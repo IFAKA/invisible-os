@@ -1,0 +1,7 @@
+Invisible: setup on a new phone (Android 10+)
+1. Install invisible.apk (allow "install unknown apps" when asked).
+2. Open the app. Allow notifications and the other permissions it asks for.
+3. Settings > Accessibility > Invisible > turn on "Button access".
+4. Settings > Notifications > Notification access > Invisible > on.
+5. Xiaomi / Samsung etc.: set battery for Invisible to "No restrictions".
+6. Optional AI: in the app, "AI on the phone" > turn on. It downloads 2.6 GB on Wi-Fi (needs 3.3 GB free, about 6 GB RAM).
