@@ -15,18 +15,28 @@ Goal: a phone you can fully use with one button and your ears. Keyboard first, b
 5. Build the keyboard as an OS service (not a game): `ModeOutput` method, `Actions` entry, returns text to the caller. Check: unit tests plus a spoken-round-trip on the phone.
 6. Use it: New message (free text), Search, Notes, rename.
 
-## OS parts after the keyboard
-| Part | State |
-|---|---|
-| Input, output, shell, lifecycle | built, partly |
-| Text input | step 1-5 above |
-| Interrupt queue with priorities (message, timer, call) | not built yet |
-| Settings by ear | not built yet |
-| Search | not built yet (needs keyboard) |
-| Help ("where am I", "what can I do") | not built yet |
-| Program contract (one API for every program, not only games) | not built yet |
-| Speech arbiter (who may speak now) | not built yet |
-| Files and storage | not built yet |
+## The OS list, in order (2026-10-25)
+A real OS lets you do any task, not only the ones we built. Each item gets a check before the next starts.
+
+Usable every day:
+1. **Keyboard (Write).** Built, installed, not yet tested by ear. Check: the ear test and a real message written.
+2. **Bridge to other apps.** The accessibility service reads any app's screen aloud and taps for you. Not built yet. Check: reply in one real app (WhatsApp) with only the button. Risk: badly labelled apps, apps that block it. Test it early.
+3. **Calls.** Answer, reject, dial, call back. Not built yet.
+4. **Lock and unlock by ear.** Not built yet. Needs the keyboard.
+
+Safe:
+5. **Interrupt queue.** One queue for messages, calls, timers, with priorities. Not built yet (messages only today).
+6. **Help.** "Where am I" and "What can I do", on one gesture, from any screen. Not built yet.
+7. **Recovery.** If the earbud disconnects, speech dies or the app crashes: say so, get back home. Not built yet.
+8. **Setup.** Wi-Fi, Bluetooth, permissions without a screen. Not built yet.
+
+Clean:
+9. **One program rule.** One contract for every program (raw button, how to leave, close sound, who may speak), not only games. Write is the second program; use it to write the contract.
+10. **Language rule.** One rule for English menu and Spanish text. Write has an English model only: get a Spanish one.
+11. **Battery warning.** Not built yet.
+12. **Helper mode.** A sighted person can fix problems. Not built yet.
+
+Not needed: kernel, drivers, file manager, icon launcher (Android has them).
 
 ## Later (only with real users)
 Custom Android build (AOSP) that boots into this shell. Linux only after that: the design is ideas, not Android code, so keep OS parts clean.
