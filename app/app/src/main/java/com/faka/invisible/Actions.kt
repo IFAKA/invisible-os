@@ -281,12 +281,12 @@ object Actions {
         // when our app is visible; otherwise use our own timer.
         val ok = if (!appVisible()) { Log.d(TAG, "TIMER background start blocked, own timer"); false } else try { app.startActivity(intent); true } catch (e: Exception) { Log.d(TAG, "TIMER clock app failed: $e"); false }
         Log.d(TAG, "TIMER $minutes min clockApp=$ok")
-        if (ok) { say("Timer $minutes minutes", false); return }
+        if (ok) { say(Voice.timerSet(minutes), false); return }
         ownTimer?.let { handler.removeCallbacks(it) }
         val r = Runnable { ownTimer = null; ring(0) }
         ownTimer = r
         handler.postDelayed(r, minutes * 60_000L)
-        say("Timer $minutes minutes", false)
+        say(Voice.timerSet(minutes), false)
     }
 
     private fun appVisible(): Boolean {
@@ -298,7 +298,7 @@ object Actions {
     private fun ring(n: Int) {
         if (n >= 20) { ringing = null; return }
         beep(Tone.ALARM, minOf(1f, 0.5f + 0.15f * (n / 3)))   // louder every 10 s
-        if (n % 3 == 0) say("Timer done", true)
+        if (n % 3 == 0) say(Voice.TIMER_DONE, true)
         val r = Runnable { ring(n + 1) }
         ringing = r
         handler.postDelayed(r, 3000)
@@ -313,12 +313,12 @@ object Actions {
         if (appVisible()) try {
             app.startActivity(Intent(AlarmClock.ACTION_DISMISS_ALARM).putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_NEXT).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Exception) { Log.d(TAG, "DISMISS alarm failed: $e") }
-        say("Alarm stopped", false)
+        say(Voice.ALARM_STOPPED, false)
     }
 
     private fun menuAction(name: String) {
         when (name) {
-            "Flashlight" -> say("Flashlight " + if (toggleTorch()) "on" else "off", false)
+            "Flashlight" -> say(Voice.flashlight(toggleTorch()), false)
             "Time" -> say(spokenTime(Calendar.getInstance()), false)
             "Next alarm" -> {
                 val t = app.getSystemService(AlarmManager::class.java).nextAlarmClock?.triggerTime
@@ -326,14 +326,14 @@ object Actions {
             }
             "Battery" -> {
                 val b = app.getSystemService(BatteryManager::class.java).getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-                say("Battery $b percent", false)
+                say(Voice.battery(b), false)
             }
             "Do not disturb" -> {
                 val nm = app.getSystemService(NotificationManager::class.java)
                 val on = nm.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_NONE
                 nm.setInterruptionFilter(if (on) NotificationManager.INTERRUPTION_FILTER_NONE else NotificationManager.INTERRUPTION_FILTER_ALL)
                 Log.d(TAG, "DND ${if (on) "on" else "off"}")
-                say("Do not disturb " + if (on) "on" else "off", false)
+                say(Voice.doNotDisturb(on), false)
             }
         }
     }

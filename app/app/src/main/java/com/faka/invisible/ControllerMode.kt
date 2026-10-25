@@ -377,7 +377,7 @@ class ControllerMode(
                         when {
                             ts.isNotEmpty() -> show(Screen.TASK)
                             out.taskOffers().isNotEmpty() -> show(Screen.TASK_ADD)
-                            else -> { say("No tasks yet"); phase = Phase.WAIT; waitNext = { beginScan() } }
+                            else -> { say(Voice.NO_TASKS); phase = Phase.WAIT; waitNext = { beginScan() } }
                         }
                     } }
                     "timer" -> all["hub:timer"] = Opt("hub:timer", "Timer", null) { pick("hub:timer"); show(Screen.TIMER_PICK) }
@@ -393,14 +393,14 @@ class ControllerMode(
                     val t = taskList.getOrNull(taskIdx)
                     if (t != null) startPending(null, "Done. Click to cancel", { out.completeTask(t.id); true }, onCancel = { show(Screen.TASK) }, after = {
                         taskList = taskList - t
-                        if (taskList.isEmpty()) { say("All done"); phase = Phase.WAIT; waitNext = { afterTasks() } }
+                        if (taskList.isEmpty()) { say(Voice.ALL_DONE); phase = Phase.WAIT; waitNext = { afterTasks() } }
                         else { if (taskIdx >= taskList.size) taskIdx = 0; show(Screen.TASK) }
                     })
                 },
                 Opt("task:next", "Next", null) { pick("task:next"); taskIdx++; if (taskIdx >= taskList.size) afterTasks() else show(Screen.TASK) })
             Screen.TASK_ADD -> out.taskOffers().map { t ->
                 Opt("taskadd", t.text.take(MAX_SPOKEN), t.lang.ifEmpty { null }) {
-                    pick("taskadd"); out.addTask(t.text, t.lang); say("Task added"); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
+                    pick("taskadd"); out.addTask(t.text, t.lang); say(Voice.TASK_ADDED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
                 }
             }
             Screen.TIMER_PICK -> (settings.timers.map { it to Spoken.minutes(it) }.let { t -> if (out.lastTimer() > 0) listOf(lastTimer() to "Last used") + t else t + (lastTimer() to "Last used") }).map { (min, label) ->
@@ -430,7 +430,7 @@ class ControllerMode(
                 Opt("task", "Task", null) {   // no typing needed: the task is made from the message
                     pick("task", m.sender)
                     out.addTask("Reply to ${m.sender}: ${MessageLogic.spoken(m.text, m.lang).replace(Regex("\\s+"), " ").trim().take(60)}", vl(m) ?: "")
-                    say("Task added"); phase = Phase.WAIT; waitNext = { show(Screen.MESSAGE) }
+                    say(Voice.TASK_ADDED); phase = Phase.WAIT; waitNext = { show(Screen.MESSAGE) }
                 })
             Screen.COMPOSE -> if (m == null) emptyList() else composeOptions(m, l)
             Screen.SENT -> emptyList()
@@ -479,7 +479,7 @@ class ControllerMode(
 
     private fun readUnread(key: String) {
         val all = unread().sortedByDescending { it.at }
-        if (all.isEmpty()) { pick("none"); out.tone(Tone.UNKNOWN); say("No unread messages"); phase = Phase.WAIT; waitNext = { beginScan() } }
+        if (all.isEmpty()) { pick("none"); out.tone(Tone.UNKNOWN); say(Voice.NO_MESSAGES); phase = Phase.WAIT; waitNext = { beginScan() } }
         else { pick(key); queue = all.toMutableList(); qi = 0; fromHub = true; showQueueItemOrHub() }
     }
 
@@ -532,7 +532,7 @@ class ControllerMode(
     private fun fireUndo() {
         val p = pending ?: return
         pending = null
-        if (p.run()) out.tone(Tone.SENT) else say("Cannot do it")
+        if (p.run()) out.tone(Tone.SENT) else say(Voice.CANNOT)
         if (active && phase == Phase.PENDING) p.after()
     }
 
@@ -549,7 +549,7 @@ class ControllerMode(
         out.choice(screen.name, 1, "undo", "")
         stopAll()
         out.tone(Tone.CANCEL)
-        say("Cancelled", p.lang)
+        say(Voice.CANCELLED, p.lang)
         if (active) { phase = Phase.WAIT; waitNext = { p.onCancel() } }
     }
 
