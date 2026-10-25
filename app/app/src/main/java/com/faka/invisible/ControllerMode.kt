@@ -51,6 +51,7 @@ interface ModeOutput {
     fun choice(screen: String, code: Int, intent: String, sender: String)   // choice log; code 0 = wake, else the position of the option in the list
     fun codeCount(): Int             // successful code actions so far (persisted); learning mode while < 15
     fun setCodeCount(n: Int)
+    fun startWrite() {}   // the Write keyboard (stereo pair); its text comes back through the app
     fun startGame(coach: Boolean) {}   // coach = teach first (the "How to play" item)
     fun weather(done: (String) -> Unit) { done(Voice.WEATHER_FAILED) }   // off the main thread inside; [done] runs on the main thread with ONE sentence
     fun nextEvent(done: (String) -> Unit) { done(Voice.CALENDAR_FAILED) }   // same: the next calendar event sentence
@@ -438,6 +439,7 @@ class ControllerMode(
             } } + Opt("phone:back", "Back", null) { pick("phone:back"); show(Screen.HUB) }
             Screen.GAMES -> listOf(   // every game lives here; a new game is one more line
                 Opt("games:duel", "Duel", null) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame(false) },   // music stays paused for the game, which resumes it
+                Opt("games:write", "Write", null) { pick("games:write"); pausedByUs = false; exit(false); out.startWrite() },   // a program of the OS, not a game; reachable here until it has its own place
                 Opt("games:howto", "How to play", null) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) },
                 Opt("games:back", "Back", null) { pick("games:back"); show(Screen.HUB) })
             Screen.TIMER_DONE -> listOf(

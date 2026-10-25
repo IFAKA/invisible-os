@@ -132,6 +132,7 @@ object Actions {
             override fun lastTimer() = prefs().getInt("lastTimer", 0)
             override fun setLastTimer(minutes: Int) { prefs().edit().putInt("lastTimer", minutes).apply() }
             override fun startGame(coach: Boolean) = startDuel(coach)
+            override fun startWrite() = launchWrite()
             override fun pickCount(intent: String) = choices.intentCount(intent)
             override fun favourites() = choices.favourites()
             override fun choice(screen: String, code: Int, intent: String, sender: String) {
@@ -172,7 +173,7 @@ object Actions {
                 tts?.language = Locale.US; ttsReady = true
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) { if (id == lastUtt) handler.post { mode.onSpeechStarted() } }
-                    override fun onDone(id: String?) { if (id?.startsWith("sy_") == true) spearconMade(id.removePrefix("sy_")) else speechEnded(id) }
+                    override fun onDone(id: String?) { if (id?.startsWith("wc_") == true) clips?.made(id) else if (id?.startsWith("sy_") == true) spearconMade(id.removePrefix("sy_")) else speechEnded(id) }
                     @Deprecated("old api") override fun onError(id: String?) { speechEnded(id) }
                     override fun onStop(id: String?, interrupted: Boolean) {}   // flushed by a newer utterance or a click
                 })
@@ -181,6 +182,65 @@ object Actions {
     }
 
     private var duel: TellAndroid? = null
+
+    // ---- Write: the stereo-pair keyboard (Typing.kt). The OS gives it the raw button and plays the close sound when it ends. ----
+    private var typer: TypeProgram? = null
+    private var nextWord: NextWord? = null
+    private var clips: WordClips? = null
+    private var pairTrack: AudioTrack? = null
+    private var pairSeq = 0
+    private val typeTimers = HashMap<String, Runnable>()
+
+    private fun stopPair() { pairSeq++; pairTrack?.let { try { it.stop(); it.release() } catch (e: Exception) {} }; pairTrack = null }
+
+    private fun playPair(left: String, right: String?, me: Int) {
+        if (me != pairSeq) return
+        if (tts?.isSpeaking == true) { handler.postDelayed({ playPair(left, right, me) }, 300); return }   // the sentence first
+        val (pcm, rate) = clips?.stereo(left, right) ?: run { say(left, false); return }
+        pairTrack = try {
+            val t = AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
+                .setBufferSizeInBytes(pcm.size * 2).setTransferMode(AudioTrack.MODE_STATIC).build()
+            t.write(pcm, 0, pcm.size); t.play()
+            val frames = pcm.size / 2
+            handler.postDelayed({ if (pairTrack === t) pairTrack = null; try { t.release() } catch (e: Exception) {} }, frames * 1000L / rate + 100)
+            t
+        } catch (e: Exception) { Log.e(TAG, "pair failed", e); null }
+    }
+
+    private fun launchWrite() {
+        typer?.stop()
+        Thread({
+            val lm = nextWord ?: try {
+                NextWord(app.assets.open("lm/lm.bin"), app.assets.open("lm/vocab.txt").bufferedReader().readText()).also { nextWord = it }
+            } catch (e: Throwable) { Log.e(TAG, "word model failed", e); null }
+            handler.post {
+                if (lm == null) { say(TypeVoice.NO_MODEL, false); gameEnded(); return@post }
+                if (clips == null) clips = WordClips(java.io.File(app.cacheDir, "words"), { text, f, id -> tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS }, { handler.post(it) })
+                val timers = object : Timers {
+                    override fun set(key: String, delayMs: Long, task: () -> Unit) { clear(key); val r = Runnable { typeTimers.remove(key); task() }; typeTimers[key] = r; handler.postDelayed(r, delayMs) }
+                    override fun clear(key: String) { typeTimers.remove(key)?.let { handler.removeCallbacks(it) } }
+                }
+                val out = object : TypeOut {
+                    override fun pair(left: String, right: String?) {
+                        stopPair(); val me = pairSeq
+                        var pending = if (right == null) 1 else 2
+                        val one = { if (--pending == 0) playPair(left, right, me) }
+                        clips?.ensure(left, one); right?.let { clips?.ensure(it, one) }
+                    }
+                    override fun prefetch(words: List<String>) { words.forEach { clips?.ensure(it) {} } }
+                    override fun say(text: String) { this@Actions.say(text, true) }
+                    override fun cue(c: TypeCue) { play(TypeSounds.pcm(c)) }
+                    override fun finished(text: String) {
+                        Log.d(TAG, "WRITE result: $text"); EventLog.add("write: $text")
+                        handler.postDelayed({ this@Actions.say(text.ifEmpty { TypeVoice.EMPTY }, false) }, 700)
+                    }
+                }
+                typer = TypeProgram(lm, out, timers) { typer = null; stopPair(); gameEnded() }.also { it.start() }
+            }
+        }, "write-load").start()
+    }
 
     /** The OS rule for every game: when a game gives the phone back, the OS says goodbye with its own close sound. A game never plays it. */
     private fun gameEnded() { handler.post { beep(Tone.EXIT) } }
@@ -201,13 +261,14 @@ object Actions {
         if (repeat > 0) return
         if (!deduper.accept(source, isDown, downTime)) { Log.d(TAG, "DEDUPE dropped $source down=$downTime"); return }
         duel?.let { d -> if (d.active) { if (isDown) d.down(downTime) else d.up(time); return } }   // the Duel game owns the raw button
+        typer?.let { w -> if (w.active) { if (isDown) w.down(downTime) else w.up(time); return } }   // so does Write
         if (isDown && mode.active) beep(Tone.TAP)   // blind: every press is answered at once
         if (isDown) detector.down(time) else detector.up(time)
     }
 
     /** Long press launched the assistant role / hands-free: act as HOLD unless a HOLD just fired from the key path. */
     fun assistHold() {
-        if (duel?.active == true) return
+        if (duel?.active == true || typer?.active == true) return
         if (SystemClock.uptimeMillis() - lastHoldAt < 1500) { Log.d(TAG, "ASSIST ignored, hold just fired"); return }
         fire(Gesture.HOLD, 0)
     }

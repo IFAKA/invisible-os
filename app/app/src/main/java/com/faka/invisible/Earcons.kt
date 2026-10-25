@@ -93,3 +93,29 @@ object Earcons {
         return ShortArray(total) { (buf[it] * k * 32767).toInt().coerceIn(-32767, 32767).toShort() }
     }
 }
+
+/** Sounds of the Write program (its own: the OS tones are not used inside a program). Short tones; pitch says which side. */
+object TypeSounds {
+    private fun tone(vararg notes: Pair<Double, Int>): ShortArray {   // (Hz, ms) one after another
+        val out = ArrayList<Short>()
+        for ((hz, ms) in notes) {
+            val n = Earcons.SR * ms / 1000
+            for (i in 0 until n) {
+                val env = minOf(1.0, i / (Earcons.SR * 0.004)) * minOf(1.0, (n - i) / (Earcons.SR * 0.012))
+                out.add((Math.sin(2 * Math.PI * hz * i / Earcons.SR) * env * 9000).toInt().toShort())
+            }
+        }
+        return out.toShortArray()
+    }
+
+    fun pcm(c: TypeCue): ShortArray = when (c) {
+        TypeCue.PICK_LEFT -> tone(880.0 to 70)
+        TypeCue.PICK_RIGHT -> tone(660.0 to 70)
+        TypeCue.NEXT -> tone(440.0 to 40)
+        TypeCue.LETTERS -> tone(330.0 to 60, 494.0 to 60)
+        TypeCue.WORDS -> tone(494.0 to 60, 330.0 to 60)
+        TypeCue.DELETE -> tone(300.0 to 60, 200.0 to 80)
+        TypeCue.DONE -> tone(523.0 to 80, 659.0 to 80, 784.0 to 140)
+        TypeCue.ARMED -> tone(1000.0 to 25)
+    }
+}

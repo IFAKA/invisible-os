@@ -8,7 +8,7 @@ import kotlin.math.ln
 import kotlin.math.tanh
 
 /** Tiny next-word LSTM (Utter ml/utter/lm.py, int8 `lm.bin` "ULM1" + `vocab.txt`). Ranks the words that may come next. */
-class NextWord(bin: InputStream, vocabText: String) {
+class NextWord(bin: InputStream, vocabText: String) : Ranker {
     val V: Int; val E: Int; val H: Int
     private val vocab: List<String>
     private val ids: Map<String, Int>
@@ -72,7 +72,7 @@ class NextWord(bin: InputStream, vocabText: String) {
     private var rankedAll: List<Pair<String, Double>> = emptyList()
 
     /** Every word, most likely first, for [context]. Kept for the last context, so paging and letter views cost nothing. */
-    fun ranked(context: List<String>): List<Pair<String, Double>> {
+    override fun ranked(context: List<String>): List<Pair<String, Double>> {
         val key = context.joinToString(" ")
         if (key != rankedKey) { rankedAll = top(context, V - 3); rankedKey = key }
         return rankedAll
