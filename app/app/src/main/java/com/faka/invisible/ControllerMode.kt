@@ -46,6 +46,7 @@ interface ModeOutput {
     fun choice(screen: String, code: Int, intent: String, sender: String)   // choice log; code 0 = wake, else the position of the option in the list
     fun codeCount(): Int             // successful code actions so far (persisted); learning mode while < 15
     fun setCodeCount(n: Int)
+    fun startGame() {}               // the Duel game takes over the button (the mode has already exited)
     fun pickCount(intent: String): Int = 0   // how often this option was picked (spearcon after [ControllerMode.SPEARCON_AFTER] picks)
 }
 
@@ -414,6 +415,7 @@ class ControllerMode(
                 "read" -> Opt("more:read", "Read unread messages", null) { readUnread("more:read") }
                 "torch" -> Opt("more:torch", "Torch", null) { pick("more:torch"); out.runAction("Flashlight"); afterSpeech { beginScan() } }
                 "dnd" -> if (out.dndAllowed()) Opt("more:dnd", "Do not disturb", null) { pick("more:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null
+                "duel" -> Opt("more:duel", "Duel", null) { pick("more:duel"); pausedByUs = false; exit(false); out.startGame() }   // music stays paused for the game, which resumes it
                 "exit" -> Opt("more:exit", "Exit", null) { pick("more:exit"); exit(true) }
                 else -> null
             } }

@@ -575,10 +575,10 @@ class ModeTest {
     }
 
     @Test fun moreHubOptionsIncludeDndOnlyWithAccess() {
-        val a = Rig(); a.wake(); a.pick("More"); a.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Read unread messages", "say Torch", "say Do not disturb", "say Exit"), a.spoken())
-        val b = Rig(); b.dnd = false; b.wake(); b.pick("More"); b.advance(400 + 1300 * 2 + 100)
-        assertEquals(listOf("say Read unread messages", "say Torch", "say Exit"), b.spoken())
+        val a = Rig(); a.wake(); a.pick("More"); a.advance(400 + 1300 * 4 + 100)
+        assertEquals(listOf("say Read unread messages", "say Torch", "say Do not disturb", "say Duel", "say Exit"), a.spoken())
+        val b = Rig(); b.dnd = false; b.wake(); b.pick("More"); b.advance(400 + 1300 * 3 + 100)
+        assertEquals(listOf("say Read unread messages", "say Torch", "say Duel", "say Exit"), b.spoken())
     }
 
     @Test fun torchRunsAndTheListRestartsAfterItsSpeech() {

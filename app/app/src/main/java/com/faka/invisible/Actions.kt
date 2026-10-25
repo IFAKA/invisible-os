@@ -21,6 +21,8 @@ import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import com.faka.invisible.tell.TellAndroid
+import com.faka.invisible.tell.TellHost
 import java.util.Calendar
 import java.util.Locale
 
@@ -103,6 +105,7 @@ object Actions {
             override fun setCodeCount(n: Int) { prefs().edit().putInt("codeCount", n).apply() }
             override fun lastTimer() = prefs().getInt("lastTimer", 0)
             override fun setLastTimer(minutes: Int) { prefs().edit().putInt("lastTimer", minutes).apply() }
+            override fun startGame() = startDuel()
             override fun pickCount(intent: String) = choices.intentCount(intent)
             override fun favourites() = choices.favourites()
             override fun choice(screen: String, code: Int, intent: String, sender: String) {
@@ -148,16 +151,30 @@ object Actions {
         }
     }
 
+    private var duel: TellAndroid? = null
+    private fun startDuel() {
+        duel?.stop()
+        duel = TellAndroid(prefs(), handler, object : TellHost {
+            override fun speak(text: String) = say(text, false)
+            override fun stopSpeech() { tts?.stop(); lastUtt = "" }
+            override fun pauseMusic() { pauseMusicNow() }
+            override fun resumeMusic() = resumeMusicNow()
+            override fun log(line: String) { Log.d(TAG, line); EventLog.add(line) }
+        }, onEnded = { duel = null }).also { it.start() }
+    }
+
     /** Call on the main thread. repeatCount > 0 is ignored (the hold timer handles holds). */
     fun key(source: String, isDown: Boolean, repeat: Int, downTime: Long, time: Long) {
         if (repeat > 0) return
         if (!deduper.accept(source, isDown, downTime)) { Log.d(TAG, "DEDUPE dropped $source down=$downTime"); return }
+        duel?.let { d -> if (d.active) { if (isDown) d.down(downTime) else d.up(time); return } }   // the Duel game owns the raw button
         if (isDown && mode.active) beep(Tone.TAP)   // blind: every press is answered at once
         if (isDown) detector.down(time) else detector.up(time)
     }
 
     /** Long press launched the assistant role / hands-free: act as HOLD unless a HOLD just fired from the key path. */
     fun assistHold() {
+        if (duel?.active == true) return
         if (SystemClock.uptimeMillis() - lastHoldAt < 1500) { Log.d(TAG, "ASSIST ignored, hold just fired"); return }
         fire(Gesture.HOLD, 0)
     }
