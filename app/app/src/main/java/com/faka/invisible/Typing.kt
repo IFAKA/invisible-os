@@ -59,7 +59,7 @@ class TypeProgram(
 
     fun start() {
         active = true
-        out.say(TypeVoice.START); out.say(TypeVoice.START2); out.say(TypeVoice.START3)
+        out.say(TypeVoice.START); out.say(TypeVoice.START2); out.say(TypeVoice.START_NEXT); out.say(TypeVoice.START3)
         show()
     }
 

@@ -182,6 +182,7 @@ object TellVoice {
 object TypeVoice {
     const val START = "Write. Click on the first word."
     const val START2 = "Hold on the second word."
+    const val START_NEXT = "Two clicks for the next two."
     const val START3 = "Three clicks for more."
     const val MENU_DONE = "Done"
     const val MENU_DELETE = "Delete"
