@@ -38,7 +38,10 @@ object Actions {
     private var torchOn = false
     private var taskStore = TaskStore()
     fun tasks(): List<Task> = taskStore.all()
-    fun addTasks(text: String): Int = taskStore.addAll(text)
+    /** Splits the note, detects each task's language (off the main thread), saves, then calls [done] on the main thread with the count. */
+    fun addTasks(text: String, done: (Int) -> Unit) {
+        Thread { val n = taskStore.addAll(text) { ControllerNotificationListener.voiceFor(it) }; handler.post { done(n) } }.start()
+    }
     fun completeTask(id: Long) = taskStore.done(id)
     private val deduper = Deduper()
     private var lastHoldAt = 0L

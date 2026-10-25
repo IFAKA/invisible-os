@@ -261,7 +261,7 @@ class ControllerMode(
         val m = cur
         if (s == Screen.MESSAGE && m != null && hid(m) !in heard) intro += Intro("${m.sender}: ${shortText(m)}", vl(m), hid(m))
         if (s == Screen.TASK) taskList.getOrNull(taskIdx)?.let { t ->
-            intro += Intro(if (taskList.size > 1) "${taskIdx + 1} of ${taskList.size}: ${t.text}" else t.text, out.songLang(t.text), null)
+            intro += Intro(if (taskList.size > 1) "${taskIdx + 1} of ${taskList.size}: ${t.text}" else t.text, t.lang.ifEmpty { out.songLang(t.text) ?: "es" }, null)
         }
         if (s == Screen.TIMER_DONE) intro += Intro("Timer done", null, null)
         curIntro = null

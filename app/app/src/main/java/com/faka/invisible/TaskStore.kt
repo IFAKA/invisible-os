@@ -1,10 +1,11 @@
 package com.faka.invisible
 
 /** One open to-do item. */
-data class Task(val id: Long, val text: String)
+/** lang = voice language detected when it was added ("es", "en"), "" if unknown. */
+data class Task(val id: Long, val text: String, val lang: String = "")
 
 /**
- * Pure: the open to-do list, oldest first. Done items are removed. [lines] = saved form ("id<TAB>text" per line);
+ * Pure: the open to-do list, oldest first. Done items are removed. [lines] = saved form ("id<TAB>lang<TAB>text" per line; older saves have no lang);
  * `save` gets the new lines after every change.
  */
 class TaskStore(lines: List<String> = emptyList(), private val save: (List<String>) -> Unit = {}) {
@@ -13,21 +14,22 @@ class TaskStore(lines: List<String> = emptyList(), private val save: (List<Strin
 
     init {
         for (l in lines) {
-            val i = l.indexOf('\t')
-            val id = if (i > 0) l.substring(0, i).toLongOrNull() else null
-            if (id != null && i < l.length - 1) { list.add(Task(id, l.substring(i + 1))); nextId = maxOf(nextId, id + 1) }
+            val p = l.split('\t', limit = 3)
+            val id = p.getOrNull(0)?.toLongOrNull() ?: continue
+            val t = if (p.size == 3) Task(id, p[2], p[1]) else if (p.size == 2) Task(id, p[1]) else continue
+            if (t.text.isNotEmpty()) { list.add(t); nextId = maxOf(nextId, id + 1) }
         }
     }
 
     /** Adds a task (blank text is ignored, line breaks become spaces). Returns it, or null if blank. */
-    @Synchronized fun add(text: String): Task? {
+    @Synchronized fun add(text: String, lang: String = ""): Task? {
         val t = text.replace(Regex("\\s+"), " ").trim()
         if (t.isEmpty()) return null
-        return Task(nextId++, t).also { list.add(it); persist() }
+        return Task(nextId++, t, lang).also { list.add(it); persist() }
     }
 
     /** Adds every task found in [text] (see [parse]). Returns how many were added. */
-    fun addAll(text: String): Int = parse(text).count { add(it) != null }
+    fun addAll(text: String, detect: (String) -> String = { "" }): Int = parse(text).count { add(it, detect(it)) != null }
 
     @Synchronized fun done(id: Long) { if (list.removeAll { it.id == id }) persist() }
     @Synchronized fun all(): List<Task> = list.toList()
@@ -55,5 +57,5 @@ class TaskStore(lines: List<String> = emptyList(), private val save: (List<Strin
         }
     }
 
-    private fun persist() = save(list.map { "${it.id}\t${it.text}" })
+    private fun persist() = save(list.map { "${it.id}\t${it.lang}\t${it.text}" })
 }

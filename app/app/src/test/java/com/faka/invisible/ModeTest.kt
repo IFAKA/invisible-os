@@ -453,6 +453,8 @@ class ModeTest {
         val a = TaskStore { saved = it }
         a.add("  Buy\n milk "); assertNull(a.add("   "))
         val b = TaskStore(saved); assertEquals(listOf("Buy milk"), b.all().map { it.text })
+        assertEquals("en", TaskStore().also { it.addAll("[ ] Buy milk") { "en" } }.all()[0].lang)
+        assertEquals(listOf(Task(7, "old task")), TaskStore(listOf("7\told task")).all())   // saved before languages existed
         assertEquals(2L, b.add("x")!!.id)
     }
 

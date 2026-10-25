@@ -12,8 +12,8 @@ class AddTaskActivity : Activity() {
         Actions.init(applicationContext)
         val t = intent?.takeIf { it.action == Intent.ACTION_SEND }?.getStringExtra(Intent.EXTRA_TEXT)
         t?.let { try { java.io.File(filesDir, "last_share.txt").writeText(it) } catch (e: Exception) {} }   // to see the real format if splitting looks wrong
-        val n = t?.let { Actions.addTasks(it) } ?: 0
-        Toast.makeText(this, when (n) { 0 -> "No open tasks found"; 1 -> "1 task added"; else -> "$n tasks added" }, Toast.LENGTH_SHORT).show()
+        val ctx = applicationContext
+        Actions.addTasks(t ?: "") { n -> Toast.makeText(ctx, when (n) { 0 -> "No open tasks found"; 1 -> "1 task added"; else -> "$n tasks added" }, Toast.LENGTH_SHORT).show() }
         finish()
     }
 }
