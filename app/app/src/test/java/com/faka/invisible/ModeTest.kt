@@ -168,22 +168,22 @@ class ModeTest {
         r.advance(1); assertEquals("tone TICK", r.log.last())                    // t=1500
         r.advance(199); assertFalse(r.log.contains("say Volume"))
         r.advance(1); assertEquals("say Volume", r.log.last())                   // t=1700 = 800 ms after "done"
-        r.advance(1300 * 2); assertEquals(listOf("say Timer", "say Volume", "say Status", "say More"), r.spoken())
-        r.advance(1300) // More ends at 4800, pause, ding at 5600
+        r.advance(1300 * 3 + 50); assertEquals(listOf("say Timer", "say Volume", "say Status", "say Games", "say More"), r.spoken())
+        r.advance(1300) // More ends, pause, ding
         assertEquals(1, r.count("tone DING"))
     }
 
     @Test fun listLoopsByItself() {
         val r = Rig(); r.wake()
-        r.advance(400 + 4 * 1300 + 800 + 600)
+        r.advance(400 + 5 * 1300 + 800 + 600)
         assertEquals(1, r.count("tone DING"))
-        assertEquals(listOf("say Timer", "say Volume", "say Status", "say More", "say Timer"), r.spoken())
+        assertEquals(listOf("say Timer", "say Volume", "say Status", "say Games", "say More", "say Timer"), r.spoken())
         assertTrue(r.m.active)
     }
 
     @Test fun listEndFallsThenRisesBeforeItStartsOver() {
         val r = Rig(); r.wake()
-        r.advance(400 + 4 * 1300 + 800 + 600)
+        r.advance(400 + 5 * 1300 + 800 + 600)
         val d = r.log.indexOf("tone DING"); val u = r.log.indexOf("tone RESTART"); val again = r.log.lastIndexOf("say Timer")
         assertTrue("ding, then rise, then the first option", d in 0 until u && u < again)
         assertEquals(1, r.count("tone RESTART"))
@@ -192,11 +192,11 @@ class ModeTest {
     @Test fun twoSilentLoopsLeaveWithLeaveTone() {
         val r = Rig(); r.wake(); r.advance(60_000)
         assertFalse(r.m.active)
-        assertEquals(2, r.count("tone DING")); assertEquals(1, r.count("tone LEAVE")); assertEquals(8, r.spoken().size)
+        assertEquals(2, r.count("tone DING")); assertEquals(1, r.count("tone LEAVE")); assertEquals(10, r.spoken().size)
     }
 
     @Test fun aClickResetsTheSilentLoopCount() {
-        val r = Rig(); r.wake(); r.advance(400 + 4 * 1300 + 900)   // one ding, list restarted
+        val r = Rig(); r.wake(); r.advance(400 + 5 * 1300 + 900)   // one ding, list restarted
         r.pick("Volume")                                             // Volume screen: counter starts again
         r.advance(1300 * 4 + 400)                                    // a full loop and one ding there
         assertTrue(r.m.active)
@@ -375,8 +375,8 @@ class ModeTest {
     // ---------- option ranker ----------
     @Test fun rankerNeverReordersTheHub() {
         val rev = object : OptionRanker { override fun rank(screen: String, context: String, keys: List<String>) = keys.reversed() }
-        val r = Rig(rev); r.wake(); r.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Timer", "say Volume", "say Status", "say More"), r.spoken())   // the hub keeps the user's order
+        val r = Rig(rev); r.wake(); r.advance(400 + 1300 * 4 + 100)
+        assertEquals(listOf("say Timer", "say Volume", "say Status", "say Games", "say More"), r.spoken())   // the hub keeps the user's order
     }
 
     @Test fun countRankerPutsMostPickedFirstAndTiesKeepDefaultOrder() {
@@ -594,16 +594,26 @@ class ModeTest {
     }
 
     @Test fun moreHubOptionsIncludeDndOnlyWithAccess() {
-        val a = Rig(); a.wake(); a.pick("More"); a.advance(400 + 1300 * 4 + 100)
-        assertEquals(listOf("say Read unread messages", "say Torch", "say Do not disturb", "say Duel", "say Exit"), a.spoken())
-        val b = Rig(); b.dnd = false; b.wake(); b.pick("More"); b.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Read unread messages", "say Torch", "say Duel", "say Exit"), b.spoken())
+        val a = Rig(); a.wake(); a.pick("More"); a.advance(400 + 1300 * 3 + 100)
+        assertEquals(listOf("say Read unread messages", "say Torch", "say Do not disturb", "say Exit"), a.spoken())
+        val b = Rig(); b.dnd = false; b.wake(); b.pick("More"); b.advance(400 + 1300 * 2 + 100)
+        assertEquals(listOf("say Read unread messages", "say Torch", "say Exit"), b.spoken())
     }
 
     @Test fun torchRunsAndTheListRestartsAfterItsSpeech() {
         val r = Rig(); r.wake(); r.pick("More"); r.pick("Torch")
         assertTrue(r.has("run Flashlight")); r.advance(1500)
         assertTrue(r.spoken().contains("say Read unread messages")); assertEquals(ControllerMode.Screen.MORE_HUB, r.m.screen)
+    }
+
+    @Test fun gamesHubListsDuelAndBack() {
+        val r = Rig(); r.wake(); r.pick("Games"); r.advance(400 + 1300 + 100)
+        assertEquals(listOf("say Duel", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
+    }
+
+    @Test fun pickingDuelLeavesTheMenuForTheGame() {
+        val r = Rig(); r.wake(); r.pick("Games"); r.pick("Duel")
+        assertFalse(r.m.active)   // the game takes the button
     }
 
     @Test fun moreHubExitLeaves() {

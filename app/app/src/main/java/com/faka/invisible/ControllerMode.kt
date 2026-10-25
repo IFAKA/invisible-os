@@ -121,7 +121,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, MORE_HUB, TASK, TASK_ADD, SENT }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, MORE_HUB, TASK, TASK_ADD, GAMES, SENT }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: String, val lang: String?, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: String, val lang: String?, val run: () -> Unit)
@@ -252,7 +252,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.MORE_HUB, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.MORE_HUB, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -381,6 +381,7 @@ class ControllerMode(
                     "timer" -> all["hub:timer"] = Opt("hub:timer", "Timer", null) { pick("hub:timer"); show(Screen.TIMER_PICK) }
                     "volume" -> all["hub:volume"] = Opt("hub:volume", "Volume", null) { pick("hub:volume"); show(Screen.VOLUME) }
                     "status" -> all["hub:status"] = Opt("hub:status", "Status", null) { pick("hub:status"); outro(Spoken.status(out.status(), unread().size)) }
+                    "games" -> all["hub:games"] = Opt("hub:games", "Games", null) { pick("hub:games"); show(Screen.GAMES) }
                     "more" -> all["hub:more"] = Opt("hub:more", "More", null) { pick("hub:more"); show(Screen.MORE_HUB) }
                 }
                 all.values.toList()   // the menu order is the user's own; learning only reorders replies
@@ -414,10 +415,12 @@ class ControllerMode(
                 "read" -> Opt("more:read", "Read unread messages", null) { readUnread("more:read") }
                 "torch" -> Opt("more:torch", "Torch", null) { pick("more:torch"); out.runAction("Flashlight"); afterSpeech { beginScan() } }
                 "dnd" -> if (out.dndAllowed()) Opt("more:dnd", "Do not disturb", null) { pick("more:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null
-                "duel" -> Opt("more:duel", "Duel", null) { pick("more:duel"); pausedByUs = false; exit(false); out.startGame() }   // music stays paused for the game, which resumes it
                 "exit" -> Opt("more:exit", "Exit", null) { pick("more:exit"); exit(true) }
                 else -> null
             } }
+            Screen.GAMES -> listOf(   // every game lives here; a new game is one more line
+                Opt("games:duel", "Duel", null) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame() },   // music stays paused for the game, which resumes it
+                Opt("games:back", "Back", null) { pick("games:back"); show(Screen.HUB) })
             Screen.TIMER_DONE -> listOf(
                 Opt("timer:stop", "Stop", null) { pick("timer:stop"); out.stopAlarm(); afterSpeech { advance() } },
                 Opt("timer:plus5", "Five more minutes", null) { pick("timer:plus5"); out.stopAlarm(); queue.removeAt(qi); startTimerPending(5) },
@@ -503,7 +506,7 @@ class ControllerMode(
         when (screen) {
             Screen.MORE_MSG -> show(Screen.MESSAGE)
             Screen.COMPOSE -> show(Screen.MORE_MSG)
-            Screen.TIMER_PICK, Screen.VOLUME, Screen.MORE_HUB, Screen.TASK, Screen.TASK_ADD -> show(Screen.HUB)
+            Screen.TIMER_PICK, Screen.VOLUME, Screen.MORE_HUB, Screen.TASK, Screen.TASK_ADD, Screen.GAMES -> show(Screen.HUB)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()
         }

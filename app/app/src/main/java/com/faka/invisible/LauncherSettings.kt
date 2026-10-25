@@ -18,11 +18,11 @@ data class LauncherSettings(
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("playing" to "Playing", "messages" to "Messages", "tasks" to "Tasks", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "more" to "More")
+        val HUB_ITEMS = linkedMapOf("playing" to "Playing", "messages" to "Messages", "tasks" to "Tasks", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "games" to "Games", "more" to "More")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** What is inside "More", in the order spoken. "exit" is always kept. */
-        val MORE_ITEMS = linkedMapOf("read" to "Read unread messages", "torch" to "Torch", "dnd" to "Do not disturb", "duel" to "Duel", "exit" to "Exit")
+        val MORE_ITEMS = linkedMapOf("read" to "Read unread messages", "torch" to "Torch", "dnd" to "Do not disturb", "exit" to "Exit")
         val DEFAULT_MORE = MORE_ITEMS.keys.toList()
         fun cleanMore(keys: List<String>): List<String> = keys.filter { it in MORE_ITEMS }.distinct().let { if ("exit" in it) it else it + "exit" }
 
@@ -41,8 +41,8 @@ object SettingsStore {
     fun load(p: SharedPreferences): LauncherSettings {
         val d = LauncherSettings()
         return LauncherSettings(
-            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withTasks(p, withPlaying(p, it))) } ?: d.hub,
-            more = p.getString("s_more", null)?.split(',')?.let { LauncherSettings.cleanMore(withDuel(p, it)) } ?: d.more,
+            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withGames(p, withTasks(p, withPlaying(p, it)))) } ?: d.hub,
+            more = p.getString("s_more", null)?.split(',')?.let { LauncherSettings.cleanMore(it) } ?: d.more,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
             itemGapMs = p.getLong("s_gap", d.itemGapMs).coerceIn(600, 4000),
             silentLoops = p.getInt("s_loops", d.silentLoops).coerceIn(1, 5),
@@ -71,13 +71,13 @@ object SettingsStore {
         return moved
     }
 
-    /** A saved "More" list from before "Duel" existed gets it once, before Exit. */
-    private fun withDuel(p: SharedPreferences, keys: List<String>): List<String> {
-        if (p.getBoolean("s_duel_saved", false)) return keys
-        val rest = keys.filter { it != "duel" }
-        val at = rest.indexOf("exit").let { if (it < 0) rest.size else it }
-        val moved = rest.take(at) + "duel" + rest.drop(at)
-        p.edit().putBoolean("s_duel_saved", true).putString("s_more", moved.joinToString(",")).apply()
+    /** A saved menu from before "Games" existed gets it once, just before "More". The old "duel" entry in "More" is dropped by cleanMore. */
+    private fun withGames(p: SharedPreferences, keys: List<String>): List<String> {
+        if (p.getBoolean("s_games_saved", false)) return keys
+        val rest = keys.filter { it != "games" }
+        val at = rest.indexOf("more").let { if (it < 0) rest.size else it }
+        val moved = rest.take(at) + "games" + rest.drop(at)
+        p.edit().putBoolean("s_games_saved", true).putString("s_hub", moved.joinToString(",")).apply()
         return moved
     }
 
