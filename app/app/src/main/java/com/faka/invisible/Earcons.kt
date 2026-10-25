@@ -29,7 +29,7 @@ object Earcons {
         Tone.MESSAGE to page, Tone.TIMER to page, Tone.MORE to page, Tone.VOLUME to page,
         Tone.PICK to run(listOf("C5", "E5"), 55, 160, .40),                 // 1 click: up
         Tone.RESTART to run(listOf("G4", "C5", "E5"), 70, 200, .32),        // rises from below: the list starts over (also 2 clicks)
-        Tone.AGAIN to run(listOf("E5", "C5"), 50, 120, .30),                // 2 clicks: a short step down = one back
+        Tone.AGAIN to run(listOf("C5", "E5"), 50, 120, .30),                // 2 clicks: a short step up = next now
         Tone.BACK to run(listOf("G5", "E5", "C5"), 60, 160, .35),           // 3 clicks: down
         Tone.UNDO to run(listOf("C5", "E5", "G5"), 70, 160, .22),           // quiet: you can still cancel
         Tone.SENT to run(listOf("C5", "G5", "C6"), 90, 700, .45),           // up, rings out: done
