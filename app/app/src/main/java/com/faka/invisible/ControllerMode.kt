@@ -621,7 +621,12 @@ class ControllerMode(
         if (active) { phase = Phase.WAIT; waitNext = { p.onCancel() } }
     }
 
+    private var backPicked = false
+    /** True once after the user picked a "Back" item: the click should sound like leaving (falling), not like entering. */
+    fun consumeBackPick(): Boolean = backPicked.also { backPicked = false }
+
     private fun pick(intent: String, sender: String = "") {
+        backPicked = intent.endsWith(":back")
         out.choice(screen.name, code, intent, sender)
         if (intent != "none" && intent != "nothing") out.setCodeCount(out.codeCount() + 1)
     }
