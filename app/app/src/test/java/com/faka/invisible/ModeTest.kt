@@ -365,16 +365,15 @@ class ModeTest {
     }
 
     // ---------- option ranker ----------
-    @Test fun rankerOrdersTheHub() {
+    @Test fun rankerNeverReordersTheHub() {
         val rev = object : OptionRanker { override fun rank(screen: String, context: String, keys: List<String>) = keys.reversed() }
         val r = Rig(rev); r.wake(); r.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say More", "say Status", "say Volume", "say Timer"), r.spoken())
+        assertEquals(listOf("say Timer", "say Volume", "say Status", "say More"), r.spoken())   // the hub keeps the user's order
     }
 
     @Test fun countRankerPutsMostPickedFirstAndTiesKeepDefaultOrder() {
-        val counts = mapOf("hub:volume" to 3, "hub:status" to 3, "hub:timer" to 1)
-        val r = Rig(CountRanker { counts[it] ?: 0 }); r.wake(); r.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Volume", "say Status", "say Timer", "say More"), r.spoken())
+        val counts = mapOf("b" to 3, "c" to 3, "a" to 1)
+        assertEquals(listOf("b", "c", "a", "d"), CountRanker { counts[it] ?: 0 }.rank("X", "", listOf("a", "b", "c", "d")))
     }
 
     @Test fun countRankerFromChoiceLogAndMessageContext() {
