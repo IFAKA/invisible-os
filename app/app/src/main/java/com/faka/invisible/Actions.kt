@@ -161,6 +161,8 @@ object Actions {
     fun init(ctx: Context) {
         if (::app.isInitialized) return
         app = ctx.applicationContext
+        val bf = java.io.File(app.filesDir, "buckets.txt")
+        buckets = BucketStore(if (bf.exists()) bf.readLines() else emptyList()) { lines -> try { bf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "buckets.txt write failed", e) } }
         Thread({ wordModel() }, "write-warm").start()
         com.faka.invisible.tell.TellSynth.warmAsync()   // the Duel's sounds take seconds to build on a phone: do it now, quietly
         mode.settings = SettingsStore.load(prefs())
@@ -191,6 +193,7 @@ object Actions {
     private var typer: TypeProgram? = null
     private var nextWord: Ranker? = null
     @Volatile private var phraseReq = 0
+    private lateinit var buckets: BucketStore
     private val phraseWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
     private var clips: WordClips? = null
     private var pairTrack: AudioTrack? = null
@@ -225,6 +228,9 @@ object Actions {
         m.also { nextWord = it }
     } catch (e: Throwable) { Log.e(TAG, "word model failed", e); null }
 
+    /** Dev tool (AiTestReceiver): start Write into the field that has focus, as the hub item does. */
+    fun startWriteDev() { handler.post { launchWrite() } }
+
     private fun launchWrite() {
         typer?.stop()
         Thread({
@@ -236,7 +242,9 @@ object Actions {
                     override fun set(key: String, delayMs: Long, task: () -> Unit) { clear(key); val r = Runnable { typeTimers.remove(key); task() }; typeTimers[key] = r; handler.postDelayed(r, delayMs) }
                     override fun clear(key: String) { typeTimers.remove(key)?.let { handler.removeCallbacks(it) } }
                 }
+                val frame = ButtonAccessibilityService.inst?.frame() ?: Frame()   // the place that has focus: app, kind of field, what is on the screen
                 val out = object : TypeOut {
+                    override fun suggestions() = buckets.suggestions(frame)
                     override fun pair(left: String, right: String?) {
                         Log.d(TAG, "WRITE pair $left | $right")
                         stopPair(); val me = pairSeq
@@ -250,19 +258,23 @@ object Actions {
                     override fun cue(c: TypeCue) { play(TypeSounds.pcm(c)) }
                     override fun phrases(text: String, then: (List<String>) -> Unit) {
                         if (!mode.settings.ai || !LocalAi.available(app)) return
-                        val my = ++phraseReq; val es = lm is NgramWords
+                        val my = ++phraseReq; val es = lm is NgramWords; val frameNow = frame
                         phraseWorker.execute {   // one at a time; a request for an older text is dropped before it starts
                             if (my != phraseReq) return@execute
-                            val r = try { LocalAi.continuations(app, text, if (es) "es" else "en") } catch (e: Throwable) { Log.e(TAG, "endings failed", e); emptyList() }
+                            val r = try { LocalAi.continuations(app, text, if (es) "es" else "en", frameNow.brief()) } catch (e: Throwable) { Log.e(TAG, "endings failed", e); emptyList() }
                             if (r.isNotEmpty()) handler.post { then(r) }
                         }
                     }
                     override fun finished(text: String) {
-                        Log.d(TAG, "WRITE result: $text"); EventLog.add("write: $text")
+                        Log.d(TAG, "WRITE result [${frame.app} ${frame.kind}]: ${if (frame.kind == FieldKind.PASSWORD) "-" else text}"); EventLog.add("write: ${frame.app} ${text.length} chars")
+                        if (text.isNotEmpty()) {
+                            buckets.learn(frame, text.split(' ').filter { it.isNotEmpty() }, text)
+                            if (frame.hasField) { val all = if (frame.before.isBlank()) text else frame.before.trimEnd() + (if (frame.digits) "" else " ") + text; if (!(ButtonAccessibilityService.inst?.setFieldText(all) ?: false)) Log.d(TAG, "WRITE could not set the field") }
+                        }
                         handler.postDelayed({ if (text.isEmpty()) this@Actions.say(TypeVoice.EMPTY, false) else this@Actions.say(text, false, if (lm is NgramWords) "es" else null) }, 700)
                     }
                 }
-                typer = TypeProgram(lm, out, timers) { typer = null; stopPair(); gameEnded() }.also { it.start() }
+                typer = TypeProgram(BucketRanker(lm, buckets, frame), out, timers, frame) { typer = null; stopPair(); gameEnded() }.also { it.start() }
             }
         }, "write-load").start()
     }
