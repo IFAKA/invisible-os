@@ -15,6 +15,7 @@ data class LauncherSettings(
     val undoMs: Long = 3000,
     val speechRate: Float = 0.9f,
     val learnOrder: Boolean = true,
+    val ai: Boolean = false,   // reply sentences and task wording from the model on the phone (needs the 2.6 GB download)
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
@@ -49,6 +50,7 @@ object SettingsStore {
             undoMs = p.getLong("s_undo", d.undoMs).coerceIn(1500, 8000),
             speechRate = p.getFloat("s_rate", d.speechRate).coerceIn(0.6f, 1.8f),
             learnOrder = p.getBoolean("s_learn", d.learnOrder),
+            ai = p.getBoolean("s_ai", d.ai),
             spearcons = p.getBoolean("s_spearcons", d.spearcons),
         )
     }
@@ -94,6 +96,6 @@ object SettingsStore {
     fun save(p: SharedPreferences, s: LauncherSettings) {
         p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_more", s.more.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
             .putLong("s_gap", s.itemGapMs).putInt("s_loops", s.silentLoops).putLong("s_undo", s.undoMs)
-            .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).apply()
+            .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).putBoolean("s_ai", s.ai).apply()
     }
 }

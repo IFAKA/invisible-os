@@ -143,6 +143,19 @@ class MainActivity : Activity() {
             addView(chips, LinearLayout.LayoutParams(-1, -2))
         }
 
+        card("AI on the phone", "Writes reply sentences and clean tasks from a message. It runs on the phone, no network use after the download, and it never listens.") {
+            addView(k.row(k.grow(k.text("Use AI for replies and tasks", 14f, Ui.soft)),
+                Switch(this@MainActivity).apply { isChecked = s.ai; setOnCheckedChangeListener { _, v -> change(s.copy(ai = v)); if (v) ModelDownload.start(applicationContext) { EventLog.refresh() } } }),
+                LinearLayout.LayoutParams(-1, -2))
+            if (s.ai) {
+                val ready = ModelDownload.ready(this@MainActivity)
+                addView(k.text(if (ready) "Ready. The model is on this phone." else ModelDownload.status.ifEmpty { "The model (2.6 GB) is not on this phone yet." }, 14f, Ui.soft),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
+                if (!ready) addView(k.btn("Download model (Wi-Fi only)", true) { ModelDownload.start(applicationContext) { EventLog.refresh() }; render() },
+                    LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(8) })
+            }
+        }
+
         card("Speed", "Find what feels right. You can change it any time.") {
             addView(slider("Pause between options", "%.1f s".format(s.itemGapMs / 1000f), 34, ((s.itemGapMs - 600) / 100).toInt()) {
                 s.copy(itemGapMs = 600L + it * 100) })

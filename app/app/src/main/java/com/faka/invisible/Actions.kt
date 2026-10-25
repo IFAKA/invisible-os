@@ -80,7 +80,7 @@ object Actions {
             override fun tasks() = taskStore.all()
             override fun prepareAiReplies(m: Msg) {
                 val k = "${m.key}|${m.at}"
-                if (!LocalAi.available(app) || aiCache.containsKey(k) || !aiBusy.add(k)) return
+                if (!mode.settings.ai || !LocalAi.available(app) || aiCache.containsKey(k) || !aiBusy.add(k)) return
                 Thread {
                     val msg = "${m.sender}: ${m.text.take(300)}"; val l = if (m.lang.startsWith("en")) "en" else "es"
                     try { aiCache[k] = LocalAi.replies(app, msg, l); aiTaskCache[k] = LocalAi.tasks(app, msg, l) }
