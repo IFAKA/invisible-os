@@ -16,7 +16,7 @@ data class LauncherSettings(
     val learnOrder: Boolean = true,
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "playing" to "Playing", "more" to "More")
+        val HUB_ITEMS = linkedMapOf("playing" to "Playing", "messages" to "Messages", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "more" to "More")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** Keep known keys once each, in order; "more" is always present (it holds Exit, Torch, Read). */
@@ -44,13 +44,11 @@ object SettingsStore {
         )
     }
 
-    /** A saved menu from before "Playing" existed gets it once, before More (the user can switch it off in settings). */
+    /** A saved menu from before "Playing" existed (or from when it was last) gets it once, as the first item; the user can move or switch it off in settings. */
     private fun withPlaying(p: SharedPreferences, keys: List<String>): List<String> {
-        if (p.getBoolean("s_playing_added", false)) return keys
-        p.edit().putBoolean("s_playing_added", true).apply()
-        if ("playing" in keys) return keys
-        val i = keys.indexOf("more").let { if (it < 0) keys.size else it }
-        return keys.take(i) + "playing" + keys.drop(i)
+        if (p.getBoolean("s_playing_first", false)) return keys
+        p.edit().putBoolean("s_playing_first", true).apply()
+        return listOf("playing") + keys.filter { it != "playing" }
     }
 
     fun save(p: SharedPreferences, s: LauncherSettings) {

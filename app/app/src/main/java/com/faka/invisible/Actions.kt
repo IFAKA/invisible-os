@@ -64,6 +64,7 @@ object Actions {
                     if (title.isNullOrBlank()) null else if (artist.isNullOrBlank()) title else "$title, $artist"
                 }
             }
+            override fun songLang(text: String) = ControllerNotificationListener.voiceFor(text)
             override fun pauseMusic() = pauseMusicNow()
             override fun resumeMusic() = resumeMusicNow()
             override fun volume(up: Boolean) = adjustVolume(up)

@@ -16,6 +16,8 @@ class ControllerNotificationListener : NotificationListenerService() {
     companion object {
         val apps = setOf("com.whatsapp", "com.microsoft.teams", "com.tencent.mm", "com.anthropic.claude")
         val store = MessageStore()
+        /** Spanish or English voice for a song name (short text, so the stop-word guess backs up the detector); null = default voice. */
+        fun voiceFor(text: String): String? = MessageLogic.voiceLang(try { detector.detect(text) } catch (e: Exception) { "" })
         private val detector: LangDetector by lazy { MlKitLangDetector() }
         @Volatile var convLang = ConvLang()
         private val worker by lazy { java.util.concurrent.Executors.newSingleThreadExecutor() }
