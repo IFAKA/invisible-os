@@ -1,7 +1,11 @@
 package com.faka.invisible
 
 /** What the Write program needs to know about the words: all words, most likely first, after the given words. */
-interface Ranker { fun ranked(context: List<String>): List<Pair<String, Double>> }
+interface Ranker {
+    fun ranked(context: List<String>): List<Pair<String, Double>>
+    /** True when short words and contractions are too hard to hear alone, so the first pair skips them (English voice). Spanish words are short and clear. */
+    val skipShortFirst: Boolean get() = false
+}
 
 /** What the Write program asks of the app. The words of a pair are heard one after the other: the left word in the left ear, then the right word in the right ear. */
 interface TypeOut {
@@ -33,7 +37,7 @@ class TypeProgram(
         const val REPLAY_MS = 7000L
         const val MAX_REPLAYS = 3
         const val WORD_PAGES = 4
-        val LETTER_RE = Regex("[a-z']+")
+        val LETTER_RE = Regex("[a-záéíóúüñ']+")
     }
 
     private val written = ArrayList<String>()
@@ -64,7 +68,7 @@ class TypeProgram(
             val mass = LinkedHashMap<Char, Double>()
             for ((w, lp) in all) if (w.length > prefix.length && w.startsWith(prefix) && LETTER_RE.matches(w)) mass.merge(w[prefix.length], Math.exp(lp), Double::plus)
             mass.entries.sortedByDescending { it.value }.map { it.key.toString() }
-        } else all.asSequence().filter { it.first.startsWith(prefix) && LETTER_RE.matches(it.first) && (prefix.isNotEmpty() || (it.first.length >= 3 && '\'' !in it.first)) }.take(WORD_PAGES * 2).map { it.first }.toList()
+        } else all.asSequence().filter { it.first.startsWith(prefix) && LETTER_RE.matches(it.first) && (prefix.isNotEmpty() || !lm.skipShortFirst || (it.first.length >= 3 && '\'' !in it.first)) }.take(WORD_PAGES * 2).map { it.first }.toList()
     }
 
     private fun show(again: Boolean = false) {

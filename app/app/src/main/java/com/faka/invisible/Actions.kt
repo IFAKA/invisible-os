@@ -186,7 +186,7 @@ object Actions {
 
     // ---- Write: the stereo-pair keyboard (Typing.kt). The OS gives it the raw button and plays the close sound when it ends. ----
     private var typer: TypeProgram? = null
-    private var nextWord: NextWord? = null
+    private var nextWord: Ranker? = null
     private var clips: WordClips? = null
     private var pairTrack: AudioTrack? = null
     private var pairSeq = 0
@@ -214,7 +214,9 @@ object Actions {
         typer?.stop()
         Thread({
             val lm = nextWord ?: try {
-                NextWord(app.assets.open("lm/lm.bin"), app.assets.open("lm/vocab.txt").bufferedReader().readText()).also { nextWord = it }
+                val mine = java.io.File(app.filesDir, "words_es.txt")   // your own model, pushed from the laptop; not in the app or in git
+                if (mine.exists()) mine.bufferedReader().use { r -> NgramWords(r.lineSequence().toList().asSequence()) }.also { nextWord = it }
+                else NextWord(app.assets.open("lm/lm.bin"), app.assets.open("lm/vocab.txt").bufferedReader().readText()).also { nextWord = it }
             } catch (e: Throwable) { Log.e(TAG, "word model failed", e); null }
             handler.post {
                 if (lm == null) { say(TypeVoice.NO_MODEL, false); gameEnded(); return@post }

@@ -48,4 +48,5 @@ def main():
         if i in (100, 500, 1000, 3000, 10000): print(f"top {i} words cover {100*cover/total:.0f}% of what you write")
     if a.out: json.dump({"me": me, "words": words.most_common(5000), "first": first.most_common(500), "pairs": [[" ".join(k), v] for k, v in pairs.most_common(3000)]}, open(a.out, "w"), ensure_ascii=False)
 
-main()
+if __name__ == "__main__":
+    main()

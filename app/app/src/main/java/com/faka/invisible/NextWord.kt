@@ -72,6 +72,8 @@ class NextWord(bin: InputStream, vocabText: String) : Ranker {
     private var rankedAll: List<Pair<String, Double>> = emptyList()
 
     /** Every word, most likely first, for [context]. Kept for the last context, so paging and letter views cost nothing. */
+    override val skipShortFirst get() = true
+
     override fun ranked(context: List<String>): List<Pair<String, Double>> {
         val key = context.joinToString(" ")
         if (key != rankedKey) { rankedAll = top(context, V - 3); rankedKey = key }
