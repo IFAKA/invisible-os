@@ -10,11 +10,11 @@ import android.util.Log
 
 /**
  * Its enabled "notification access" lets us read other apps' media sessions, and keeps the latest
- * unread chat notifications (WhatsApp, Teams, WeChat) for the Messages layer.
+ * unread chat notifications (WhatsApp, Teams, WeChat, Claude; Claude has no reply action, so it is read-only) for the Messages layer.
  */
 class ControllerNotificationListener : NotificationListenerService() {
     companion object {
-        val apps = setOf("com.whatsapp", "com.microsoft.teams", "com.tencent.mm")
+        val apps = setOf("com.whatsapp", "com.microsoft.teams", "com.tencent.mm", "com.anthropic.claude")
         val store = MessageStore()
         private val detector: LangDetector by lazy { MlKitLangDetector() }
         @Volatile var convLang = ConvLang()
