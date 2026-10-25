@@ -80,6 +80,43 @@ class Kit(private val c: Context) {
     /** Grey rounded background of a list row. */
     fun surface(v: View) { v.background = GradientDrawable().apply { setColor(Ui.page); cornerRadius = dp(Ui.RADIUS_ROW).toFloat() } }
 
+    /** Top bar of a sub-screen: a back button and the page title. */
+    fun header(title: String, onBack: () -> Unit) = row(
+        btn("\u2190 Back") { onBack() }.apply { minWidth = dp(88) },
+        grow(text(title, 22f, bold = true).apply { setPadding(dp(14), 0, 0, 0) }))
+
+    /** A tappable card that opens a page: title, one line that shows its current state, and a chevron. */
+    fun navRow(parent: LinearLayout, title: String, summary: String, onClick: () -> Unit) {
+        val r = row(grow(LinearLayout(c).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(text(title, 18f, bold = true))
+            addView(text(summary, 14f, Ui.soft).apply { setPadding(0, dp(2), 0, 0) })
+        }), text("\u203A", 28f, Ui.soft))
+        r.minimumHeight = dp(72); r.setPadding(dp(16), dp(12), dp(16), dp(12))
+        r.background = GradientDrawable().apply { setColor(Ui.card); cornerRadius = dp(Ui.RADIUS_CARD).toFloat() }
+        r.isClickable = true; r.setOnClickListener { onClick() }
+        parent.addView(r, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+    }
+
+    /** The one big message at the top of the home page: a colour, a headline and a line under it. */
+    fun banner(parent: LinearLayout, headline: String, line: String, color: Int, fill: LinearLayout.() -> Unit = {}) {
+        val v = LinearLayout(c).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(18), dp(20), dp(18))
+            background = GradientDrawable().apply { setColor(color); cornerRadius = dp(Ui.RADIUS_CARD).toFloat() }
+        }
+        v.addView(text(headline, 22f, Ui.onAccent, true))
+        v.addView(text(line, 15f, Ui.onAccent).apply { setPadding(0, dp(4), 0, dp(4)) })
+        v.fill()
+        parent.addView(v, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
+    }
+
+    /** Big button on a coloured banner (white, accent text). */
+    fun bannerBtn(label: String, onClick: () -> Unit) = Button(c).apply {
+        text = label; isAllCaps = false; minHeight = dp(52); minimumHeight = dp(52); stateListAnimator = null; elevation = 0f
+        setTextColor(Ui.accent); background = GradientDrawable().apply { setColor(Ui.onAccent); cornerRadius = dp(Ui.RADIUS_BUTTON).toFloat() }
+        setOnClickListener { onClick() }
+    }
+
     /** Big tinted button for one value (a timer length). */
     fun chip(label: String, onClick: () -> Unit) = Button(c).apply {
         text = label; isAllCaps = false; textSize = 18f; setTextColor(Ui.accent); stateListAnimator = null; elevation = 0f

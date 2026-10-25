@@ -58,39 +58,66 @@ class MainActivity : Activity() {
     private fun card(title: String, hint: String? = null, fill: LinearLayout.() -> Unit) = k.card(body, title, hint, fill)
     private fun slider(label: String, valueText: String, max: Int, now: Int, apply: (Int) -> LauncherSettings) = k.slider(label, valueText, max, now) { change(apply(it)) }
 
-    // ---- screen ----
+    // ---- screens: Home shows one thing to do and a few doors; each door opens one small page ----
+    private enum class Page(val title: String) { HOME("Invisible"), TASKS("Tasks"), MENU("Your menu"), VOICE("Voice and speed"), AI("AI on the phone"), HELP("Help") }
+    private var page = Page.HOME
+
+    private fun open(p: Page) { page = p; render(); (body.parent as? ScrollView)?.scrollTo(0, 0) }
+
+    @Deprecated("Back goes to Home first, then leaves")
+    override fun onBackPressed() { if (page != Page.HOME) open(Page.HOME) else super.onBackPressed() }
+
     private fun render() {
         body.removeAllViews()
+        if (page != Page.HOME) body.addView(k.header(page.title) { open(Page.HOME) })
+        when (page) {
+            Page.HOME -> home()
+            Page.TASKS -> tasksPage()
+            Page.MENU -> menuPage()
+            Page.VOICE -> voicePage()
+            Page.AI -> aiPage()
+            Page.HELP -> helpPage()
+        }
+    }
+
+    private fun home() {
         val notif = (Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: "").contains(packageName)
         val assist = (Settings.Secure.getString(contentResolver, "assistant") ?: "").contains(packageName)
         val a11y = Actions.accessibilityConnected
-        val missing = listOf(a11y, notif, assist).count { !it }
-
+        // one step at a time: the first missing permission is the only thing asked
+        val steps = listOf(
+            Triple("Button access", "So the app can hear your earbud button.", a11y) to Settings.ACTION_ACCESSIBILITY_SETTINGS,
+            Triple("Notification access", "So it can read your new messages to you.", notif) to Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS,
+            Triple("Assistant", "So a long press works on the lock screen.", assist) to Settings.ACTION_VOICE_INPUT_SETTINGS)
+        val next = steps.indexOfFirst { !it.first.third }
         body.addView(k.text("Invisible", 30f, bold = true))
-        body.addView(k.text("Control your phone with one earbud button. No screen needed.", 15f, Ui.soft))
-
-        card(if (missing == 0) "Ready" else "$missing step${if (missing > 1) "s" else ""} left to set up",
-            "Turn each one on once. Then this app works with the screen off.") {
-            fun step(name: String, why: String, ok: Boolean, open: String) {
-                addView(k.row(
-                    k.grow(LinearLayout(this@MainActivity).apply {
-                        orientation = LinearLayout.VERTICAL
-                        addView(k.text((if (ok) "✓  " else "✗  ") + name, 16f, if (ok) Ui.good else Ui.bad, true))
-                        addView(k.text(why, 13f, Ui.soft).apply { setPadding(k.dp(24), 0, 0, 0) })
-                    }),
-                    if (ok) k.spacer() else k.btn("Turn on", true) { startActivity(Intent(open)) }))
+        if (next >= 0) {
+            val (t, open) = steps[next]
+            k.banner(body, "Step ${next + 1} of ${steps.size}: ${t.first}", t.second + " Turn it on once. Then come back.", Ui.accent) {
+                addView(k.bannerBtn("Turn on") { startActivity(Intent(open)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
             }
-            step("Button access", "Hears your earbud button.", a11y, Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            step("Notification access", "Reads your new messages.", notif, Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-            step("Assistant", "A long press works on the lock screen.", assist, Settings.ACTION_VOICE_INPUT_SETTINGS)
-            addView(k.row(k.grow(k.text(if (EventLog.running) "Listening for the button" else "Stopped", 15f, Ui.soft)),
-                k.btn(if (EventLog.running) "Stop" else "Start") {
-                    val svc = Intent(this@MainActivity, ButtonService::class.java)
-                    if (EventLog.running) stopService(svc) else startForegroundService(svc)
-                }))
+        } else if (!EventLog.running) {
+            k.banner(body, "Stopped", "The app is not listening to the button.", Ui.bad) {
+                addView(k.bannerBtn("Start") { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
+            }
+        } else {
+            k.banner(body, "Ready", "Turn the screen off. Hold your earbud button to hear the menu.", Ui.good)
         }
+        val n = Actions.tasks().size
+        k.navRow(body, "Tasks", if (n == 0) "None yet. Add one." else "$n to do") { open(Page.TASKS) }
+        k.navRow(body, "Your menu", "${s.hub.size} items you hear, in your order") { open(Page.MENU) }
+        k.navRow(body, "Voice and speed", "Voice ${"%.1f".format(s.speechRate)}x, pause ${"%.1f".format(s.itemGapMs / 1000f)} s") { open(Page.VOICE) }
+        k.navRow(body, "AI on the phone", if (!s.ai) "Off" else if (ModelDownload.ready(this)) "On, ready" else "On, model not downloaded") { open(Page.AI) }
+        k.navRow(body, "Help", "Button gestures and your last presses") { open(Page.HELP) }
+        if (next >= 0) {
+            val left = steps.drop(next + 1).filter { !it.first.third }
+            if (left.isNotEmpty()) body.addView(k.text("After this: " + left.joinToString(", ") { it.first.first }, 14f, Ui.soft).apply { setPadding(0, k.dp(12), 0, 0) })
+        }
+        if (next < 0 && EventLog.running) body.addView(k.btn("Stop listening") { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = k.dp(16) })
+    }
 
-        card("Tasks" + Actions.tasks().size.let { if (it > 0) " ($it)" else "" }, "Hold the button, then click \"Tasks\". Click \"Add task\" to add one. Click a task right after you hear it to finish it.") {
+    private fun tasksPage() {
+        card("Tasks" + Actions.tasks().size.let { if (it > 0) " ($it)" else "" }, "Add one here, or share from Google Keep. Hold the button and pick \"Tasks\" to hear them.") {
             val input = k.input("Write a task, or paste a checklist")
             val note = k.text(taskNote, 14f, if (taskNoteBad) Ui.bad else Ui.good).apply { setPadding(0, k.dp(6), 0, 0) }
             fun add() {
@@ -121,7 +148,10 @@ class MainActivity : Activity() {
             }
         }
 
-        card("Your menu", "Hold \u2261 and drag to reorder. The switch turns an item off.") {
+    }
+
+    private fun menuPage() {
+        card("What you hear first", "Hold \u2261 and drag to reorder. The switch turns an item off.") {
             addView(k.dragList(s.hub, LauncherSettings.HUB_ITEMS, setOf("more")) { order -> change(s.copy(hub = LauncherSettings.cleanHub(order))) })
             addView(k.row(k.grow(k.text("Reply options: put the ones you pick most first (automatic)", 14f, Ui.soft)),
                 Switch(this@MainActivity).apply { isChecked = s.learnOrder; setOnCheckedChangeListener { _, v -> change(s.copy(learnOrder = v)) } }),
@@ -135,6 +165,19 @@ class MainActivity : Activity() {
             addView(k.dragList(s.more, LauncherSettings.MORE_ITEMS, setOf("exit")) { order -> change(s.copy(more = LauncherSettings.cleanMore(order))) })
         }
 
+    }
+
+    private fun voicePage() {
+        card("Speed", "Find what feels right. You can change it any time.") {
+            addView(slider("Pause between options", "%.1f s".format(s.itemGapMs / 1000f), 34, ((s.itemGapMs - 600) / 100).toInt()) {
+                s.copy(itemGapMs = 600L + it * 100) })
+            addView(slider("Voice speed", "%.1f x".format(s.speechRate), 12, ((s.speechRate - 0.6f) * 10).toInt()) {
+                s.copy(speechRate = 0.6f + it / 10f) })
+            addView(slider("Time to cancel a send", "%.1f s".format(s.undoMs / 1000f), 13, ((s.undoMs - 1500) / 500).toInt()) {
+                s.copy(undoMs = 1500L + it * 500) })
+            addView(slider("Rounds before it goes quiet", "${s.silentLoops}", 4, s.silentLoops - 1) { s.copy(silentLoops = it + 1) })
+        }
+
         card("Timer", "Tap a time to change it, like the clock app. These are the choices you hear. \"Last used\" is always added.") {
             val chips = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
             s.timers.forEachIndexed { i, m ->
@@ -143,6 +186,9 @@ class MainActivity : Activity() {
             addView(chips, LinearLayout.LayoutParams(-1, -2))
         }
 
+    }
+
+    private fun aiPage() {
         card("AI on the phone", "Writes reply sentences and clean tasks from a message. It runs on the phone, no network use after the download, and it never listens.") {
             addView(k.row(k.grow(k.text("Use AI for replies and tasks", 14f, Ui.soft)),
                 Switch(this@MainActivity).apply { isChecked = s.ai; setOnCheckedChangeListener { _, v -> change(s.copy(ai = v)); if (v) ModelDownload.start(applicationContext) { EventLog.refresh() } } }),
@@ -156,23 +202,16 @@ class MainActivity : Activity() {
             }
         }
 
-        card("Speed", "Find what feels right. You can change it any time.") {
-            addView(slider("Pause between options", "%.1f s".format(s.itemGapMs / 1000f), 34, ((s.itemGapMs - 600) / 100).toInt()) {
-                s.copy(itemGapMs = 600L + it * 100) })
-            addView(slider("Voice speed", "%.1f x".format(s.speechRate), 12, ((s.speechRate - 0.6f) * 10).toInt()) {
-                s.copy(speechRate = 0.6f + it / 10f) })
-            addView(slider("Time to cancel a send", "%.1f s".format(s.undoMs / 1000f), 13, ((s.undoMs - 1500) / 500).toInt()) {
-                s.copy(undoMs = 1500L + it * 500) })
-            addView(slider("Rounds before it goes quiet", "${s.silentLoops}", 4, s.silentLoops - 1) { s.copy(silentLoops = it + 1) })
-        }
+    }
 
+    private fun helpPage() {
         card("How to use it") {
             addView(k.text("Music playing or phone idle: click = play/pause, 2 = next, 3 = previous.\n" +
                 "Hold: wake the menu.\n" +
                 Voice.GESTURE_HELP, 14f, Ui.soft))
         }
 
-        card("Last gestures") {
+        card("Last button presses") {
             addView(k.text(EventLog.items.joinToString("\n").ifEmpty { "None yet. Press your button." }, 14f, Ui.soft))
         }
 
