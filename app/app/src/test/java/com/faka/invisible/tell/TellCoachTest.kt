@@ -212,6 +212,38 @@ class TellCoachTest {
         assertEquals(0, r.out.count("saveLevel"))
     }
 
+    @Test fun aStepChangeInTheMiddleOfAHoldDoesNotCancelTheLeave() {
+        val r = rig(1)
+        r.w.advanceBy(300)
+        r.tap(100)                                   // answers the first drill: the next step starts about 2 s later, while we hold
+        r.w.advanceBy(100)
+        r.g.down(r.w.now); r.w.advanceBy(3200)
+        assertTrue("the 3 s hold must leave even though the step changed mid-hold", r.out.left)
+    }
+
+    @Test fun aShortPressDoesNotLeaveLaterWhenAStepResetsTheTimers() {
+        val r = rig(1)
+        r.w.advanceBy(300)
+        r.tap(100); r.w.advanceBy(100)
+        r.tap(150)
+        r.w.advanceBy(6000)
+        assertFalse(r.out.left)
+    }
+
+    @Test fun aThreeSecondHoldLeavesAtAnyMomentOfAnyLevelsPractice() {
+        for (lv in 1..3) for (answer in listOf(0L, 100L, 450L, 1000L)) {
+            var t = 0L
+            while (t < 60000) {
+                val r = rig(lv)
+                var now = 0L
+                while (now < t) { r.w.advanceBy(250); now += 250; if (answer > 0 && now % 2500L == 0L) r.tap(answer).also { now += answer } }
+                r.g.down(r.w.now); r.w.advanceBy(3100)
+                assertTrue("level $lv answer $answer at t=$t: the hold did not leave", r.out.left)
+                t += 370
+            }
+        }
+    }
+
     @Test fun howToPlayStartsAtLevelOneEvenWhenInTheFullGame() {
         val r = rig(4, force = true)
         assertEquals(1, r.out.level)

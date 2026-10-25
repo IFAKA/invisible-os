@@ -102,7 +102,7 @@ class TellGame(
     private fun at(key: String, time: Long, task: () -> Unit) = timers.set(K + key, maxOf(0L, time - clock()), task)
     private fun clear(key: String) = timers.clear(K + key)
     private fun clearAll() {
-        for (k in listOf("start", "snare", "close", "next", "result", "life", "end", "speech", "d1", "d2", "f1", "f3", "leave", "coach", "fb", "hint", "en0", "en1", "en2", "en3", "en4", "en5")) clear(k)
+        for (k in listOf("start", "snare", "close", "next", "result", "life", "end", "speech", "d1", "d2", "coach", "fb", "hint", "en0", "en1", "en2", "en3", "en4", "en5")) clear(k)
     }
 
     /** Level of a hold: 0 = JAB, 1 = GUARD, 2 = CHARGE. */
@@ -140,6 +140,7 @@ class TellGame(
     private val noEnergy get() = level <= 2
     private val chargeOk get() = level >= 2
     private var stepNo = 0
+    private var downAt = -1L           // the time of the press that is still down (-1 = button up); the leave timers check it
     private var hints = 0
     private var fromPress = false      // the step was started by a press: skip its talk, judge the press
     private var pendingNext: (() -> Unit)? = null   // where a press jumps to while the coach is talking
@@ -331,13 +332,15 @@ class TellGame(
                     at("d1", timeMs + GUARD_MS) { out.play(Cue.DETENT_1); out.setHold(1) }
                     if (chargeOk) at("d2", timeMs + CHARGE_MS) { out.play(Cue.DETENT_2); out.setHold(2) }
                 }
-                at("f1", timeMs + FORFEIT_CUE_MS) { out.play(Cue.FORFEIT) }
-                at("f3", timeMs + FORFEIT_MS) { forfeit() }
+                downAt = timeMs
+                at("f1", timeMs + FORFEIT_CUE_MS) { if (downAt == timeMs) out.play(Cue.FORFEIT) }
+                at("f3", timeMs + FORFEIT_MS) { if (downAt == timeMs) forfeit() }
             }
             Phase.AFTER -> {
                 out.play(Cue.TAP)
                 pressAt = timeMs
-                at("leave", timeMs + LEAVE_MS) { pressAt = -1L; leave(true) }
+                downAt = timeMs
+                at("leave", timeMs + LEAVE_MS) { if (downAt == timeMs) { pressAt = -1L; leave(true) } }
             }
             else -> {}
         }
@@ -351,10 +354,11 @@ class TellGame(
     }
 
     fun up(timeMs: Long) {
+        downAt = -1L; clear("f1"); clear("f3"); clear("leave")   // the button is up, whatever the steps did meanwhile
         val p = pressAt
         if (p < 0) return
         pressAt = -1L
-        clear("d1"); clear("d2"); clear("f1"); clear("f3"); clear("leave")
+        clear("d1"); clear("d2")
         when (phase) {
             Phase.AFTER -> { out.stopSpeech(); if (advanced) { advanced = false; startPractice() } else newMatch() }
             Phase.PRACTICE -> {
@@ -497,13 +501,14 @@ class TellGame(
     }
 
     private fun forfeit() {
-        if (phase == Phase.IDLE || phase == Phase.OVER || phase == Phase.AFTER) return
-        if (phase != Phase.PRACTICE) log(rung, "FORFEIT")   // counts as a loss; the rung does not change
+        if (phase == Phase.IDLE || phase == Phase.OVER) return   // AFTER too: a hold that began in a round and outlived the match still leaves
+        if (phase != Phase.PRACTICE && phase != Phase.AFTER) log(rung, "FORFEIT")   // counts as a loss; the rung does not change
         leave(true)
     }
 
     private fun leave(tape: Boolean) {
         if (phase == Phase.OVER) return
+        downAt = -1L; clear("f1"); clear("f3"); clear("leave")
         val wasAfter = phase == Phase.AFTER || phase == Phase.PRACTICE   // no bed is running in either
         phase = Phase.OVER
         clearAll()
