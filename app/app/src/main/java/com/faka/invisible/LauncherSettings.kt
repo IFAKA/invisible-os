@@ -19,17 +19,29 @@ data class LauncherSettings(
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("tasks" to "Tasks", "messages" to "Messages", "playing" to "Playing", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "weather" to "Weather", "turn" to "Next turn (Google Maps)", "calendar" to "Next event", "games" to "Games", "find" to "Find my phone (only without wired headphones)", "more" to "More")
+        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "playing" to "Playing", "timer" to "Timer", "status" to "Status", "info" to "Info (weather, next event, next turn)", "phone" to "Phone (volume, torch, do not disturb, find my phone)", "games" to "Games", "more" to "More")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** What is inside "More", in the order spoken. "exit" is always kept. */
-        val MORE_ITEMS = linkedMapOf("read" to "Read unread messages", "torch" to "Torch", "dnd" to "Do not disturb", "exit" to "Exit")
+        val MORE_ITEMS = linkedMapOf("read" to "Read unread messages", "exit" to "Exit")
         val DEFAULT_MORE = MORE_ITEMS.keys.toList()
         fun cleanMore(keys: List<String>): List<String> = keys.filter { it in MORE_ITEMS }.distinct().let { if ("exit" in it) it else it + "exit" }
 
         /** Keep known keys once each, in order; "more" is always present (it holds Exit, Torch, Read). */
         fun cleanHub(keys: List<String>): List<String> =
             keys.filter { it in HUB_ITEMS }.distinct().let { if ("more" in it) it else it + "more" }
+
+        /**
+         * Old flat menu -> grouped menu. "info" is ON if any of weather/calendar/turn was; "phone" is ON if any of volume/find (hub) or torch/dnd ([oldMore]) was.
+         * Other OFF choices stay OFF. Result is in the new default order. A menu that already has "info" or "phone" is only cleaned.
+         */
+        fun groupHub(keys: List<String>, oldMore: List<String>): List<String> {
+            if ("info" in keys || "phone" in keys) return cleanHub(keys)
+            val on = keys.toMutableSet()
+            if (keys.any { it in setOf("weather", "calendar", "turn") }) on += "info"
+            if (keys.any { it in setOf("volume", "find") } || oldMore.any { it in setOf("torch", "dnd") }) on += "phone"
+            return cleanHub(DEFAULT_HUB.filter { it in on })
+        }
 
         fun cleanTimers(t: List<Int>): List<Int> {
             val d = listOf(5, 10, 25)
@@ -42,7 +54,7 @@ object SettingsStore {
     fun load(p: SharedPreferences): LauncherSettings {
         val d = LauncherSettings()
         return LauncherSettings(
-            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withOrder(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it))))))) } ?: d.hub,
+            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it)))))))) } ?: d.hub,
             more = p.getString("s_more", null)?.split(',')?.let { LauncherSettings.cleanMore(it) } ?: d.more,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
             itemGapMs = p.getLong("s_gap", d.itemGapMs).coerceIn(600, 4000),
@@ -103,6 +115,15 @@ object SettingsStore {
         return moved
     }
 
+    /** Once: the old flat menu becomes the grouped one. OFF choices are kept (see [LauncherSettings.groupHub]); the old keys are dropped. */
+    private fun withGroups(p: SharedPreferences, keys: List<String>): List<String> {
+        if (p.getBoolean("s_groups_saved", false)) return keys
+        val more = p.getString("s_more", null)?.split(',') ?: listOf("torch", "dnd")   // torch and Do not disturb used to live in "More"
+        val moved = LauncherSettings.groupHub(keys, more)
+        p.edit().putBoolean("s_groups_saved", true).putString("s_hub", moved.joinToString(",")).apply()
+        return moved
+    }
+
     /** Once: put the user's ON items in the fastest order (most used first, "More" last). Items that are OFF stay OFF. */
     private fun withOrder(p: SharedPreferences, keys: List<String>): List<String> {
         if (p.getBoolean("s_order_saved", false)) return keys
@@ -114,6 +135,6 @@ object SettingsStore {
     fun save(p: SharedPreferences, s: LauncherSettings) {
         p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_more", s.more.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
             .putLong("s_gap", s.itemGapMs).putInt("s_loops", s.silentLoops).putLong("s_undo", s.undoMs)
-            .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).putBoolean("s_ai", s.ai).apply()
+            .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).putBoolean("s_ai", s.ai).putBoolean("s_groups_saved", true).apply()
     }
 }

@@ -79,7 +79,7 @@ class ModeTest {
             override fun set(key: String, delayMs: Long, task: () -> Unit) { timers[key] = (now + delayMs) to task }
             override fun clear(key: String) { timers.remove(key) }
         }, { now }, ranker, pauseMs = gap)
-        init { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks" - "weather" - "calendar" - "find" - "turn") }   // the older timing tests count menu items
+        init { m.settings = LauncherSettings(hub = listOf("messages", "playing", "timer", "phone", "status", "games", "more")) }   // the older timing tests count menu items
         fun withTasks() = apply { m.settings = LauncherSettings() }
         fun withInfo() = apply { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks") }
         fun g(vararg x: Gesture) = x.forEach { m.onGesture(it) }
@@ -121,55 +121,55 @@ class ModeTest {
 
     // ---------- weather, next event, find my phone ----------
     @Test fun weatherSpeaksTheAnswerAfterItArrives() {
-        val r = Rig().withInfo(); r.wake(); r.pick("Weather")
+        val r = Rig().withInfo(); r.wake(); r.pick("Info"); r.pick("Weather")
         r.advance(300); assertTrue(r.spoken().isEmpty())   // waiting, nothing said yet
         r.weatherAnswer = "Now 18 degrees, rain in 2 hours."; r.pendingWeather?.invoke(r.weatherAnswer!!)
         r.advance(100); assertEquals(listOf("say Now 18 degrees, rain in 2 hours."), r.spoken())
     }
 
     @Test fun weatherClickWhileWaitingCancelsAndLateAnswerIsDropped() {
-        val r = Rig().withInfo(); r.wake(); r.pick("Weather")
+        val r = Rig().withInfo(); r.wake(); r.pick("Info"); r.pick("Weather")
         r.click(); r.clearLog()
         r.pendingWeather?.invoke("Now 1 degrees, no rain soon.")
         r.advance(100); assertFalse(r.spoken().contains("say Now 1 degrees, no rain soon."))
     }
 
     @Test fun weatherFailureSpeaksFixedSentence() {
-        val r = Rig().withInfo(); r.weatherAnswer = Voice.WEATHER_FAILED; r.wake(); r.pick("Weather")
+        val r = Rig().withInfo(); r.weatherAnswer = Voice.WEATHER_FAILED; r.wake(); r.pick("Info"); r.pick("Weather")
         r.advance(100); assertEquals(listOf("say ${Voice.WEATHER_FAILED}"), r.spoken())
     }
 
     @Test fun nextTurnSpeaksTheInstruction() {
-        val r = Rig().withInfo(); r.nav = "Turn left onto Calle Mayor, 200 m."; r.wake(); r.pick("Next turn")
+        val r = Rig().withInfo(); r.nav = "Turn left onto Calle Mayor, 200 m."; r.wake(); r.pick("Info"); r.pick("Next turn")
         r.advance(100); assertEquals(listOf("say Turn left onto Calle Mayor, 200 m."), r.spoken())
     }
 
     @Test fun nextTurnWithoutNavigationSaysSoFixedSentence() {
-        val r = Rig().withInfo(); r.wake(); r.pick("Next turn")
+        val r = Rig().withInfo(); r.wake(); r.pick("Info"); r.pick("Next turn")
         r.advance(100); assertEquals(listOf("say ${Voice.NO_NAVIGATION}"), r.spoken())
     }
 
     @Test fun nextEventIsSpoken() {
-        val r = Rig().withInfo(); r.wake(); r.pick("Next event")
+        val r = Rig().withInfo(); r.wake(); r.pick("Info"); r.pick("Next event")
         r.advance(100); assertEquals(listOf("say Dentist at 4 PM, in 40 minutes."), r.spoken())
     }
 
     @Test fun findPhoneOnlyWithoutWiredOutput() {
-        val a = Rig().withInfo(); a.wake(); a.advance(60_000)
+        val a = Rig(); a.wake(); a.pick("Phone"); a.advance(10_000)
         assertTrue(a.spoken().contains("say ${Voice.FIND_PHONE}"))
-        val b = Rig().withInfo(); b.wired = true; b.wake(); b.advance(60_000)
+        val b = Rig(); b.wired = true; b.wake(); b.pick("Phone"); b.advance(10_000)
         assertFalse(b.spoken().contains("say ${Voice.FIND_PHONE}"))
     }
 
     @Test fun findPhoneRingsAndAnyClickStopsIt() {
-        val r = Rig().withInfo(); r.wake(); r.pick(Voice.FIND_PHONE)
+        val r = Rig().withInfo(); r.wake(); r.pick("Phone"); r.pick(Voice.FIND_PHONE)
         assertTrue(r.has("find true")); assertTrue(r.spoken().isEmpty())
         r.advance(5000); r.click(Gesture.DOUBLE)
         assertTrue(r.has("find false")); assertFalse(r.m.active)
     }
 
     @Test fun findPhoneStopsByItselfAfter20Seconds() {
-        val r = Rig().withInfo(); r.wake(); r.pick(Voice.FIND_PHONE)
+        val r = Rig().withInfo(); r.wake(); r.pick("Phone"); r.pick(Voice.FIND_PHONE)
         r.advance(19_000); assertFalse(r.has("find false"))
         r.advance(2_000); assertTrue(r.has("find false")); assertFalse(r.m.active)
     }
@@ -235,9 +235,9 @@ class ModeTest {
         r.advance(1); assertEquals(listOf("tone HUB", "say Timer"), r.ev())       // t=400, speech ends t=900
         r.advance(1099); assertEquals(2, r.ev().size)                             // pause: no tick yet (tick at 1500)
         r.advance(1); assertEquals("tone TICK", r.log.last())                    // t=1500
-        r.advance(199); assertFalse(r.log.contains("say Volume"))
-        r.advance(1); assertEquals("say Volume", r.log.last())                   // t=1700 = 800 ms after "done"
-        r.advance(1300 * 3 + 50); assertEquals(listOf("say Timer", "say Volume", "say Status", "say Games", "say More"), r.spoken())
+        r.advance(199); assertFalse(r.log.contains("say Phone"))
+        r.advance(1); assertEquals("say Phone", r.log.last())                   // t=1700 = 800 ms after "done"
+        r.advance(1300 * 3 + 50); assertEquals(listOf("say Timer", "say Phone", "say Status", "say Games", "say More"), r.spoken())
         r.advance(1300) // More ends, pause, ding
         assertEquals(1, r.count("tone DING"))
     }
@@ -246,7 +246,7 @@ class ModeTest {
         val r = Rig(); r.wake()
         r.advance(400 + 5 * 1300 + 800 + 600)
         assertEquals(1, r.count("tone DING"))
-        assertEquals(listOf("say Timer", "say Volume", "say Status", "say Games", "say More", "say Timer"), r.spoken())
+        assertEquals(listOf("say Timer", "say Phone", "say Status", "say Games", "say More", "say Timer"), r.spoken())
         assertTrue(r.m.active)
     }
 
@@ -266,26 +266,26 @@ class ModeTest {
 
     @Test fun aClickResetsTheSilentLoopCount() {
         val r = Rig(); r.wake(); r.advance(400 + 5 * 1300 + 900)   // one ding, list restarted
-        r.pick("Volume")                                             // Volume screen: counter starts again
+        r.clearLog(); r.pick("Phone"); r.pick("Volume")                                             // Volume screen: counter starts again
         r.advance(1300 * 4 + 400)                                    // a full loop and one ding there
         assertTrue(r.m.active)
     }
 
     // ---------- click binding ----------
     @Test fun clickPicksTheOptionSpokenLast() {
-        val r = Rig(); r.wake(); r.advance(2300)   // Volume started at 1750; press 550 ms later
+        val r = Rig(); r.wake(); r.advance(2300)   // Phone started at 1750; press 550 ms later
         r.click()
-        assertEquals(ControllerMode.Screen.VOLUME, r.m.screen)
+        assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
     }
 
     @Test fun clickWithin500msOfNextItemPicksThePrevious() {
-        val r = Rig(); r.wake(); r.advance(1900)   // Volume started at 1750 (150 ms ago): the user meant Timer
+        val r = Rig(); r.wake(); r.advance(1900)   // Phone started at 1750 (150 ms ago): the user meant Timer
         r.click()
         assertEquals(ControllerMode.Screen.TIMER_PICK, r.m.screen)
         val q = Rig(); q.wake(); q.advance(2250)   // exactly 500 ms after the start: still the previous
         q.click(); assertEquals(ControllerMode.Screen.TIMER_PICK, q.m.screen)
-        val w = Rig(); w.wake(); w.advance(2260)   // 510 ms: Volume
-        w.click(); assertEquals(ControllerMode.Screen.VOLUME, w.m.screen)
+        val w = Rig(); w.wake(); w.advance(2260)   // 510 ms: Phone
+        w.click(); assertEquals(ControllerMode.Screen.PHONE, w.m.screen)
     }
 
     @Test fun clickOnTheFirstItemHasNoPreviousToFallBackTo() {
@@ -445,7 +445,7 @@ class ModeTest {
     @Test fun rankerNeverReordersTheHub() {
         val rev = object : OptionRanker { override fun rank(screen: String, context: String, keys: List<String>) = keys.reversed() }
         val r = Rig(rev); r.wake(); r.advance(400 + 1300 * 4 + 100)
-        assertEquals(listOf("say Timer", "say Volume", "say Status", "say Games", "say More"), r.spoken())   // the hub keeps the user's order
+        assertEquals(listOf("say Timer", "say Phone", "say Status", "say Games", "say More"), r.spoken())   // the hub keeps the user's order
     }
 
     @Test fun countRankerPutsMostPickedFirstAndTiesKeepDefaultOrder() {
@@ -563,8 +563,8 @@ class ModeTest {
     }
 
     @Test fun moreMenuFollowsTheSettingsAndAlwaysKeepsExit() {
-        assertEquals(listOf("torch", "exit"), LauncherSettings.cleanMore(listOf("torch", "bogus", "torch")))
-        val r = Rig(); r.m.settings = LauncherSettings(more = listOf("exit", "torch")); r.wake(); r.pick("More"); r.advance(400 + 100)
+        assertEquals(listOf("read", "exit"), LauncherSettings.cleanMore(listOf("read", "torch", "bogus", "read")))
+        val r = Rig(); r.m.settings = LauncherSettings(more = listOf("exit", "read")); r.wake(); r.pick("More"); r.advance(400 + 100)
         assertEquals(listOf("say Exit"), r.spoken().takeLast(1))
     }
 
@@ -648,7 +648,7 @@ class ModeTest {
     }
 
     @Test fun volumeSpeaksOnlyTheLevelWordAndKeepsScanning() {
-        val r = Rig(); r.wake(); r.pick("Volume")
+        val r = Rig(); r.wake(); r.pick("Phone"); r.pick("Volume")
         r.pick("Louder")
         assertTrue(r.has("vol true")); assertEquals(ControllerMode.Screen.VOLUME, r.m.screen)
         assertEquals(listOf("say eight"), r.spoken())
@@ -664,9 +664,9 @@ class ModeTest {
         assertEquals("siete", Spoken.number(7, true)); assertEquals("seven", Spoken.number(7)); assertEquals("45", Spoken.number(45))
     }
 
-    @Test fun volumeDoneGoesToTheHub() {
-        val r = Rig(); r.wake(); r.pick("Volume"); r.pick("Done")
-        assertEquals(ControllerMode.Screen.HUB, r.m.screen)
+    @Test fun volumeDoneGoesBackToPhone() {
+        val r = Rig(); r.wake(); r.pick("Phone"); r.pick("Volume"); r.pick("Done")
+        assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
     }
 
     @Test fun statusSpeaksOneSentenceThenLeaves() {
@@ -676,17 +676,54 @@ class ModeTest {
         r.advance(600); assertFalse(r.m.active); assertTrue(r.log.contains("tone EXIT"))
     }
 
-    @Test fun moreHubOptionsIncludeDndOnlyWithAccess() {
-        val a = Rig(); a.wake(); a.pick("More"); a.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Read unread messages", "say Torch", "say Do not disturb", "say Exit"), a.spoken())
-        val b = Rig(); b.dnd = false; b.wake(); b.pick("More"); b.advance(400 + 1300 * 2 + 100)
-        assertEquals(listOf("say Read unread messages", "say Torch", "say Exit"), b.spoken())
+    @Test fun moreHubHoldsOnlyReadAndExit() {
+        val a = Rig(); a.wake(); a.pick("More"); a.advance(400 + 1300 + 100)
+        assertEquals(listOf("say Read unread messages", "say Exit"), a.spoken())
+    }
+
+    @Test fun phoneGroupListsItemsInOrderAndDndOnlyWithAccess() {
+        val a = Rig(); a.wake(); a.pick("Phone"); a.advance(400 + 1300 * 4 + 100)
+        assertEquals(listOf("say Volume", "say Torch", "say Do not disturb", "say ${Voice.FIND_PHONE}", "say Back"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
+        val b = Rig(); b.dnd = false; b.wake(); b.pick("Phone"); b.advance(400 + 1300 * 3 + 100)
+        assertEquals(listOf("say Volume", "say Torch", "say ${Voice.FIND_PHONE}", "say Back"), b.spoken())
+    }
+
+    @Test fun phoneGroupHidesFindWhenWired() {
+        val r = Rig(); r.wired = true; r.wake(); r.pick("Phone"); r.advance(400 + 1300 * 3 + 100)
+        assertEquals(listOf("say Volume", "say Torch", "say Do not disturb", "say Back"), r.spoken())
+    }
+
+    @Test fun infoGroupListsItemsInOrderAndBackReturnsToTheHub() {
+        val r = Rig().withInfo(); r.wake(); r.pick("Info"); r.advance(400 + 1300 * 3 + 100)
+        assertEquals(listOf("say Weather", "say Next event", "say Next turn", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.INFO, r.m.screen)
+        r.pick("Back"); assertEquals(ControllerMode.Screen.HUB, r.m.screen)
+        val p = Rig(); p.wake(); p.pick("Phone"); p.pick("Back"); assertEquals(ControllerMode.Screen.HUB, p.m.screen)
+    }
+
+    @Test fun picksInsideGroupsAreLoggedWithTheirKey() {
+        val a = Rig().withInfo(); a.wake(); a.pick("Info"); a.pick("Weather"); assertTrue(a.log.any { it.endsWith("info:weather") })
+        val b = Rig(); b.wake(); b.pick("Phone"); b.pick("Torch")
+        assertTrue(b.log.any { it.endsWith("phone:torch") }); assertTrue(b.has("run Flashlight"))
     }
 
     @Test fun torchRunsAndTheListRestartsAfterItsSpeech() {
-        val r = Rig(); r.wake(); r.pick("More"); r.pick("Torch")
+        val r = Rig(); r.wake(); r.pick("Phone"); r.pick("Torch")
         assertTrue(r.has("run Flashlight")); r.advance(1500)
-        assertTrue(r.spoken().contains("say Read unread messages")); assertEquals(ControllerMode.Screen.MORE_HUB, r.m.screen)
+        assertTrue(r.spoken().contains("say Volume")); assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
+    }
+
+    @Test fun firstLayerIsShortAndInOrder() {
+        assertEquals(listOf("messages", "tasks", "playing", "timer", "status", "info", "phone", "games", "more"), LauncherSettings.DEFAULT_HUB)
+        assertEquals(listOf("timer", "more"), LauncherSettings.cleanHub(listOf("weather", "timer", "volume")))
+    }
+
+    @Test fun oldFlatMenuBecomesGroupedKeepingOffChoices() {
+        val old = listOf("playing", "tasks", "messages", "timer", "volume", "status", "weather", "turn", "calendar", "games", "find", "more")
+        assertEquals(LauncherSettings.DEFAULT_HUB, LauncherSettings.groupHub(old, listOf("read", "torch", "dnd", "exit")))
+        assertEquals(listOf("messages", "tasks", "timer", "games", "more"), LauncherSettings.groupHub(listOf("tasks", "messages", "timer", "games", "more"), listOf("read", "exit")))
+        assertEquals(listOf("messages", "timer", "phone", "more"), LauncherSettings.groupHub(listOf("messages", "timer", "more"), listOf("torch", "exit")))   // Torch was ON in More
+        assertEquals(listOf("messages", "info", "more"), LauncherSettings.groupHub(listOf("messages", "turn", "more"), listOf("exit")))
+        assertEquals(listOf("timer", "info", "more"), LauncherSettings.groupHub(listOf("timer", "info", "more"), listOf("exit")))   // already grouped: untouched
     }
 
     @Test fun gamesHubListsDuelAndBack() {
@@ -767,9 +804,9 @@ class ModeTest {
 
     // ---------- choice log ----------
     @Test fun picksAreLoggedWithPositionAndIntent() {
-        val r = Rig(); r.wake(); r.pick("Volume")
+        val r = Rig(); r.wake(); r.pick("Phone"); r.pick("Volume")
         val q = Rig(); q.wake(); q.advance(2300); q.click()
-        assertTrue(q.log.contains("choice HUB 2 hub:volume"))
+        assertTrue(q.log.contains("choice HUB 2 hub:phone"))
     }
 
     // ---------- item gap (default 1.6 s, from the end of each item's speech) ----------
@@ -779,16 +816,16 @@ class ModeTest {
         r.advance(1899); assertEquals(1, r.spoken().size)                    // tick due at 900+1400=2300
         r.advance(1); assertEquals("tone TICK", r.log.last())
         r.advance(199); assertEquals(1, r.spoken().size)
-        r.advance(1); assertEquals("say Volume", r.spoken().last())          // t=2500 = 1600 after done
+        r.advance(1); assertEquals("say Phone", r.spoken().last())          // t=2500 = 1600 after done
     }
 
     @Test fun defaultGapClickDuringGapBindsToTheItemJustSpoken() {
-        val r = Rig(gap = ControllerMode.ITEM_GAP_MS); r.wake(); r.advance(450 + 2100 + 1000)   // Volume spoken at 2500, now in its gap
-        r.click(); assertEquals(ControllerMode.Screen.VOLUME, r.m.screen)
+        val r = Rig(gap = ControllerMode.ITEM_GAP_MS); r.wake(); r.advance(450 + 2100 + 1000)   // Phone spoken at 2500, now in its gap
+        r.click(); assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
     }
 
     @Test fun defaultGapGraceStillPicksThePreviousJustAfterNextStarts() {
-        val r = Rig(gap = ControllerMode.ITEM_GAP_MS); r.wake(); r.advance(2500 + 50 + 100)   // Volume started at 2550, 100 ms ago
+        val r = Rig(gap = ControllerMode.ITEM_GAP_MS); r.wake(); r.advance(2500 + 50 + 100)   // Phone started at 2550, 100 ms ago
         r.click(); assertEquals(ControllerMode.Screen.TIMER_PICK, r.m.screen)
     }
 

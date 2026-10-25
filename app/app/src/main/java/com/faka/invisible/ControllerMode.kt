@@ -129,7 +129,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, MORE_HUB, TASK, TASK_ADD, MSG_TASK, GAMES, SENT }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, MORE_HUB, INFO, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, SENT }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: String, val lang: String?, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: String, val lang: String?, val run: () -> Unit)
@@ -263,7 +263,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.MORE_HUB, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.MORE_HUB, Screen.INFO, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -391,12 +391,9 @@ class ControllerMode(
                         }
                     } }
                     "timer" -> all["hub:timer"] = Opt("hub:timer", "Timer", null) { pick("hub:timer"); show(Screen.TIMER_PICK) }
-                    "volume" -> all["hub:volume"] = Opt("hub:volume", "Volume", null) { pick("hub:volume"); show(Screen.VOLUME) }
                     "status" -> all["hub:status"] = Opt("hub:status", "Status", null) { pick("hub:status"); outro(Spoken.status(out.status(), unread().size)) }
-                    "weather" -> all["hub:weather"] = Opt("hub:weather", "Weather", null) { pick("hub:weather"); lookup(out::weather) }
-                    "calendar" -> all["hub:calendar"] = Opt("hub:calendar", "Next event", null) { pick("hub:calendar"); lookup(out::nextEvent) }
-                    "turn" -> all["hub:turn"] = Opt("hub:turn", "Next turn", null) { pick("hub:turn"); outro(out.navigation() ?: Voice.NO_NAVIGATION) }
-                    "find" -> if (!out.wiredConnected()) all["hub:find"] = Opt("hub:find", Voice.FIND_PHONE, null) { pick("hub:find"); find() }
+                    "info" -> all["hub:info"] = Opt("hub:info", "Info", null) { pick("hub:info"); show(Screen.INFO) }
+                    "phone" -> all["hub:phone"] = Opt("hub:phone", "Phone", null) { pick("hub:phone"); show(Screen.PHONE) }
                     "games" -> all["hub:games"] = Opt("hub:games", "Games", null) { pick("hub:games"); show(Screen.GAMES) }
                     "more" -> all["hub:more"] = Opt("hub:more", "More", null) { pick("hub:more"); show(Screen.MORE_HUB) }
                 }
@@ -426,14 +423,23 @@ class ControllerMode(
             Screen.VOLUME -> listOf(
                 Opt("volume:up", "Louder", null) { pick("volume:up"); out.volume(true); sayLevel() },
                 Opt("volume:down", "Quieter", null) { pick("volume:down"); out.volume(false); sayLevel() },
-                Opt("volume:done", "Done", null) { pick("volume:done"); show(Screen.HUB) })
+                Opt("volume:done", "Done", null) { pick("volume:done"); show(Screen.PHONE) })
             Screen.MORE_HUB -> settings.more.mapNotNull { k -> when (k) {   // what is inside "More" and its order are the user's choice
                 "read" -> Opt("more:read", "Read unread messages", null) { readUnread("more:read") }
-                "torch" -> Opt("more:torch", "Torch", null) { pick("more:torch"); out.runAction("Flashlight"); afterSpeech { beginScan() } }
-                "dnd" -> if (out.dndAllowed()) Opt("more:dnd", "Do not disturb", null) { pick("more:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null
                 "exit" -> Opt("more:exit", "Exit", null) { pick("more:exit"); exit(true) }
                 else -> null
             } }
+            Screen.INFO -> listOf(
+                Opt("info:weather", "Weather", null) { pick("info:weather"); lookup(out::weather) },
+                Opt("info:calendar", "Next event", null) { pick("info:calendar"); lookup(out::nextEvent) },
+                Opt("info:turn", "Next turn", null) { pick("info:turn"); outro(out.navigation() ?: Voice.NO_NAVIGATION) },
+                Opt("info:back", "Back", null) { pick("info:back"); show(Screen.HUB) })
+            Screen.PHONE -> listOfNotNull(
+                Opt("phone:volume", "Volume", null) { pick("phone:volume"); show(Screen.VOLUME) },
+                Opt("phone:torch", "Torch", null) { pick("phone:torch"); out.runAction("Flashlight"); afterSpeech { beginScan() } },
+                if (out.dndAllowed()) Opt("phone:dnd", "Do not disturb", null) { pick("phone:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null,
+                if (!out.wiredConnected()) Opt("phone:find", Voice.FIND_PHONE, null) { pick("phone:find"); find() } else null,
+                Opt("phone:back", "Back", null) { pick("phone:back"); show(Screen.HUB) })
             Screen.GAMES -> listOf(   // every game lives here; a new game is one more line
                 Opt("games:duel", "Duel", null) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame(false) },   // music stays paused for the game, which resumes it
                 Opt("games:howto", "How to play", null) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) },
@@ -552,7 +558,8 @@ class ControllerMode(
         when (screen) {
             Screen.MORE_MSG -> show(Screen.MESSAGE)
             Screen.COMPOSE, Screen.MSG_TASK -> show(Screen.MORE_MSG)
-            Screen.TIMER_PICK, Screen.VOLUME, Screen.MORE_HUB, Screen.TASK, Screen.TASK_ADD, Screen.GAMES -> show(Screen.HUB)
+            Screen.VOLUME -> show(Screen.PHONE)
+            Screen.TIMER_PICK, Screen.MORE_HUB, Screen.INFO, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES -> show(Screen.HUB)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()
         }
