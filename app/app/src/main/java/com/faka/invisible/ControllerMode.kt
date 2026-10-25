@@ -34,6 +34,8 @@ interface ModeOutput {
     fun reply(key: String, text: String): Boolean   // true if the reply was sent
     fun status(): Status
     fun songLang(text: String): String? = null   // "es" or "en" for the voice
+    fun tasks(): List<Task> = emptyList()   // open to-do items, oldest first
+    fun completeTask(id: Long) {}
     fun nowPlaying(): String? = null   // "Title, Artist" of the music app, null if none
     fun dndAllowed(): Boolean
     fun lastTimer(): Int             // minutes, 0 = none yet
@@ -114,7 +116,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, MORE_HUB, SENT }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, MORE_HUB, TASK, SENT }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: String, val lang: String?, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: String, val lang: String?, val run: () -> Unit)
@@ -133,6 +135,8 @@ class ControllerMode(
     private var pausedByUs = false
     private var queue = mutableListOf<Msg?>()   // null = the finished timer
     private var qi = 0
+    private var taskList = listOf<Task>()   // snapshot while the Tasks screen is open
+    private var taskIdx = 0
     private val handled = HashSet<String>()   // wake queue: text spoken, answered or skipped (id = key + arrival time)
     private val replied = HashSet<String>()   // answered: no longer unread
     private val heard = HashSet<String>()     // text spoken to the end (or cut by the user's click after it started)
@@ -242,7 +246,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.MORE_HUB, Screen.COMPOSE -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.MORE_HUB, Screen.COMPOSE, Screen.TASK -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -256,6 +260,9 @@ class ControllerMode(
         if (hintPending) { hintPending = false; intro += Intro(HINT, null, null, hint = true) }
         val m = cur
         if (s == Screen.MESSAGE && m != null && hid(m) !in heard) intro += Intro("${m.sender}: ${shortText(m)}", vl(m), hid(m))
+        if (s == Screen.TASK) taskList.getOrNull(taskIdx)?.let { t ->
+            intro += Intro(if (taskList.size > 1) "${taskIdx + 1} of ${taskList.size}: ${t.text}" else t.text, out.songLang(t.text), null)
+        }
         if (s == Screen.TIMER_DONE) intro += Intro("Timer done", null, null)
         curIntro = null
         timers.set("scan", toneGapMs) { nextIntro() }
@@ -360,6 +367,7 @@ class ControllerMode(
                 for (k in settings.hub) when (k) {
                     "messages" -> if (n > 0) all["hub:messages"] = Opt("hub:messages", "Messages, $n unread", null) { readUnread("hub:messages") }
                     "playing" -> out.nowPlaying()?.let { song -> all["hub:playing"] = Opt("hub:playing", "Playing", null) { pick("hub:playing"); outro(song, out.songLang(song)) } }   // only when the music app has a song
+                    "tasks" -> out.tasks().let { ts -> if (ts.isNotEmpty()) all["hub:tasks"] = Opt("hub:tasks", "Tasks, ${ts.size}", null) { pick("hub:tasks"); taskList = ts; taskIdx = 0; show(Screen.TASK) } }
                     "timer" -> all["hub:timer"] = Opt("hub:timer", "Timer", null) { pick("hub:timer"); show(Screen.TIMER_PICK) }
                     "volume" -> all["hub:volume"] = Opt("hub:volume", "Volume", null) { pick("hub:volume"); show(Screen.VOLUME) }
                     "status" -> all["hub:status"] = Opt("hub:status", "Status", null) { pick("hub:status"); outro(Spoken.status(out.status(), unread().size)) }
@@ -367,6 +375,13 @@ class ControllerMode(
                 }
                 if (settings.learnOrder) ranker.rank("HUB", "", all.keys.toList()).mapNotNull { all[it] } else all.values.toList()
             }
+            Screen.TASK -> listOf(
+                Opt("task:done", "Done", null) {
+                    pick("task:done"); taskList.getOrNull(taskIdx)?.let { out.completeTask(it.id); taskList = taskList - it }
+                    if (taskList.isEmpty()) { say("All done"); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } }
+                    else { if (taskIdx >= taskList.size) taskIdx = 0; show(Screen.TASK) }
+                },
+                Opt("task:next", "Next", null) { pick("task:next"); taskIdx++; show(if (taskIdx >= taskList.size) Screen.HUB else Screen.TASK) })
             Screen.TIMER_PICK -> (settings.timers.map { it to Spoken.minutes(it) }.let { t -> if (out.lastTimer() > 0) listOf(lastTimer() to "Last used") + t else t + (lastTimer() to "Last used") }).map { (min, label) ->
                 Opt("timer:$min", label, null) { pick("timer:$min"); startTimerPending(min) }
             }
@@ -444,7 +459,7 @@ class ControllerMode(
         when (screen) {
             Screen.MORE_MSG -> show(Screen.MESSAGE)
             Screen.COMPOSE -> show(Screen.MORE_MSG)
-            Screen.TIMER_PICK, Screen.VOLUME, Screen.MORE_HUB -> show(Screen.HUB)
+            Screen.TIMER_PICK, Screen.VOLUME, Screen.MORE_HUB, Screen.TASK -> show(Screen.HUB)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()
         }

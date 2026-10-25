@@ -2,6 +2,7 @@ package com.faka.invisible
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -15,6 +16,7 @@ class ModeTest {
         var dnd = true
         var last = 0
         var song: String? = null
+        val taskStore = TaskStore()
         var favs = listOf<String>()
         var now = 1_000_000L
         var vol = 7
@@ -47,6 +49,8 @@ class ModeTest {
             override fun dndAllowed() = dnd
             override fun lastTimer() = last
             override fun nowPlaying() = song
+            override fun tasks() = taskStore.all()
+            override fun completeTask(id: Long) = taskStore.done(id)
             override fun setLastTimer(minutes: Int) { last = minutes }
             override fun favourites() = favs
             override fun codeCount() = codes
@@ -413,6 +417,28 @@ class ModeTest {
         assertFalse(r.spoken().contains("say Playing"))
         val q = Rig(); q.song = "Blue, Ana"; q.wake(); q.pick("Playing")
         assertTrue(q.log.contains("say Blue, Ana"))
+    }
+
+    @Test fun tasksAreInTheHubOnlyWhenOpenAndDoneRemovesThemOneByOne() {
+        val r0 = Rig(); r0.wake(); r0.advance(400 + 1300 * 6)
+        assertFalse(r0.spoken().any { it.startsWith("say Tasks") })
+        val r = Rig(); r.taskStore.add("Buy milk"); r.taskStore.add("Call mum")
+        r.wake(); r.pick("Tasks, 2")
+        r.advance(400 + 600)
+        assertTrue(r.log.contains("say 1 of 2: Buy milk"))
+        r.pick("Done")
+        assertEquals(listOf("Call mum"), r.taskStore.all().map { it.text })
+        r.advance(1000); assertTrue(r.log.contains("say Call mum"))
+        r.pick("Done")
+        assertTrue(r.taskStore.all().isEmpty()); assertTrue(r.log.contains("say All done"))
+    }
+
+    @Test fun taskStoreSavesAndReloads() {
+        var saved = listOf<String>()
+        val a = TaskStore { saved = it }
+        a.add("  Buy\n milk "); assertNull(a.add("   "))
+        val b = TaskStore(saved); assertEquals(listOf("Buy milk"), b.all().map { it.text })
+        assertEquals(2L, b.add("x")!!.id)
     }
 
     @Test fun timerOptionsAndLastUsed() {

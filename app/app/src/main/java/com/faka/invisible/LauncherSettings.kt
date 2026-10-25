@@ -16,7 +16,7 @@ data class LauncherSettings(
     val learnOrder: Boolean = true,
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("playing" to "Playing", "messages" to "Messages", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "more" to "More")
+        val HUB_ITEMS = linkedMapOf("playing" to "Playing", "messages" to "Messages", "tasks" to "Tasks", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "more" to "More")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** Keep known keys once each, in order; "more" is always present (it holds Exit, Torch, Read). */
@@ -34,7 +34,7 @@ object SettingsStore {
     fun load(p: SharedPreferences): LauncherSettings {
         val d = LauncherSettings()
         return LauncherSettings(
-            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withPlaying(p, it)) } ?: d.hub,
+            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withTasks(p, withPlaying(p, it))) } ?: d.hub,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
             itemGapMs = p.getLong("s_gap", d.itemGapMs).coerceIn(600, 4000),
             silentLoops = p.getInt("s_loops", d.silentLoops).coerceIn(1, 5),
@@ -49,6 +49,16 @@ object SettingsStore {
         if (p.getBoolean("s_playing_saved", false)) return keys
         val moved = listOf("playing") + keys.filter { it != "playing" }
         p.edit().putBoolean("s_playing_saved", true).putString("s_hub", moved.joinToString(",")).apply()   // saved now, so the settings screen shows it too
+        return moved
+    }
+
+    /** A saved menu from before "Tasks" existed gets it once, after "Messages" (or first if there is none). */
+    private fun withTasks(p: SharedPreferences, keys: List<String>): List<String> {
+        if (p.getBoolean("s_tasks_saved", false)) return keys
+        val rest = keys.filter { it != "tasks" }
+        val at = rest.indexOf("messages") + 1
+        val moved = rest.take(at) + "tasks" + rest.drop(at)
+        p.edit().putBoolean("s_tasks_saved", true).putString("s_hub", moved.joinToString(",")).apply()
         return moved
     }
 

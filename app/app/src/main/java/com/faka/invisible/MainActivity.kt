@@ -11,6 +11,7 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
@@ -145,6 +146,14 @@ class MainActivity : Activity() {
             addView(text("You hear: " + shown.joinToString(", ") { LauncherSettings.HUB_ITEMS[it]!! }, 14f, accent).apply { setPadding(0, dp(8), 0, 0) })
             addView(row(grow(text("Move the options you pick most to the front (automatic)", 15f)),
                 Switch(this@MainActivity).apply { isChecked = s.learnOrder; setOnCheckedChangeListener { _, v -> change(s.copy(learnOrder = v)) } }))
+        }
+
+        card("Tasks", "Say them from the menu: Done or Next. Add here, or share text from Keep to Invisible.") {
+            val input = EditText(this@MainActivity).apply { hint = "New task"; setSingleLine() }
+            fun add() { if (Actions.addTask(input.text.toString()) != null) render() }
+            input.setOnEditorActionListener { _, _, _ -> add(); true }
+            addView(row(grow(input), btn("Add", true) { add() }))
+            Actions.tasks().forEach { t -> addView(row(grow(text(t.text, 15f)), btn("Done") { Actions.completeTask(t.id); render() })) }
         }
 
         card("Timer", "Three lengths in minutes. \"Last used\" is always added.") {

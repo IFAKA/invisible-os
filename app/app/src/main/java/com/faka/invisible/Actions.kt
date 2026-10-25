@@ -36,6 +36,10 @@ object Actions {
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var torchOn = false
+    private var taskStore = TaskStore()
+    fun tasks(): List<Task> = taskStore.all()
+    fun addTask(text: String): Task? = taskStore.add(text)
+    fun completeTask(id: Long) = taskStore.done(id)
     private val deduper = Deduper()
     private var lastHoldAt = 0L
 
@@ -57,6 +61,8 @@ object Actions {
             override fun runAction(name: String) = menuAction(name)
             override fun forward(what: Forward) = forwardToMusic(what)
             override fun log(line: String) { Log.d(TAG, line); if (line.startsWith("MODE")) EventLog.add(line) }
+            override fun tasks() = taskStore.all()
+            override fun completeTask(id: Long) = taskStore.done(id)
             override fun nowPlaying(): String? = otherSessions().firstNotNullOfOrNull { c ->
                 c.metadata?.let { md ->
                     val title = md.getString(android.media.MediaMetadata.METADATA_KEY_TITLE)
@@ -114,6 +120,8 @@ object Actions {
         mode.settings = SettingsStore.load(prefs())
         val f = java.io.File(app.filesDir, "choices.log")
         choices = ChoiceLog(if (f.exists()) f.readLines() else emptyList()) { line -> try { f.appendText(line + "\n") } catch (e: Exception) { Log.e(TAG, "choices.log write failed", e) } }
+        val tf = java.io.File(app.filesDir, "tasks.txt")
+        taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList()) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
         tts = TextToSpeech(app) { s ->
             if (s == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.US; ttsReady = true

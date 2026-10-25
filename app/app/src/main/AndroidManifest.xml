@@ -11,6 +11,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".AddTaskActivity" android:exported="true" android:label="Invisible task"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" android:excludeFromRecents="true" android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <activity android:name=".HandsFreeActivity" android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:showWhenLocked="true" android:excludeFromRecents="true" android:noHistory="true">
