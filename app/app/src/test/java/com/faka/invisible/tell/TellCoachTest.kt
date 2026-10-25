@@ -34,6 +34,7 @@ class TellCoachTest {
         r.tap(100); r.w.advanceBy(3000)
         assertTrue(r.speaks().contains("Jab."))
         assertEquals(TellVoice.DRILLS[1], r.speaks().last())
+        assertEquals(1, r.out.count("play DETENT_1"))   // the click is heard once before the prompt
         r.tap(500); r.w.advanceBy(3000)
         assertTrue(r.speaks().contains("Guard."))
         assertEquals(TellVoice.DRILLS[2], r.speaks().last())
@@ -41,21 +42,67 @@ class TellCoachTest {
         assertTrue(r.speaks().contains("Charge."))
         assertTrue(r.speaks().contains(TellVoice.RULE))
         assertEquals(TellVoice.firstMatch(1), r.speaks().last())
-        assertEquals(0, r.out.count("startBed"))   // the bed starts after the intro
+        assertEquals(0, r.out.count("startBed"))
         r.w.advanceBy(TellGame.INTRO_MS + 10)
         assertEquals(1, r.out.count("startBed"))
     }
 
-    @Test fun wrongHoldRepeatsAndThreeWrongSkips() {
+    @Test fun wrongHoldGivesFeedbackAndThreeWrongSkips() {
         val r = rig(false); toFirstDrill(r)
-        r.tap(500); r.w.advanceBy(7000)
-        assertTrue(r.speaks().contains(TellVoice.wrong(1, 0)))
-        assertEquals(TellVoice.DRILLS[0], r.speaks().last())   // repeated
-        r.tap(900); r.w.advanceBy(7000)
-        assertEquals(TellVoice.DRILLS[0], r.speaks().last())
+        r.tap(500); r.w.advanceBy(100)
+        assertEquals(TellVoice.wrong(1, 0), r.speaks().last())
+        r.tap(900); r.w.advanceBy(100)
+        assertEquals(TellVoice.wrong(2, 0), r.speaks().last())
         r.tap(500); r.w.advanceBy(7000)                          // third wrong: moves on
         assertEquals(TellVoice.DRILLS[1], r.speaks().last())
         assertFalse(r.speaks().contains("Jab."))
+    }
+
+    @Test fun pressesDuringSpeechAreJudgedAndStopTheVoice() {
+        val r = rig(false); toFirstDrill(r)
+        r.tap(100)                       // success: "Jab." is being spoken now
+        r.w.advanceBy(50)
+        val stops = r.out.count("stopSpeech")
+        r.tap(100)                       // press during that speech: starts drill 2 at once, judged against it (wrong: a jab)
+        assertTrue(r.out.count("stopSpeech") > stops)
+        assertEquals(TellVoice.wrong(0, 1), r.speaks().last())
+        r.tap(500); r.w.advanceBy(3000)  // now a right guard is accepted even right after wrong feedback began
+        assertTrue(r.speaks().contains("Guard."))
+    }
+
+    @Test fun pressAfterWrongFeedbackIsNotIgnored() {
+        val r = rig(false); toFirstDrill(r)
+        r.tap(500); r.w.advanceBy(300)   // feedback speaking
+        r.tap(100); r.w.advanceBy(100)
+        assertTrue(r.speaks().contains("Jab."))
+    }
+
+    @Test fun silenceGivesHintsEverySevenSecondsThenDemoAndAdvance() {
+        val r = rig(false); toFirstDrill(r)
+        val base = r.speaks().size
+        r.w.advanceBy(TellVoice.speakMs(TellVoice.DRILLS[0]) + TellGame.HINT_MS + 50)
+        assertEquals(TellVoice.hint(1), r.speaks().last())
+        r.w.advanceBy(TellVoice.speakMs(TellVoice.hint(1)) + TellGame.HINT_MS + 50)
+        assertEquals(TellVoice.hint(2), r.speaks().last())
+        assertTrue(TellVoice.hint(2).contains("leave"))
+        r.w.advanceBy(TellVoice.speakMs(TellVoice.hint(2)) + TellGame.HINT_MS + 50)   // third: demo
+        assertEquals(TellVoice.DEMO, r.speaks().last())
+        r.w.advanceBy(3000)
+        assertEquals(TellVoice.DRILLS[1], r.speaks().last())
+        assertTrue(r.out.count("play JAB") >= 1)
+        assertTrue(base < r.speaks().size)
+    }
+
+    @Test fun holdingThreeSecondsLeavesEvenWhileTheVoiceSpeaks() {
+        val r = rig(false)
+        r.w.advanceBy(500)                // the intro is being spoken
+        r.g.down(r.w.now); r.w.advanceBy(3100)
+        assertTrue(r.out.left)
+        assertFalse(r.out.taughtFlag)
+    }
+
+    @Test fun introSaysHowToLeave() {
+        assertTrue(TellVoice.INTRO.contains("three seconds"))
     }
 
     @Test fun noSpokenSecondsInDrills() {

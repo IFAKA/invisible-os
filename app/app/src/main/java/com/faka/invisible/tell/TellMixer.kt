@@ -28,7 +28,7 @@ class TellMixer(val sampleRate: Int = 44100) {
 
         /** Peak level in dBFS for each cue when played at the centre (the loudness ladder of GAME-TELL.md). */
         val LADDER: Map<Cue, Double> = mapOf(
-            Cue.TAP to -17.0, Cue.DETENT_1 to -17.0, Cue.DETENT_2 to -17.0, Cue.STAMP to -17.0,
+            Cue.TAP to -17.0, Cue.DETENT_1 to -9.0, Cue.DETENT_2 to -9.0, Cue.STAMP to -17.0,
             Cue.SNARE_CLOSE to -14.0, Cue.KICK_ROLL to -17.0,
             Cue.JAB to -12.0, Cue.GUARD to -12.0, Cue.CHARGE to -12.0,
             Cue.PARRY_CLANG to -9.0, Cue.COIN to -9.0, Cue.FIZZLE to -9.0, Cue.CRACK_BOOM to -9.0, Cue.NOTHING to -9.0,

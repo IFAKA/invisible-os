@@ -29,18 +29,21 @@ object Voice {
 
 /** Spoken sentences of the Duel coach (practice drills and the narrated first match). Plain, short English. */
 object TellVoice {
-    const val INTRO = "Duel. You against a robot. One button. How long you press picks your move."
+    const val INTRO = "Duel. One button. Press, listen, let go. To leave, hold for three seconds."
     val DRILLS = listOf(
-        "Tap quickly. Let go before any click. That is a jab.",
-        "Now press and hold. You hear a click. Let go right after the first click. That is a guard.",
-        "Press and hold. Wait for the second click, then let go. That is a charge. It costs three energy.")
+        "Press the button now, a quick tap. Then let go.",
+        "Now press and hold. Listen for a click. Let go right after it.",
+        "Hold again. Wait for two clicks. Let go after the second.")
+    const val DEMO = "Like this."
+    /** Said when the player does nothing for a while. Different words from the prompt. */
+    fun hint(n: Int) = if (n >= 2) "Hold three seconds to leave." else "Press the button now."
     val NAMES = listOf("jab", "guard", "charge")
     val DONE = listOf("Jab.", "Guard.", "Charge.")
     const val RULE = "Let go before a click: jab. After the first click: guard. After the second click: charge. " +
         "Guard beats jab. Jab beats charge. Charge beats guard. Same moves trade. Hold three seconds any time to leave."
     const val SKIP = "Let's move on."
     fun wrong(level: Int, drill: Int) = "That was a ${NAMES[level]}. " + when (drill) {
-        0 -> "Tap quickly. Let go before any click."; 1 -> "Hold. Let go right after the first click."; else -> "Hold. Let go after the second click."
+        0 -> "Tap quickly."; 1 -> "Hold. Let go right after the first click."; else -> "Hold. Let go after the second click."
     }
     private val NUM = listOf("zero", "one", "two", "three", "four", "five")
     fun firstMatch(rung: Int) = "First match. Rung ${NUM[rung.coerceIn(0, 5)]}."

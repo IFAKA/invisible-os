@@ -52,7 +52,9 @@ class TellGame(
         const val ROUND_MS = 2000L
         const val COACH_ROUND_MS = 4000L
         const val DRILL_TRIES = 3
-        const val DRILL_GAP_MS = 700L
+        const val DRILL_GAP_MS = 300L
+        const val HINT_MS = 7000L
+        const val MAX_HINTS = 3
         const val WINDOW_MS = 1500L
         const val LATE_MS = 150L
         const val GUARD_MS = 300L
@@ -102,7 +104,7 @@ class TellGame(
     private fun at(key: String, time: Long, task: () -> Unit) = timers.set(K + key, maxOf(0L, time - clock()), task)
     private fun clear(key: String) = timers.clear(K + key)
     private fun clearAll() {
-        for (k in listOf("start", "snare", "close", "next", "result", "life", "end", "speech", "d1", "d2", "f1", "f3", "leave", "coach")) clear(k)
+        for (k in listOf("start", "snare", "close", "next", "result", "life", "end", "speech", "d1", "d2", "f1", "f3", "leave", "coach", "hint", "lead", "lead2")) clear(k)
     }
 
     /** Level of a hold: 0 = JAB, 1 = GUARD, 2 = CHARGE. */
@@ -117,46 +119,97 @@ class TellGame(
         if (forceCoach || !out.taught()) startPractice() else newMatch()
     }
 
-    // ---- coach practice: three drills, no round clock, no bed ----
+    // ---- coach practice: three drills, no round clock, no bed. The player may press at any time. ----
+    private var hints = 0
+    private var fromPress = false     // the drill was started by a press: no lead-in clicks or prompt
+    private var pendingNext: (() -> Unit)? = null   // what happens when the current speech is over (a press runs it at once)
+
     private fun startPractice() {
         clearAll()
         phase = Phase.PRACTICE
         pressAt = -1L; pressLive = false; listening = false
-        drill = 0; tries = 0
+        drill = 0; tries = 0; hints = 0
         say(TellVoice.INTRO) { startDrill(0) }
     }
 
-    /** Speak [text], then run [then] when the (estimated) speech is over plus a short silence. */
+    /** Speak [text], then run [then] shortly after the (estimated) speech is over. */
     private fun say(text: String, then: () -> Unit) {
         out.speak(text)
-        at("coach", clock() + TellVoice.speakMs(text) + DRILL_GAP_MS, then)
+        pendingNext = then
+        at("coach", clock() + TellVoice.speakMs(text) + DRILL_GAP_MS) { runPending() }
     }
+
+    private fun runPending() {
+        val n = pendingNext ?: return
+        pendingNext = null
+        clear("coach")
+        n()
+    }
+
+    /** Silence is never allowed to last: a hint every HINT_MS, a demo after three hints. */
+    private fun armHint(afterMs: Long) {
+        at("hint", clock() + afterMs) { hint() }
+    }
+
+    private fun hint() {
+        if (phase != Phase.PRACTICE || !listening || pressLive) return
+        hints++
+        if (hints >= MAX_HINTS) { demo(); return }
+        out.speak(TellVoice.hint(hints))
+        armHint(TellVoice.speakMs(TellVoice.hint(hints)) + HINT_MS)
+    }
+
+    /** Play the move the way it sounds while holding, then go on. */
+    private fun demo() {
+        listening = false
+        val i = drill
+        if (i >= 1) at("d1", clock()) { out.play(Cue.DETENT_1) }
+        if (i >= 2) at("d2", clock() + 500) { out.play(Cue.DETENT_2) }
+        at("coach", clock() + 500L * i + 400) { out.play(cueOfLevel(i)) }
+        out.speak(TellVoice.DEMO)
+        pendingNext = { startDrill(i + 1) }
+        at("hint", clock() + 500L * i + 2200) { runPending() }
+    }
+
+    private fun cueOfLevel(level: Int) = when (level) { 0 -> Cue.JAB; 1 -> Cue.GUARD; else -> Cue.CHARGE }
 
     private fun startDrill(i: Int) {
         if (phase != Phase.PRACTICE) return
-        drill = i; tries = 0
+        drill = i; tries = 0; hints = 0
+        clear("hint")
         if (i >= 3) {
             listening = false
-            say(TellVoice.RULE) { coachNext = true; newMatch() }
+            if (fromPress) { coachNext = true; newMatch() } else say(TellVoice.RULE) { coachNext = true; newMatch() }
             return
         }
         listening = true
-        out.speak(TellVoice.DRILLS[i])
+        if (fromPress) return
+        if (i == 0) { out.speak(TellVoice.DRILLS[0]); armHint(TellVoice.speakMs(TellVoice.DRILLS[0]) + HINT_MS); return }
+        // let the player hear the click(s) once, then the prompt
+        out.play(Cue.DETENT_1)
+        if (i == 2) at("lead2", clock() + 450) { out.play(Cue.DETENT_2) }
+        val lead = if (i == 2) 1000L else 600L
+        at("lead", clock() + lead) {
+            out.speak(TellVoice.DRILLS[i])
+            armHint(TellVoice.speakMs(TellVoice.DRILLS[i]) + HINT_MS)
+        }
     }
 
     private fun drillPress(holdMs: Long) {
         if (!listening) return
         val level = levelOf(holdMs)
+        clear("hint")
         if (level == drill) {
             listening = false
-            out.play(when (level) { 0 -> Cue.JAB; 1 -> Cue.GUARD; else -> Cue.CHARGE })
+            out.play(cueOfLevel(level))
             say(TellVoice.DONE[level]) { startDrill(drill + 1) }
         } else if (++tries >= DRILL_TRIES) {
             listening = false
             say(TellVoice.wrong(level, drill) + " " + TellVoice.SKIP) { startDrill(drill + 1) }
         } else {
-            listening = false
-            say(TellVoice.wrong(level, drill)) { if (phase == Phase.PRACTICE) { listening = true; out.speak(TellVoice.DRILLS[drill]) } }
+            val t = TellVoice.wrong(level, drill)
+            out.speak(t)
+            armHint(TellVoice.speakMs(t) + HINT_MS)
         }
     }
 
@@ -197,10 +250,12 @@ class TellGame(
     fun down(timeMs: Long) {
         when (phase) {
             Phase.PRACTICE, Phase.INTRO, Phase.ROUND, Phase.ENDING -> {
+                if (phase == Phase.PRACTICE) practiceDown()
+                if (phase != Phase.PRACTICE && phase != Phase.INTRO && phase != Phase.ROUND && phase != Phase.ENDING) return
                 out.play(Cue.TAP)
                 pressAt = timeMs; pressUsed = false; pressLive = true
                 pressRound = if (phase == Phase.ROUND && timeMs < closeAt - LATE_MS) roundNo else roundNo + 1
-                if (phase == Phase.ROUND || (phase == Phase.PRACTICE && listening)) {
+                if (phase == Phase.ROUND || (phase == Phase.PRACTICE && listening)) {   // clicks while holding
                     at("d1", timeMs + GUARD_MS) { out.play(Cue.DETENT_1); out.setHold(1) }
                     at("d2", timeMs + CHARGE_MS) { out.play(Cue.DETENT_2); out.setHold(2) }
                 }
@@ -214,6 +269,13 @@ class TellGame(
             }
             else -> {}
         }
+    }
+
+    /** A press in practice: it stops the voice and is judged at once; a pending next step runs first. */
+    private fun practiceDown() {
+        if (pendingNext != null) { fromPress = true; runPending(); fromPress = false } else clear("coach")
+        out.stopSpeech()
+        clear("lead"); clear("lead2"); clear("hint"); clear("d1"); clear("d2")
     }
 
     fun up(timeMs: Long) {
