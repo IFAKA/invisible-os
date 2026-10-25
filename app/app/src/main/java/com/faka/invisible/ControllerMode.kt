@@ -649,7 +649,7 @@ class ControllerMode(
     fun consumeBackPick(): Boolean = backPicked.also { backPicked = false }
 
     private fun pick(intent: String, sender: String = "") {
-        if (suggestedKeys.isNotEmpty() && screen == Screen.HUB) out.log("SUGGEST ${if (intent in suggestedKeys) "hit" else "miss"} $intent")
+        if (suggestedKeys.isNotEmpty() && screen == Screen.HUB) out.choice(screen.name, -1, if (intent in suggestedKeys) "suggest:hit" else "suggest:miss", intent)   // into the choice log, for tools/menu_report.py
         backPicked = intent.endsWith(":back") || intent == "volume:done"
         if (backPicked) backNav = true
         out.choice(screen.name, code, intent, sender)
