@@ -321,6 +321,16 @@ class ModeTest {
         r.click(T); assertFalse(r.m.active); assertTrue(r.log.contains("tone LEAVE"))
     }
 
+    @Test fun aGestureThatMadeItsOwnToneIsCountedSoTheGestureToneStaysOut() {
+        val r = Rig(); r.wake(); r.advance(500); r.click()
+        val n = r.m.tonesPlayed
+        r.click(T)   // back to the hub: the mode itself says so (one tone for the event)
+        assertTrue(r.m.tonesPlayed - n <= 1)
+        val k = r.m.tonesPlayed
+        r.click(T)   // top of the menu: LEAVE is the only tone
+        assertEquals(1, r.m.tonesPlayed - k)
+    }
+
     @Test fun fourClicksLeaveWithLeaveTone() {
         val r = Rig(); r.wake(); r.advance(1000); r.click(Q)
         assertFalse(r.m.active); assertEquals("tone LEAVE", r.log.last())

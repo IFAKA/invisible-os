@@ -272,13 +272,12 @@ class ControllerMode(
     private fun show(s: Screen) {
         stopAll(); lookupId++
         screen = s; phase = Phase.INTRO
-        if (!backNav) out.tone(tone(s)); backNav = false
+        if (!backNav) tn(tone(s)); backNav = false
         intro.clear()
         if (hintPending) { hintPending = false; intro += Intro(Voice.HINT, null, null, hint = true) }
         val m = cur
         if (s == Screen.MESSAGE && m != null) out.prepareAiReplies(m)
         if (s == Screen.MESSAGE && m != null && hid(m) !in heard) intro += Intro("${m.sender}: ${shortText(m)}", vl(m), hid(m))
-        if (s == Screen.TASK_ADD) intro += Intro("Add a task", null, null)
         if (s == Screen.TIMER_DONE) intro += Intro("Timer done", null, null)
         curIntro = null
         timers.set("scan", toneGapMs) { nextIntro() }
@@ -340,13 +339,13 @@ class ControllerMode(
     private fun itemDone() {
         recordStart()
         if (scanIdx < opts.size - 1) {
-            timers.set("tick", maxOf(0L, pause - tickLeadMs)) { out.tone(Tone.TICK) }
+            timers.set("tick", maxOf(0L, pause - tickLeadMs)) { tn(Tone.TICK) }
             timers.set("scan", pause) { speakItem(scanIdx + 1) }
         } else timers.set("scan", pause) {
-            out.tone(Tone.DING); loops++   // falls: the list ended
+            tn(Tone.DING); loops++   // falls: the list ended
             if (loops >= silentLoops) timers.set("scan", pause) { leaveSilent() }
             else {
-                timers.set("tick", maxOf(0L, pause - restartLeadMs)) { out.tone(Tone.RESTART) }   // rises: it starts over
+                timers.set("tick", maxOf(0L, pause - restartLeadMs)) { tn(Tone.RESTART) }   // rises: it starts over
                 timers.set("scan", pause) { speakItem(0) }
             }
         }
@@ -361,7 +360,7 @@ class ControllerMode(
                 curIntro?.msgId?.let { heard.add(it) }; intro.clear(); curIntro = null; beginScan()
             }
             Phase.WAIT -> { val n = waitNext; n?.invoke() }
-            else -> { out.tone(Tone.RESTART); phase = Phase.SCAN; history.clear(); loops = 0; timers.set("scan", toneGapMs - tickLeadMs) { speakItem(0) } }
+            else -> { tn(Tone.RESTART); phase = Phase.SCAN; history.clear(); loops = 0; timers.set("scan", toneGapMs - tickLeadMs) { speakItem(0) } }
         }
     }
 
@@ -522,7 +521,7 @@ class ControllerMode(
 
     private fun readUnread(key: String) {
         val all = unread().sortedByDescending { it.at }
-        if (all.isEmpty()) { pick("none"); out.tone(Tone.UNKNOWN); say(Voice.NO_MESSAGES); phase = Phase.WAIT; waitNext = { beginScan() } }
+        if (all.isEmpty()) { pick("none"); tn(Tone.UNKNOWN); say(Voice.NO_MESSAGES); phase = Phase.WAIT; waitNext = { beginScan() } }
         else { pick(key); queue = all.toMutableList(); qi = 0; fromHub = true; showQueueItemOrHub() }
     }
 
@@ -531,7 +530,7 @@ class ControllerMode(
     private fun lookup(ask: ((String) -> Unit) -> Unit) {
         val id = ++lookupId
         stopAll(); phase = Phase.WAIT; waitNext = { lookupId++; beginScan() }
-        out.tone(Tone.TAP)
+        tn(Tone.TAP)
         ask { text -> if (id == lookupId && active && phase == Phase.WAIT) outro(text) }
     }
 
@@ -592,7 +591,7 @@ class ControllerMode(
         val p = Pending(lang, run, onCancel, after)
         pending = p
         screen = Screen.SENT; phase = Phase.PENDING
-        out.tone(Tone.UNDO)
+        tn(Tone.UNDO)
         say(prompt, lang)
         timers.clear("dog")
         timers.set("undo", waitCapMs + undoMs) { fireUndo() }   // fallback if "done" never comes; real window starts at "done"
@@ -601,7 +600,7 @@ class ControllerMode(
     private fun fireUndo() {
         val p = pending ?: return
         pending = null
-        if (p.run()) out.tone(Tone.SENT) else say(Voice.CANNOT)
+        if (p.run()) tn(Tone.SENT) else say(Voice.CANNOT)
         if (active && phase == Phase.PENDING) p.after()
     }
 
@@ -617,10 +616,14 @@ class ControllerMode(
         timers.clear("undo"); pending = null
         out.choice(screen.name, 1, "undo", "")
         stopAll()
-        out.tone(Tone.CANCEL)
+        tn(Tone.CANCEL)
         say(Voice.CANCELLED, p.lang)
         if (active) { phase = Phase.WAIT; waitNext = { p.onCancel() } }
     }
+
+    /** Tones the mode has played; Actions.fire skips its own gesture tone when this moved (one tone per navigation event). */
+    var tonesPlayed = 0; private set
+    private fun tn(t: Tone) { tonesPlayed++; out.tone(t) }
 
     private var backPicked = false
     private var backNav = false   // going back: only the falling Back tone sounds; the screen's own (rising) arrival tone is skipped
@@ -641,11 +644,11 @@ class ControllerMode(
         active = false
         if (pausedByUs) { pausedByUs = false; out.resumeMusic() }
         out.log("MODE exit")
-        if (withTone) out.tone(Tone.EXIT)
+        if (withTone) tn(Tone.EXIT)
     }
 
     /** Two silent loops or 4 clicks: leave, and say so with the leaving tone (silence is never ambiguous). */
-    private fun leaveSilent() { if (!active) return; exit(false); out.tone(Tone.LEAVE) }
+    private fun leaveSilent() { if (!active) return; exit(false); tn(Tone.LEAVE) }
 
     /** The platform started speaking the newest utterance. */
     fun onSpeechStarted() {
