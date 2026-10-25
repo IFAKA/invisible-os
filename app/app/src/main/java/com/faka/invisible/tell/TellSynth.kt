@@ -442,11 +442,12 @@ object TellSynth {
         var peak = 1e-9
         for (i in 0 until N) peak = max(peak, abs(kick[i] * kk + hat[i] * hh + bass[i] * bb))
         val s = 1 / peak
+        val kb = .45 / pk(bright) * s; val ko = .30 / pk(ost) * s   // once, not per sample
         return Bed(
             FloatArray(N) { (kick[it] * kk * s).toFloat() }, FloatArray(N) { (hat[it] * hh * s).toFloat() },
             FloatArray(N) { (bass[it] * bb * s).toFloat() },
-            FloatArray(N) { (bright[it] * .45 / pk(bright) * s).toFloat() },
-            FloatArray(N) { (ost[it] * .30 / pk(ost) * s).toFloat() },
+            FloatArray(N) { (bright[it] * kb).toFloat() },
+            FloatArray(N) { (ost[it] * ko).toFloat() },
         )
     }
 
@@ -465,7 +466,6 @@ object TellSynth {
     /** Start the build in the background (low priority) so the sounds are ready before the player opens the Duel. */
     fun warmAsync() {
         if (warmed) return
-        Thread({ try { val t0 = System.nanoTime(); warm(); android.util.Log.d("TELL", "warm took ${(System.nanoTime() - t0) / 1_000_000} ms") } catch (e: Throwable) { android.util.Log.e("TELL", "warm failed", e) } }, "tell-warm")
-            .also { it.priority = Thread.MIN_PRIORITY; it.start() }
+        Thread({ try { val t0 = System.nanoTime(); warm(); android.util.Log.d("TELL", "warm took ${(System.nanoTime() - t0) / 1_000_000} ms") } catch (e: Throwable) { android.util.Log.e("TELL", "warm failed", e) } }, "tell-warm").start()
     }
 }
