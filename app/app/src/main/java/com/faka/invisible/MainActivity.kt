@@ -14,6 +14,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Toast
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
@@ -129,6 +130,25 @@ class MainActivity : Activity() {
                 }))
         }
 
+        card("Tasks" + Actions.tasks().size.let { if (it > 0) " ($it)" else "" }, "Hold the button, then click \"Tasks\" to hear them. Done removes one, Next skips it.") {
+            val input = EditText(this@MainActivity).apply {
+                hint = "Type a task, or paste a checklist"; setTextColor(ink); minLines = 1; maxLines = 4
+                imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            }
+            fun add() {
+                val t = input.text.toString()
+                if (t.isBlank()) { Toast.makeText(this@MainActivity, "Type a task first", Toast.LENGTH_SHORT).show(); return }
+                Actions.addTasks(t) { n ->
+                    Toast.makeText(this@MainActivity, when (n) { 0 -> "Already in the list"; 1 -> "Task added"; else -> "$n tasks added" }, Toast.LENGTH_SHORT).show()
+                    render()
+                }
+            }
+            addView(row(grow(input), btn("Add", true) { add() }), LinearLayout.LayoutParams(-1, -2))
+            val ts = Actions.tasks()
+            if (ts.isEmpty()) addView(text("No tasks yet. In Google Keep: open a note, Share, Invisible task. Only the unchecked items are added.", 14f, soft).apply { setPadding(0, dp(10), 0, 0) })
+            ts.forEach { t -> addView(row(grow(text(t.text, 15f).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }), btn("Done") { Actions.completeTask(t.id); render() }), LinearLayout.LayoutParams(-1, -2)) }
+        }
+
         card("Your menu", "The phone says these one by one. Click when you hear the one you want. Turn off what you never use.") {
             val shown = Actions.mode.hubOrder()   // the order you hear
             val rest = LauncherSettings.HUB_ITEMS.keys.filter { it !in shown }
@@ -146,14 +166,6 @@ class MainActivity : Activity() {
             addView(text("You hear: " + shown.joinToString(", ") { LauncherSettings.HUB_ITEMS[it]!! }, 14f, accent).apply { setPadding(0, dp(8), 0, 0) })
             addView(row(grow(text("Reply options: put the ones you pick most first (automatic)", 15f)),
                 Switch(this@MainActivity).apply { isChecked = s.learnOrder; setOnCheckedChangeListener { _, v -> change(s.copy(learnOrder = v)) } }))
-        }
-
-        card("Tasks", "Say them from the menu: Done or Next. Add here, or share text from Keep to Invisible.") {
-            val input = EditText(this@MainActivity).apply { hint = "New task"; setSingleLine() }
-            fun add() { Actions.addTasks(input.text.toString()) { n -> if (n > 0) render() } }
-            input.setOnEditorActionListener { _, _, _ -> add(); true }
-            addView(row(grow(input), btn("Add", true) { add() }), LinearLayout.LayoutParams(-1, -2))
-            Actions.tasks().forEach { t -> addView(row(grow(text(t.text, 15f).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }), btn("Done") { Actions.completeTask(t.id); render() }), LinearLayout.LayoutParams(-1, -2)) }
         }
 
         card("Timer", "Three lengths in minutes. \"Last used\" is always added.") {
