@@ -272,7 +272,7 @@ class ControllerMode(
     private fun show(s: Screen) {
         stopAll(); lookupId++
         screen = s; phase = Phase.INTRO
-        out.tone(tone(s))
+        if (!backNav) out.tone(tone(s)); backNav = false
         intro.clear()
         if (hintPending) { hintPending = false; intro += Intro(Voice.HINT, null, null, hint = true) }
         val m = cur
@@ -551,6 +551,11 @@ class ControllerMode(
 
     // ---- back one level ----
     private fun back() {
+        backNav = true
+        try { backInner() } finally { backNav = false }
+    }
+
+    private fun backInner() {
         when (screen) {
             Screen.MORE_MSG -> show(Screen.MESSAGE)
             Screen.COMPOSE, Screen.MSG_TASK -> show(Screen.MORE_MSG)
@@ -618,11 +623,13 @@ class ControllerMode(
     }
 
     private var backPicked = false
+    private var backNav = false   // going back: only the falling Back tone sounds; the screen's own (rising) arrival tone is skipped
     /** True once after the user picked a "Back" item: the click should sound like leaving (falling), not like entering. */
     fun consumeBackPick(): Boolean = backPicked.also { backPicked = false }
 
     private fun pick(intent: String, sender: String = "") {
-        backPicked = intent.endsWith(":back")
+        backPicked = intent.endsWith(":back") || intent == "volume:done"
+        if (backPicked) backNav = true
         out.choice(screen.name, code, intent, sender)
         if (intent != "none" && intent != "nothing") out.setCodeCount(out.codeCount() + 1)
     }
