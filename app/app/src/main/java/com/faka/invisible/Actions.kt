@@ -192,6 +192,7 @@ object Actions {
     // ---- Write: the stereo-pair keyboard (Typing.kt). The OS gives it the raw button and plays the close sound when it ends. ----
     private var typer: TypeProgram? = null
     private var nextWord: Ranker? = null
+    @Volatile private var chatLang: String? = null   // the language of the place being written into; null = not known
     @Volatile private var phraseReq = 0
     private lateinit var buckets: BucketStore
     private val phraseWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -218,12 +219,10 @@ object Actions {
         } catch (e: Exception) { Log.e(TAG, "pair failed", e); null }
     }
 
-    /** Loads your word model once (a few seconds on the phone, so it is also started when the app starts). */
+    /** Loads the English word model once (a few seconds on the phone, so it is also started when the app starts). */
     @Synchronized private fun wordModel(): Ranker? = nextWord ?: try {
         val t0 = System.currentTimeMillis()
-        val mine = java.io.File(app.filesDir, "words_es.txt")   // your own model, pushed from the laptop; not in the app or in git
-        val m: Ranker = if (mine.exists()) mine.bufferedReader().use { r -> NgramWords(r.lineSequence()) }
-            else NextWord(app.assets.open("lm/lm.bin"), app.assets.open("lm/vocab.txt").bufferedReader().readText())
+        val m: Ranker = NextWord(app.assets.open("lm/lm.bin"), app.assets.open("lm/vocab.txt").bufferedReader().readText())   // you write in English; the chat gets the translation
         Log.d(TAG, "WRITE model loaded in ${System.currentTimeMillis() - t0} ms")
         m.also { nextWord = it }
     } catch (e: Throwable) { Log.e(TAG, "word model failed", e); null }
@@ -237,20 +236,27 @@ object Actions {
             val lm = wordModel()
             handler.post {
                 if (lm == null) { say(TypeVoice.NO_MODEL, false); gameEnded(); return@post }
-                if (clips == null) clips = WordClips(java.io.File(app.cacheDir, "words"), { text, f, id -> setVoice(if (lm is NgramWords) "es" else null); tts?.setSpeechRate(TypeVoice.WORD_RATE); tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS }, { handler.post(it) })
+                if (clips == null) clips = WordClips(java.io.File(app.cacheDir, "words"), { text, f, id -> setVoice(null); tts?.setSpeechRate(TypeVoice.WORD_RATE); tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS }, { handler.post(it) })
                 val timers = object : Timers {
                     override fun set(key: String, delayMs: Long, task: () -> Unit) { clear(key); val r = Runnable { typeTimers.remove(key); task() }; typeTimers[key] = r; handler.postDelayed(r, delayMs) }
                     override fun clear(key: String) { typeTimers.remove(key)?.let { handler.removeCallbacks(it) } }
                 }
                 val frame = ButtonAccessibilityService.inst?.frame() ?: Frame()   // the place that has focus: app, kind of field, what is on the screen
                 Log.d(TAG, "WRITE frame app=${frame.app} kind=${frame.kind} field=${frame.field} thread=${frame.thread} around=${frame.around.size} before=${frame.before.length}")
+                chatLang = null
+                Thread({   // the language of the place, from what is on the screen and in the field; unknown means nothing to translate
+                    val seen = (frame.around + frame.before).joinToString(" ")
+                    val lang = if (seen.length >= 12) MlKitLangDetector().detect(seen) else null
+                    handler.post { chatLang = lang?.takeIf { it != "und" } }
+                    if (lang != null && lang != "und" && lang != "en" && MlKitTranslator.code(lang) != null && frame.kind == FieldKind.TEXT && !MlKitTranslator.hasModel(lang)) MlKitTranslator.download(lang)
+                    Log.d(TAG, "WRITE chat language $lang")
+                }, "write-lang").start()
                 val out = object : TypeOut {
                     override fun suggestions() = buckets.suggestions(frame)
                     override fun nextWords(text: String, then: (List<String>) -> Unit) {
                         if (!mode.settings.ai || !LocalAi.available(app)) return
-                        val es = lm is NgramWords
                         phraseWorker.execute {
-                            val r = try { LocalAi.nextWords(app, text, if (es) "es" else "en", frame.brief()) } catch (e: Throwable) { Log.e(TAG, "next words failed", e); emptyList() }
+                            val r = try { LocalAi.nextWords(app, text, "en", frame.brief()) } catch (e: Throwable) { Log.e(TAG, "next words failed", e); emptyList() }
                             handler.post { then(r) }
                         }
                     }
@@ -267,20 +273,34 @@ object Actions {
                     override fun cue(c: TypeCue) { play(TypeSounds.pcm(c)) }
                     override fun phrases(text: String, then: (List<String>) -> Unit) {
                         if (!mode.settings.ai || !LocalAi.available(app)) return
-                        val my = ++phraseReq; val es = lm is NgramWords; val frameNow = frame
+                        val my = ++phraseReq; val frameNow = frame
                         phraseWorker.execute {   // one at a time; a request for an older text is dropped before it starts
                             if (my != phraseReq) return@execute
-                            val r = try { LocalAi.continuations(app, text, if (es) "es" else "en", frameNow.brief()) } catch (e: Throwable) { Log.e(TAG, "endings failed", e); emptyList() }
+                            val r = try { LocalAi.continuations(app, text, "en", frameNow.brief()) } catch (e: Throwable) { Log.e(TAG, "endings failed", e); emptyList() }
                             if (r.isNotEmpty()) handler.post { then(r) }
                         }
                     }
+                    override fun written(text: String) { buckets.learn(frame, text.split(' ').filter { it.isNotEmpty() }, text) }
+                    override fun translate(text: String, then: (Translation) -> Unit) {
+                        val target = chatLang
+                        if (frame.kind != FieldKind.TEXT || target == null || target == "en") { then(Translation.Same); return }
+                        phraseWorker.execute {
+                            val r: Translation = when {
+                                MlKitTranslator.code(target) == null -> Translation.Failed(TypeVoice.TRANSLATION_FAILED)
+                                !MlKitTranslator.hasModel(target) || !MlKitTranslator.hasModel("en") -> { MlKitTranslator.download(target); Translation.Failed(TypeVoice.TRANSLATION_MISSING) }
+                                else -> MlKitTranslator.translate(text, target)?.let { Translation.Done(it) } ?: Translation.Failed(TypeVoice.TRANSLATION_FAILED)
+                            }
+                            Log.d(TAG, "WRITE translate to $target: ${r::class.simpleName}")
+                            handler.post { then(r) }
+                        }
+                    }
+                    override fun readBack(text: String) { this@Actions.say(text, false, chatLang) }
                     override fun finished(text: String) {
                         Log.d(TAG, "WRITE result [${frame.app} ${frame.kind}]: ${if (frame.kind == FieldKind.PASSWORD) "-" else text}"); EventLog.add("write: ${frame.app} ${text.length} chars")
                         if (text.isNotEmpty()) {
-                            buckets.learn(frame, text.split(' ').filter { it.isNotEmpty() }, text)
                             if (frame.hasField) { val all = if (frame.before.isBlank()) text else frame.before.trimEnd() + (if (frame.digits) "" else " ") + text; if (!(ButtonAccessibilityService.inst?.setFieldText(all) ?: false)) Log.d(TAG, "WRITE could not set the field") }
                         }
-                        handler.postDelayed({ if (text.isEmpty()) this@Actions.say(TypeVoice.EMPTY, false) else this@Actions.say(text, false, if (lm is NgramWords) "es" else null) }, 700)
+                        handler.postDelayed({ if (text.isEmpty()) this@Actions.say(TypeVoice.EMPTY, false) else this@Actions.say(text, false) }, 700)
                     }
                 }
                 typer = TypeProgram(BucketRanker(lm, buckets, frame), out, timers, frame) { typer = null; stopPair(); gameEnded() }.also { it.start() }

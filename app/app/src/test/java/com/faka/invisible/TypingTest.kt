@@ -207,4 +207,51 @@ class TypingTest {
         assertEquals(listOf(listOf("cenar", "hora")), hints)
         assertEquals(2, asked.size); assertEquals("hello", asked.last())   // the text moved on: ask again with the new text
     }
+
+    // ---- write in English, send the translation only after a click ----
+    private val learned = ArrayList<String>()
+    private val readBacks = ArrayList<String>()
+    private var tr: Translation = Translation.Same
+    private var trAsked = 0
+    private fun translating() = TypeProgram(lm, object : TypeOut {
+        override fun pair(left: String, right: String?) { pairs.add(left to right) }
+        override fun hush() {}
+        override fun prefetch(words: List<String>) {}
+        override fun say(text: String) { said.add(text) }
+        override fun cue(c: TypeCue) { cues.add(c) }
+        override fun finished(text: String) { result = text }
+        override fun translate(text: String, then: (Translation) -> Unit) { trAsked++; then(tr) }
+        override fun readBack(text: String) { readBacks.add(text) }
+        override fun written(text: String) { learned.add(text) }
+    }, t, onEnded = {})
+
+    private fun writeHelloAndDone(q: TypeProgram) {
+        q.start(); q.down(t.now); t.advance(80); q.up(t.now); t.advance(500)   // click: Hello
+        repeat(3) { q.down(t.now); t.advance(80); q.up(t.now); t.advance(120) }; t.advance(400)   // menu
+        q.down(t.now); t.advance(80); q.up(t.now); t.advance(500)   // Done
+    }
+
+    @Test fun aTranslationIsReadBackAndSentOnlyAfterAClick() {
+        tr = Translation.Done("Hola"); val q = translating(); writeHelloAndDone(q)
+        assertEquals(listOf("Hola"), readBacks); assertEquals(null, result); assertTrue(q.active)
+        assertEquals(TypeVoice.CONFIRM, said.last())
+        q.down(t.now); t.advance(80); q.up(t.now); t.advance(500)
+        assertEquals("Hola", result); assertEquals(listOf("Hello"), learned); assertTrue(!q.active)
+    }
+
+    @Test fun holdAfterTheReadBackGoesBackToWritingAndSendsNothing() {
+        tr = Translation.Done("Hola"); val q = translating(); writeHelloAndDone(q)
+        q.down(t.now); t.advance(700); q.up(t.now); t.advance(20)
+        assertEquals(null, result); assertTrue(q.active); assertEquals("Hello", q.text())
+    }
+
+    @Test fun aFailedTranslationIsSpokenAndNothingIsSent() {
+        tr = Translation.Failed(TypeVoice.TRANSLATION_MISSING); val q = translating(); writeHelloAndDone(q)
+        assertEquals(TypeVoice.TRANSLATION_MISSING, said.last()); assertEquals(null, result); assertTrue(q.active); assertTrue(readBacks.isEmpty())
+    }
+
+    @Test fun whenNoTranslationIsNeededTheEnglishIsSentAsWritten() {
+        tr = Translation.Same; val q = translating(); writeHelloAndDone(q)
+        assertEquals("Hello", result); assertEquals(listOf("Hello"), learned)
+    }
 }

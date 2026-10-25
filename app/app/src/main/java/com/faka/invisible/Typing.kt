@@ -25,6 +25,19 @@ interface TypeOut {
     fun suggestions(): List<String> = emptyList()
     /** Ask the big model (slow, background) for the next words after [text]; call [then] always, with the words or an empty list. Default: never. */
     fun nextWords(text: String, then: (List<String>) -> Unit) {}
+    /** Turn the English [text] into the language of the place. Call [then] exactly once; a failure is a [Translation.Failed], never the plain text. Default: no translation needed. */
+    fun translate(text: String, then: (Translation) -> Unit) { then(Translation.Same) }
+    /** Say the translation aloud in its own language so the player can check it before it is sent. */
+    fun readBack(text: String) {}
+    /** The English text the player wrote (what the models learn from), even when the translation is what is sent. */
+    fun written(text: String) {}
+}
+
+/** The answer of [TypeOut.translate]. */
+sealed class Translation {
+    object Same : Translation()                         // the place uses the writing language: send as written
+    data class Done(val text: String) : Translation()   // translated: read it back, send only after a click
+    data class Failed(val say: String) : Translation()  // could not translate: say why, send nothing
 }
 
 enum class TypeCue { PICK_LEFT, PICK_RIGHT, NEXT, LETTERS, WORDS, DELETE, DONE, ARMED, MENU }
@@ -72,6 +85,8 @@ class TypeProgram(
     private var guessing = false
     private var pressedSinceShow = false
     private var touched = false   // the player has pressed since the start
+    private var waiting = false   // Done was picked: the translation is being made
+    private var pending: String? = null   // the translation, read back, waiting for a click to send it
     var active = false; private set
 
     fun start() {
@@ -83,7 +98,7 @@ class TypeProgram(
         show()
     }
 
-    fun stop() { if (active) { active = false; menu = false; timers.clear("t:menu"); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:replay") } }
+    fun stop() { if (active) { active = false; waiting = false; pending = null; menu = false; timers.clear("t:menu"); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:replay") } }
 
     fun text(): String = if (frame.digits) written.joinToString("") else written.joinToString(" ").replaceFirstChar { it.uppercase() }
 
@@ -129,12 +144,14 @@ class TypeProgram(
         timers.clear("t:hold"); timers.clear("t:leave")
         val long = armed || time - downAt >= HOLD_MS
         downAt = -1; armed = false
-        if (long) { clicks = 0; if (menu) closeMenu() else choose(false); return }
+        if (long) { clicks = 0; if (waiting) return; if (pending != null) backToEdit() else if (menu) closeMenu() else choose(false); return }
         clicks++
         timers.set("t:gap", GAP_MS) { val n = clicks; clicks = 0; if (active) many(n) }
     }
 
     private fun many(n: Int) {
+        if (waiting) return
+        pending?.let { t -> if (n == 1) send(t) else { out.readBack(t); out.say(TypeVoice.CONFIRM) }; return }
         if (menu) { if (n == 1) pickMenu() else closeMenu(); return }
         when (n) {
             1 -> choose(true)
@@ -216,9 +233,27 @@ class TypeProgram(
 
     private fun leave(done: Boolean) {
         val t = if (done) text() else ""
+        if (t.isEmpty()) { send(""); return }
+        waiting = true; timers.clear("t:replay")
+        out.translate(t) { r ->
+            if (!active || !waiting) return@translate
+            waiting = false
+            when (r) {
+                is Translation.Same -> send(t)
+                is Translation.Done -> { pending = r.text; out.readBack(r.text); out.say(TypeVoice.CONFIRM) }
+                is Translation.Failed -> { out.say(r.say); show() }   // nothing is sent; the text is kept and you can try again
+            }
+        }
+    }
+
+    /** Hold while the translation waits for a click: go back to writing, nothing is sent. */
+    private fun backToEdit() { pending = null; out.cue(TypeCue.NEXT); show() }
+
+    private fun send(sent: String) {
+        val original = if (sent.isEmpty()) "" else text()
         stop()
-        if (done) out.cue(TypeCue.DONE)
-        out.finished(t)
+        if (sent.isNotEmpty()) { out.cue(TypeCue.DONE); out.written(original) }
+        out.finished(sent)
         onEnded()
     }
 }
