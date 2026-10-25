@@ -39,7 +39,8 @@ object Actions {
     private var ttsReady = false
     private var torchOn = false
     private var taskStore = TaskStore()
-    private var taskMemory = TaskMemory()
+    private var taskMemory = PhraseMemory()
+    private var replyMemory = PhraseMemory()
     fun tasks(): List<Task> = taskStore.all()
     /** Splits the note, detects each task's language (off the main thread), saves, then calls [done] on the main thread with the count. */
     fun addTasks(text: String, done: (Int) -> Unit) {
@@ -73,6 +74,8 @@ object Actions {
             override fun forward(what: Forward) = forwardToMusic(what)
             override fun log(line: String) { Log.d(TAG, line); if (line.startsWith("MODE")) EventLog.add(line) }
             override fun tasks() = taskStore.all()
+            override fun replyOffers() = replyMemory.offers(3, emptySet())
+            override fun rememberReply(text: String, lang: String) = replyMemory.record(text, lang)
             override fun taskOffers() = taskMemory.offers(5, taskStore.all().map { it.text.lowercase() }.toSet())
             override fun addTask(text: String, lang: String) = taskStore.add(text, lang) != null
             override fun completeTask(id: Long) = taskStore.done(id)
@@ -136,7 +139,9 @@ object Actions {
         choices = ChoiceLog(if (f.exists()) f.readLines() else emptyList()) { line -> try { f.appendText(line + "\n") } catch (e: Exception) { Log.e(TAG, "choices.log write failed", e) } }
         val tf = java.io.File(app.filesDir, "tasks.txt")
         val mf = java.io.File(app.filesDir, "task_memory.txt")
-        taskMemory = TaskMemory(if (mf.exists()) mf.readLines() else emptyList()) { lines -> try { mf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "task_memory.txt write failed", e) } }
+        val rf = java.io.File(app.filesDir, "reply_memory.txt")
+        replyMemory = PhraseMemory(if (rf.exists()) rf.readLines() else emptyList()) { lines -> try { rf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "reply_memory.txt write failed", e) } }
+        taskMemory = PhraseMemory(if (mf.exists()) mf.readLines() else emptyList()) { lines -> try { mf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "task_memory.txt write failed", e) } }
         taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList(), onAdd = { taskMemory.record(it.text, it.lang) }) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
         tts = TextToSpeech(app) { s ->
             if (s == TextToSpeech.SUCCESS) {

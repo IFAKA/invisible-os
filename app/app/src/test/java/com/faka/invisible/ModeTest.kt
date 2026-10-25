@@ -18,6 +18,7 @@ class ModeTest {
         var song: String? = null
         val taskStore = TaskStore()
         var offers = listOf<Task>()
+        var replyOffersList = listOf<Task>(); val remembered = ArrayList<String>()
         var favs = listOf<String>()
         var now = 1_000_000L
         var vol = 7
@@ -53,6 +54,8 @@ class ModeTest {
             override fun tasks() = taskStore.all()
             override fun completeTask(id: Long) = taskStore.done(id)
             override fun taskOffers() = offers
+            override fun replyOffers() = replyOffersList
+            override fun rememberReply(text: String, lang: String) { remembered.add(text) }
             override fun addTask(text: String, lang: String) = taskStore.add(text, lang) != null
             override fun setLastTimer(minutes: Int) { last = minutes }
             override fun favourites() = favs
@@ -502,11 +505,11 @@ class ModeTest {
 
     @Test fun taskMemoryOffersMostAddedFirstAndSkipsOpenAndMessageTasks() {
         var now = 0L; var saved = listOf<String>()
-        val m = TaskMemory(clock = { now++ }, save = { saved = it })
+        val m = PhraseMemory(clock = { now++ }, save = { saved = it })
         m.record("Buy milk", "en"); m.record("Call mum", "en"); m.record("Buy milk", "en"); m.record("Reply to Ana: hi", "es")
         assertEquals(listOf("Buy milk", "Call mum"), m.offers(5, emptySet()).map { it.text })
         assertEquals(listOf("Call mum"), m.offers(5, setOf("buy milk")).map { it.text })
-        assertEquals(listOf("Buy milk", "Call mum"), TaskMemory(saved).offers(5, emptySet()).map { it.text })
+        assertEquals(listOf("Buy milk", "Call mum"), PhraseMemory(saved).offers(5, emptySet()).map { it.text })
     }
 
     @Test fun addTaskMenuOffersPastTasksAndAddsTheChosenOne() {
@@ -519,6 +522,17 @@ class ModeTest {
     @Test fun taskOptionOnAMessageMakesATaskWithoutTyping() {
         val r = Rig(); r.msgs = listOf(ana); r.wake(); r.advance(500); r.click(); r.pick("More"); r.pick("Task")
         assertTrue(r.taskStore.all().single().text.startsWith("Reply to Ana: "))
+    }
+
+    @Test fun composeOffersYourOwnPastReplies() {
+        val r = Rig(); r.msgs = listOf(bob); r.replyOffersList = listOf(Task(0, "On my way", "en"))
+        r.wake(); r.advance(500); r.click(); r.pick("More"); r.pick("Compose"); r.advance(9000)
+        assertTrue(r.log.contains("say[en] On my way"))
+    }
+
+    @Test fun aSentReplyIsRemembered() {
+        val r = Rig(); r.msgs = listOf(bob); r.wake(); r.advance(500); r.click(); r.pick("More"); r.pick("Compose"); r.pick("Yes"); r.advance(6000)
+        assertEquals(1, r.remembered.size)
     }
 
     @Test fun taskStoreSavesAndReloads() {

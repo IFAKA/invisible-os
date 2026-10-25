@@ -38,6 +38,8 @@ interface ModeOutput {
     fun completeTask(id: Long) {}
     fun taskOffers(): List<Task> = emptyList()   // the user's own past tasks, best first, not open now
     fun addTask(text: String, lang: String): Boolean = false
+    fun replyOffers(): List<Task> = emptyList()   // the user's own past replies, most used first
+    fun rememberReply(text: String, lang: String) {}
     fun nowPlaying(): String? = null   // "Title, Artist" of the music app, null if none
     fun dndAllowed(): Boolean
     fun lastTimer(): Int             // minutes, 0 = none yet
@@ -399,10 +401,8 @@ class ControllerMode(
                 if (taskIdx + TASK_PAGE < taskList.size) opts += Opt("task:more", "More tasks", null) { pick("task:more"); taskIdx += TASK_PAGE; show(Screen.TASK) }
                 opts
             }
-            Screen.TASK_ADD -> out.taskOffers().map { t ->
-                Opt("taskadd", t.text.take(MAX_SPOKEN), t.lang.ifEmpty { null }) {
-                    pick("taskadd"); out.addTask(t.text, t.lang); say(Voice.TASK_ADDED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
-                }
+            Screen.TASK_ADD -> phraseOptions(out.taskOffers(), "taskadd") { t ->
+                out.addTask(t.text, t.lang); say(Voice.TASK_ADDED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
             }
             Screen.TIMER_PICK -> (settings.timers.map { it to Spoken.minutes(it) }.let { t -> if (out.lastTimer() > 0) listOf(lastTimer() to "Last used") + t else t + (lastTimer() to "Last used") }).map { (min, label) ->
                 Opt("timer:$min", label, null) { pick("timer:$min"); startTimerPending(min) }
@@ -462,7 +462,13 @@ class ControllerMode(
         Opt("send:compose:$a", MessageLogic.word(a, "en"), l) {
             sendPending(m, MessageLogic.compose(a, MessageLogic.timeWord(m.text), Extra.NOTHING, m.lang), "send:compose $a")
         }
-    } + Opt("send:ask_details", "Ask details", l) { sendPending(m, MessageLogic.tellMeMore(m.lang), "send:ask_details") }
+    } + Opt("send:ask_details", "Ask details", l) { sendPending(m, MessageLogic.tellMeMore(m.lang), "send:ask_details") } +
+        phraseOptions(out.replyOffers().take(3), "send:mine") { t -> sendPending(m, t.text, "send:mine") }
+
+    /** The shared "pick a text" step (tasks and replies): the user's own past texts, spoken one by one; a pick calls [onPick]. */
+    private fun phraseOptions(texts: List<Task>, key: String, onPick: (Task) -> Unit): List<Opt> = texts.map { t ->
+        Opt(key, t.text.take(MAX_SPOKEN), t.lang.ifEmpty { null }) { pick(key); onPick(t) }
+    }
 
     /** Speak only the new volume level as a word, then keep scanning the volume list. */
     private fun sayLevel() {
@@ -508,7 +514,7 @@ class ControllerMode(
     private fun sendPending(m: Msg, text: String, intent: String) {
         pick(intent, m.sender)
         handled.add(hid(m)); replied.add(hid(m))
-        startPending(null, "Sending. Click to cancel", { out.reply(m.key, text) },
+        startPending(null, "Sending. Click to cancel", { out.reply(m.key, text).also { if (it) out.rememberReply(text, m.lang) } },
             onCancel = { handled.remove(hid(m)); replied.remove(hid(m)); show(Screen.MESSAGE) },
             after = { queue.remove(m); if (qi >= queue.size) qi = 0; showQueueItemOrHub() })
     }

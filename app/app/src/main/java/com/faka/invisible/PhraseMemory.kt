@@ -1,11 +1,11 @@
 package com.faka.invisible
 
 /**
- * Pure: remembers every task text the user added, so "Add task" can offer them again (their own words, nothing to set up).
+ * Pure: remembers every text the user chose or sent (task added, reply sent), so the shared "pick a text" step can offer them again (their own words, nothing to set up).
  * Offers: most added first, then most recent; message-made tasks ("Reply to ...") are not offered; open tasks are left out.
  * [lines] = saved form ("count<TAB>lastMs<TAB>lang<TAB>text"); `save` gets all lines after each change.
  */
-class TaskMemory(lines: List<String> = emptyList(), private val clock: () -> Long = { System.currentTimeMillis() }, private val save: (List<String>) -> Unit = {}) {
+class PhraseMemory(lines: List<String> = emptyList(), private val clock: () -> Long = { System.currentTimeMillis() }, private val save: (List<String>) -> Unit = {}) {
     private class E(var count: Int, var last: Long, var lang: String, val text: String)
     private val items = LinkedHashMap<String, E>()   // key = lower-case text
 
