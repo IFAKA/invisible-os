@@ -23,6 +23,7 @@ def read(paths):
                 cur = [m.group(2).strip(), m.group(3)]
             elif cur: cur[1] += " " + line
         if cur: msgs.append(cur)
+    msgs = [(s, re.sub(r"\s*<?(this message was edited|se editó este mensaje)>?", "", t, flags=re.I)) for s, t in msgs]
     return [(s, t) for s, t in msgs if t.strip().lower() not in SKIP and not t.startswith("http") and not SYSTEM.search(t.strip().replace("<This message was edited>", "").strip() or "image omitted")]
 
 def main():
