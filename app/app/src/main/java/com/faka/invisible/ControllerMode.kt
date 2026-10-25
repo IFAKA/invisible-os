@@ -106,7 +106,7 @@ class CountRanker(private val count: (String) -> Int) : OptionRanker {
  * Pure state machine for the v4 auto-scan launcher.
  * Idle: clicks go to the music app, hold = WAKE. In the mode ONE rule on every screen: the phone speaks the
  * options one at a time (pause, tick between items, ding at the end) and loops. 1 click = the option spoken last,
- * 2 = list again from the first, 3 = back one level (top: leave), 4 = leave. Two silent loops = leave. Hold = exit.
+ * 2 = one option back, 3 = back one level (top: leave), 4 = leave. Two silent loops = leave. Hold = exit.
  * Sends and timer starts wait [undoMs] after "Click to cancel"; any click inside cancels them.
  * Events in: onGesture, onSpeechStarted, onSpeechDone. Time and timers are injected.
  */
@@ -351,7 +351,7 @@ class ControllerMode(
         }
     }
 
-    /** Two clicks: the list again from the first option. */
+    /** Two clicks: one option back (while scanning); in the other phases the list again from the first. */
     private fun again() {
         stopAll()
         out.choice(screen.name, 2, "again", "")
@@ -360,6 +360,7 @@ class ControllerMode(
                 curIntro?.msgId?.let { heard.add(it) }; intro.clear(); curIntro = null; beginScan()
             }
             Phase.WAIT -> { val n = waitNext; n?.invoke() }
+            Phase.SCAN -> { phase = Phase.SCAN; loops = 0; val j = maxOf(0, scanIdx - 1); timers.set("scan", toneGapMs - tickLeadMs) { speakItem(j) } }   // one option back
             else -> { tn(Tone.RESTART); phase = Phase.SCAN; history.clear(); loops = 0; timers.set("scan", toneGapMs - tickLeadMs) { speakItem(0) } }
         }
     }

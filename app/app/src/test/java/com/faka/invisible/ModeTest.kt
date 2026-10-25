@@ -304,14 +304,13 @@ class ModeTest {
         r.advance(60_000); assertFalse(r.m.active)
     }
 
-    @Test fun twoClicksStartTheListAgain() {
+    @Test fun twoClicksMoveOneBack() {
         val r = Rig(); r.wake(); r.advance(3100)   // Status is being spoken
         r.clearLog(); r.click(D)
         assertTrue(r.m.active); assertEquals(ControllerMode.Screen.HUB, r.m.screen)
         r.advance(300)
-        assertEquals(listOf("say Timer"), r.spoken())
-        // the first item counts as most recent: a click now picks Timer, not the Status heard before
-        r.advance(600); r.click(); assertEquals(ControllerMode.Screen.TIMER_PICK, r.m.screen)
+        assertEquals(listOf("say Phone"), r.spoken())   // Status was spoken: one back is Phone
+        r.advance(600); r.click(); assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
     }
 
     @Test fun threeClicksGoBackOneLevelAndAtTheTopLeave() {
@@ -792,7 +791,7 @@ class ModeTest {
     @Test fun learningModeSpeaksOneHintAtWakeThenOptions() {
         val r = Rig(); r.codes = 0; r.wake()
         r.advance(400)
-        assertEquals(listOf("say Click when you hear it. Two clicks: start over. Three clicks: go back."), r.spoken())
+        assertEquals(listOf("say Click when you hear it. Two clicks: one back. Three clicks: go back."), r.spoken())
         r.advance(500); assertEquals("say Timer", r.spoken().last())
         r.advance(60_000); assertEquals(1, r.spoken().count { it.contains("Click when") })
     }
