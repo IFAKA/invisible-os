@@ -1,0 +1,34 @@
+{"kind":"reply","lang":"es","ctx":"Ana: ¿Vienes esta noche a cenar?","text":"Sí, voy"}
+{"kind":"reply","lang":"es","ctx":"Luis: ¿Puedes llamarme cuando llegues?","text":"Te llamo en un rato"}
+{"kind":"reply","lang":"es","ctx":"Mamá: ¿Ya comiste?","text":"Sí mamá, ya comí"}
+{"kind":"reply","lang":"es","ctx":"Jefe: ¿Puedes enviarme el informe hoy?","text":"Sí, te lo envío esta tarde"}
+{"kind":"reply","lang":"es","ctx":"Carlos: ¿Jugamos fútbol mañana?","text":"No puedo mañana, otro día"}
+{"kind":"reply","lang":"es","ctx":"Sofía: ¿A qué hora salimos?","text":"A las seis"}
+{"kind":"reply","lang":"es","ctx":"Pablo: Te mandé las fotos","text":"Gracias, ya las vi"}
+{"kind":"reply","lang":"es","ctx":"Ana: ¿Vienes esta noche a cenar?","text":"Sí, voy"}
+{"kind":"reply","lang":"es","ctx":"Marta: ¿Estás en casa?","text":"Estoy llegando"}
+{"kind":"reply","lang":"es","ctx":"Papá: ¿Necesitas que te recoja?","text":"No hace falta, gracias"}
+{"kind":"reply","lang":"es","ctx":"Luis: ¿Puedes llamarme cuando llegues?","text":"Sí, te llamo luego"}
+{"kind":"reply","lang":"es","ctx":"Elena: ¿Compraste el pan?","text":"Todavía no, ahora voy"}
+{"kind":"reply","lang":"en","ctx":"Sam: Are you coming tonight?","text":"Yes, I'll be there"}
+{"kind":"reply","lang":"en","ctx":"Boss: Can you send the report today?","text":"Sure, I'll send it this afternoon"}
+{"kind":"reply","lang":"en","ctx":"Kim: Did you eat?","text":"Yes, thanks"}
+{"kind":"reply","lang":"en","ctx":"Alex: Can we move the meeting to 4?","text":"Four works for me"}
+{"kind":"reply","lang":"en","ctx":"Dad: Do you need a ride?","text":"No thanks, I'm fine"}
+{"kind":"reply","lang":"en","ctx":"Sam: Are you coming tonight?","text":"Yes, I'll be there"}
+{"kind":"reply","lang":"en","ctx":"Jo: What time do we leave?","text":"Around six"}
+{"kind":"reply","lang":"en","ctx":"Kim: Can you call me later?","text":"I'll call you in a bit"}
+{"kind":"task","lang":"es","ctx":"","text":"Comprar leche"}
+{"kind":"task","lang":"es","ctx":"","text":"Llamar a mamá"}
+{"kind":"task","lang":"es","ctx":"","text":"Pagar el alquiler"}
+{"kind":"task","lang":"es","ctx":"","text":"Comprar leche"}
+{"kind":"task","lang":"es","ctx":"","text":"Sacar la basura"}
+{"kind":"task","lang":"es","ctx":"","text":"Enviar el informe a Carlos"}
+{"kind":"task","lang":"es","ctx":"","text":"Pedir cita con el dentista"}
+{"kind":"task","lang":"en","ctx":"","text":"Buy milk"}
+{"kind":"task","lang":"en","ctx":"","text":"Call the bank"}
+{"kind":"task","lang":"en","ctx":"","text":"Pay the electricity bill"}
+{"kind":"task","lang":"en","ctx":"","text":"Buy milk"}
+{"kind":"task","lang":"en","ctx":"","text":"Book a dentist appointment"}
+{"kind":"task","lang":"en","ctx":"","text":"Send the report to Carlos"}
+{"kind":"task","lang":"en","ctx":"","text":"Renew my passport"}
