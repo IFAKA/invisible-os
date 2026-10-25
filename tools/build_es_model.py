@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds YOUR next-word model from WhatsApp exports: words you write, word pairs and triples, how you start messages, plus a general Spanish
 word list so rare words can still be spelled. Runs only on this machine. The output holds your private word pairs: it never goes into git.
-Usage: python3 -I tools/build_es_model.py CHAT_DIR_OR_FILES... [--general words_es.txt] [--out ~/wa_words/words_es.txt] [--eval]
+Usage: python3 -I tools/build_es_model.py CHAT_DIR_OR_FILES... [--general words_es.txt] [--text NOTES.txt] [--out ~/wa_words/words_es.txt] [--eval]
 --eval builds on the first 80% of your messages and tests on the last 20%: how often the next word is in the top 2 / 4 / 6."""
 import sys, os, re, math, argparse, collections, importlib.util, glob
 
@@ -81,13 +81,15 @@ def evaluate(sents_train, sents_test, gen):
     for k in (2, 4, 6): print(f"  next word in top {k}: your model {100*hit[k]/n:.0f}%   (most common words only: {100*hit_u[k]/n:.0f}%)")
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("paths", nargs="+"); ap.add_argument("--me")
+    ap = argparse.ArgumentParser(); ap.add_argument("paths", nargs="+"); ap.add_argument("--me"); ap.add_argument("--text", action="append", default=[], help="plain text file of your own writing (Keep notes, tasks): one note per line")
     ap.add_argument("--general", default=os.path.expanduser("~/code/projects/hardware/health/utter/app/Sources/TypingCore/Resources/words_es.txt"))
     ap.add_argument("--out", default=os.path.expanduser("~/wa_words/words_es.txt")); ap.add_argument("--eval", action="store_true"); ap.add_argument("--min", type=int, default=2)
     a = ap.parse_args()
     msgs = cw.read(a.paths)
     me = a.me or collections.Counter(s for s, _ in msgs).most_common(1)[0][0]
     sents = sentences(msgs, me); gen = general(a.general)
+    for tf in a.text:
+        sents += sentences([(me, l) for l in open(os.path.expanduser(tf), encoding="utf-8").read().split("\n")], me)
     print(f"{len(sents)} of your sentences, {len(gen)} general words")
     if a.eval:
         cut = int(len(sents) * 0.8); evaluate(sents[:cut], sents[cut:], gen); return
