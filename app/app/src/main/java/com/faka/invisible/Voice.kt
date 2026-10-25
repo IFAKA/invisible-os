@@ -25,6 +25,33 @@ object Voice {
     const val NO_MESSAGES = "No unread messages"
     const val CANNOT = "Cannot do it"
     const val CANCELLED = "Cancelled"
+
+    // ---- weather, calendar, find my phone ----
+    const val NEED_LOCATION = "Open the app and allow location."
+    const val WEATHER_FAILED = "No weather now."
+    const val NEED_CALENDAR = "Open the app and allow the calendar."
+    const val CALENDAR_FAILED = "Cannot read the calendar."
+    const val NO_EVENTS = "No events today."
+    const val EVENT_UNNAMED = "Event"
+    const val FIND_PHONE = "Find my phone"
+    /** "Now 18 degrees, rain in 2 hours." [rainInHours]: 0 = raining now, null = none soon. */
+    fun weather(degrees: Int, rainInHours: Int?): String {
+        val t = if (degrees < 0) "minus ${-degrees}" else "$degrees"
+        val rain = when (rainInHours) { null -> "no rain soon"; 0 -> "raining now"; 1 -> "rain in 1 hour"; else -> "rain in $rainInHours hours" }
+        return "Now $t degrees, $rain."
+    }
+    fun eventNow(title: String) = "$title, now."
+    /** "Dentist at 4 PM, in 40 minutes." */
+    fun eventLater(title: String, hour24: Int, minute: Int, inMinutes: Int): String {
+        val h = (hour24 % 12).let { if (it == 0) 12 else it }
+        val at = "$h" + (if (minute == 0) "" else ":%02d".format(minute)) + if (hour24 < 12) " AM" else " PM"
+        val h2 = inMinutes / 60; val m2 = inMinutes % 60
+        val inText = buildList {
+            if (h2 > 0) add(if (h2 == 1) "1 hour" else "$h2 hours")
+            if (m2 > 0 || h2 == 0) add(if (m2 == 1) "1 minute" else "$m2 minutes")
+        }.joinToString(" ")
+        return "$title at $at, in $inText."
+    }
 }
 
 /**

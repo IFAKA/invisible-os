@@ -51,6 +51,10 @@ interface ModeOutput {
     fun codeCount(): Int             // successful code actions so far (persisted); learning mode while < 15
     fun setCodeCount(n: Int)
     fun startGame(coach: Boolean) {}   // coach = teach first (the "How to play" item)
+    fun weather(done: (String) -> Unit) { done(Voice.WEATHER_FAILED) }   // off the main thread inside; [done] runs on the main thread with ONE sentence
+    fun nextEvent(done: (String) -> Unit) { done(Voice.CALENDAR_FAILED) }   // same: the next calendar event sentence
+    fun wiredConnected(): Boolean = false   // a wired headset or USB audio is plugged in: then "Find my phone" is not offered
+    fun findPhone(on: Boolean) {}   // ring loudly on the alarm stream (on) or stop (off)
     fun pickCount(intent: String): Int = 0   // how often this option was picked (spearcon after [ControllerMode.SPEARCON_AFTER] picks)
 }
 
@@ -150,6 +154,8 @@ class ControllerMode(
     private val heard = HashSet<String>()     // text spoken to the end (or cut by the user's click after it started)
     private var fromHub = false
     private var hintPending = false
+    private var lookupId = 0                 // a newer id cancels an answer still on its way
+    private var finding = false               // the phone is ringing for "Find my phone"
     private var speechOpen = false            // we asked for speech and "done" has not come yet
 
     private val intro = ArrayDeque<Intro>()
@@ -174,6 +180,7 @@ class ControllerMode(
     /** [lastPressMs] = length of the last press; with the gesture gap it gives the time of the first press. */
     fun onGesture(g: Gesture, lastPressMs: Long = 0) {
         val firstPress = clock() - gapMs - lastPressMs
+        if (active && finding) { endFind(); return }   // ANY click or hold stops the ringing
         if (pending != null && g != Gesture.HOLD) { cancelPending(); return }   // ANY click cancels
         if (!active) {
             when (g) {
@@ -261,7 +268,7 @@ class ControllerMode(
 
     // ---- screens: earcon, then the intro (hint, message text), then the scan ----
     private fun show(s: Screen) {
-        stopAll()
+        stopAll(); lookupId++
         screen = s; phase = Phase.INTRO
         out.tone(tone(s))
         intro.clear()
@@ -384,6 +391,9 @@ class ControllerMode(
                     "timer" -> all["hub:timer"] = Opt("hub:timer", "Timer", null) { pick("hub:timer"); show(Screen.TIMER_PICK) }
                     "volume" -> all["hub:volume"] = Opt("hub:volume", "Volume", null) { pick("hub:volume"); show(Screen.VOLUME) }
                     "status" -> all["hub:status"] = Opt("hub:status", "Status", null) { pick("hub:status"); outro(Spoken.status(out.status(), unread().size)) }
+                    "weather" -> all["hub:weather"] = Opt("hub:weather", "Weather", null) { pick("hub:weather"); lookup(out::weather) }
+                    "calendar" -> all["hub:calendar"] = Opt("hub:calendar", "Next event", null) { pick("hub:calendar"); lookup(out::nextEvent) }
+                    "find" -> if (!out.wiredConnected()) all["hub:find"] = Opt("hub:find", Voice.FIND_PHONE, null) { pick("hub:find"); find() }
                     "games" -> all["hub:games"] = Opt("hub:games", "Games", null) { pick("hub:games"); show(Screen.GAMES) }
                     "more" -> all["hub:more"] = Opt("hub:more", "More", null) { pick("hub:more"); show(Screen.MORE_HUB) }
                 }
@@ -505,6 +515,26 @@ class ControllerMode(
     }
 
     /** Speak one sentence, then leave (Status). */
+    /** Ask the phone for one sentence (it may take seconds, off the main thread); any click cancels and the list goes on. */
+    private fun lookup(ask: ((String) -> Unit) -> Unit) {
+        val id = ++lookupId
+        stopAll(); phase = Phase.WAIT; waitNext = { lookupId++; beginScan() }
+        out.tone(Tone.TAP)
+        ask { text -> if (id == lookupId && active && phase == Phase.WAIT) outro(text) }
+    }
+
+    /** Find my phone: it rings for [FIND_MS]; the first click of any kind stops it and leaves. It says nothing else. */
+    private fun find() {
+        stopAll(); phase = Phase.PENDING
+        finding = true; out.findPhone(true)
+        timers.set("find", FIND_MS) { endFind() }
+    }
+
+    private fun endFind() {
+        if (!finding) return
+        finding = false; timers.clear("find"); out.findPhone(false); exit(true)
+    }
+
     private fun outro(text: String, lang: String? = null) { phase = Phase.OUTRO; say(text, lang) }
 
     // ---- back one level ----
@@ -581,7 +611,8 @@ class ControllerMode(
 
     fun exit(withTone: Boolean = true) {
         if (!active) return
-        stopAll()
+        stopAll(); lookupId++
+        if (finding) { finding = false; timers.clear("find"); out.findPhone(false) }
         active = false
         if (pausedByUs) { pausedByUs = false; out.resumeMusic() }
         out.log("MODE exit")
@@ -621,6 +652,7 @@ class ControllerMode(
     companion object {
         /** Pause between scanned items, from the end of one item's speech to the start of the next. Easy to change. */
         const val ITEM_GAP_MS = 1600L
+        const val FIND_MS = 20_000L   // "Find my phone" rings this long
         const val SPEARCON_AFTER = 30   // picks of one option, then it is scanned as a sped-up spearcon
         private const val MAX_SPOKEN = 160
     }

@@ -115,6 +115,13 @@ object Actions {
                 val a = t?.let { Calendar.getInstance().apply { timeInMillis = it } }
                 return Status(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), b, a?.get(Calendar.HOUR_OF_DAY), a?.get(Calendar.MINUTE))
             }
+            override fun weather(done: (String) -> Unit) = PhoneInfo.weather(app) { t -> handler.post { done(t) } }
+            override fun nextEvent(done: (String) -> Unit) = PhoneInfo.nextEvent(app) { t -> handler.post { done(t) } }
+            override fun wiredConnected() = app.getSystemService(AudioManager::class.java).getDevices(AudioManager.GET_DEVICES_OUTPUTS).any {
+                it.type in setOf(android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET, android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                    android.media.AudioDeviceInfo.TYPE_USB_HEADSET, android.media.AudioDeviceInfo.TYPE_USB_DEVICE)
+            }
+            override fun findPhone(on: Boolean) = ringFind(on)
             override fun dndAllowed() = this@Actions.dndAllowed()
             override fun codeCount() = prefs().getInt("codeCount", 0)
             override fun setCodeCount(n: Int) { prefs().edit().putInt("codeCount", n).apply() }
@@ -337,6 +344,27 @@ object Actions {
         val r = Runnable { ring(n + 1) }
         ringing = r
         handler.postDelayed(r, 3000)
+    }
+
+    // Find my phone: the alarm sound loops on the alarm stream at full volume; the old alarm volume comes back after.
+    private var findTrack: AudioTrack? = null
+    private var findOldVolume = -1
+
+    private fun ringFind(on: Boolean) {
+        val am = app.getSystemService(AudioManager::class.java)
+        findTrack?.let { try { it.stop(); it.release() } catch (e: Exception) {} }; findTrack = null
+        if (!on) { if (findOldVolume >= 0) am.setStreamVolume(AudioManager.STREAM_ALARM, findOldVolume, 0); findOldVolume = -1; return }
+        if (findOldVolume < 0) findOldVolume = am.getStreamVolume(AudioManager.STREAM_ALARM)
+        am.setStreamVolume(AudioManager.STREAM_ALARM, am.getStreamMaxVolume(AudioManager.STREAM_ALARM), 0)
+        val pcm = Earcons.pcm(Tone.ALARM)
+        findTrack = try {
+            AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                .setAudioFormat(AudioFormat.Builder().setSampleRate(Earcons.SR).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
+                .setBufferSizeInBytes(pcm.size * 2).setTransferMode(AudioTrack.MODE_STATIC).build().also {
+                    it.write(pcm, 0, pcm.size); it.setLoopPoints(0, pcm.size, -1); it.setVolume(1f); it.play()
+                }
+        } catch (e: Exception) { Log.e(TAG, "find ring failed", e); null }
     }
 
     private fun stopAlarmNow() {

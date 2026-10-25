@@ -34,7 +34,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.READ_CALENDAR), 1)   // location: Weather; calendar: Next event
         Actions.init(applicationContext)
         s = Actions.mode.settings
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(k.dp(16), k.dp(40), k.dp(16), k.dp(32)) }

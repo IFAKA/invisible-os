@@ -23,6 +23,9 @@ class ModeTest {
         var favs = listOf<String>()
         var now = 1_000_000L
         var vol = 7
+        var wired = false
+        var weatherAnswer: String? = null     // null = the answer has not come yet
+        var pendingWeather: ((String) -> Unit)? = null
         var codes = 100          // experienced by default; learning tests set 0
         private val timers = HashMap<String, Pair<Long, () -> Unit>>()
         /** Platform speech: starts 50 ms after the call, ends 500 ms after it. */
@@ -50,6 +53,10 @@ class ModeTest {
             override fun reply(key: String, text: String): Boolean { log.add("reply $key $text"); return replyOk }
             override fun status() = Status(15, 5, 80, 7, 30)
             override fun dndAllowed() = dnd
+            override fun wiredConnected() = wired
+            override fun findPhone(on: Boolean) { log.add("find $on") }
+            override fun weather(done: (String) -> Unit) { val a = weatherAnswer; if (a != null) done(a) else pendingWeather = done }
+            override fun nextEvent(done: (String) -> Unit) { done("Dentist at 4 PM, in 40 minutes.") }
             override fun lastTimer() = last
             override fun nowPlaying() = song
             override fun tasks() = taskStore.all()
@@ -69,8 +76,9 @@ class ModeTest {
             override fun set(key: String, delayMs: Long, task: () -> Unit) { timers[key] = (now + delayMs) to task }
             override fun clear(key: String) { timers.remove(key) }
         }, { now }, ranker, pauseMs = gap)
-        init { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks") }   // the older timing tests count menu items
+        init { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks" - "weather" - "calendar" - "find") }   // the older timing tests count menu items
         fun withTasks() = apply { m.settings = LauncherSettings() }
+        fun withInfo() = apply { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks") }
         fun g(vararg x: Gesture) = x.forEach { m.onGesture(it) }
         fun advance(ms: Long) {
             val end = now + ms
@@ -107,6 +115,51 @@ class ModeTest {
     private val ana = Msg("a", "Ana", "quieres venir a cenar?", "es", 999_000)
     private val bob = Msg("b", "Bob", "what time is it", "en", 999_000)
     private val info = Msg("i", "Eve", "ok see you", "en", 999_000)
+
+    // ---------- weather, next event, find my phone ----------
+    @Test fun weatherSpeaksTheAnswerAfterItArrives() {
+        val r = Rig().withInfo(); r.wake(); r.pick("Weather")
+        r.advance(300); assertTrue(r.spoken().isEmpty())   // waiting, nothing said yet
+        r.weatherAnswer = "Now 18 degrees, rain in 2 hours."; r.pendingWeather?.invoke(r.weatherAnswer!!)
+        r.advance(100); assertEquals(listOf("say Now 18 degrees, rain in 2 hours."), r.spoken())
+    }
+
+    @Test fun weatherClickWhileWaitingCancelsAndLateAnswerIsDropped() {
+        val r = Rig().withInfo(); r.wake(); r.pick("Weather")
+        r.click(); r.clearLog()
+        r.pendingWeather?.invoke("Now 1 degrees, no rain soon.")
+        r.advance(100); assertFalse(r.spoken().contains("say Now 1 degrees, no rain soon."))
+    }
+
+    @Test fun weatherFailureSpeaksFixedSentence() {
+        val r = Rig().withInfo(); r.weatherAnswer = Voice.WEATHER_FAILED; r.wake(); r.pick("Weather")
+        r.advance(100); assertEquals(listOf("say ${Voice.WEATHER_FAILED}"), r.spoken())
+    }
+
+    @Test fun nextEventIsSpoken() {
+        val r = Rig().withInfo(); r.wake(); r.pick("Next event")
+        r.advance(100); assertEquals(listOf("say Dentist at 4 PM, in 40 minutes."), r.spoken())
+    }
+
+    @Test fun findPhoneOnlyWithoutWiredOutput() {
+        val a = Rig().withInfo(); a.wake(); a.advance(60_000)
+        assertTrue(a.spoken().contains("say ${Voice.FIND_PHONE}"))
+        val b = Rig().withInfo(); b.wired = true; b.wake(); b.advance(60_000)
+        assertFalse(b.spoken().contains("say ${Voice.FIND_PHONE}"))
+    }
+
+    @Test fun findPhoneRingsAndAnyClickStopsIt() {
+        val r = Rig().withInfo(); r.wake(); r.pick(Voice.FIND_PHONE)
+        assertTrue(r.has("find true")); assertTrue(r.spoken().isEmpty())
+        r.advance(5000); r.click(Gesture.DOUBLE)
+        assertTrue(r.has("find false")); assertFalse(r.m.active)
+    }
+
+    @Test fun findPhoneStopsByItselfAfter20Seconds() {
+        val r = Rig().withInfo(); r.wake(); r.pick(Voice.FIND_PHONE)
+        r.advance(19_000); assertFalse(r.has("find false"))
+        r.advance(2_000); assertTrue(r.has("find false")); assertFalse(r.m.active)
+    }
 
     // ---------- idle ----------
     @Test fun idlePassthroughAndHoldWakes() {
