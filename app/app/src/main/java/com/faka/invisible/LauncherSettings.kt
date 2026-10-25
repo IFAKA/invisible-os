@@ -46,9 +46,10 @@ object SettingsStore {
 
     /** A saved menu from before "Playing" existed (or from when it was last) gets it once, as the first item; the user can move or switch it off in settings. */
     private fun withPlaying(p: SharedPreferences, keys: List<String>): List<String> {
-        if (p.getBoolean("s_playing_first", false)) return keys
-        p.edit().putBoolean("s_playing_first", true).apply()
-        return listOf("playing") + keys.filter { it != "playing" }
+        if (p.getBoolean("s_playing_saved", false)) return keys
+        val moved = listOf("playing") + keys.filter { it != "playing" }
+        p.edit().putBoolean("s_playing_saved", true).putString("s_hub", moved.joinToString(",")).apply()   // saved now, so the settings screen shows it too
+        return moved
     }
 
     fun save(p: SharedPreferences, s: LauncherSettings) {
