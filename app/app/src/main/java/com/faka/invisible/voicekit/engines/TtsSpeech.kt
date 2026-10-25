@@ -1,0 +1,117 @@
+@file:OptIn(KitOnly::class)
+package com.faka.invisible.voicekit
+
+import android.content.Context
+import android.media.AudioTrack
+import android.os.Handler
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
+import android.util.Log
+import java.io.File
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+
+/**
+ * ENGINE. The only place that speaks: the TTS engine, the voice language, the speech rate, and the spearcon and word-clip
+ * files that the TTS engine makes. [rate] gives the normal speech rate (it grows with use).
+ */
+class TtsSpeech(
+    private val app: Context,
+    private val handler: Handler,
+    private val tones: TonePlayer,
+    private val rate: () -> Float,
+    private val listener: SpeechListener,
+) : SpeechPort {
+    private val tag = "Invisible"
+    private var tts: TextToSpeech? = null
+    private var ready = false
+    private var uttSeq = 0
+    private var lastUtt = ""
+    private var spTrack: AudioTrack? = null
+
+    override val words: WordClips = WordClips(File(app.cacheDir, "words"), { text, f, id ->
+        setVoice(null); tts?.setSpeechRate(Pacing.WORD_RATE); tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS
+    }, { handler.post(it) })
+
+    override val speaking get() = tts?.isSpeaking == true
+
+    fun start() {
+        tts = TextToSpeech(app) { s ->
+            if (s == TextToSpeech.SUCCESS) {
+                tts?.language = Locale.US; ready = true
+                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(id: String?) { if (id == lastUtt) handler.post { listener.started() } }
+                    override fun onDone(id: String?) { if (id?.startsWith("wc_") == true) words.made(id) else if (id?.startsWith("sy_") == true) spearconMade(id.removePrefix("sy_")) else ended(id) }
+                    @Deprecated("old api") override fun onError(id: String?) { ended(id) }
+                    override fun onStop(id: String?, interrupted: Boolean) {}   // flushed by a newer utterance or a click
+                })
+            }
+        }
+    }
+
+    override fun stop() { tts?.stop(); spTrack?.let { try { it.stop() } catch (e: Exception) {} }; spTrack = null; lastUtt = "" }
+
+    /** Only the newest utterance counts: older ones were flushed. Tells the listener the speech is over. */
+    private fun ended(id: String?) { if (id == lastUtt) handler.post { listener.ended() } }
+
+    /** Sets the voice language for the next utterance; falls back to the default locale if the voice is missing. */
+    private fun setVoice(lang: String?) {
+        val t = tts ?: return
+        val want = if (lang == null) Locale.US else Locale(lang)
+        val r = t.isLanguageAvailable(want)
+        if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) {
+            Log.d(tag, "TTS voice $lang missing, default"); t.language = Locale.getDefault()
+        } else t.language = want
+    }
+
+    override fun speak(p: Phrase, queue: Boolean, fast: Boolean, slow: Boolean) {
+        val text = p.text; val lang = p.lang
+        Log.d(tag, "SPEAK[$lang] $text ready=$ready fast=$fast")
+        if (!ready) { handler.post { listener.ended() }; return }
+        val spKey = Spearcon.key(text, lang)
+        if (fast) spearcon(spKey)?.let { sp ->
+            tts?.stop(); lastUtt = "inv${++uttSeq}"; val me = lastUtt
+            handler.post { listener.started() }
+            spTrack = tones.play(sp.samples, sp.rate) { if (lastUtt == me) { spTrack = null; listener.ended() } }
+            return
+        }
+        setVoice(lang)
+        tts?.setSpeechRate(if (slow) Pacing.COACH_RATE else rate())   // the Duel coach talks slowly; every other call sets its own rate again
+        lastUtt = "inv${++uttSeq}"
+        if (fast) { val k = spKey; val l = lang; handler.postDelayed({ makeSpearcon(k, text, l) }, 4000) }   // after the word, not during it
+        tts?.speak(text, if (queue) TextToSpeech.QUEUE_ADD else TextToSpeech.QUEUE_FLUSH, null, lastUtt)
+    }
+
+    // ---- spearcons: an option picked often is scanned as its sped-up spoken word ----
+    private val spMem = ConcurrentHashMap<String, Spearcon.Pcm>()
+    private val spWant = ConcurrentHashMap<String, Pair<String, String?>>()   // key -> (text, lang) being made
+    private fun spDir() = File(app.cacheDir, "spearcons").apply { mkdirs() }
+
+    private fun spearcon(key: String): Spearcon.Pcm? = spMem[key] ?: try {
+        val f = File(spDir(), "$key.pcm")
+        if (!f.exists()) null else {
+            val bb = java.nio.ByteBuffer.wrap(f.readBytes()).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            val rate = bb.getInt(); Spearcon.Pcm(rate, ShortArray((bb.remaining()) / 2) { bb.getShort() }).also { spMem[key] = it }
+        }
+    } catch (e: Exception) { null }
+
+    /** Called after the full word was spoken once: ask the TTS engine for a file of it (the next scan can use it). */
+    private fun makeSpearcon(key: String, text: String, lang: String?) {
+        if (spWant.putIfAbsent(key, text to lang) != null) return
+        val r = tts?.synthesizeToFile(text, null, File(spDir(), "$key.wav"), "sy_$key")
+        if (r != TextToSpeech.SUCCESS) spWant.remove(key)
+    }
+
+    /** Runs on a TTS thread: wav -> compressed PCM, kept in memory and on disk. */
+    private fun spearconMade(key: String) {
+        try {
+            val w = File(spDir(), "$key.wav")
+            val pcm = Spearcon.readWav(w.readBytes()) ?: return
+            val sp = Spearcon.Pcm(pcm.rate, Spearcon.compress(pcm.samples, pcm.rate))
+            val bb = java.nio.ByteBuffer.allocate(4 + sp.samples.size * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            bb.putInt(sp.rate); sp.samples.forEach { bb.putShort(it) }
+            File(spDir(), "$key.pcm").writeBytes(bb.array()); w.delete(); spMem[key] = sp
+            Log.d(tag, "SPEARCON made $key ${pcm.samples.size} -> ${sp.samples.size}")
+        } catch (e: Exception) { Log.e(tag, "spearcon failed", e) } finally { spWant.remove(key) }
+    }
+}

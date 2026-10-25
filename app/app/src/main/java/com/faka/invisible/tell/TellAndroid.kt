@@ -1,14 +1,12 @@
 package com.faka.invisible.tell
 
 import android.content.SharedPreferences
-import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioTimestamp
-import android.media.AudioTrack
 import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
 import com.faka.invisible.voicekit.Phrase
+import com.faka.invisible.voicekit.RawButton
+import com.faka.invisible.voicekit.TellAudio
 import com.faka.invisible.voicekit.TellVoice
 import com.faka.invisible.voicekit.Timers
 
@@ -22,7 +20,7 @@ interface TellHost {
 }
 
 /**
- * Android side of TELL: owns the mixer, a thread that feeds a low-latency stereo AudioTrack (44.1 kHz, float, 5 ms blocks),
+ * Android side of TELL: owns the mixer, a TellAudio engine (low-latency stereo, 44.1 kHz, float, 5 ms blocks),
  * the latency estimate, the solver thread and the saved rung. Game calls come on the main thread ([handler]); the mixer is
  * guarded by one lock shared with the audio thread. No audio input of any kind.
  */
@@ -32,7 +30,7 @@ class TellAndroid(
     private val host: TellHost,
     private val onEnded: () -> Unit,
     private val coach: Boolean = false,
-) {
+) : RawButton {
     private val sr = 44100
     private val block = sr * 5 / 1000   // 220 frames
     private val lock = Any()
@@ -41,12 +39,13 @@ class TellAndroid(
     private val keyed = HashMap<String, Runnable>()
     @Volatile private var running = false
     @Volatile private var latency = 0.0
-    private var thread: Thread? = null
+    private val audio = TellAudio(sr, block, { buf, n -> synchronized(lock) { mixer.render(buf, n) } }, { running },
+        { ms -> latency = if (latency == 0.0) ms else latency * 0.8 + ms * 0.2 })
     private var solverThread: Thread? = null
     private var game: TellGame? = null
     private var gen = 0
 
-    val active get() = running
+    override val active get() = running
 
     private val timers = object : Timers {
         override fun set(key: String, delayMs: Long, task: () -> Unit) {
@@ -95,18 +94,17 @@ class TellAndroid(
     }
 
     private fun begin(m: TellMixer?) {
-        val track = try { buildTrack() } catch (e: Exception) { Log.e("TELL", "AudioTrack failed", e); null }
-        if (m == null || track == null) { host.speak(TellVoice.COULD_NOT_START); running = false; onEnded(); return }
+        if (m == null || !audio.open()) { host.speak(TellVoice.COULD_NOT_START); running = false; onEnded(); return }
         mixer = m
-        thread = Thread({ pump(track) }, "tell-audio").also { it.start() }
+        audio.start()
         solverThread = Thread({ try { solver.solve() } catch (e: Throwable) { Log.e("TELL", "solve failed", e) } }, "tell-solver")
             .also { it.priority = Thread.MIN_PRIORITY; it.start() }
         game = TellGame(solver, out, timers, { SystemClock.uptimeMillis() }, { latency.toLong() },
             solved = { solver.isSolved }, forceCoach = coach).also { it.start() }
     }
 
-    fun down(timeMs: Long) { game?.down(timeMs) }
-    fun up(timeMs: Long) { game?.up(timeMs) }
+    override fun down(time: Long) { game?.down(time) }
+    override fun up(time: Long) { game?.up(time) }
     /** The speech engine finished the last sentence. */
     fun speechDone() { game?.onSpeechDone() }
 
@@ -122,46 +120,7 @@ class TellAndroid(
         running = false
         for (k in keyed.keys.toList()) timers.clear(k)
         game = null
-        thread?.let { try { it.join(500) } catch (e: InterruptedException) {} }
-        thread = null
+        audio.join()
         onEnded()
-    }
-
-    private fun buildTrack(): AudioTrack {
-        val min = AudioTrack.getMinBufferSize(sr, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_FLOAT)
-        val size = maxOf(min, block * 2 * 4 * 2)
-        return AudioTrack.Builder()
-            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-            .setAudioFormat(AudioFormat.Builder().setSampleRate(sr).setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build())
-            .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .setBufferSizeInBytes(size).build()
-    }
-
-    private fun pump(track: AudioTrack) {
-        val buf = FloatArray(block * 2)
-        val ts = AudioTimestamp()
-        var written = 0L
-        var n = 0
-        try {
-            track.play()
-            while (running) {
-                synchronized(lock) { mixer.render(buf, block) }
-                track.write(buf, 0, buf.size, AudioTrack.WRITE_BLOCKING)
-                written += block
-                if (++n % 50 == 0 && track.getTimestamp(ts)) {   // every ~250 ms
-                    val playedNow = ts.framePosition + (System.nanoTime() - ts.nanoTime) * sr / 1_000_000_000L
-                    val ms = (written - playedNow) * 1000.0 / sr
-                    if (ms in 0.0..1000.0) latency = if (latency == 0.0) ms else latency * 0.8 + ms * 0.2
-                }
-            }
-        } catch (e: Throwable) {
-            Log.e("TELL", "audio thread failed", e)
-        } finally {
-            try { track.stop() } catch (e: Exception) {}
-            track.release()
-        }
     }
 }

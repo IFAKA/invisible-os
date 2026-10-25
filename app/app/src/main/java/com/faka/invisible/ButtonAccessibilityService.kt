@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.util.Log
 import android.view.KeyEvent
+import com.faka.invisible.voicekit.VoiceKit
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -22,12 +23,7 @@ class ButtonAccessibilityService : AccessibilityService() {
         EventLog.add("accessibility connected")
     }
 
-    override fun onKeyEvent(e: KeyEvent): Boolean {
-        if (e.keyCode != KeyEvent.KEYCODE_HEADSETHOOK && e.keyCode != KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) return false
-        Log.d("Invisible", "AKEY action=${e.action} code=${e.keyCode} repeat=${e.repeatCount} down=${e.downTime} t=${e.eventTime}")
-        Actions.key("a11y", e.action == KeyEvent.ACTION_DOWN, e.repeatCount, e.downTime, e.eventTime)
-        return true
-    }
+    override fun onKeyEvent(e: KeyEvent): Boolean = VoiceKit.buttons.keyEvent("a11y", e)
 
     private val nameLike = Regex("title|name|contact|conversation|toolbar", RegexOption.IGNORE_CASE)
 

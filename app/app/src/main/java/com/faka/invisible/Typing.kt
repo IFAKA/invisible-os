@@ -54,7 +54,7 @@ class TypeProgram(
     private val timers: Timers,
     private val frame: Frame = Frame(),   // the place being typed into; the default is a plain text place
     private val onEnded: () -> Unit,
-) {
+) : RawButton {
     companion object {
         const val REPLAY_MS = 7000L
         const val MAX_REPLAYS = 3
@@ -83,7 +83,7 @@ class TypeProgram(
     private var touched = false   // the player has pressed since the start
     private var waiting = false   // Done was picked: the translation is being made
     private var pending: String? = null   // the translation, read back, waiting for a click to send it
-    var active = false; private set
+    override var active = false; private set
 
     fun start() {
         if (frame.kind == FieldKind.PASSWORD) { out.say(TypeVoice.PASSWORD); onEnded(); return }   // never spoken, never saved
@@ -126,7 +126,7 @@ class TypeProgram(
     }
 
     // ---- the raw button ----
-    fun down(time: Long) {
+    override fun down(time: Long) {
         if (!active) return
         touched = true; pressedSinceShow = true
         out.hush(); timers.clear("t:gap"); timers.clear("t:replay"); timers.clear("t:menu")
@@ -135,7 +135,7 @@ class TypeProgram(
         timers.set("t:leave", Pacing.LEAVE_MS) { if (active && downAt >= 0) leave(false) }
     }
 
-    fun up(time: Long) {
+    override fun up(time: Long) {
         if (!active || downAt < 0) return
         timers.clear("t:hold"); timers.clear("t:leave")
         val long = armed || time - downAt >= Pacing.HOLD_MS
