@@ -165,11 +165,9 @@ class ControllerMode(
 
     private val intro = ArrayDeque<Intro>()
     private var curIntro: Intro? = null
-    private var opts = listOf<Opt>()
-    private var scanIdx = 0
+    private var list = ScanList<Opt>(emptyList())   // the options being read
     private var awaitStart = -1
     private val history = ArrayList<Pair<Int, Long>>()   // (option index, time its speech started), oldest first
-    private var loops = 0
     private var code = 0                       // position of the option being run
     private var waitNext: (() -> Unit)? = null
 
@@ -205,7 +203,7 @@ class ControllerMode(
                 Phase.OUTRO -> { stopAll(); exit(true) }
                 Phase.SCAN -> {   // two clicks choose the option spoken last
                     val i = bind(firstPress) ?: return    // nothing spoken yet: ignore
-                    stopAll(); code = i + 1; opts[i].run()
+                    stopAll(); code = i + 1; list.items[i].run()
                 }
                 else -> again()
             }
@@ -326,15 +324,16 @@ class ControllerMode(
     private fun beginScan() {
         stopAll()
         phase = Phase.SCAN; curIntro = null
-        history.clear(); loops = 0
-        opts = buildOptions()
-        if (opts.isEmpty()) { leaveSilent(); return }
+        history.clear()
+        list = ScanList(buildOptions())
+        if (list.isEmpty) { leaveSilent(); return }
         speakItem(0)
     }
 
     private fun speakItem(i: Int) {
-        scanIdx = i; awaitStart = i
-        say(opts[i].label, opts[i].lang, settings.spearcons && out.pickCount(opts[i].key) >= SPEARCON_AFTER)
+        list.moveTo(i); awaitStart = i
+        val o = list.items[i]
+        say(o.label, o.lang, settings.spearcons && out.pickCount(o.key) >= SPEARCON_AFTER)
     }
 
     private fun recordStart() {
@@ -345,12 +344,12 @@ class ControllerMode(
 
     private fun itemDone() {
         recordStart()
-        if (scanIdx < opts.size - 1) {
+        if (!list.isLast) {
             timers.set("tick", maxOf(0L, pause - tickLeadMs)) { tn(Tone.TICK) }
-            timers.set("scan", pause) { speakItem(scanIdx + 1) }
+            timers.set("scan", pause) { speakItem(list.index + 1) }
         } else timers.set("scan", pause) {
-            tn(Tone.DING); loops++   // falls: the list ended
-            if (loops >= silentLoops) timers.set("scan", pause) { leaveSilent() }
+            tn(Tone.DING)   // falls: the list ended
+            if (list.endLoop() >= silentLoops) timers.set("scan", pause) { leaveSilent() }
             else {
                 timers.set("tick", maxOf(0L, pause - restartLeadMs)) { tn(Tone.RESTART) }   // rises: it starts over
                 timers.set("scan", pause) { speakItem(0) }
@@ -370,8 +369,8 @@ class ControllerMode(
                 curIntro?.msgId?.let { heard.add(it) }; intro.clear(); curIntro = null; beginScan()
             }
             Phase.WAIT -> { val n = waitNext; n?.invoke() }
-            Phase.SCAN -> { phase = Phase.SCAN; loops = 0; val j = if (scanIdx + 1 < opts.size) scanIdx + 1 else 0; timers.set("scan", SKIP_MS) { speakItem(j) } }   // the next option now, at the user's own pace
-            else -> { tn(Tone.RESTART); phase = Phase.SCAN; history.clear(); loops = 0; timers.set("scan", toneGapMs - tickLeadMs) { speakItem(0) } }
+            Phase.SCAN -> { phase = Phase.SCAN; list.resetLoops(); val j = list.nextIndex(); timers.set("scan", SKIP_MS) { speakItem(j) } }   // the next option now, at the user's own pace
+            else -> { tn(Tone.RESTART); phase = Phase.SCAN; history.clear(); list.resetLoops(); timers.set("scan", toneGapMs - tickLeadMs) { speakItem(0) } }
         }
     }
 

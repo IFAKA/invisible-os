@@ -27,4 +27,10 @@ class KitRulesTest {
         val o = offenders("Ui.kt", Regex("""GradientDrawable\(|\bTextView\(|\bButton\("""))
         assertTrue("Build views with Kit (Ui.kt): $o", o.isEmpty())
     }
+
+    /** Every list is a ScanList (ScanList.kt): no second class keeps its own item index (scanIdx, menuIdx...) or loop count. */
+    @Test fun noListsOutsideScanList() {
+        val o = offenders("ScanList.kt", Regex("""\b(scanIdx|menuIdx|menuSteps|itemIdx|listIdx)\b|\bvar\s+loops\b"""))
+        assertTrue("Build lists with ScanList (ScanList.kt): $o", o.isEmpty())
+    }
 }

@@ -77,8 +77,7 @@ class TypeProgram(
     private var downAt = -1L
     private var armed = false
     private var menu = false
-    private var menuIdx = 0
-    private var menuSteps = 0
+    private var menuList = ScanList<String>(emptyList())   // the small menu, read one item at a time
     private var phrases: List<String> = emptyList()   // ways to finish the text, from the big model, when ready
     private var phraseMode = false
     private var phraseGen = 0
@@ -197,21 +196,22 @@ class TypeProgram(
         if (candidates().take(2) != items.drop(page * 2).take(2)) show()
     }
 
-    private fun openMenu() { menu = true; menuIdx = 0; menuSteps = 0; timers.clear("t:replay"); out.cue(TypeCue.MENU); speakMenu() }
+    private fun openMenu() { menu = true; menuList = ScanList(menuLabels()); timers.clear("t:replay"); out.cue(TypeCue.MENU); speakMenu() }
 
     private fun speakMenu() {
-        out.say(menuLabels()[menuIdx])
+        out.say(menuList.current)
         timers.set("t:menu", MENU_GAP_MS) {
             if (!active || !menu) return@set
-            menuSteps++
-            if (menuSteps >= menuLabels().size * MENU_LOOPS) closeMenu() else { menuIdx = (menuIdx + 1) % menuLabels().size; speakMenu() }
+            if (!menuList.isLast) { menuList.moveTo(menuList.index + 1); speakMenu() }
+            else if (menuList.endLoop() >= MENU_LOOPS) closeMenu()
+            else { menuList.moveTo(0); speakMenu() }
         }
     }
 
     private fun closeMenu() { menu = false; timers.clear("t:menu"); out.cue(TypeCue.NEXT); show() }
 
     private fun pickMenu() {
-        val label = menuLabels()[menuIdx]
+        val label = menuList.current
         menu = false; timers.clear("t:menu")
         when (label) {
             TypeVoice.MENU_DONE -> leave(true)
