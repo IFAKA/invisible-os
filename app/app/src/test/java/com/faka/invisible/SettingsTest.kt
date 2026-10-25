@@ -4,8 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SettingsTest {
-    @Test fun hubKeepsMoreAndDropsJunk() {
-        assertEquals(listOf("timer", "more"), LauncherSettings.cleanHub(listOf("timer", "bogus", "timer")))
+    @Test fun hubKeepsKnownOnce() {
+        assertEquals(listOf("timer"), LauncherSettings.cleanHub(listOf("timer", "bogus", "timer")))
     }
     @Test fun timersAreThreeAndBounded() {
         assertEquals(listOf(1, 10, 180), LauncherSettings.cleanTimers(listOf(0, 10, 999)))

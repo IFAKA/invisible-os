@@ -152,17 +152,13 @@ class MainActivity : Activity() {
 
     private fun menuPage() {
         card("What you hear first", "Hold \u2261 and drag to reorder. The switch turns an item off.") {
-            addView(k.dragList(s.hub, LauncherSettings.HUB_ITEMS, setOf("more")) { order -> change(s.copy(hub = LauncherSettings.cleanHub(order))) })
+            addView(k.dragList(s.hub, LauncherSettings.HUB_ITEMS, emptySet()) { order -> change(s.copy(hub = LauncherSettings.cleanHub(order))) })
             addView(k.row(k.grow(k.text("Reply options: put the ones you pick most first (automatic)", 14f, Ui.soft)),
                 Switch(this@MainActivity).apply { isChecked = s.learnOrder; setOnCheckedChangeListener { _, v -> change(s.copy(learnOrder = v)) } }),
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
             addView(k.row(k.grow(k.text("Speak well-known options as a fast sound (spearcon)", 14f, Ui.soft)),
                 Switch(this@MainActivity).apply { isChecked = s.spearcons; setOnCheckedChangeListener { _, v -> change(s.copy(spearcons = v)) } }),
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
-        }
-
-        card("Inside \"More\"", "What you hear after you click More. Same drag and switch.") {
-            addView(k.dragList(s.more, LauncherSettings.MORE_ITEMS, setOf("exit")) { order -> change(s.copy(more = LauncherSettings.cleanMore(order))) })
         }
 
         card("Inside \"Info\"", "What you hear after you click Info. Same drag and switch.") {

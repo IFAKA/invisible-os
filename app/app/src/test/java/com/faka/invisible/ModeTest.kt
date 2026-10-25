@@ -79,7 +79,7 @@ class ModeTest {
             override fun set(key: String, delayMs: Long, task: () -> Unit) { timers[key] = (now + delayMs) to task }
             override fun clear(key: String) { timers.remove(key) }
         }, { now }, ranker, pauseMs = gap)
-        init { m.settings = LauncherSettings(hub = listOf("messages", "playing", "timer", "phone", "status", "games", "more")) }   // the older timing tests count menu items
+        init { m.settings = LauncherSettings(hub = listOf("messages", "playing", "timer", "phone", "status", "games")) }   // the older timing tests count menu items
         fun withTasks() = apply { m.settings = LauncherSettings() }
         fun withInfo() = apply { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks") }
         fun g(vararg x: Gesture) = x.forEach { m.onGesture(it) }
@@ -237,22 +237,22 @@ class ModeTest {
         r.advance(1); assertEquals("tone TICK", r.log.last())                    // t=1500
         r.advance(199); assertFalse(r.log.contains("say Phone"))
         r.advance(1); assertEquals("say Phone", r.log.last())                   // t=1700 = 800 ms after "done"
-        r.advance(1300 * 3 + 50); assertEquals(listOf("say Timer", "say Phone", "say Status", "say Games", "say More"), r.spoken())
-        r.advance(1300) // More ends, pause, ding
+        r.advance(1300 * 3 + 50); assertEquals(listOf("say Timer", "say Phone", "say Status", "say Games"), r.spoken())
+        r.advance(1300) // Games ends, pause, ding
         assertEquals(1, r.count("tone DING"))
     }
 
     @Test fun listLoopsByItself() {
         val r = Rig(); r.wake()
-        r.advance(400 + 5 * 1300 + 800 + 600)
+        r.advance(400 + 4 * 1300 + 800 + 600)
         assertEquals(1, r.count("tone DING"))
-        assertEquals(listOf("say Timer", "say Phone", "say Status", "say Games", "say More", "say Timer"), r.spoken())
+        assertEquals(listOf("say Timer", "say Phone", "say Status", "say Games", "say Timer"), r.spoken())
         assertTrue(r.m.active)
     }
 
     @Test fun listEndFallsThenRisesBeforeItStartsOver() {
         val r = Rig(); r.wake()
-        r.advance(400 + 5 * 1300 + 800 + 600)
+        r.advance(400 + 4 * 1300 + 800 + 600)
         val d = r.log.indexOf("tone DING"); val u = r.log.indexOf("tone RESTART"); val again = r.log.lastIndexOf("say Timer")
         assertTrue("ding, then rise, then the first option", d in 0 until u && u < again)
         assertEquals(1, r.count("tone RESTART"))
@@ -261,11 +261,11 @@ class ModeTest {
     @Test fun twoSilentLoopsLeaveWithLeaveTone() {
         val r = Rig(); r.wake(); r.advance(60_000)
         assertFalse(r.m.active)
-        assertEquals(2, r.count("tone DING")); assertEquals(1, r.count("tone LEAVE")); assertEquals(10, r.spoken().size)
+        assertEquals(2, r.count("tone DING")); assertEquals(1, r.count("tone LEAVE")); assertEquals(8, r.spoken().size)
     }
 
     @Test fun aClickResetsTheSilentLoopCount() {
-        val r = Rig(); r.wake(); r.advance(400 + 5 * 1300 + 900)   // one ding, list restarted
+        val r = Rig(); r.wake(); r.advance(400 + 4 * 1300 + 900)   // one ding, list restarted
         r.clearLog(); r.pick("Phone"); r.pick("Volume")                                             // Volume screen: counter starts again
         r.advance(1300 * 4 + 400)                                    // a full loop and one ding there
         assertTrue(r.m.active)
@@ -445,7 +445,7 @@ class ModeTest {
     @Test fun rankerNeverReordersTheHub() {
         val rev = object : OptionRanker { override fun rank(screen: String, context: String, keys: List<String>) = keys.reversed() }
         val r = Rig(rev); r.wake(); r.advance(400 + 1300 * 4 + 100)
-        assertEquals(listOf("say Timer", "say Phone", "say Status", "say Games", "say More"), r.spoken())   // the hub keeps the user's order
+        assertEquals(listOf("say Timer", "say Phone", "say Status", "say Games"), r.spoken())   // the hub keeps the user's order
     }
 
     @Test fun countRankerPutsMostPickedFirstAndTiesKeepDefaultOrder() {
@@ -547,10 +547,10 @@ class ModeTest {
     }
 
     @Test fun hubOrderMatchesWhatIsSpoken() {
-        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("timer", "volume", "more"), learnOrder = false)
-        assertEquals(listOf("timer", "volume", "more"), r.m.hubOrder())
+        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("timer", "status", "games"), learnOrder = false)
+        assertEquals(listOf("timer", "status", "games"), r.m.hubOrder())
         r.m.settings = r.m.settings.copy(learnOrder = true)
-        assertEquals(listOf("timer", "volume", "more"), r.m.hubOrder())   // learning never changes the user's menu order
+        assertEquals(listOf("timer", "status", "games"), r.m.hubOrder())   // learning never changes the user's menu order
     }
 
     @Test fun sharedNotesAreSplitIntoOpenTasks() {
@@ -560,12 +560,6 @@ class ModeTest {
         assertEquals(listOf("call mum tonight"), TaskStore.parse("call mum\ntonight"))
         assertTrue(TaskStore.parse("[X] only done").isEmpty())
         assertEquals(listOf("b"), TaskStore.parse("☑ a\n☐ b\n✅ c"))
-    }
-
-    @Test fun moreMenuFollowsTheSettingsAndAlwaysKeepsExit() {
-        assertEquals(listOf("read", "exit"), LauncherSettings.cleanMore(listOf("read", "torch", "bogus", "read")))
-        val r = Rig(); r.m.settings = LauncherSettings(more = listOf("exit", "read")); r.wake(); r.pick("More"); r.advance(400 + 100)
-        assertEquals(listOf("say Exit"), r.spoken().takeLast(1))
     }
 
     @Test fun tasksCanBeReorderedAndTheOrderIsSaved() {
@@ -676,9 +670,10 @@ class ModeTest {
         r.advance(600); assertFalse(r.m.active); assertTrue(r.log.contains("tone EXIT"))
     }
 
-    @Test fun moreHubHoldsOnlyReadAndExit() {
-        val a = Rig(); a.wake(); a.pick("More"); a.advance(400 + 1300 + 100)
-        assertEquals(listOf("say Read unread messages", "say Exit"), a.spoken())
+    @Test fun noMoreInTheHubAndOrderIsFixed() {
+        val a = Rig(); a.m.settings = LauncherSettings(); a.msgs = listOf(bob.copy(at = 1)); a.wake()
+        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "playing", "timer", "status", "info", "phone", "games"), LauncherSettings.DEFAULT_HUB)
+        a.advance(400 + 1300 * 8); assertFalse(a.spoken().contains("say More")); assertFalse(a.spoken().contains("say Exit"))
     }
 
     @Test fun phoneGroupListsItemsInOrderAndDndOnlyWithAccess() {
@@ -723,17 +718,23 @@ class ModeTest {
     }
 
     @Test fun firstLayerIsShortAndInOrder() {
-        assertEquals(listOf("messages", "tasks", "playing", "timer", "status", "info", "phone", "games", "more"), LauncherSettings.DEFAULT_HUB)
-        assertEquals(listOf("timer", "more"), LauncherSettings.cleanHub(listOf("weather", "timer", "volume")))
+        assertEquals(listOf("messages", "tasks", "playing", "timer", "status", "info", "phone", "games"), LauncherSettings.DEFAULT_HUB)
+        assertEquals(listOf("timer"), LauncherSettings.cleanHub(listOf("weather", "timer", "volume")))
+    }
+
+    @Test fun migrationDropsMoreAndUnknownKeepsOffChoicesAndReorders() {
+        assertEquals(listOf("messages", "timer", "games"), LauncherSettings.withoutMore(listOf("games", "more", "bogus", "timer", "messages")))
+        assertEquals(LauncherSettings.DEFAULT_HUB, LauncherSettings.withoutMore(LauncherSettings.DEFAULT_HUB.reversed() + "more"))
+        assertEquals(emptyList<String>(), LauncherSettings.withoutMore(listOf("more")))
     }
 
     @Test fun oldFlatMenuBecomesGroupedKeepingOffChoices() {
-        val old = listOf("playing", "tasks", "messages", "timer", "volume", "status", "weather", "turn", "calendar", "games", "find", "more")
+        val old = listOf("playing", "tasks", "messages", "timer", "volume", "status", "weather", "turn", "calendar", "games", "find")
         assertEquals(LauncherSettings.DEFAULT_HUB, LauncherSettings.groupHub(old, listOf("read", "torch", "dnd", "exit")))
-        assertEquals(listOf("messages", "tasks", "timer", "games", "more"), LauncherSettings.groupHub(listOf("tasks", "messages", "timer", "games", "more"), listOf("read", "exit")))
-        assertEquals(listOf("messages", "timer", "phone", "more"), LauncherSettings.groupHub(listOf("messages", "timer", "more"), listOf("torch", "exit")))   // Torch was ON in More
-        assertEquals(listOf("messages", "info", "more"), LauncherSettings.groupHub(listOf("messages", "turn", "more"), listOf("exit")))
-        assertEquals(listOf("timer", "info", "more"), LauncherSettings.groupHub(listOf("timer", "info", "more"), listOf("exit")))   // already grouped: untouched
+        assertEquals(listOf("messages", "tasks", "timer", "games"), LauncherSettings.groupHub(listOf("tasks", "messages", "timer", "games", "more"), listOf("read", "exit")))
+        assertEquals(listOf("messages", "timer", "phone"), LauncherSettings.groupHub(listOf("messages", "timer", "more"), listOf("torch", "exit")))   // Torch was ON in More
+        assertEquals(listOf("messages", "info"), LauncherSettings.groupHub(listOf("messages", "turn", "more"), listOf("exit")))
+        assertEquals(listOf("timer", "info"), LauncherSettings.groupHub(listOf("timer", "info"), listOf("exit")))   // already grouped: untouched
     }
 
     @Test fun gamesHubListsDuelAndBack() {
@@ -751,13 +752,8 @@ class ModeTest {
         assertFalse(r.m.active)
     }
 
-    @Test fun moreHubExitLeaves() {
-        val r = Rig(); r.wake(); r.pick("More"); r.pick("Exit")
-        assertFalse(r.m.active); assertTrue(r.log.contains("tone EXIT"))
-    }
-
-    @Test fun readUnreadMessagesFromMoreOpensTheMessage() {
-        val r = Rig(); r.msgs = listOf(bob.copy(at = 1)); r.wake(); r.pick("More"); r.pick("Read unread messages")
+    @Test fun readUnreadIsInsideMessagesAndReadsTheUnread() {
+        val r = Rig(); r.msgs = listOf(bob.copy(at = 1)); r.wake(); r.pick("Messages, 1 unread")
         assertEquals(ControllerMode.Screen.MESSAGE, r.m.screen)
         r.advance(450); assertTrue(r.log.contains("say[en] Bob: what time is it"))
         r.click(T); assertEquals(ControllerMode.Screen.HUB, r.m.screen)

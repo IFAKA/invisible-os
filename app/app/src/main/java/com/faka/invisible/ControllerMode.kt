@@ -129,7 +129,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, MORE_HUB, INFO, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, SENT }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, INFO, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, SENT }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: String, val lang: String?, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: String, val lang: String?, val run: () -> Unit)
@@ -263,7 +263,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.MORE_HUB, Screen.INFO, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.INFO, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -395,7 +395,6 @@ class ControllerMode(
                     "info" -> all["hub:info"] = Opt("hub:info", "Info", null) { pick("hub:info"); show(Screen.INFO) }
                     "phone" -> all["hub:phone"] = Opt("hub:phone", "Phone", null) { pick("hub:phone"); show(Screen.PHONE) }
                     "games" -> all["hub:games"] = Opt("hub:games", "Games", null) { pick("hub:games"); show(Screen.GAMES) }
-                    "more" -> all["hub:more"] = Opt("hub:more", "More", null) { pick("hub:more"); show(Screen.MORE_HUB) }
                 }
                 all.values.toList()   // the menu order is the user's own; learning only reorders replies
             }
@@ -424,11 +423,6 @@ class ControllerMode(
                 Opt("volume:up", "Louder", null) { pick("volume:up"); out.volume(true); sayLevel() },
                 Opt("volume:down", "Quieter", null) { pick("volume:down"); out.volume(false); sayLevel() },
                 Opt("volume:done", "Done", null) { pick("volume:done"); show(Screen.PHONE) })
-            Screen.MORE_HUB -> settings.more.mapNotNull { k -> when (k) {   // what is inside "More" and its order are the user's choice
-                "read" -> Opt("more:read", "Read unread messages", null) { readUnread("more:read") }
-                "exit" -> Opt("more:exit", "Exit", null) { pick("more:exit"); exit(true) }
-                else -> null
-            } }
             Screen.INFO -> settings.info.mapNotNull { k -> when (k) {
                 "weather" -> Opt("info:weather", "Weather", null) { pick("info:weather"); lookup(out::weather) }
                 "calendar" -> Opt("info:calendar", "Next event", null) { pick("info:calendar"); lookup(out::nextEvent) }
@@ -561,7 +555,7 @@ class ControllerMode(
             Screen.MORE_MSG -> show(Screen.MESSAGE)
             Screen.COMPOSE, Screen.MSG_TASK -> show(Screen.MORE_MSG)
             Screen.VOLUME -> show(Screen.PHONE)
-            Screen.TIMER_PICK, Screen.MORE_HUB, Screen.INFO, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES -> show(Screen.HUB)
+            Screen.TIMER_PICK, Screen.INFO, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES -> show(Screen.HUB)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()
         }

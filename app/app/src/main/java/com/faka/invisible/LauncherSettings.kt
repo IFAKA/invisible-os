@@ -3,12 +3,11 @@ package com.faka.invisible
 import android.content.SharedPreferences
 
 /**
- * What the user can set in the app. [hub] = the first-menu items that are ON, in order (keys of [HUB_ITEMS]; "more" is always kept).
+ * What the user can set in the app. [hub] = the first-menu items that are ON, in order (keys of [HUB_ITEMS];).
  * [timers] = the three timer lengths in minutes ("Last used" is always added). [learnOrder] = reorder options by how often you pick them.
  */
 data class LauncherSettings(
     val hub: List<String> = DEFAULT_HUB,
-    val more: List<String> = DEFAULT_MORE,
     val info: List<String> = DEFAULT_INFO,   // what is inside Info, in order (Back is added by the mode)
     val phone: List<String> = DEFAULT_PHONE,   // what is inside Phone, in order (Back is added by the mode)
     val timers: List<Int> = listOf(5, 10, 25),
@@ -21,13 +20,8 @@ data class LauncherSettings(
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "playing" to "Playing", "timer" to "Timer", "status" to "Status", "info" to "Info (weather, next event, next turn)", "phone" to "Phone (volume, torch, do not disturb, find my phone)", "games" to "Games", "more" to "More")
+        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "playing" to "Playing", "timer" to "Timer", "status" to "Status", "info" to "Info (weather, next event, next turn)", "phone" to "Phone (volume, torch, do not disturb, find my phone)", "games" to "Games")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
-
-        /** What is inside "More", in the order spoken. "exit" is always kept. */
-        val MORE_ITEMS = linkedMapOf("read" to "Read unread messages", "exit" to "Exit")
-        val DEFAULT_MORE = MORE_ITEMS.keys.toList()
-        fun cleanMore(keys: List<String>): List<String> = keys.filter { it in MORE_ITEMS }.distinct().let { if ("exit" in it) it else it + "exit" }
 
         val INFO_ITEMS = linkedMapOf("weather" to "Weather", "calendar" to "Next event", "turn" to "Next turn")
         val DEFAULT_INFO = INFO_ITEMS.keys.toList()
@@ -36,9 +30,11 @@ data class LauncherSettings(
         val DEFAULT_PHONE = PHONE_ITEMS.keys.toList()
         fun cleanPhone(keys: List<String>): List<String> = keys.filter { it in PHONE_ITEMS }.distinct()
 
-        /** Keep known keys once each, in order; "more" is always present (it holds Exit, Torch, Read). */
-        fun cleanHub(keys: List<String>): List<String> =
-            keys.filter { it in HUB_ITEMS }.distinct().let { if ("more" in it) it else it + "more" }
+        /** Keep known keys once each, in order. */
+        fun cleanHub(keys: List<String>): List<String> = keys.filter { it in HUB_ITEMS }.distinct()
+
+        /** Menu without "More": drop it and any unknown key, keep the other ON/OFF choices, use the default order. */
+        fun withoutMore(keys: List<String>): List<String> = DEFAULT_HUB.filter { it in keys }
 
         /**
          * Old flat menu -> grouped menu. "info" is ON if any of weather/calendar/turn was; "phone" is ON if any of volume/find (hub) or torch/dnd ([oldMore]) was.
@@ -63,8 +59,7 @@ object SettingsStore {
     fun load(p: SharedPreferences): LauncherSettings {
         val d = LauncherSettings()
         return LauncherSettings(
-            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it)))))))) } ?: d.hub,
-            more = p.getString("s_more", null)?.split(',')?.let { LauncherSettings.cleanMore(it) } ?: d.more,
+            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withNoMore(p, withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it))))))))) } ?: d.hub,
             info = p.getString("s_info", null)?.split(',')?.let { LauncherSettings.cleanInfo(it) } ?: d.info,
             phone = p.getString("s_phone", null)?.split(',')?.let { LauncherSettings.cleanPhone(it) } ?: d.phone,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
@@ -143,8 +138,16 @@ object SettingsStore {
         return moved
     }
 
+    /** Once, last: the "More" menu is gone. Drops "more" and unknown keys, keeps the other ON/OFF choices, default order. */
+    private fun withNoMore(p: SharedPreferences, keys: List<String>): List<String> {
+        if (p.getBoolean("s_nomore_saved", false)) return keys
+        val moved = LauncherSettings.withoutMore(keys)
+        p.edit().putBoolean("s_nomore_saved", true).putString("s_hub", moved.joinToString(",")).apply()
+        return moved
+    }
+
     fun save(p: SharedPreferences, s: LauncherSettings) {
-        p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_more", s.more.joinToString(",")).putString("s_info", s.info.joinToString(",")).putString("s_phone", s.phone.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
+        p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_info", s.info.joinToString(",")).putString("s_phone", s.phone.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
             .putLong("s_gap", s.itemGapMs).putInt("s_loops", s.silentLoops).putLong("s_undo", s.undoMs)
             .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).putBoolean("s_ai", s.ai).putBoolean("s_groups_saved", true).apply()
     }
