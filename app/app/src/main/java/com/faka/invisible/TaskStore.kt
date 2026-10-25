@@ -8,7 +8,7 @@ data class Task(val id: Long, val text: String, val lang: String = "")
  * Pure: the open to-do list, oldest first. Done items are removed. [lines] = saved form ("id<TAB>lang<TAB>text" per line; older saves have no lang);
  * `save` gets the new lines after every change.
  */
-class TaskStore(lines: List<String> = emptyList(), private val save: (List<String>) -> Unit = {}) {
+class TaskStore(lines: List<String> = emptyList(), private val onAdd: (Task) -> Unit = {}, private val save: (List<String>) -> Unit = {}) {
     private val list = ArrayList<Task>()
     private var nextId = 1L
 
@@ -25,7 +25,7 @@ class TaskStore(lines: List<String> = emptyList(), private val save: (List<Strin
     @Synchronized fun add(text: String, lang: String = ""): Task? {
         val t = text.replace(Regex("\\s+"), " ").trim()
         if (t.isEmpty() || list.any { it.text.equals(t, ignoreCase = true) }) return null   // blank or already there
-        return Task(nextId++, t, lang).also { list.add(it); persist() }
+        return Task(nextId++, t, lang).also { list.add(it); persist(); onAdd(it) }
     }
 
     /** Adds every task found in [text] (see [parse]). Returns how many were added. */

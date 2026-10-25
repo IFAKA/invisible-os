@@ -36,6 +36,8 @@ interface ModeOutput {
     fun songLang(text: String): String? = null   // "es" or "en" for the voice
     fun tasks(): List<Task> = emptyList()   // open to-do items, oldest first
     fun completeTask(id: Long) {}
+    fun taskOffers(): List<Task> = emptyList()   // the user's own past tasks, best first, not open now
+    fun addTask(text: String, lang: String): Boolean = false
     fun nowPlaying(): String? = null   // "Title, Artist" of the music app, null if none
     fun dndAllowed(): Boolean
     fun lastTimer(): Int             // minutes, 0 = none yet
@@ -116,7 +118,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, MORE_HUB, TASK, SENT }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, MORE_HUB, TASK, TASK_ADD, SENT }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: String, val lang: String?, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: String, val lang: String?, val run: () -> Unit)
@@ -246,7 +248,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.MORE_HUB, Screen.COMPOSE, Screen.TASK -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.MORE_HUB, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -388,6 +390,11 @@ class ControllerMode(
                     })
                 },
                 Opt("task:next", "Next", null) { pick("task:next"); taskIdx++; show(if (taskIdx >= taskList.size) Screen.HUB else Screen.TASK) })
+            Screen.TASK_ADD -> out.taskOffers().map { t ->
+                Opt("taskadd", t.text.take(MAX_SPOKEN), t.lang.ifEmpty { null }) {
+                    pick("taskadd"); out.addTask(t.text, t.lang); say("Task added"); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
+                }
+            }
             Screen.TIMER_PICK -> (settings.timers.map { it to Spoken.minutes(it) }.let { t -> if (out.lastTimer() > 0) listOf(lastTimer() to "Last used") + t else t + (lastTimer() to "Last used") }).map { (min, label) ->
                 Opt("timer:$min", label, null) { pick("timer:$min"); startTimerPending(min) }
             }
@@ -399,6 +406,7 @@ class ControllerMode(
                 "read" -> Opt("more:read", "Read unread messages", null) { readUnread("more:read") }
                 "torch" -> Opt("more:torch", "Torch", null) { pick("more:torch"); out.runAction("Flashlight"); afterSpeech { beginScan() } }
                 "dnd" -> if (out.dndAllowed()) Opt("more:dnd", "Do not disturb", null) { pick("more:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null
+                "addtask" -> if (out.taskOffers().isNotEmpty()) Opt("more:addtask", "Add task", null) { pick("more:addtask"); show(Screen.TASK_ADD) } else null
                 "exit" -> Opt("more:exit", "Exit", null) { pick("more:exit"); exit(true) }
                 else -> null
             } }
@@ -411,7 +419,12 @@ class ControllerMode(
                 Opt("read", if (es) "Leer todo" else "Read all", l) { pick("read", m.sender); intro += Intro(MessageLogic.spoken(m.text, m.lang).take(500), vl(m), hid(m)); phase = Phase.INTRO; nextIntro() },
                 Opt("send:later", MessageLogic.word(Answer.LATER, "en"), l) { sendPending(m, MessageLogic.compose(Answer.LATER, When.SKIP, Extra.NOTHING, m.lang), "send:later") },
                 Opt("send:cant_now", MessageLogic.word(Answer.CANT_NOW, "en"), l) { sendPending(m, MessageLogic.compose(Answer.CANT_NOW, When.SKIP, Extra.NOTHING, m.lang), "send:cant_now") },
-                Opt("compose", if (es) "Redactar" else "Compose", l) { pick("compose", m.sender); show(Screen.COMPOSE) })
+                Opt("compose", if (es) "Redactar" else "Compose", l) { pick("compose", m.sender); show(Screen.COMPOSE) },
+                Opt("task", "Task", null) {   // no typing needed: the task is made from the message
+                    pick("task", m.sender)
+                    out.addTask("Reply to ${m.sender}: ${MessageLogic.spoken(m.text, m.lang).replace(Regex("\\s+"), " ").trim().take(60)}", vl(m) ?: "")
+                    say("Task added"); phase = Phase.WAIT; waitNext = { show(Screen.MESSAGE) }
+                })
             Screen.COMPOSE -> if (m == null) emptyList() else composeOptions(m, l)
             Screen.SENT -> emptyList()
         }
@@ -468,7 +481,7 @@ class ControllerMode(
         when (screen) {
             Screen.MORE_MSG -> show(Screen.MESSAGE)
             Screen.COMPOSE -> show(Screen.MORE_MSG)
-            Screen.TIMER_PICK, Screen.VOLUME, Screen.MORE_HUB, Screen.TASK -> show(Screen.HUB)
+            Screen.TIMER_PICK, Screen.VOLUME, Screen.MORE_HUB, Screen.TASK, Screen.TASK_ADD -> show(Screen.HUB)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()
         }

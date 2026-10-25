@@ -17,6 +17,7 @@ class ModeTest {
         var last = 0
         var song: String? = null
         val taskStore = TaskStore()
+        var offers = listOf<Task>()
         var favs = listOf<String>()
         var now = 1_000_000L
         var vol = 7
@@ -51,6 +52,8 @@ class ModeTest {
             override fun nowPlaying() = song
             override fun tasks() = taskStore.all()
             override fun completeTask(id: Long) = taskStore.done(id)
+            override fun taskOffers() = offers
+            override fun addTask(text: String, lang: String) = taskStore.add(text, lang) != null
             override fun setLastTimer(minutes: Int) { last = minutes }
             override fun favourites() = favs
             override fun codeCount() = codes
@@ -470,16 +473,37 @@ class ModeTest {
 
     @Test fun tasksCanBeReorderedAndTheOrderIsSaved() {
         var saved = listOf<String>()
-        val a = TaskStore { saved = it }
+        val a = TaskStore(save = { saved = it })
         listOf("a", "b", "c").forEach { a.add(it) }
         a.move(2, 0); assertEquals(listOf("c", "a", "b"), a.all().map { it.text })
         assertEquals(listOf("c", "a", "b"), TaskStore(saved).all().map { it.text })
         a.move(0, 9); assertEquals(listOf("c", "a", "b"), a.all().map { it.text })   // out of range: ignored
     }
 
+    @Test fun taskMemoryOffersMostAddedFirstAndSkipsOpenAndMessageTasks() {
+        var now = 0L; var saved = listOf<String>()
+        val m = TaskMemory(clock = { now++ }, save = { saved = it })
+        m.record("Buy milk", "en"); m.record("Call mum", "en"); m.record("Buy milk", "en"); m.record("Reply to Ana: hi", "es")
+        assertEquals(listOf("Buy milk", "Call mum"), m.offers(5, emptySet()).map { it.text })
+        assertEquals(listOf("Call mum"), m.offers(5, setOf("buy milk")).map { it.text })
+        assertEquals(listOf("Buy milk", "Call mum"), TaskMemory(saved).offers(5, emptySet()).map { it.text })
+    }
+
+    @Test fun addTaskMenuOffersPastTasksAndAddsTheChosenOne() {
+        val r = Rig(); r.offers = listOf(Task(0, "Buy milk", "en"), Task(0, "Call mum", "es"))
+        r.wake(); r.pick("More"); r.pick("Add task"); r.pick("Call mum")
+        assertEquals(listOf("Call mum"), r.taskStore.all().map { it.text })
+        r.advance(2000); assertTrue(r.log.contains("say Task added"))
+    }
+
+    @Test fun taskOptionOnAMessageMakesATaskWithoutTyping() {
+        val r = Rig(); r.msgs = listOf(ana); r.wake(); r.advance(500); r.click(); r.pick("More"); r.pick("Task")
+        assertTrue(r.taskStore.all().single().text.startsWith("Reply to Ana: "))
+    }
+
     @Test fun taskStoreSavesAndReloads() {
         var saved = listOf<String>()
-        val a = TaskStore { saved = it }
+        val a = TaskStore(save = { saved = it })
         a.add("  Buy\n milk "); assertNull(a.add("   "))
         val b = TaskStore(saved); assertEquals(listOf("Buy milk"), b.all().map { it.text })
         assertEquals("en", TaskStore().also { it.addAll("[ ] Buy milk") { "en" } }.all()[0].lang)

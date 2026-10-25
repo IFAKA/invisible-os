@@ -37,6 +37,7 @@ object Actions {
     private var ttsReady = false
     private var torchOn = false
     private var taskStore = TaskStore()
+    private var taskMemory = TaskMemory()
     fun tasks(): List<Task> = taskStore.all()
     /** Splits the note, detects each task's language (off the main thread), saves, then calls [done] on the main thread with the count. */
     fun addTasks(text: String, done: (Int) -> Unit) {
@@ -70,6 +71,8 @@ object Actions {
             override fun forward(what: Forward) = forwardToMusic(what)
             override fun log(line: String) { Log.d(TAG, line); if (line.startsWith("MODE")) EventLog.add(line) }
             override fun tasks() = taskStore.all()
+            override fun taskOffers() = taskMemory.offers(5, taskStore.all().map { it.text.lowercase() }.toSet())
+            override fun addTask(text: String, lang: String) = taskStore.add(text, lang) != null
             override fun completeTask(id: Long) = taskStore.done(id)
             override fun nowPlaying(): String? = otherSessions().firstNotNullOfOrNull { c ->
                 c.metadata?.let { md ->
@@ -129,7 +132,9 @@ object Actions {
         val f = java.io.File(app.filesDir, "choices.log")
         choices = ChoiceLog(if (f.exists()) f.readLines() else emptyList()) { line -> try { f.appendText(line + "\n") } catch (e: Exception) { Log.e(TAG, "choices.log write failed", e) } }
         val tf = java.io.File(app.filesDir, "tasks.txt")
-        taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList()) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
+        val mf = java.io.File(app.filesDir, "task_memory.txt")
+        taskMemory = TaskMemory(if (mf.exists()) mf.readLines() else emptyList()) { lines -> try { mf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "task_memory.txt write failed", e) } }
+        taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList(), onAdd = { taskMemory.record(it.text, it.lang) }) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
         tts = TextToSpeech(app) { s ->
             if (s == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.US; ttsReady = true
