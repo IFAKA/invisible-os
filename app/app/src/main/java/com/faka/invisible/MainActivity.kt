@@ -168,7 +168,7 @@ class MainActivity : Activity() {
 
         card("How to use it") {
             addView(text("Music playing or phone idle: click = play/pause, 2 = next, 3 = previous.\n" +
-                "4 clicks, or hold: wake the menu.\n" +
+                "Hold: wake the menu.\n" +
                 "In the menu: click when you hear the option. 2 = start over, 3 = back, 4 = leave. Hold = exit.", 14f, soft))
         }
 

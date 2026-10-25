@@ -66,7 +66,7 @@ class ModeTest {
         /** The user presses NOW; the gesture is detected 350 ms later (the click gap). */
         fun click(x: Gesture = Gesture.SINGLE) { advance(350); m.onGesture(x, 0) }
         fun clearLog() = log.clear()
-        fun wake() { g(Gesture.QUAD) }
+        fun wake() { g(Gesture.HOLD) }
         fun ev() = log.filter { !it.startsWith("choice") && it != "stopspeech" }
         fun spoken() = log.filter { it.startsWith("say") }
         fun count(s: String) = log.count { it == s }
@@ -92,11 +92,13 @@ class ModeTest {
     private val info = Msg("i", "Eve", "ok see you", "en", 999_000)
 
     // ---------- idle ----------
-    @Test fun idlePassthroughAndQuadWakes() {
+    @Test fun idlePassthroughAndHoldWakes() {
         val r = Rig(); r.g(S, D, T)
         assertEquals(listOf("fwd PLAY_PAUSE", "fwd NEXT", "fwd PREVIOUS"), r.log)
         assertFalse(r.m.active)
         r.g(Q)
+        assertFalse(r.m.active)   // four clicks no longer wake
+        r.g(Gesture.HOLD)
         assertTrue(r.m.active)
         assertEquals(ControllerMode.Screen.HUB, r.m.screen)
     }

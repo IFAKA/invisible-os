@@ -13,7 +13,7 @@ It uses **auto-scan** (also called single-switch scanning, the method used in as
 | 1 click | Play / pause | Pick the option you just heard |
 | 2 clicks | Next track | Start the list again |
 | 3 clicks | Previous track | Go back one level |
-| 4 clicks or hold | Wake the menu (works on the lock screen) | Leave / exit |
+| Hold | Wake the menu (works on the lock screen) | Leave / exit |
 
 Menu items: **Messages** (read and quick-reply, in Spanish or English), **Timer**, **Volume**, **Status** (time, battery, unread, next alarm), **More** (torch, do not disturb, exit).
 
@@ -41,7 +41,7 @@ or run `app/run.sh` (build, install, start). Then open the app and turn on the t
 
 1. **Button access** (accessibility service) to hear the earbud button.
 2. **Notification access** to read and reply to new messages.
-3. **Assistant** so a long press works on the lock screen.
+3. **Assistant** so a long press works on the lock screen. Then open the "Complete action using" box once (`adb shell am start -a android.speech.action.VOICE_SEARCH_HANDS_FREE`), tap **Invisible**, then **Always**. Without this, Google and Invisible both claim the hold and the lock screen cannot show the chooser.
 
 On some phones (Xiaomi / HyperOS and others) also allow the app to run in the background and turn off battery optimization for it, or the system may stop it when the screen is off.
 
