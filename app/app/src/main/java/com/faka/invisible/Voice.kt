@@ -17,6 +17,7 @@ object Voice {
     fun flashlight(on: Boolean) = "Flashlight " + if (on) "on" else "off"
     fun battery(percent: Int) = "Battery $percent percent"
     fun doNotDisturb(on: Boolean) = "Do not disturb " + if (on) "on" else "off"
+    fun tasksAdded(n: Int) = when (n) { 0 -> "No new open tasks"; 1 -> "1 task added"; else -> "$n tasks added" }
     const val NO_TASKS = "No tasks yet"
     const val ALL_DONE = "All done"
     const val TASK_ADDED = "Task added"
