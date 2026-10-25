@@ -177,3 +177,15 @@ object TellVoice {
         return sb.toString()
     }
 }
+
+/** Fixed sentences of the Write program (the stereo-pair keyboard, PLAN-OS.md). At most 7 words each. */
+object TypeVoice {
+    const val START = "Write. Click for the left word."
+    const val START2 = "Hold for the right word."
+    const val NO_MODEL = "Write could not start"
+    const val EMPTY = "Nothing written"
+    const val DELETED = "Deleted"
+    const val LETTERS = "Letters"
+    const val WORDS = "Words"
+    const val CHECKING = "Pick the left or the right"
+}

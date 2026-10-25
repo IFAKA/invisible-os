@@ -68,6 +68,16 @@ class NextWord(bin: InputStream, vocabText: String) {
         return s
     }
 
+    private var rankedKey = ""
+    private var rankedAll: List<Pair<String, Double>> = emptyList()
+
+    /** Every word, most likely first, for [context]. Kept for the last context, so paging and letter views cost nothing. */
+    fun ranked(context: List<String>): List<Pair<String, Double>> {
+        val key = context.joinToString(" ")
+        if (key != rankedKey) { rankedAll = top(context, V - 3); rankedKey = key }
+        return rankedAll
+    }
+
     /** The [n] most likely next words after [context] (lowercase words), best first, with log probability. */
     fun top(context: List<String>, n: Int): List<Pair<String, Double>> {
         val p = gemv(proj, E, H, state(context).first)
