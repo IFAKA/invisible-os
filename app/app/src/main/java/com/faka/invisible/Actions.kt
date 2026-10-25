@@ -108,7 +108,7 @@ object Actions {
             override fun setCodeCount(n: Int) { prefs().edit().putInt("codeCount", n).apply() }
             override fun lastTimer() = prefs().getInt("lastTimer", 0)
             override fun setLastTimer(minutes: Int) { prefs().edit().putInt("lastTimer", minutes).apply() }
-            override fun startGame() = startDuel()
+            override fun startGame(coach: Boolean) = startDuel(coach)
             override fun pickCount(intent: String) = choices.intentCount(intent)
             override fun favourites() = choices.favourites()
             override fun choice(screen: String, code: Int, intent: String, sender: String) {
@@ -158,7 +158,7 @@ object Actions {
     }
 
     private var duel: TellAndroid? = null
-    private fun startDuel() {
+    private fun startDuel(coach: Boolean) {
         duel?.stop()
         duel = TellAndroid(prefs(), handler, object : TellHost {
             override fun speak(text: String) = say(text, false)
@@ -166,7 +166,7 @@ object Actions {
             override fun pauseMusic() { pauseMusicNow() }
             override fun resumeMusic() = resumeMusicNow()
             override fun log(line: String) { Log.d(TAG, line); EventLog.add(line) }
-        }, onEnded = { duel = null }).also { it.start() }
+        }, onEnded = { duel = null }, coach = coach).also { it.start() }
     }
 
     /** Call on the main thread. repeatCount > 0 is ignored (the hold timer handles holds). */

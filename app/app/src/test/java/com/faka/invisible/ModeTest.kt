@@ -607,13 +607,18 @@ class ModeTest {
     }
 
     @Test fun gamesHubListsDuelAndBack() {
-        val r = Rig(); r.wake(); r.pick("Games"); r.advance(400 + 1300 + 100)
-        assertEquals(listOf("say Duel", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
+        val r = Rig(); r.wake(); r.pick("Games"); r.advance(400 + 1300 * 2 + 100)
+        assertEquals(listOf("say Duel", "say How to play", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
     }
 
     @Test fun pickingDuelLeavesTheMenuForTheGame() {
         val r = Rig(); r.wake(); r.pick("Games"); r.pick("Duel")
         assertFalse(r.m.active)   // the game takes the button
+    }
+
+    @Test fun pickingHowToPlayLeavesTheMenuForTheCoach() {
+        val r = Rig(); r.wake(); r.pick("Games"); r.pick("How to play")
+        assertFalse(r.m.active)
     }
 
     @Test fun moreHubExitLeaves() {

@@ -26,3 +26,52 @@ object Voice {
     const val CANNOT = "Cannot do it"
     const val CANCELLED = "Cancelled"
 }
+
+/** Spoken sentences of the Duel coach (practice drills and the narrated first match). Plain, short English. */
+object TellVoice {
+    const val INTRO = "Duel. You against a robot. One button. How long you press picks your move."
+    val DRILLS = listOf(
+        "Tap quickly. Let go before any click. That is a jab.",
+        "Now press and hold. You hear a click. Let go right after the first click. That is a guard.",
+        "Press and hold. Wait for the second click, then let go. That is a charge. It costs three energy.")
+    val NAMES = listOf("jab", "guard", "charge")
+    val DONE = listOf("Jab.", "Guard.", "Charge.")
+    const val RULE = "Let go before a click: jab. After the first click: guard. After the second click: charge. " +
+        "Guard beats jab. Jab beats charge. Charge beats guard. Same moves trade. Hold three seconds any time to leave."
+    const val SKIP = "Let's move on."
+    fun wrong(level: Int, drill: Int) = "That was a ${NAMES[level]}. " + when (drill) {
+        0 -> "Tap quickly. Let go before any click."; 1 -> "Hold. Let go right after the first click."; else -> "Hold. Let go after the second click."
+    }
+    private val NUM = listOf("zero", "one", "two", "three", "four", "five")
+    fun firstMatch(rung: Int) = "First match. Rung ${NUM[rung.coerceIn(0, 5)]}."
+    fun duelRung(rung: Int) = "Duel. Rung ${NUM[rung.coerceIn(0, 5)]}."
+    const val LOADING = "Loading the duel"
+    const val COULD_NOT_START = "Duel could not start"
+
+    private fun verb(m: com.faka.invisible.tell.Move) = when (m) {
+        com.faka.invisible.tell.Move.JAB -> "jabbed"; com.faka.invisible.tell.Move.GUARD -> "guarded"; com.faka.invisible.tell.Move.CHARGE -> "charged"
+    }
+    private fun n(x: Int) = NUM[x.coerceIn(0, 5)]
+
+    /** The result of one round in six words or fewer. */
+    fun result(r: com.faka.invisible.tell.Round): String {
+        if (r.mine == r.theirs) {
+            val both = "Both ${verb(r.mine)}."
+            return if (r.damageToMe > 0) "$both Both lose ${n(r.damageToMe)}." else "Nothing happens."
+        }
+        val head = "You ${verb(r.mine)}. They ${verb(r.theirs)}."
+        val tail = when {
+            r.myParry -> "Parry."
+            r.theirParry -> "They parry."
+            r.myChargeFizzled -> "Fizzle."
+            r.theirChargeFizzled -> "They fizzle."
+            r.damageToOpp > 0 -> "Hit, ${n(r.damageToOpp)}."
+            r.damageToMe > 0 -> "Ouch, ${n(r.damageToMe)}."
+            else -> "Nothing happens."
+        }
+        return "$head $tail"
+    }
+
+    /** Rough speaking time in ms (the speech engine does not tell the game when it is done). */
+    fun speakMs(text: String) = 400L + 70L * text.length
+}

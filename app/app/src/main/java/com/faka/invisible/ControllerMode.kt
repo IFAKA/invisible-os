@@ -48,7 +48,7 @@ interface ModeOutput {
     fun choice(screen: String, code: Int, intent: String, sender: String)   // choice log; code 0 = wake, else the position of the option in the list
     fun codeCount(): Int             // successful code actions so far (persisted); learning mode while < 15
     fun setCodeCount(n: Int)
-    fun startGame() {}               // the Duel game takes over the button (the mode has already exited)
+    fun startGame(coach: Boolean) {}   // coach = teach first (the "How to play" item)
     fun pickCount(intent: String): Int = 0   // how often this option was picked (spearcon after [ControllerMode.SPEARCON_AFTER] picks)
 }
 
@@ -419,7 +419,8 @@ class ControllerMode(
                 else -> null
             } }
             Screen.GAMES -> listOf(   // every game lives here; a new game is one more line
-                Opt("games:duel", "Duel", null) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame() },   // music stays paused for the game, which resumes it
+                Opt("games:duel", "Duel", null) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame(false) },   // music stays paused for the game, which resumes it
+                Opt("games:howto", "How to play", null) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) },
                 Opt("games:back", "Back", null) { pick("games:back"); show(Screen.HUB) })
             Screen.TIMER_DONE -> listOf(
                 Opt("timer:stop", "Stop", null) { pick("timer:stop"); out.stopAlarm(); afterSpeech { advance() } },

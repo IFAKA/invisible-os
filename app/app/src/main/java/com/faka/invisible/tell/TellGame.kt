@@ -1,5 +1,6 @@
 package com.faka.invisible.tell
 
+import com.faka.invisible.TellVoice
 import com.faka.invisible.Timers
 import java.util.Random
 
@@ -19,6 +20,9 @@ interface TellOut {
     fun log(line: String)
     fun savedRung(): Int
     fun saveRung(rung: Int)
+    /** The coach has been through one full match (persisted). Default: taught, so no coaching. */
+    fun taught(): Boolean = true
+    fun saveTaught() {}
     /** The game is over for good (leave or forfeit): the host shuts the audio down after the tape stop. */
     fun leave()
 }
@@ -39,9 +43,16 @@ class TellGame(
     seed: Long = System.nanoTime(),
     private val opponentFor: (Int, TellSolver, Long) -> Opponent = ::opponentForRung,
     private val solved: () -> Boolean = { true },
+    /** Coach even if already taught (the "How to play" menu item). */
+    private val forceCoach: Boolean = false,
+    /** Round length of a coached match: the extra rest after the reveal leaves room for the spoken result. */
+    private val coachRoundMs: Long = COACH_ROUND_MS,
 ) {
     companion object {
         const val ROUND_MS = 2000L
+        const val COACH_ROUND_MS = 4000L
+        const val DRILL_TRIES = 3
+        const val DRILL_GAP_MS = 700L
         const val WINDOW_MS = 1500L
         const val LATE_MS = 150L
         const val GUARD_MS = 300L
@@ -55,15 +66,20 @@ class TellGame(
         /** After the end cue (600 ms) the voice starts. */
         const val SPEECH_AFTER_MS = 1000L
         private const val K = "tell."
-        private val NUM = listOf("zero", "one", "two", "three", "four", "five")
     }
 
-    private enum class Phase { IDLE, INTRO, ROUND, ENDING, AFTER, OVER }
+    private enum class Phase { IDLE, PRACTICE, INTRO, ROUND, ENDING, AFTER, OVER }
 
     private val rng = Random(seed)
     private var phase = Phase.IDLE
     private var rung = 1
     private var opp: Opponent? = null
+    private var coachNext = false      // the next match is the coached one
+    private var narrate = false        // this match speaks each result
+    private var roundMs = ROUND_MS
+    private var drill = 0              // practice: 0 jab, 1 guard, 2 charge, 3 = rule being spoken
+    private var tries = 0
+    private var listening = false
 
     private var state = TellRules.start()
     private var roundNo = 0
@@ -86,7 +102,7 @@ class TellGame(
     private fun at(key: String, time: Long, task: () -> Unit) = timers.set(K + key, maxOf(0L, time - clock()), task)
     private fun clear(key: String) = timers.clear(K + key)
     private fun clearAll() {
-        for (k in listOf("start", "snare", "close", "next", "result", "life", "end", "speech", "d1", "d2", "f1", "f3", "leave")) clear(k)
+        for (k in listOf("start", "snare", "close", "next", "result", "life", "end", "speech", "d1", "d2", "f1", "f3", "leave", "coach")) clear(k)
     }
 
     /** Level of a hold: 0 = JAB, 1 = GUARD, 2 = CHARGE. */
@@ -98,7 +114,50 @@ class TellGame(
         if (phase != Phase.IDLE) return
         out.pauseMusic()
         rung = out.savedRung().coerceIn(1, 5)
-        newMatch()
+        if (forceCoach || !out.taught()) startPractice() else newMatch()
+    }
+
+    // ---- coach practice: three drills, no round clock, no bed ----
+    private fun startPractice() {
+        clearAll()
+        phase = Phase.PRACTICE
+        pressAt = -1L; pressLive = false; listening = false
+        drill = 0; tries = 0
+        say(TellVoice.INTRO) { startDrill(0) }
+    }
+
+    /** Speak [text], then run [then] when the (estimated) speech is over plus a short silence. */
+    private fun say(text: String, then: () -> Unit) {
+        out.speak(text)
+        at("coach", clock() + TellVoice.speakMs(text) + DRILL_GAP_MS, then)
+    }
+
+    private fun startDrill(i: Int) {
+        if (phase != Phase.PRACTICE) return
+        drill = i; tries = 0
+        if (i >= 3) {
+            listening = false
+            say(TellVoice.RULE) { coachNext = true; newMatch() }
+            return
+        }
+        listening = true
+        out.speak(TellVoice.DRILLS[i])
+    }
+
+    private fun drillPress(holdMs: Long) {
+        if (!listening) return
+        val level = levelOf(holdMs)
+        if (level == drill) {
+            listening = false
+            out.play(when (level) { 0 -> Cue.JAB; 1 -> Cue.GUARD; else -> Cue.CHARGE })
+            say(TellVoice.DONE[level]) { startDrill(drill + 1) }
+        } else if (++tries >= DRILL_TRIES) {
+            listening = false
+            say(TellVoice.wrong(level, drill) + " " + TellVoice.SKIP) { startDrill(drill + 1) }
+        } else {
+            listening = false
+            say(TellVoice.wrong(level, drill)) { if (phase == Phase.PRACTICE) { listening = true; out.speak(TellVoice.DRILLS[drill]) } }
+        }
     }
 
     private fun newMatch() {
@@ -106,11 +165,15 @@ class TellGame(
         state = TellRules.start(); rounds = ArrayList(); committed.clear(); holdLens.clear()
         pressAt = -1L; pressLive = false; pressUsed = false
         roundNo = 0
+        narrate = coachNext || !out.taught()
+        roundMs = if (narrate) coachRoundMs else ROUND_MS
+        val firstCoached = coachNext
+        coachNext = false
         opp = opponentFor(if (rung >= 3 && !solved()) 2 else rung, solver, rng.nextLong())
         phase = Phase.INTRO
         out.setTension(0)
         out.play(Cue.KICK_ROLL)
-        out.speak("Duel. Rung ${NUM[rung]}.")
+        out.speak(if (firstCoached) TellVoice.firstMatch(rung) else TellVoice.duelRung(rung))
         at("start", clock() + INTRO_MS) { out.startBed(); beginRound(1, clock()) }
     }
 
@@ -133,11 +196,11 @@ class TellGame(
     // ---- input ----
     fun down(timeMs: Long) {
         when (phase) {
-            Phase.INTRO, Phase.ROUND, Phase.ENDING -> {
+            Phase.PRACTICE, Phase.INTRO, Phase.ROUND, Phase.ENDING -> {
                 out.play(Cue.TAP)
                 pressAt = timeMs; pressUsed = false; pressLive = true
                 pressRound = if (phase == Phase.ROUND && timeMs < closeAt - LATE_MS) roundNo else roundNo + 1
-                if (phase == Phase.ROUND) {
+                if (phase == Phase.ROUND || (phase == Phase.PRACTICE && listening)) {
                     at("d1", timeMs + GUARD_MS) { out.play(Cue.DETENT_1); out.setHold(1) }
                     at("d2", timeMs + CHARGE_MS) { out.play(Cue.DETENT_2); out.setHold(2) }
                 }
@@ -160,6 +223,12 @@ class TellGame(
         clear("d1"); clear("d2"); clear("f1"); clear("f3"); clear("leave")
         when (phase) {
             Phase.AFTER -> { out.stopSpeech(); newMatch() }
+            Phase.PRACTICE -> {
+                if (!pressLive) return
+                pressLive = false
+                out.setHold(0)
+                drillPress(timeMs - p)
+            }
             Phase.ROUND, Phase.ENDING, Phase.INTRO -> {
                 if (!pressLive) return
                 pressLive = false
@@ -201,7 +270,7 @@ class TellGame(
         state = r.after
         reveal(r)
         val done = TellRules.finished(state, roundNo)
-        val nextStart = roundStart + ROUND_MS
+        val nextStart = roundStart + roundMs
         if (done != null) {
             phase = Phase.ENDING
             at("end", nextStart) { endMatch(done) }
@@ -214,7 +283,7 @@ class TellGame(
         out.play(cueOf(r.mine), Side.ME)
         out.play(cueOf(r.theirs), Side.OPP)
         val delay = if (r.mine == Move.CHARGE || r.theirs == Move.CHARGE) 450L else 200L
-        at("result", clock() + delay) { results(r) }
+        at("result", clock() + delay) { results(r); if (narrate) out.speak(TellVoice.result(r)) }
     }
 
     private fun cueOf(m: Move) = when (m) { Move.JAB -> Cue.JAB; Move.GUARD -> Cue.GUARD; Move.CHARGE -> Cue.CHARGE }
@@ -247,6 +316,7 @@ class TellGame(
         out.stopBed(false)
         out.play(when (result) { Result.WIN -> Cue.WIN; Result.LOSS -> Cue.LOSS; Result.DRAW -> Cue.DRAW })
         val before = rung
+        if (narrate) { narrate = false; out.saveTaught() }
         if (result == Result.WIN) rung = minOf(5, rung + 1)
         if (rung != before) out.saveRung(rung)
         log(before, result.name)
@@ -264,13 +334,13 @@ class TellGame(
 
     private fun forfeit() {
         if (phase == Phase.IDLE || phase == Phase.OVER || phase == Phase.AFTER) return
-        log(rung, "FORFEIT")   // counts as a loss; the rung does not change
+        if (phase != Phase.PRACTICE) log(rung, "FORFEIT")   // counts as a loss; the rung does not change
         leave(true)
     }
 
     private fun leave(tape: Boolean) {
         if (phase == Phase.OVER) return
-        val wasAfter = phase == Phase.AFTER
+        val wasAfter = phase == Phase.AFTER || phase == Phase.PRACTICE   // no bed is running in either
         phase = Phase.OVER
         clearAll()
         out.setHold(0)

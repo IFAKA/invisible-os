@@ -8,6 +8,7 @@ import android.media.AudioTrack
 import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
+import com.faka.invisible.TellVoice
 import com.faka.invisible.Timers
 
 /** What the duel needs from the app (speech, the user's music, the log). */
@@ -29,6 +30,7 @@ class TellAndroid(
     private val handler: Handler,
     private val host: TellHost,
     private val onEnded: () -> Unit,
+    private val coach: Boolean = false,
 ) {
     private val sr = 44100
     private val block = sr * 5 / 1000   // 220 frames
@@ -69,6 +71,8 @@ class TellAndroid(
         override fun log(line: String) = host.log(line)
         override fun savedRung() = prefs.getInt("tellRung", 1)
         override fun saveRung(rung: Int) { prefs.edit().putInt("tellRung", rung).apply() }
+        override fun taught() = prefs.getBoolean("tell_taught", false)
+        override fun saveTaught() { prefs.edit().putBoolean("tell_taught", true).apply() }
         override fun leave() { val g = gen; handler.postDelayed({ if (g == gen) shutdown() }, 900) }   // lets the tape stop and the tails finish
     }
 
@@ -79,7 +83,7 @@ class TellAndroid(
         gen++
         val g = gen
         latency = 0.0
-        if (!TellSynth.warmed) host.speak("Loading the duel")
+        if (!TellSynth.warmed) host.speak(TellVoice.LOADING)
         Thread({
             val t0 = SystemClock.uptimeMillis()
             val m = try { TellMixer(sr) } catch (e: Throwable) { Log.e("TELL", "mixer failed", e); null }
@@ -90,13 +94,13 @@ class TellAndroid(
 
     private fun begin(m: TellMixer?) {
         val track = try { buildTrack() } catch (e: Exception) { Log.e("TELL", "AudioTrack failed", e); null }
-        if (m == null || track == null) { host.speak("Duel could not start"); running = false; onEnded(); return }
+        if (m == null || track == null) { host.speak(TellVoice.COULD_NOT_START); running = false; onEnded(); return }
         mixer = m
         thread = Thread({ pump(track) }, "tell-audio").also { it.start() }
         solverThread = Thread({ try { solver.solve() } catch (e: Throwable) { Log.e("TELL", "solve failed", e) } }, "tell-solver")
             .also { it.priority = Thread.MIN_PRIORITY; it.start() }
         game = TellGame(solver, out, timers, { SystemClock.uptimeMillis() }, { latency.toLong() },
-            solved = { solver.isSolved }).also { it.start() }
+            solved = { solver.isSolved }, forceCoach = coach).also { it.start() }
     }
 
     fun down(timeMs: Long) { game?.down(timeMs) }
