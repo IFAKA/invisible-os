@@ -27,6 +27,20 @@ def counts(sents):
         tri.update(zip(t, t[1:], t[2:]))
     return uni, bi, tri
 
+def merge(personal, general, w, gmin):
+    """Your counts count `w` times each; general counts below `gmin` are dropped so the file stays small."""
+    out = collections.Counter({k: c for k, c in general.items() if c >= gmin})
+    for k, c in personal.items(): out[k] += c * w
+    return out
+
+def corpus_sentences(path):
+    out = []
+    for line in open(os.path.expanduser(path), encoding="utf-8"):
+        for part in re.split(r"[.!?\n]+", line.rstrip("\n").split("\t")[-1]):
+            w = [x.lower() for x in cw.WORD.findall(part)]
+            if w: out.append(w)
+    return out
+
 def general(path, top=30000):
     out = {}
     for line in open(path, encoding="utf-8"):
@@ -36,20 +50,24 @@ def general(path, top=30000):
             except ValueError: pass
     return out
 
+VOCAB = 40000
+
 def write(path, uni, bi, tri, gen, mincount):
     total_u = sum(uni.values()); total_g = sum(gen.values())
     scale = 0.25 * total_u / total_g              # the general list carries 25% of the weight, so your own words win
     words = {w: uni.get(w, 0) + gen.get(w, 0) * scale for w in set(uni) | set(gen)}
+    keep = dict(sorted(words.items(), key=lambda x: -x[1])[:VOCAB])   # a smaller word list keeps the phone fast
     with open(path, "w", encoding="utf-8") as f:
-        for w, c in sorted(words.items(), key=lambda x: -x[1]): f.write(f"U\t{w}\t{c:.3f}\n")
+        for w, c in keep.items(): f.write(f"U\t{w}\t{c:.3f}\n")
         for (a, b), c in bi.items():
-            if c >= mincount: f.write(f"B\t{a}\t{b}\t{c}\n")
+            if c >= mincount and b in keep: f.write(f"B\t{a}\t{b}\t{c}\n")
         for (a, b, d), c in tri.items():
-            if c >= mincount: f.write(f"T\t{a}\t{b}\t{d}\t{c}\n")
-    return len(words)
+            if c >= mincount and d in keep: f.write(f"T\t{a}\t{b}\t{d}\t{c}\n")
+    return len(keep)
 
-def evaluate(sents_train, sents_test, gen):
+def evaluate(sents_train, sents_test, gen, gcounts=None, w=3, gmin=3):
     uni, bi, tri = counts(sents_train)
+    if gcounts: uni, bi, tri = (merge(a, b, w, gmin if i else 1) for i, (a, b) in enumerate(zip((uni, bi, tri), gcounts)))
     total_g = sum(gen.values()); scale = 0.25 * sum(uni.values()) / total_g
     vocab = sorted(set(uni) | set(gen), key=lambda w: -(uni.get(w, 0) + gen.get(w, 0) * scale))
     uw = {w: uni.get(w, 0) + gen.get(w, 0) * scale for w in vocab}
@@ -84,6 +102,9 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("paths", nargs="+"); ap.add_argument("--me"); ap.add_argument("--text", action="append", default=[], help="plain text file of your own writing (Keep notes, tasks): one note per line")
     ap.add_argument("--general", default=os.path.expanduser("~/code/projects/hardware/health/utter/app/Sources/TypingCore/Resources/words_es.txt"))
     ap.add_argument("--out", default=os.path.expanduser("~/wa_words/words_es.txt")); ap.add_argument("--eval", action="store_true"); ap.add_argument("--min", type=int, default=2)
+    ap.add_argument("--corpus", help="general Spanish sentences (tsv, text in the last column), e.g. Tatoeba; makes the model general-purpose")
+    ap.add_argument("--weight", type=int, default=3, help="how many times your own counts count against the corpus")
+    ap.add_argument("--gmin", type=int, default=3, help="drop corpus pairs/triples seen fewer times than this")
     a = ap.parse_args()
     msgs = cw.read(a.paths)
     me = a.me or collections.Counter(s for s, _ in msgs).most_common(1)[0][0]
@@ -91,10 +112,13 @@ def main():
     for tf in a.text:
         sents += sentences([(me, l) for l in open(os.path.expanduser(tf), encoding="utf-8").read().split("\n")], me)
     print(f"{len(sents)} of your sentences, {len(gen)} general words")
+    gc = counts(corpus_sentences(a.corpus)) if a.corpus else None
+    if gc: print(f"{len(gc[0])} corpus words, {len(gc[1])} pairs, {len(gc[2])} triples")
     if a.eval:
-        cut = int(len(sents) * 0.8); evaluate(sents[:cut], sents[cut:], gen); return
+        cut = int(len(sents) * 0.8); evaluate(sents[:cut], sents[cut:], gen, gc, a.weight, a.gmin); return
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     uni, bi, tri = counts(sents)
+    if gc: uni, bi, tri = (merge(x, y, a.weight, a.gmin if i else 1) for i, (x, y) in enumerate(zip((uni, bi, tri), gc)))
     n = write(a.out, uni, bi, tri, gen, a.min)
     print(f"wrote {a.out}: {n} words, {os.path.getsize(a.out)/1e6:.2f} MB")
 

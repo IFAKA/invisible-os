@@ -161,6 +161,7 @@ object Actions {
     fun init(ctx: Context) {
         if (::app.isInitialized) return
         app = ctx.applicationContext
+        Thread({ wordModel() }, "write-warm").start()
         com.faka.invisible.tell.TellSynth.warmAsync()   // the Duel's sounds take seconds to build on a phone: do it now, quietly
         mode.settings = SettingsStore.load(prefs())
         val f = java.io.File(app.filesDir, "choices.log")
@@ -214,14 +215,20 @@ object Actions {
         } catch (e: Exception) { Log.e(TAG, "pair failed", e); null }
     }
 
+    /** Loads your word model once (a few seconds on the phone, so it is also started when the app starts). */
+    @Synchronized private fun wordModel(): Ranker? = nextWord ?: try {
+        val t0 = System.currentTimeMillis()
+        val mine = java.io.File(app.filesDir, "words_es.txt")   // your own model, pushed from the laptop; not in the app or in git
+        val m: Ranker = if (mine.exists()) mine.bufferedReader().use { r -> NgramWords(r.lineSequence()) }
+            else NextWord(app.assets.open("lm/lm.bin"), app.assets.open("lm/vocab.txt").bufferedReader().readText())
+        Log.d(TAG, "WRITE model loaded in ${System.currentTimeMillis() - t0} ms")
+        m.also { nextWord = it }
+    } catch (e: Throwable) { Log.e(TAG, "word model failed", e); null }
+
     private fun launchWrite() {
         typer?.stop()
         Thread({
-            val lm = nextWord ?: try {
-                val mine = java.io.File(app.filesDir, "words_es.txt")   // your own model, pushed from the laptop; not in the app or in git
-                if (mine.exists()) mine.bufferedReader().use { r -> NgramWords(r.lineSequence().toList().asSequence()) }.also { nextWord = it }
-                else NextWord(app.assets.open("lm/lm.bin"), app.assets.open("lm/vocab.txt").bufferedReader().readText()).also { nextWord = it }
-            } catch (e: Throwable) { Log.e(TAG, "word model failed", e); null }
+            val lm = wordModel()
             handler.post {
                 if (lm == null) { say(TypeVoice.NO_MODEL, false); gameEnded(); return@post }
                 if (clips == null) clips = WordClips(java.io.File(app.cacheDir, "words"), { text, f, id -> setVoice(if (lm is NgramWords) "es" else null); tts?.setSpeechRate(TypeVoice.WORD_RATE); tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS }, { handler.post(it) })
