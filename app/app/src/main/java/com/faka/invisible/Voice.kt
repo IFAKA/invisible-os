@@ -39,8 +39,17 @@ object TellVoice {
     fun hint(n: Int) = if (n >= 2) "Hold three seconds to leave." else "Press the button now."
     val NAMES = listOf("jab", "guard", "charge")
     val DONE = listOf("Jab.", "Guard.", "Charge.")
-    const val RULE = "Let go before a click: jab. After the first click: guard. After the second click: charge. " +
-        "Guard beats jab. Jab beats charge. Charge beats guard. Same moves trade. Hold three seconds any time to leave."
+    /** What a total beginner still needs after the drills, one short piece at a time (each under about 8 s). */
+    const val ENERGY_COSTS = "Energy. A jab costs one. A charge costs three. A guard is free. You get one back every round."
+    const val ENERGY_NOTES = "A higher soft note at the start of each round means more energy."
+    const val GOAL = "Each of you has four life. Take all of theirs to win."
+    const val PLACES = "The robot is in your left ear. You are in the middle."
+    const val RULE_CLICKS = "Let go before a click: jab. After the first click: guard. After the second click: charge."
+    const val RULE_BEATS = "Guard beats jab. Jab beats charge. Charge beats guard. Same moves trade."
+    const val RULE_LEAVE = "Hold three seconds any time to leave."
+    /** The lessons after the drills, in order. The energy demo (notes 0..5) plays after the one marked. */
+    val LESSONS = listOf(ENERGY_COSTS, ENERGY_NOTES, GOAL, PLACES, RULE_CLICKS, RULE_BEATS, RULE_LEAVE)
+    const val ENERGY_DEMO_AFTER = 1
     const val SKIP = "Let's move on."
     fun wrong(level: Int, drill: Int) = "That was a ${NAMES[level]}. " + when (drill) {
         0 -> "Tap quickly."; 1 -> "Hold. Let go right after the first click."; else -> "Hold. Let go after the second click."
@@ -73,6 +82,13 @@ object TellVoice {
             else -> "Nothing happens."
         }
         return "$head $tail"
+    }
+
+    /** The coached result: the result, your energy, and both lives when someone lost life. */
+    fun narration(r: com.faka.invisible.tell.Round): String {
+        val sb = StringBuilder(result(r)).append(" Energy ").append(n(r.after.myE)).append('.')
+        if (r.damageToMe > 0 || r.damageToOpp > 0) sb.append(" Your life ").append(n(r.after.myL)).append(". Their life ").append(n(r.after.oppL)).append('.')
+        return sb.toString()
     }
 
     /** Rough speaking time in ms (the speech engine does not tell the game when it is done). */

@@ -26,6 +26,8 @@ class TellCoachTest {
         return R(w, out, g)
     }
 
+    private fun lessonsMs() = TellVoice.LESSONS.sumOf { TellVoice.speakMs(it) + TellGame.DRILL_GAP_MS } + 3000L
+
     private fun toFirstDrill(r: R) = r.w.advanceBy(TellVoice.speakMs(TellVoice.INTRO) + TellGame.DRILL_GAP_MS + 10)
 
     @Test fun drillsProgressOnRightHolds() {
@@ -38,9 +40,10 @@ class TellCoachTest {
         r.tap(500); r.w.advanceBy(3000)
         assertTrue(r.speaks().contains("Guard."))
         assertEquals(TellVoice.DRILLS[2], r.speaks().last())
-        r.tap(900); r.w.advanceBy(TellVoice.speakMs(TellVoice.RULE) + 3000)
+        r.tap(900); r.w.advanceBy(lessonsMs() + 3000)
         assertTrue(r.speaks().contains("Charge."))
-        assertTrue(r.speaks().contains(TellVoice.RULE))
+        assertEquals(TellVoice.LESSONS, r.speaks().filter { it in TellVoice.LESSONS })
+        assertEquals(6, r.out.count("status "))   // energy notes 0..5 played once
         assertEquals(TellVoice.firstMatch(1), r.speaks().last())
         assertEquals(0, r.out.count("startBed"))
         r.w.advanceBy(TellGame.INTRO_MS + 10)
@@ -113,14 +116,14 @@ class TellCoachTest {
     private fun playCoached(r: R) {
         toFirstDrill(r)
         r.tap(100); r.w.advanceBy(3000); r.tap(500); r.w.advanceBy(3000); r.tap(900)
-        r.w.advanceBy(TellVoice.speakMs(TellVoice.RULE) + 3000 + TellGame.INTRO_MS)
+        r.w.advanceBy(lessonsMs() + 3000 + TellGame.INTRO_MS)
     }
 
     @Test fun flagSetOnlyAfterAFullCoachedMatch() {
         val r = rig(false)
         playCoached(r)
         assertFalse(r.out.taughtFlag)
-        r.w.advanceBy(4000L * 20 + 2000)   // the whole match, guard against guard: draw after 20 rounds
+        r.w.advanceBy(6000L * 20 + 2000)   // the whole match, guard against guard: draw after 20 rounds
         assertTrue(r.out.taughtFlag)
         assertEquals(1, r.out.count("saveTaught"))
     }
@@ -135,9 +138,9 @@ class TellCoachTest {
     @Test fun coachedMatchNarratesEveryRoundAndLastsFourSeconds() {
         val r = rig(false); playCoached(r)
         r.w.advanceBy(4000L * 3)
-        assertTrue(r.speaks().count { it == "Nothing happens." } >= 2)
+        assertTrue(r.speaks().count { it.startsWith("Nothing happens. Energy") } >= 2)
         val beds = r.out.times("tension")
-        assertEquals(4000L, beds[2] - beds[1])
+        assertEquals(6000L, beds[2] - beds[1])
     }
 
     @Test fun coachedMatchHasNoTensionLayers() {
@@ -148,7 +151,7 @@ class TellCoachTest {
             }
         }
         val r = rig(false, opp = jabber); playCoached(r)
-        r.w.advanceBy(4000L * 6)
+        r.w.advanceBy(6000L * 6)
         assertTrue(r.out.count("play PARRY_CLANG") >= 3)   // the opponent is being hurt: normally tension would rise
         val t = r.out.events.map { it.second }.filter { it.startsWith("tension ") }
         assertTrue(t.isNotEmpty() && t.all { it == "tension 0" })
@@ -165,6 +168,20 @@ class TellCoachTest {
     @Test fun howToPlayCoachesEvenWhenTaught() {
         val r = rig(true, force = true)
         assertEquals(listOf(TellVoice.INTRO), r.speaks())
+    }
+
+    @Test fun everyLessonFitsInEightSeconds() {
+        for (l in TellVoice.LESSONS + TellVoice.INTRO + TellVoice.DRILLS) assertTrue(l, TellVoice.speakMs(l) <= 8000)
+        assertTrue(TellVoice.LESSONS.joinToString(" ").let { it.contains("four life") && it.contains("left ear") && it.contains("costs three") })
+    }
+
+    @Test fun narrationAddsEnergyAndLifeOnlyWhenLifeChanges() {
+        val s = State(3, 3, 4, 4)
+        val parry = TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.JAB))
+        assertEquals("You guarded. They jabbed. Parry. Energy five. Your life four. Their life three.", parry)
+        val calm = TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.GUARD))
+        assertEquals("Nothing happens. Energy four.", calm)
+        for (m in Move.values()) for (t in Move.values()) assertTrue(TellVoice.narration(TellRules.resolve(s, m, t)).contains("Energy"))
     }
 
     @Test fun resultSentencesCoverAllNinePairs() {

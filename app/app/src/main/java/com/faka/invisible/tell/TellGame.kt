@@ -50,7 +50,7 @@ class TellGame(
 ) {
     companion object {
         const val ROUND_MS = 2000L
-        const val COACH_ROUND_MS = 4000L
+        const val COACH_ROUND_MS = 6000L
         const val DRILL_TRIES = 3
         const val DRILL_GAP_MS = 300L
         const val HINT_MS = 7000L
@@ -104,7 +104,7 @@ class TellGame(
     private fun at(key: String, time: Long, task: () -> Unit) = timers.set(K + key, maxOf(0L, time - clock()), task)
     private fun clear(key: String) = timers.clear(K + key)
     private fun clearAll() {
-        for (k in listOf("start", "snare", "close", "next", "result", "life", "end", "speech", "d1", "d2", "f1", "f3", "leave", "coach", "hint", "lead", "lead2")) clear(k)
+        for (k in listOf("start", "snare", "close", "next", "result", "life", "end", "speech", "d1", "d2", "f1", "f3", "leave", "coach", "hint", "lead", "lead2", "en0", "en1", "en2", "en3", "en4", "en5")) clear(k)
     }
 
     /** Level of a hold: 0 = JAB, 1 = GUARD, 2 = CHARGE. */
@@ -179,7 +179,7 @@ class TellGame(
         clear("hint")
         if (i >= 3) {
             listening = false
-            if (fromPress) { coachNext = true; newMatch() } else say(TellVoice.RULE) { coachNext = true; newMatch() }
+            if (fromPress) { coachNext = true; newMatch() } else lesson(0)
             return
         }
         listening = true
@@ -193,6 +193,22 @@ class TellGame(
             out.speak(TellVoice.DRILLS[i])
             armHint(TellVoice.speakMs(TellVoice.DRILLS[i]) + HINT_MS)
         }
+    }
+
+    /** The talk after the drills: goal, places, energy (with the rising notes), the rule. Then the match. */
+    private fun lesson(k: Int) {
+        if (phase != Phase.PRACTICE) return
+        if (k >= TellVoice.LESSONS.size) { coachNext = true; newMatch(); return }
+        say(TellVoice.LESSONS[k]) {
+            if (k == TellVoice.ENERGY_DEMO_AFTER) energyDemo { lesson(k + 1) } else lesson(k + 1)
+        }
+    }
+
+    /** The status note for energy 0..5, rising, once. */
+    private fun energyDemo(then: () -> Unit) {
+        for (e in 0..5) at("en$e", clock() + 400L * e) { out.status(e, e) }
+        pendingNext = then
+        at("coach", clock() + 400L * 6 + 400) { runPending() }
     }
 
     private fun drillPress(holdMs: Long) {
@@ -276,7 +292,7 @@ class TellGame(
     private fun practiceDown() {
         if (pendingNext != null) { fromPress = true; runPending(); fromPress = false } else clear("coach")
         out.stopSpeech()
-        clear("lead"); clear("lead2"); clear("hint"); clear("d1"); clear("d2")
+        for (e in 0..5) clear("en$e"); clear("lead"); clear("hint"); clear("d1"); clear("d2")
     }
 
     fun up(timeMs: Long) {
@@ -346,7 +362,7 @@ class TellGame(
         out.play(cueOf(r.mine), Side.ME)
         out.play(cueOf(r.theirs), Side.OPP)
         val delay = if (r.mine == Move.CHARGE || r.theirs == Move.CHARGE) 450L else 200L
-        at("result", clock() + delay) { results(r); if (narrate) out.speak(TellVoice.result(r)) }
+        at("result", clock() + delay) { results(r); if (narrate) out.speak(TellVoice.narration(r)) }
     }
 
     private fun cueOf(m: Move) = when (m) { Move.JAB -> Cue.JAB; Move.GUARD -> Cue.GUARD; Move.CHARGE -> Cue.CHARGE }
