@@ -32,6 +32,7 @@
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
         </service>
+        <receiver android:name=".AiTestReceiver" android:exported="true" />
         <service android:name=".ButtonService" android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
         <service android:name=".ButtonAccessibilityService" android:exported="true"
