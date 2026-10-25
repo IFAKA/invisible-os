@@ -146,4 +146,34 @@ class TypingTest {
         t.advance(TypeProgram.MENU_GAP_MS * 2)
         assertEquals(listOf("Done", "Delete", "Letters"), said)
     }
+
+    private fun program(frame: Frame, sug: List<String> = emptyList(), ended: () -> Unit = {}) = TypeProgram(lm, object : TypeOut {
+        override fun pair(left: String, right: String?) { pairs.add(left to right) }
+        override fun hush() {}
+        override fun prefetch(words: List<String>) {}
+        override fun say(text: String) { said.add(text) }
+        override fun cue(c: TypeCue) { cues.add(c) }
+        override fun finished(text: String) { result = text }
+        override fun suggestions() = sug
+    }, t, frame, ended)
+
+    @Test fun aPasswordFieldIsRefusedAndNothingIsOffered() {
+        var ended = false
+        val q = program(Frame(kind = FieldKind.PASSWORD)) { ended = true }
+        q.start()
+        assertTrue(ended); assertTrue(!q.active); assertTrue(pairs.isEmpty()); assertEquals(listOf(TypeVoice.PASSWORD), said)
+    }
+
+    @Test fun aNumberFieldOffersDigitsAndWritesThemWithoutSpaces() {
+        val q = program(Frame(kind = FieldKind.NUMBER)); q.start()
+        assertEquals("1" to "2", pairs.last())
+        q.down(t.now); t.advance(80); q.up(t.now); t.advance(500)   // click: 1
+        q.down(t.now); t.advance(80); q.up(t.now); t.advance(500)   // click: 1 again
+        assertEquals("11", q.text())
+    }
+
+    @Test fun anEmailFieldStartsWithWhatYouUsedThere() {
+        val q = program(Frame(app = "mail", kind = FieldKind.EMAIL), listOf("ana@x.com", "bea@y.com")); q.start()
+        assertEquals("ana@x.com" to "bea@y.com", pairs.last())
+    }
 }

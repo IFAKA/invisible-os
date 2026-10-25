@@ -187,6 +187,8 @@ object TypeVoice {
     const val MENU_DONE = "Done"
     const val MENU_DELETE = "Delete"
     const val PHRASES = "Phrases"
+    const val DIGITS = "Digits"
+    const val PASSWORD = "Password field. Not written."
     const val NO_MODEL = "Write could not start"
     const val EMPTY = "Nothing written"
     const val DELETED = "Deleted"

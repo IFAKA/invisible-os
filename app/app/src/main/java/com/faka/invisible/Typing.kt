@@ -5,6 +5,8 @@ interface Ranker {
     fun ranked(context: List<String>): List<Pair<String, Double>>
     /** True when short words and contractions are too hard to hear alone, so the first pair skips them (English voice). Spanish words are short and clear. */
     val skipShortFirst: Boolean get() = false
+    /** [word] was chosen after [context]: a ranker that learns by place can credit its layers. */
+    fun picked(context: List<String>, word: String) {}
 }
 
 /** What the Write program asks of the app. The words of a pair are heard one after the other: the left word in the left ear, then the right word in the right ear. */
@@ -17,6 +19,8 @@ interface TypeOut {
     fun finished(text: String)   // the written text; "" = nothing written
     /** Ask the big model (slow, in the background) for ways to finish [text]; call [then] with them when ready. Default: none. */
     fun phrases(text: String, then: (List<String>) -> Unit) {}
+    /** Whole values you used in this place before (addresses, names, searches, numbers). Default: none. */
+    fun suggestions(): List<String> = emptyList()
 }
 
 enum class TypeCue { PICK_LEFT, PICK_RIGHT, NEXT, LETTERS, WORDS, DELETE, DONE, ARMED, MENU }
@@ -31,6 +35,7 @@ class TypeProgram(
     private val lm: Ranker,
     private val out: TypeOut,
     private val timers: Timers,
+    private val frame: Frame = Frame(),   // the place being typed into; the default is a plain text place
     private val onEnded: () -> Unit,
 ) {
     companion object {
@@ -63,17 +68,21 @@ class TypeProgram(
     var active = false; private set
 
     fun start() {
+        if (frame.kind == FieldKind.PASSWORD) { out.say(TypeVoice.PASSWORD); onEnded(); return }   // never spoken, never saved
         active = true
         out.say(TypeVoice.START); out.say(TypeVoice.START2); out.say(TypeVoice.START_NEXT); out.say(TypeVoice.START3)
+        askPhrases()
+        if (frame.kind != FieldKind.TEXT && phrases.isNotEmpty()) phraseMode = true   // addresses, names, searches: what you used here comes first
         show()
     }
 
     fun stop() { if (active) { active = false; menu = false; timers.clear("t:menu"); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:replay") } }
 
-    fun text(): String = written.joinToString(" ").replaceFirstChar { it.uppercase() }
+    fun text(): String = if (frame.digits) written.joinToString("") else written.joinToString(" ").replaceFirstChar { it.uppercase() }
 
     // ---- what is offered ----
     private fun candidates(): List<String> {
+        if (frame.digits) return "1234567890".map { it.toString() }
         val all = lm.ranked(written.takeLast(8))   // at the start of a word, a short word or a contraction is hard to hear alone: those come through letters
         return if (letters) {
             val mass = LinkedHashMap<Char, Double>()
@@ -127,10 +136,14 @@ class TypeProgram(
 
     // ---- the small menu: Done, Delete, Letters/Words, read one at a time ----
     private fun menuLabels() = listOf(TypeVoice.MENU_DONE, TypeVoice.MENU_DELETE) + (if (phrases.isNotEmpty() && !phraseMode) listOf(TypeVoice.PHRASES) else emptyList()) +
-        (if (letters || phraseMode) TypeVoice.WORDS else TypeVoice.LETTERS)
+        (if (frame.digits) (if (phraseMode) listOf(TypeVoice.DIGITS) else emptyList()) else listOf(if (letters || phraseMode) TypeVoice.WORDS else TypeVoice.LETTERS))
 
     /** The big model gets the text so far; a late answer for an older text is ignored. */
-    private fun askPhrases() { phrases = emptyList(); val g = ++phraseGen; if (written.isNotEmpty()) out.phrases(text()) { r -> if (active && g == phraseGen) phrases = r } }
+    private fun askPhrases() {
+        phrases = if (written.isEmpty()) out.suggestions() else emptyList()
+        val g = ++phraseGen
+        if (!frame.digits && (written.isNotEmpty() || frame.around.isNotEmpty())) out.phrases(text()) { r -> if (active && g == phraseGen) phrases = r }
+    }
 
     private fun openMenu() { menu = true; menuIdx = 0; menuSteps = 0; timers.clear("t:replay"); out.cue(TypeCue.MENU); speakMenu() }
 
@@ -152,7 +165,7 @@ class TypeProgram(
             TypeVoice.MENU_DONE -> leave(true)
             TypeVoice.MENU_DELETE -> { out.cue(TypeCue.DELETE); if (prefix.isNotEmpty()) prefix = "" else if (written.isNotEmpty()) { written.removeAt(written.size - 1); askPhrases() }; letters = false; phraseMode = false; page = 0; show() }
             TypeVoice.PHRASES -> { phraseMode = true; letters = false; page = 0; out.cue(TypeCue.WORDS); show() }
-            else -> { phraseMode = false; letters = !letters; page = 0; out.cue(if (letters) TypeCue.LETTERS else TypeCue.WORDS); show() }
+            else -> { phraseMode = false; if (!frame.digits) letters = !letters; page = 0; out.cue(if (letters) TypeCue.LETTERS else TypeCue.WORDS); show() }
         }
     }
 
@@ -161,7 +174,7 @@ class TypeProgram(
         if (item == null) { out.cue(TypeCue.NEXT); show(true); return }
         out.cue(if (left) TypeCue.PICK_LEFT else TypeCue.PICK_RIGHT)
         if (phraseMode) { written.addAll(item.split(' ').filter { it.isNotEmpty() }); phraseMode = false; prefix = ""; askPhrases() }
-        else if (letters) { prefix += item; letters = false; out.say(TypeVoice.WORDS_WITH + " " + prefix.toCharArray().joinToString(" ")) } else { written.add(item); prefix = ""; askPhrases() }
+        else if (letters) { prefix += item; letters = false; out.say(TypeVoice.WORDS_WITH + " " + prefix.toCharArray().joinToString(" ")) } else { lm.picked(written.takeLast(8), item); written.add(item); prefix = ""; askPhrases() }
         page = 0
         show()
     }

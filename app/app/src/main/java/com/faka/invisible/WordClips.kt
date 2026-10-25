@@ -11,7 +11,7 @@ class WordClips(private val dir: File, private val synth: (text: String, file: F
     private val mem = ConcurrentHashMap<String, Spearcon.Pcm>()
     private val waiting = ConcurrentHashMap<String, MutableList<() -> Unit>>()
 
-    private fun key(word: String) = word.filter { it.isLetter() || it == '\'' }.lowercase()
+    private fun key(word: String) = word.filter { it.isLetterOrDigit() || it == '\'' }.lowercase()
 
     /** Main thread: [then] runs on the main thread when the clip of [word] is ready (at once if it is). */
     fun ensure(word: String, then: () -> Unit) {
