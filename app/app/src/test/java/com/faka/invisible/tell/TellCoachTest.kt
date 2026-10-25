@@ -123,6 +123,20 @@ class TellCoachTest {
         assertTrue(r.out.count("saveLevel 2") >= 1)
     }
 
+    @Test fun afterAMatchTwoTapsSayItAgainAndThreeTapsGiveTheScore() {
+        val r = rig(1, opp = always(Move.GUARD))
+        learnL1(r)
+        r.playMatch(3000) { 100L }
+        r.waitFor { r.speaks().any { it.contains("play again") } }
+        val n = r.speaks().size
+        r.tap(100); r.w.advanceBy(100); r.tap(100); r.w.advanceBy(1000)
+        assertEquals(0, r.out.count("startBed") - 1)          // no new match started
+        assertTrue(r.speaks().drop(n).any { it.contains("rounds.") })
+        val m = r.speaks().size
+        r.tap(100); r.w.advanceBy(100); r.tap(100); r.w.advanceBy(100); r.tap(100); r.w.advanceBy(1000)
+        assertTrue(r.speaks().drop(m).any { it.contains("Jab ") })
+    }
+
     @Test fun nextLevelIsTaughtBeforeItsMatchAndLevel3AlwaysGoesToFullGame() {
         val r = rig(1, opp = always(Move.JAB))
         learnL1(r)

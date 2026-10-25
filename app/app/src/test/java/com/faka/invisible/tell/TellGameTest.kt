@@ -255,7 +255,7 @@ class TellGameTest {
     @Test fun afterAMatchTapPlaysAgainAndHoldLeaves() {
         val r = rig(always(Move.JAB))
         r.w.advanceTo(r.roundStart(5) + 200)
-        r.g.down(r.w.now); r.w.advanceBy(100); r.g.up(r.w.now)
+        r.g.down(r.w.now); r.w.advanceBy(100); r.g.up(r.w.now); r.w.advanceBy(TellGame.TAP_WINDOW_MS + 10)
         assertEquals(2, r.out.count("play KICK_ROLL"))
         assertTrue(r.out.events.any { it.second == "stopSpeech" })
         assertFalse(r.out.left)

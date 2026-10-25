@@ -67,6 +67,7 @@ class TellGame(
         const val INTRO_MS = 2400L
         /** After the end cue (600 ms) the voice starts. */
         const val SPEECH_AFTER_MS = 1000L
+        const val TAP_WINDOW_MS = 350L   // after a match: taps inside this window count together
         private const val K = "tell."
     }
 
@@ -360,7 +361,18 @@ class TellGame(
         pressAt = -1L
         clear("d1"); clear("d2")
         when (phase) {
-            Phase.AFTER -> { out.stopSpeech(); if (advanced) { advanced = false; startPractice() } else newMatch() }
+            Phase.AFTER -> {
+                out.stopSpeech(); clear("speech")
+                afterTaps++
+                at("taps", timeMs + TAP_WINDOW_MS) {
+                    val n = afterTaps; afterTaps = 0
+                    when (n) {
+                        1 -> if (advanced) { advanced = false; startPractice() } else newMatch()
+                        2 -> out.speak(mistakeText.ifEmpty { summaryText() })   // two taps: hear the costliest mistake again
+                        else -> out.speak(summaryText())                        // three taps: the score and your moves
+                    }
+                }
+            }
             Phase.PRACTICE -> {
                 if (!pressLive) return
                 pressLive = false
@@ -489,8 +501,19 @@ class TellGame(
         }
         log(before, result.name)
         val word = when (result) { Result.WIN -> "You win."; Result.LOSS -> "You lose."; Result.DRAW -> "Draw." }
-        val text = listOf(word, if (playedLevel >= 3) costliestMistake(rounds) else "", "Tap to play again. Hold to leave.").filter { it.isNotEmpty() }.joinToString(" ")
+        afterTaps = 0
+        mistakeText = if (playedLevel >= 3) costliestMistake(rounds) else ""
+        val text = listOf(word, mistakeText, "Tap to play again. Hold to leave.").filter { it.isNotEmpty() }.joinToString(" ")
         at("speech", clock() + SPEECH_AFTER_MS) { out.speak(text) }
+    }
+
+    private var afterTaps = 0
+    private var mistakeText = ""
+    private fun summaryText(): String {
+        val c = Move.values().associateWith { m -> rounds.count { it.mine == m } }
+        val last = rounds.lastOrNull()?.after
+        val life = if (last != null) " Life ${last.myL} to ${last.oppL}." else ""
+        return "${rounds.size} rounds.$life Jab ${c[Move.JAB]}, guard ${c[Move.GUARD]}, charge ${c[Move.CHARGE]}."
     }
 
     private fun log(rungPlayed: Int, result: String) {
@@ -508,7 +531,7 @@ class TellGame(
 
     private fun leave(tape: Boolean) {
         if (phase == Phase.OVER) return
-        downAt = -1L; clear("f1"); clear("f3"); clear("leave")
+        downAt = -1L; clear("f1"); clear("f3"); clear("leave"); clear("taps"); afterTaps = 0
         val wasAfter = phase == Phase.AFTER || phase == Phase.PRACTICE   // no bed is running in either
         phase = Phase.OVER
         clearAll()
