@@ -176,4 +176,24 @@ class TypingTest {
         val q = program(Frame(app = "mail", kind = FieldKind.EMAIL), listOf("ana@x.com", "bea@y.com")); q.start()
         assertEquals("ana@x.com" to "bea@y.com", pairs.last())
     }
+
+    @Test fun inAChatTheRepliesFromTheBigModelComeFirstWhenReady() {
+        val q = TypeProgram(lm, object : TypeOut {
+            override fun pair(left: String, right: String?) { pairs.add(left to right) }
+            override fun hush() {}
+            override fun prefetch(words: List<String>) {}
+            override fun say(text: String) {}
+            override fun cue(c: TypeCue) {}
+            override fun finished(text: String) {}
+            override fun phrases(text: String, then: (List<String>) -> Unit) { then(listOf("sí, voy", "no puedo hoy")) }
+        }, t, Frame(app = "wa", around = listOf("¿Vienes a cenar?"), hasField = true)) {}
+        q.start()
+        assertEquals("sí, voy" to "no puedo hoy", pairs.last())
+    }
+
+    @Test fun aWordJustWrittenIsNotOfferedAgainAtOnce() {
+        p.start(); val first = pairs.last().first
+        clicks(1)
+        assertTrue(pairs.last().first != first && pairs.last().second != first)
+    }
 }

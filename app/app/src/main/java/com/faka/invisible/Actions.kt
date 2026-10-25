@@ -243,6 +243,7 @@ object Actions {
                     override fun clear(key: String) { typeTimers.remove(key)?.let { handler.removeCallbacks(it) } }
                 }
                 val frame = ButtonAccessibilityService.inst?.frame() ?: Frame()   // the place that has focus: app, kind of field, what is on the screen
+                Log.d(TAG, "WRITE frame app=${frame.app} kind=${frame.kind} field=${frame.field} thread=${frame.thread} around=${frame.around.size} before=${frame.before.length}")
                 val out = object : TypeOut {
                     override fun suggestions() = buckets.suggestions(frame)
                     override fun pair(left: String, right: String?) {

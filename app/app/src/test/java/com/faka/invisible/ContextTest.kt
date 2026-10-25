@@ -65,4 +65,10 @@ class ContextTest {
         s.learn(Frame(app = "wa", field = "entry", thread = "Bea"), listOf("b"), "to Bea")
         assertEquals("to Ana", s.suggestions(Frame(app = "wa", field = "entry", thread = "Ana")).first())
     }
+
+    @Test fun wordsOnTheScreenComeBackInTheReply() {
+        val chat = Frame(app = "wa", around = listOf("Ana: ¿Vienes a cenar mañana?"), hasField = true)
+        val top = BucketRanker(base, BucketStore(emptyList()), chat).ranked(emptyList()).take(4).map { it.first }
+        assertTrue(top.toString(), top.contains("cenar") || top.contains("vienes") || top.contains("mañana"))
+    }
 }

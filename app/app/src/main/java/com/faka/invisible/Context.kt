@@ -29,7 +29,7 @@ data class Frame(
     /** One line for the big model: the screen the user is answering. Empty if there is nothing to say. */
     fun brief(): String = buildString {
         if (thread.isNotBlank()) append("Chat with: $thread\n")
-        if (around.isNotEmpty()) append("Messages on the screen:\n" + around.joinToString("\n") { "- $it" } + "\n")
+        if (around.isNotEmpty()) append("Messages on the screen, oldest first (the last one is probably the one they answer):\n" + around.joinToString("\n") { "- $it" } + "\n")
         if (hint.isNotBlank()) append("The field is called: $hint\n")
     }
 
@@ -131,10 +131,13 @@ class BucketRanker(private val base: Ranker, private val store: BucketStore, pri
     private var cacheKey: String? = null
     private var cache: List<Pair<String, Double>> = emptyList()
 
-    private val prior = mapOf("t" to 1.2, "f" to 1.0, "a" to 0.8, "k" to 0.6)
+    private val prior = mapOf("t" to 1.2, "f" to 1.0, "a" to 0.8, "k" to 0.6, "s" to 0.5)
+    /** Words on the screen (the chat you answer): likely to come back in the reply ("cenar" -> "cenar"). */
+    private val screen: Map<String, Int> = frame.around.flatMap { Regex("[\\p{L}']+").findAll(it).map { m -> m.value.lowercase() }.toList() }
+        .filter { it.length >= 3 }.groupingBy { it }.eachCount()
 
     private fun layers(prev: String): List<Pair<String, Map<String, Int>>> =
-        frame.keys().mapNotNull { k -> store.counts(k, prev)?.let { k.substringBefore(':') to it } }
+        frame.keys().mapNotNull { k -> store.counts(k, prev)?.let { k.substringBefore(':') to it } } + (if (screen.isEmpty()) emptyList() else listOf("s" to screen))
 
     override fun ranked(context: List<String>): List<Pair<String, Double>> {
         val prev = context.lastOrNull()?.lowercase() ?: "<s>"
@@ -164,7 +167,7 @@ class BucketRanker(private val base: Ranker, private val store: BucketStore, pri
         val prev = context.lastOrNull()?.lowercase() ?: "<s>"
         val w = word.lowercase()
         store.scored("base", base.ranked(context).asSequence().filter { it.first.length >= 1 }.take(2).any { it.first == w })
-        for ((l, m) in layers(prev)) store.scored(l, m.entries.sortedByDescending { it.value }.take(2).any { it.key == w })
+        for ((l, m) in layers(prev)) store.scored(l, if (l == "s") w in m else m.entries.sortedByDescending { it.value }.take(2).any { it.key == w })
         cacheKey = null
     }
 }

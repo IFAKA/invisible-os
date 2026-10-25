@@ -65,6 +65,7 @@ class TypeProgram(
     private var phrases: List<String> = emptyList()   // ways to finish the text, from the big model, when ready
     private var phraseMode = false
     private var phraseGen = 0
+    private var touched = false   // the player has pressed since the start
     var active = false; private set
 
     fun start() {
@@ -83,12 +84,13 @@ class TypeProgram(
     // ---- what is offered ----
     private fun candidates(): List<String> {
         if (frame.digits) return "1234567890".map { it.toString() }
+        val recent = written.takeLast(3).toSet()   // a word just written is not offered again at once
         val all = lm.ranked(written.takeLast(8))   // at the start of a word, a short word or a contraction is hard to hear alone: those come through letters
         return if (letters) {
             val mass = LinkedHashMap<Char, Double>()
             for ((w, lp) in all) if (w.length > prefix.length && w.startsWith(prefix) && LETTER_RE.matches(w)) mass.merge(w[prefix.length], Math.exp(lp), Double::plus)
             mass.entries.sortedByDescending { it.value }.map { it.key.toString() }
-        } else all.asSequence().filter { it.first.startsWith(prefix) && LETTER_RE.matches(it.first) && (prefix.isNotEmpty() || !lm.skipShortFirst || (it.first.length >= 3 && '\'' !in it.first)) }.take(WORD_PAGES * 2).map { it.first }.toList()
+        } else all.asSequence().filter { it.first !in recent }.filter { it.first.startsWith(prefix) && LETTER_RE.matches(it.first) && (prefix.isNotEmpty() || !lm.skipShortFirst || (it.first.length >= 3 && '\'' !in it.first)) }.take(WORD_PAGES * 2).map { it.first }.toList()
     }
 
     private fun show(again: Boolean = false) {
@@ -108,6 +110,7 @@ class TypeProgram(
     // ---- the raw button ----
     fun down(time: Long) {
         if (!active) return
+        touched = true
         out.hush(); timers.clear("t:gap"); timers.clear("t:replay"); timers.clear("t:menu")
         downAt = time; armed = false
         timers.set("t:hold", HOLD_MS) { if (active && downAt >= 0) { armed = true; out.cue(TypeCue.ARMED) } }
@@ -142,7 +145,12 @@ class TypeProgram(
     private fun askPhrases() {
         phrases = if (written.isEmpty()) out.suggestions() else emptyList()
         val g = ++phraseGen
-        if (!frame.digits && (written.isNotEmpty() || frame.around.isNotEmpty())) out.phrases(text()) { r -> if (active && g == phraseGen) phrases = r }
+        if (!frame.digits && (written.isNotEmpty() || frame.around.isNotEmpty())) out.phrases(text()) { r ->
+            if (!active || g != phraseGen) return@phrases
+            phrases = r
+            // answering a chat: the replies that fit it come first, as soon as they are ready, unless the player is already busy
+            if (written.isEmpty() && frame.around.isNotEmpty() && r.isNotEmpty() && !touched && !menu) { phraseMode = true; page = 0; out.cue(TypeCue.NEXT); show() }
+        }
     }
 
     private fun openMenu() { menu = true; menuIdx = 0; menuSteps = 0; timers.clear("t:replay"); out.cue(TypeCue.MENU); speakMenu() }

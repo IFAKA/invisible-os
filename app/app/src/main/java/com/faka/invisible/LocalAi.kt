@@ -58,10 +58,13 @@ object LocalAi {
     /** Up to 3 ways to finish a message that starts with [text], in [lang]: only the new words, short. [brief] says what the screen is about. */
     fun continuations(ctx: Context, text: String, lang: String, brief: String = ""): List<String> {
         val es = lang == "es"
-        val start = if (text.isBlank()) "They have not written anything yet. Write 3 different short things they could write first" else "So far they wrote:\n\"$text\"\nWrite 3 different short endings for it"
-        return ask(ctx, "Someone is writing a message.\n" + brief + start + ", in ${langName(lang)}. " +
-            (if (text.isBlank()) "" else "Write only the new words that come next, not the words already written. ") + "Max 6 words each. One per line, numbered 1. 2. 3.\n" +
+        val chat = brief.isNotBlank()
+        val language = if (chat) "in the same language as the messages" else "in ${langName(lang)}"
+        val task = if (text.isBlank()) "They have not written anything yet. Write 3 different short replies they could send now" else "So far they wrote:\n\"$text\"\nWrite 3 different short endings for it"
+        return ask(ctx, "You help someone write a message on their phone.\n" + brief + task + ", $language, in their voice: natural, casual, first person" +
+            (if (chat) ", answering what the messages ask" else "") + ". " +
+            (if (text.isBlank()) "" else "Write only the new words that come next, not the words already written. ") + "Max 8 words each. One per line, numbered 1. 2. 3.\n" +
             "Example for \"${if (es) "Voy a" else "I will"}\":\n" +
-            (if (es) "1. llegar tarde hoy\n2. salir en cinco minutos\n3. llamarte luego" else "1. be late today\n2. leave in five minutes\n3. call you later") + "\nNow write the 3 endings.", "endings")
+            (if (es) "1. llegar tarde hoy\n2. salir en cinco minutos\n3. llamarte luego" else "1. be late today\n2. leave in five minutes\n3. call you later") + "\nNow write the 3 lines.", "endings")
     }
 }
