@@ -375,8 +375,7 @@ class ControllerMode(
                         pick("hub:tasks"); taskList = ts; taskIdx = 0
                         when {
                             ts.isNotEmpty() -> show(Screen.TASK)
-                            out.taskOffers().isNotEmpty() -> show(Screen.TASK_ADD)
-                            else -> { say(Voice.NO_TASKS); phase = Phase.WAIT; waitNext = { beginScan() } }
+                            else -> show(Screen.TASK_ADD)
                         }
                     } }
                     "timer" -> all["hub:timer"] = Opt("hub:timer", "Timer", null) { pick("hub:timer"); show(Screen.TIMER_PICK) }
@@ -389,7 +388,7 @@ class ControllerMode(
             Screen.TASK -> {   // "Add task" first, then this page of tasks (a click right after hearing one = done), then "More tasks"
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)
                 val opts = ArrayList<Opt>()
-                if (out.taskOffers().isNotEmpty()) opts += Opt("task:add", "Add task", null) { pick("task:add"); show(Screen.TASK_ADD) }
+                opts += Opt("task:add", "Add task", null) { pick("task:add"); show(Screen.TASK_ADD) }
                 for (t in page) opts += Opt("task:done", t.text.let { x -> if (x.length <= MAX_SPOKEN) x else x.take(MAX_SPOKEN).trimEnd() + (if (t.lang == "en") " and more" else " y más") }, t.lang.ifEmpty { out.songLang(t.text) ?: "es" }) {
                     pick("task:done")
                     startPending(null, "Done. Click to cancel", { out.completeTask(t.id); true }, onCancel = { show(Screen.TASK) }, after = {
@@ -401,7 +400,7 @@ class ControllerMode(
                 if (taskIdx + TASK_PAGE < taskList.size) opts += Opt("task:more", "More tasks", null) { pick("task:more"); taskIdx += TASK_PAGE; show(Screen.TASK) }
                 opts
             }
-            Screen.TASK_ADD -> phraseOptions(out.taskOffers(), "taskadd") { t ->
+            Screen.TASK_ADD -> phraseOptions(taskChoices(), "taskadd") { t ->
                 out.addTask(t.text, t.lang); say(Voice.TASK_ADDED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
             }
             Screen.TIMER_PICK -> (settings.timers.map { it to Spoken.minutes(it) }.let { t -> if (out.lastTimer() > 0) listOf(lastTimer() to "Last used") + t else t + (lastTimer() to "Last used") }).map { (min, label) ->
@@ -464,6 +463,12 @@ class ControllerMode(
         }
     } + Opt("send:ask_details", "Ask details", l) { sendPending(m, MessageLogic.tellMeMore(m.lang), "send:ask_details") } +
         phraseOptions(out.replyOffers().take(3), "send:mine") { t -> sendPending(m, t.text, "send:mine") }
+
+    /** Your own past tasks first, then starters (so "Add task" works on day one); open tasks are left out. */
+    private fun taskChoices(): List<Task> {
+        val own = out.taskOffers(); val seen = (own.map { it.text } + out.tasks().map { it.text }).map { it.lowercase() }.toSet()
+        return (own + Voice.TASK_STARTERS.filter { it.lowercase() !in seen }.map { Task(0, it, "en") }).take(5)
+    }
 
     /** The shared "pick a text" step (tasks and replies): the user's own past texts, spoken one by one; a pick calls [onPick]. */
     private fun phraseOptions(texts: List<Task>, key: String, onPick: (Task) -> Unit): List<Opt> = texts.map { t ->

@@ -433,8 +433,7 @@ class ModeTest {
 
     @Test fun pickingATaskMarksItDoneAfterTheCancelWindow() {
         val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.taskStore.add("Call mum")
-        r.wake(); r.pick("Tasks, 2"); r.advance(1500)
-        assertTrue(r.log.contains("say[es] Buy milk"))
+        r.wake(); r.pick("Tasks, 2")
         r.pick("Buy milk"); assertEquals(2, r.taskStore.all().size)   // not removed yet
         r.advance(5000)
         assertEquals(listOf("Call mum"), r.taskStore.all().map { it.text })
@@ -453,9 +452,15 @@ class ModeTest {
         assertFalse(r.log.contains("say[es] Buy milk"))   // not yet: Add task is spoken first
     }
 
+    @Test fun addTaskIsThereOnDayOneWithStarters() {
+        val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1000)
+        assertTrue(r.log.contains("say Add task"))
+        r.pick("Add task"); r.advance(3000); assertTrue(r.log.contains("say[en] Buy groceries"))
+    }
+
     @Test fun moreTasksPagesByFive() {
         val r = Rig().withTasks(); for (i in 1..6) r.taskStore.add("task $i")
-        r.wake(); r.pick("Tasks, 6"); r.pick("More tasks"); r.advance(1500)
+        r.wake(); r.pick("Tasks, 6"); r.pick("More tasks"); r.advance(3500)
         assertTrue(r.log.contains("say[es] task 6"))
     }
 
@@ -467,7 +472,7 @@ class ModeTest {
     }
 
     @Test fun longTasksAreCutAndDuplicatesAreSkipped() {
-        val r = Rig().withTasks(); r.taskStore.add("x".repeat(400)); r.wake(); r.pick("Tasks, 1"); r.advance(1000)
+        val r = Rig().withTasks(); r.taskStore.add("x".repeat(400)); r.wake(); r.pick("Tasks, 1"); r.advance(3500)
         assertTrue(r.log.any { it.startsWith("say[es] x") && it.endsWith("y más") && it.length < 200 })
         val s = TaskStore(); assertEquals(1, s.addAll("[ ] Buy milk\n[ ] buy MILK")); assertEquals(0, s.addAll("[ ] Buy milk"))
     }

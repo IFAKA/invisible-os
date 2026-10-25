@@ -21,6 +21,7 @@ object Voice {
     const val NO_TASKS = "No tasks yet"
     const val ALL_DONE = "All done"
     const val TASK_ADDED = "Task added"
+    val TASK_STARTERS = listOf("Buy groceries", "Call someone", "Pay a bill", "Send an email", "Clean up")
     const val NO_MESSAGES = "No unread messages"
     const val CANNOT = "Cannot do it"
     const val CANCELLED = "Cancelled"
