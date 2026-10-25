@@ -58,6 +58,7 @@ object Actions {
     fun moveTask(from: Int, to: Int) = taskStore.move(from, to)
     private val deduper = Deduper()
     private var lastHoldAt = 0L
+    private var clickHolding = false   // a click-then-hold is down (fast scroll): the system's long press must not also fire
 
     private var gestureTimer: Runnable? = null
     private val detector = GestureDetector(
@@ -335,12 +336,13 @@ object Actions {
     /** Long press launched the assistant role / hands-free: act as HOLD unless a HOLD just fired from the key path. */
     fun assistHold() {
         if (duel?.active == true || typer?.active == true) return
-        if (SystemClock.uptimeMillis() - lastHoldAt < 1500) { Log.d(TAG, "ASSIST ignored, hold just fired"); return }
+        if (clickHolding || SystemClock.uptimeMillis() - lastHoldAt < 1500) { Log.d(TAG, "ASSIST ignored, hold just fired"); return }
         fire(Gesture.HOLD, 0)
     }
 
     private fun fire(g: Gesture, dur: Long) {
-        if (g == Gesture.HOLD) lastHoldAt = SystemClock.uptimeMillis()
+        if (g == Gesture.HOLD || g == Gesture.CLICK_HOLD) lastHoldAt = SystemClock.uptimeMillis()
+        if (g == Gesture.CLICK_HOLD) clickHolding = true else if (g == Gesture.CLICK_HOLD_END) clickHolding = false
         Log.d(TAG, "GESTURE ${g.name.lowercase()} dur=$dur")
         EventLog.add("${g.name.lowercase()}  ${dur}ms")
         val inMode = mode.active && mode.screen != ControllerMode.Screen.SENT   // a click that cancels a send has its own tone

@@ -110,6 +110,8 @@ class CountRanker(private val count: (String) -> Int) : OptionRanker {
  * Idle: clicks go to the music app, hold = WAKE. In the mode ONE rule on every screen: the phone speaks the
  * options one at a time (pause, tick between items, ding at the end) and loops. 1 click = the option spoken last,
  * 1 = next option now, 2 = choose the option spoken last, 3 = back one level (top: leave), 4 = leave. Two silent loops = leave. Hold = exit.
+ * Click then hold (fast scroll, while options are read): steps through the options about 4 per second, first word + tick; on release the option is
+ * spoken in full and the scan goes on from there. Anywhere else a click-then-hold is a plain hold (exit), so you can never get stuck.
  * Sends and timer starts wait [undoMs] after "Click to cancel"; any click inside cancels them.
  * Events in: onGesture, onSpeechStarted, onSpeechDone. Time and timers are injected.
  */
@@ -181,7 +183,10 @@ class ControllerMode(
     private fun vl(m: Msg) = MessageLogic.voiceLang(m.lang)
 
     /** [lastPressMs] = length of the last press; with the gesture gap it gives the time of the first press. */
-    fun onGesture(g: Gesture, lastPressMs: Long = 0) {
+    fun onGesture(g0: Gesture, lastPressMs: Long = 0) {
+        if (g0 == Gesture.CLICK_HOLD_END) { endFast(); return }
+        // click-then-hold scrolls only while the options are read; everywhere else it is a plain hold (exit)
+        val g = if (g0 == Gesture.CLICK_HOLD && !(active && !finding && pending == null && phase == Phase.SCAN && !list.isEmpty)) Gesture.HOLD else g0
         val firstPress = clock() - gapMs - lastPressMs
         if (active && finding) { endFind(); return }   // ANY click or hold stops the ringing
         if (pending != null && g != Gesture.HOLD) { cancelPending(); return }   // ANY click cancels
@@ -191,12 +196,15 @@ class ControllerMode(
                 Gesture.DOUBLE -> out.forward(Forward.NEXT)
                 Gesture.TRIPLE -> out.forward(Forward.PREVIOUS)
                 Gesture.HOLD -> wake()
+                Gesture.CLICK_HOLD, Gesture.CLICK_HOLD_END -> {}   // mapped to HOLD above
                 Gesture.QUAD -> {}   // no meaning when idle; hold wakes (the system sends it, also on the lock screen)
             }
             return
         }
         when (g) {
             Gesture.HOLD -> { stopAll(); out.choice(screen.name, 9, "exit", ""); exit(true) }
+            Gesture.CLICK_HOLD -> startFast()
+            Gesture.CLICK_HOLD_END -> {}
             Gesture.QUAD -> { stopAll(); out.choice(screen.name, 4, "leave", ""); leaveSilent() }
             Gesture.TRIPLE -> { stopAll(); out.choice(screen.name, 3, "back", ""); back() }
             Gesture.DOUBLE -> when (phase) {
@@ -228,7 +236,7 @@ class ControllerMode(
 
     /** Stop speech and every scan timer. */
     private fun stopAll() {
-        timers.clear("scan"); timers.clear("tick"); timers.clear("dog")
+        timers.clear("scan"); timers.clear("tick"); timers.clear("dog"); timers.clear("fast")
         if (speechOpen) out.stopSpeech()
         speechOpen = false; awaitStart = -1
     }
@@ -360,6 +368,34 @@ class ControllerMode(
     /** One click while scanning: the next option right now (after the last one, the first). In the other phases (two clicks): the list again from the first. */
     /** True while the options are being read: there one click moves on and two clicks choose (the tones follow). */
     fun scanning() = active && phase == Phase.SCAN
+
+    // ---- fast scroll: click, then hold ----
+    private var fast = false
+
+    private fun startFast() {
+        stopAll(); fast = true
+        out.choice(screen.name, 8, "fast", "")
+        fastTick()
+    }
+
+    /** One fast step: a tick (the rising sound at the wrap), then only the first word of the option. */
+    private fun fastTick() {
+        if (!fast) return
+        val s = list.fastStep { it.label }
+        tn(if (s.wrapped) Tone.RESTART else Tone.TICK)
+        speechOpen = true
+        out.speak(s.text, false, list.current.lang, false)
+        timers.set("fast", ScanList.FAST_MS) { fastTick() }
+    }
+
+    /** Released: stop on the option reached, speak it in full, and the normal scan goes on from there. */
+    private fun endFast() {
+        if (!fast) return
+        fast = false
+        stopAll()
+        list.resetLoops(); history.clear()
+        timers.set("scan", SKIP_MS) { speakItem(list.index) }
+    }
 
     private fun again() {
         stopAll()
@@ -690,6 +726,7 @@ class ControllerMode(
     /** The platform finished speaking (or the watchdog fired). */
     fun onSpeechDone() {
         if (!speechOpen) return
+        if (fast) { speechOpen = false; return }   // a first word during fast scroll: nothing follows it
         speechOpen = false
         timers.clear("dog")
         val p = pending

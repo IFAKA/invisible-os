@@ -896,4 +896,73 @@ class ModeTest {
         r.advance(400 + 4 * 2100 + 5000)
         assertFalse(r.m.active); assertEquals(2, r.count("tone DING")); assertEquals(1, r.count("tone LEAVE"))
     }
+
+    // ---------- click then hold: fast scroll ----------
+    private fun scanReady(): Rig {
+        val r = Rig(); r.wake()
+        r.advance(3000)   // tone, then the first options are being read
+        assertTrue(r.m.scanning())
+        return r
+    }
+
+    @Test fun clickHoldScrollsFastWithFirstWordsAndTicks() {
+        val r = scanReady(); r.clearLog()
+        r.m.onGesture(Gesture.CLICK_HOLD)
+        r.advance(1000)
+        val said = r.spoken()
+        assertTrue("many steps in 1 s: $said", said.size >= 4)
+        assertTrue("only first words: $said", said.all { !it.removePrefix("say ").contains(' ') })
+        assertTrue(r.count("tone TICK") >= 3)
+    }
+
+    @Test fun clickHoldReleaseSpeaksTheOptionInFullAndScanContinues() {
+        val r = scanReady()
+        val labels = Regex("say (.*)").let { re -> r.spoken().map { re.matchEntire(it)!!.groupValues[1] } }
+        r.m.onGesture(Gesture.CLICK_HOLD); r.advance(300)   // 2 steps
+        r.clearLog()
+        r.m.onGesture(Gesture.CLICK_HOLD_END); r.advance(200)
+        val full = r.spoken()
+        assertEquals(1, full.size)
+        assertTrue(r.m.scanning())
+        r.clearLog(); r.advance(5000)
+        assertTrue("scan continues: ${r.spoken()}", r.spoken().isNotEmpty())
+        assertTrue(labels.isNotEmpty())
+    }
+
+    @Test fun clickHoldReleaseThenTwoClicksChoosesThatOption() {
+        val r = scanReady()
+        r.m.onGesture(Gesture.CLICK_HOLD); r.advance(300)
+        r.m.onGesture(Gesture.CLICK_HOLD_END); r.advance(200)
+        val heard = r.spoken().last()
+        r.advance(500); r.clearLog()
+        r.advance(350); r.m.onGesture(D, 0)   // 2 clicks while the scan goes on from there
+        assertTrue("the option was run: ${r.log}", r.log.isNotEmpty())
+        assertTrue(heard.startsWith("say "))
+    }
+
+    @Test fun clickHoldWrapsWithTheRestartTone() {
+        val r = scanReady(); r.clearLog()
+        r.m.onGesture(Gesture.CLICK_HOLD); r.advance(4000)
+        assertTrue(r.count("tone RESTART") >= 1)
+    }
+
+    @Test fun clickHoldWhenNotScanningIsAnExit() {
+        val r = Rig(); r.wake()   // intro phase: not reading options yet
+        r.m.onGesture(Gesture.CLICK_HOLD)
+        assertFalse(r.m.active)
+        r.m.onGesture(Gesture.CLICK_HOLD_END)
+        assertFalse(r.m.active)
+    }
+
+    @Test fun clickHoldWhenIdleWakes() {
+        val r = Rig()
+        r.m.onGesture(Gesture.CLICK_HOLD)
+        assertTrue(r.m.active)
+    }
+
+    @Test fun plainHoldStillExits() {
+        val r = scanReady()
+        r.m.onGesture(H)
+        assertFalse(r.m.active)
+    }
 }
