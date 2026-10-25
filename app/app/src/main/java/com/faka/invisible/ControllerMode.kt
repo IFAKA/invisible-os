@@ -443,6 +443,10 @@ class ControllerMode(
         phase = Phase.WAIT; waitNext = { beginScan() }
     }
 
+    /** Menu keys in the order the phone speaks them (the app's "Your menu" shows this). Items with nothing to say right now are still listed. */
+    fun hubOrder(): List<String> =
+        if (settings.learnOrder) ranker.rank("HUB", "", settings.hub.map { "hub:$it" }).map { it.removePrefix("hub:") } else settings.hub
+
     private fun lastTimer() = out.lastTimer().let { if (it > 0) it else 15 }
 
     private fun readUnread(key: String) {

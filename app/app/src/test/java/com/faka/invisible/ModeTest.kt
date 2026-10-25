@@ -433,6 +433,13 @@ class ModeTest {
         assertTrue(r.taskStore.all().isEmpty()); assertTrue(r.log.contains("say All done"))
     }
 
+    @Test fun hubOrderMatchesWhatIsSpoken() {
+        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("timer", "volume", "more"), learnOrder = false)
+        assertEquals(listOf("timer", "volume", "more"), r.m.hubOrder())
+        r.m.settings = r.m.settings.copy(learnOrder = true)
+        assertEquals(setOf("timer", "volume", "more"), r.m.hubOrder().toSet())
+    }
+
     @Test fun taskStoreSavesAndReloads() {
         var saved = listOf<String>()
         val a = TaskStore { saved = it }

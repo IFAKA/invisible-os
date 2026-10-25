@@ -130,7 +130,7 @@ class MainActivity : Activity() {
         }
 
         card("Your menu", "The phone says these one by one. Click when you hear the one you want. Turn off what you never use.") {
-            val shown = s.hub
+            val shown = Actions.mode.hubOrder()   // the order you hear
             val rest = LauncherSettings.HUB_ITEMS.keys.filter { it !in shown }
             (shown + rest).forEach { k ->
                 val on = k in shown
@@ -140,10 +140,10 @@ class MainActivity : Activity() {
                         change(s.copy(hub = LauncherSettings.cleanHub(if (v) s.hub + k else s.hub - k)))
                     } },
                     grow(text("  " + LauncherSettings.HUB_ITEMS[k] + if (locked) "  (has Exit, Torch)" else "", 16f, if (on) ink else soft)),
-                    if (on && shown.indexOf(k) > 0) btn("↑") { move(k, -1) }.apply { minWidth = dp(48) } else spacer(),
-                    if (on && shown.indexOf(k) < shown.size - 1) btn("↓") { move(k, 1) }.apply { minWidth = dp(48) } else spacer()))
+                    if (on && !s.learnOrder && shown.indexOf(k) > 0) btn("↑") { move(k, -1) }.apply { minWidth = dp(48) } else spacer(),
+                    if (on && !s.learnOrder && shown.indexOf(k) < shown.size - 1) btn("↓") { move(k, 1) }.apply { minWidth = dp(48) } else spacer()))
             }
-            addView(text("You hear: " + shown.joinToString(", ") { LauncherSettings.HUB_ITEMS[it]!! }, 14f, accent).apply { setPadding(0, dp(8), 0, 0) })
+            addView(text((if (s.learnOrder) "Order is automatic (most picked first). You hear: " else "You hear: ") + shown.joinToString(", ") { LauncherSettings.HUB_ITEMS[it]!! }, 14f, accent).apply { setPadding(0, dp(8), 0, 0) })
             addView(row(grow(text("Move the options you pick most to the front (automatic)", 15f)),
                 Switch(this@MainActivity).apply { isChecked = s.learnOrder; setOnCheckedChangeListener { _, v -> change(s.copy(learnOrder = v)) } }))
         }
