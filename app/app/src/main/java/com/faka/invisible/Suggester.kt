@@ -16,10 +16,6 @@ object Suggester {
     /** The situations the OS can see without asking. A pick remembers which were true. */
     val TAGS = listOf("unread", "playing", "navigating", "wired")
 
-    /** Old intent names (before the menu was regrouped into apps) -> the intent that replaced them. "info:*" kept its name. */
-    private val ALIASES = mapOf("games:duel" to "duel:play", "games:howto" to "duel:howto", "games:write" to "hub:write", "hub:status" to "phone:status", "hub:playing" to "hub:music")
-    fun alias(intent: String): String = ALIASES[intent] ?: intent
-
     class Pick(val ts: Long, val intent: String, val tags: Set<String> = emptySet())
 
     /** 1.0 when the situation is the same now as then; every situation tag that differs halves the weight. */

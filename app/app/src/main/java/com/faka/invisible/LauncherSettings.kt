@@ -20,15 +20,15 @@ data class LauncherSettings(
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "write" to "Write", "duel" to "Duel (play, how to play)")
+        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "games" to "Games")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** Every key a saved menu has ever used, in a fixed order. Only the old migration steps use it; [cleanHub] drops what is no longer an app. */
-        val LEGACY_ORDER = listOf("messages", "tasks", "playing", "music", "timer", "status", "info", "today", "phone", "games", "write", "duel")
+        val LEGACY_ORDER = listOf("messages", "tasks", "playing", "music", "timer", "status", "info", "today", "phone", "games")
 
-        /** Old apps -> new apps, once: playing->music, info->today, games->duel+write, status->dropped (it is a Phone option now). Unknown keys are dropped. */
+        /** Old apps -> new apps, once: playing->music, info->today, write/duel->games, status->dropped (it is a Phone option now). Unknown keys are dropped. */
         fun migrateApps(keys: List<String>): List<String> = cleanHub(keys.flatMap { k ->
-            when (k) { "playing" -> listOf("music"); "info" -> listOf("today"); "games" -> listOf("write", "duel"); "status" -> emptyList(); else -> listOf(k) }
+            when (k) { "playing" -> listOf("music"); "info" -> listOf("today"); "write", "duel" -> listOf("games"); "status" -> emptyList(); else -> listOf(k) }
         })
 
         val INFO_ITEMS = linkedMapOf("weather" to "Weather", "calendar" to "Next event", "turn" to "Next turn")

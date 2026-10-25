@@ -83,7 +83,7 @@ class ModeTest {
             override fun set(key: String, delayMs: Long, task: () -> Unit) { timers[key] = (now + delayMs) to task }
             override fun clear(key: String) { timers.remove(key) }
         }, { now }, ranker, pauseMs = gap)
-        init { m.settings = LauncherSettings(hub = listOf("messages", "music", "timer", "phone", "today", "duel")) }   // the older timing tests count menu items
+        init { m.settings = LauncherSettings(hub = listOf("messages", "music", "timer", "phone", "today", "games")) }   // the older timing tests count menu items
         fun withTasks() = apply { m.settings = LauncherSettings() }
         fun withInfo() = apply { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks") }
         fun g(vararg x: Gesture) = x.forEach { m.onGesture(it) }
@@ -243,7 +243,7 @@ class ModeTest {
         r.advance(1); assertEquals("tone TICK", r.log.last())                    // t=1500
         r.advance(199); assertFalse(r.log.contains("say Phone"))
         r.advance(1); assertEquals("say Phone", r.log.last())                   // t=1700 = 800 ms after "done"
-        r.advance(1300 * 3 + 50); assertEquals(listOf("say Timer", "say Phone", "say Today", "say Duel"), r.spoken())
+        r.advance(1300 * 3 + 50); assertEquals(listOf("say Timer", "say Phone", "say Today", "say Games"), r.spoken())
         r.advance(1300) // Games ends, pause, ding
         assertEquals(1, r.count("tone DING"))
     }
@@ -252,7 +252,7 @@ class ModeTest {
         val r = Rig(); r.wake()
         r.advance(400 + 4 * 1300 + 800 + 600)
         assertEquals(1, r.count("tone DING"))
-        assertEquals(listOf("say Timer", "say Phone", "say Today", "say Duel", "say Timer"), r.spoken())
+        assertEquals(listOf("say Timer", "say Phone", "say Today", "say Games", "say Timer"), r.spoken())
         assertTrue(r.m.active)
     }
 
@@ -315,8 +315,8 @@ class ModeTest {
         r.clearLog(); r.skip()
         assertTrue(r.m.active); assertEquals(ControllerMode.Screen.HUB, r.m.screen)
         r.advance(150)                              // no pause: far sooner than the 800 ms gap
-        assertEquals(listOf("say Duel"), r.spoken())
-        r.advance(600); r.click(); assertEquals(ControllerMode.Screen.DUEL, r.m.screen)
+        assertEquals(listOf("say Games"), r.spoken())
+        r.advance(600); r.click(); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
     }
 
     @Test fun skippingPastTheLastOptionStartsOver() {
@@ -466,7 +466,7 @@ class ModeTest {
     @Test fun rankerNeverReordersTheHub() {
         val rev = object : OptionRanker { override fun rank(screen: String, context: String, keys: List<String>) = keys.reversed() }
         val r = Rig(rev); r.wake(); r.advance(400 + 1300 * 4 + 100)
-        assertEquals(listOf("say Timer", "say Phone", "say Today", "say Duel"), r.spoken())   // the hub keeps the user's order
+        assertEquals(listOf("say Timer", "say Phone", "say Today", "say Games"), r.spoken())   // the hub keeps the user's order
     }
 
     @Test fun countRankerPutsMostPickedFirstAndTiesKeepDefaultOrder() {
@@ -574,10 +574,10 @@ class ModeTest {
     }
 
     @Test fun hubOrderMatchesWhatIsSpoken() {
-        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("timer", "today", "duel"), learnOrder = false)
-        assertEquals(listOf("timer", "today", "duel"), r.m.hubOrder())
+        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("timer", "today", "games"), learnOrder = false)
+        assertEquals(listOf("timer", "today", "games"), r.m.hubOrder())
         r.m.settings = r.m.settings.copy(learnOrder = true)
-        assertEquals(listOf("timer", "today", "duel"), r.m.hubOrder())   // learning never changes the user's menu order
+        assertEquals(listOf("timer", "today", "games"), r.m.hubOrder())   // learning never changes the user's menu order
     }
 
     @Test fun sharedNotesAreSplitIntoOpenTasks() {
@@ -699,7 +699,7 @@ class ModeTest {
 
     @Test fun noMoreInTheHubAndOrderIsFixed() {
         val a = Rig(); a.m.settings = LauncherSettings(); a.msgs = listOf(bob.copy(at = 1)); a.wake()
-        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "write", "duel"), LauncherSettings.DEFAULT_HUB)
+        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games"), LauncherSettings.DEFAULT_HUB)
         a.advance(400 + 1300 * 8); assertFalse(a.spoken().contains("say More")); assertFalse(a.spoken().contains("say Exit"))
     }
 
@@ -745,7 +745,7 @@ class ModeTest {
     }
 
     @Test fun firstLayerIsShortAndInOrder() {
-        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "write", "duel"), LauncherSettings.DEFAULT_HUB)
+        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games"), LauncherSettings.DEFAULT_HUB)
         assertEquals(listOf("timer"), LauncherSettings.cleanHub(listOf("weather", "timer", "volume")))
     }
 
@@ -764,26 +764,26 @@ class ModeTest {
         assertEquals(listOf("timer", "info"), LauncherSettings.groupHub(listOf("timer", "info"), listOf("exit")))   // already grouped: untouched
     }
 
-    @Test fun duelListsPlayHowToPlayAndBack() {
-        val r = Rig(); r.wake(); r.pick("Duel"); r.advance(400 + 1300 * 2 + 100)
-        assertEquals(listOf("say Play", "say How to play", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.DUEL, r.m.screen)
+    @Test fun gamesListsDuelWriteHowToPlayAndBack() {
+        val r = Rig(); r.wake(); r.pick("Games"); r.advance(400 + 1300 * 3 + 100)
+        assertEquals(listOf("say Duel", "say Write", "say How to play", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
     }
 
     @Test fun pickingDuelLeavesTheMenuForTheGame() {
-        val r = Rig(); r.wake(); r.pick("Duel"); r.pick("Play")
+        val r = Rig(); r.wake(); r.pick("Games"); r.pick("Duel")
         assertFalse(r.m.active)   // the game takes the button
     }
 
     @Test fun pickingHowToPlayLeavesTheMenuForTheCoach() {
-        val r = Rig(); r.wake(); r.pick("Duel"); r.pick("How to play")
+        val r = Rig(); r.wake(); r.pick("Games"); r.pick("How to play")
         assertFalse(r.m.active)
     }
 
-    @Test fun duelLogsItsIntentsAndWriteStartsAtOnce() {
-        val r = Rig(); r.wake(); r.pick("Duel"); r.pick("Play"); assertTrue(r.log.any { it.endsWith("duel:play") }); assertTrue(r.has("startGame false"))
-        val h = Rig(); h.wake(); h.pick("Duel"); h.pick("How to play"); assertTrue(h.log.any { it.endsWith("duel:howto") })
-        val w = Rig(); w.m.settings = LauncherSettings(hub = listOf("write", "timer")); w.wake(); w.pick("Write")
-        assertFalse(w.m.active); assertTrue(w.has("startWrite")); assertTrue(w.log.any { it.endsWith("hub:write") })
+    @Test fun gamesLogsItsIntentsAndWriteStarts() {
+        val r = Rig(); r.wake(); r.pick("Games"); r.pick("Duel"); assertTrue(r.log.any { it.endsWith("games:duel") }); assertTrue(r.has("startGame false"))
+        val h = Rig(); h.wake(); h.pick("Games"); h.pick("How to play"); assertTrue(h.log.any { it.endsWith("games:howto") }); assertTrue(h.has("startGame true"))
+        val w = Rig(); w.wake(); w.pick("Games"); w.pick("Write")
+        assertFalse(w.m.active); assertTrue(w.has("startWrite")); assertTrue(w.log.any { it.endsWith("games:write") })
     }
 
     @Test fun statusIsInsideThePhoneListAndLogged() {
@@ -791,18 +791,19 @@ class ModeTest {
         assertFalse(Rig().also { it.wake(); it.advance(400 + 1300 * 5) }.spoken().contains("say Status"))   // not in the home menu
     }
 
-    @Test fun suggestedDrawsFromTodayPhoneAndDuel() {
-        val r = Rig(); r.suggested = listOf("duel:play", "phone:status", "info:turn", "duel:back", "today:back")
+    @Test fun suggestedDrawsFromTodayPhoneAndGames() {
+        val r = Rig(); r.suggested = listOf("games:duel", "phone:status", "info:turn", "games:back", "today:back")
         r.wake(); r.advance(1300 * 4 + 50)
-        assertEquals(listOf("say Play", "say Status", "say Next turn", "say Timer"), r.spoken().take(4))
+        assertEquals(listOf("say Duel", "say Status", "say Next turn", "say Timer"), r.spoken().take(4))
     }
 
     @Test fun oldSavedMenuMapsToApps() {
-        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "write", "duel"),
+        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games"),
             LauncherSettings.migrateApps(listOf("messages", "tasks", "playing", "timer", "status", "info", "phone", "games")))
         assertEquals(listOf("music", "today", "bogus".let { "timer" }), LauncherSettings.migrateApps(listOf("playing", "bogus", "info", "more", "timer")))
         assertEquals(listOf("timer"), LauncherSettings.migrateApps(listOf("status", "timer", "timer")))
-        assertEquals(listOf("music", "timer"), LauncherSettings.migrateApps(listOf("music", "timer")))   // already new: untouched
+        assertEquals(listOf("music", "timer"), LauncherSettings.migrateApps(listOf("music", "timer")))
+        assertEquals(listOf("timer", "games"), LauncherSettings.migrateApps(listOf("timer", "write", "duel", "games")))   // write and duel hub items fold into games   // already new: untouched
     }
 
     @Test fun readUnreadIsInsideMessagesAndReadsTheUnread() {
