@@ -592,7 +592,7 @@ class ModeTest {
 
     @Test fun addTaskMenuOffersPastTasksAndAddsTheChosenOne() {
         val r = Rig().withTasks(); r.offers = listOf(Task(0, "Buy milk", "en"), Task(0, "Call mum", "es"))
-        r.wake(); r.pick("Tasks, none"); r.advance(1500); assertTrue(r.log.contains("say Add a task")); r.pick("Call mum")
+        r.wake(); r.pick("Tasks, none"); r.advance(1500); assertFalse(r.log.contains("say Add a task")); r.pick("Call mum")
         assertEquals(listOf("Call mum"), r.taskStore.all().map { it.text })
         r.advance(2000); assertTrue(r.log.contains("say Task added"))
     }
