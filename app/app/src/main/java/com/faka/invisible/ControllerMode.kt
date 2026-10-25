@@ -316,7 +316,7 @@ class ControllerMode(
 
     private fun speakItem(i: Int) {
         scanIdx = i; awaitStart = i
-        say(opts[i].label, opts[i].lang, out.pickCount(opts[i].key) >= SPEARCON_AFTER)
+        say(opts[i].label, opts[i].lang, settings.spearcons && out.pickCount(opts[i].key) >= SPEARCON_AFTER)
     }
 
     private fun recordStart() {
@@ -612,7 +612,7 @@ class ControllerMode(
     companion object {
         /** Pause between scanned items, from the end of one item's speech to the start of the next. Easy to change. */
         const val ITEM_GAP_MS = 1600L
-        const val SPEARCON_AFTER = 10   // picks of one option, then it is scanned as a sped-up spearcon
+        const val SPEARCON_AFTER = 30   // picks of one option, then it is scanned as a sped-up spearcon
         private const val MAX_SPOKEN = 160
     }
 }

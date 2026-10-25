@@ -126,6 +126,9 @@ class MainActivity : Activity() {
             addView(k.row(k.grow(k.text("Reply options: put the ones you pick most first (automatic)", 14f, Ui.soft)),
                 Switch(this@MainActivity).apply { isChecked = s.learnOrder; setOnCheckedChangeListener { _, v -> change(s.copy(learnOrder = v)) } }),
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
+            addView(k.row(k.grow(k.text("Speak well-known options as a fast sound (spearcon)", 14f, Ui.soft)),
+                Switch(this@MainActivity).apply { isChecked = s.spearcons; setOnCheckedChangeListener { _, v -> change(s.copy(spearcons = v)) } }),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
         }
 
         card("Inside \"More\"", "What you hear after you click More. Same drag and switch.") {

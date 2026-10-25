@@ -15,6 +15,7 @@ data class LauncherSettings(
     val undoMs: Long = 3000,
     val speechRate: Float = 0.9f,
     val learnOrder: Boolean = true,
+    val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
         val HUB_ITEMS = linkedMapOf("playing" to "Playing", "messages" to "Messages", "tasks" to "Tasks", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "more" to "More")
@@ -48,6 +49,7 @@ object SettingsStore {
             undoMs = p.getLong("s_undo", d.undoMs).coerceIn(1500, 8000),
             speechRate = p.getFloat("s_rate", d.speechRate).coerceIn(0.6f, 1.8f),
             learnOrder = p.getBoolean("s_learn", d.learnOrder),
+            spearcons = p.getBoolean("s_spearcons", d.spearcons),
         )
     }
 
@@ -82,6 +84,6 @@ object SettingsStore {
     fun save(p: SharedPreferences, s: LauncherSettings) {
         p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_more", s.more.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
             .putLong("s_gap", s.itemGapMs).putInt("s_loops", s.silentLoops).putLong("s_undo", s.undoMs)
-            .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).apply()
+            .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).apply()
     }
 }
