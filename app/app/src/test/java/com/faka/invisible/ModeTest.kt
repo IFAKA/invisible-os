@@ -18,7 +18,7 @@ class ModeTest {
         var song: String? = null
         val taskStore = TaskStore()
         var offers = listOf<Task>()
-        var aiList = listOf<Task>(); val prepared = ArrayList<String>()
+        var aiTaskList = listOf<Task>(); var aiList = listOf<Task>(); val prepared = ArrayList<String>()
         var replyOffersList = listOf<Task>(); val remembered = ArrayList<String>()
         var favs = listOf<String>()
         var now = 1_000_000L
@@ -63,6 +63,7 @@ class ModeTest {
             override fun completeTask(id: Long) = taskStore.done(id)
             override fun taskOffers() = offers
             override fun prepareAiReplies(m: Msg) { prepared.add(m.key) }
+            override fun aiTasks(m: Msg) = aiTaskList
             override fun aiReplies(m: Msg) = aiList
             override fun replyOffers() = replyOffersList
             override fun rememberReply(text: String, lang: String) { remembered.add(text) }
@@ -596,6 +597,13 @@ class ModeTest {
         r.wake(); r.advance(500); assertTrue(r.prepared.isNotEmpty())
         r.click(); r.pick("More"); r.pick("Compose"); r.advance(5000)
         assertTrue(r.log.contains("say[es] Sí, me encantaría ir."))
+    }
+
+    @Test fun taskOnAMessageOffersTheModelsCleanTasks() {
+        val r = Rig(); r.msgs = listOf(ana); r.aiTaskList = listOf(Task(0, "Enviar el informe el viernes", "es"))
+        r.wake(); r.advance(500); r.click(); r.pick("More"); r.pick("Task"); r.advance(1500)
+        assertTrue(r.log.contains("say[es] Enviar el informe el viernes"))
+        r.pick("Enviar el informe el viernes"); assertEquals(listOf("Enviar el informe el viernes"), r.taskStore.all().map { it.text })
     }
 
     @Test fun aSentReplyIsRemembered() {

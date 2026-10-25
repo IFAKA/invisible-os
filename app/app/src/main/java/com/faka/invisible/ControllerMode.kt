@@ -41,6 +41,7 @@ interface ModeOutput {
     fun replyOffers(): List<Task> = emptyList()   // the user's own past replies, most used first
     fun rememberReply(text: String, lang: String) {}
     fun prepareAiReplies(m: Msg) {}              // start writing reply sentences with the local model (background, cached)
+    fun aiTasks(m: Msg): List<Task> = emptyList()     // clean to-do items the message asks for (cached, empty if none or not ready)
     fun aiReplies(m: Msg): List<Task> = emptyList()   // the cached sentences, empty if not ready
     fun nowPlaying(): String? = null   // "Title, Artist" of the music app, null if none
     fun dndAllowed(): Boolean
@@ -127,7 +128,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, MORE_HUB, TASK, TASK_ADD, GAMES, SENT }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, MORE_HUB, TASK, TASK_ADD, MSG_TASK, GAMES, SENT }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: String, val lang: String?, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: String, val lang: String?, val run: () -> Unit)
@@ -261,7 +262,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.MORE_HUB, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.MORE_HUB, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -447,9 +448,11 @@ class ControllerMode(
                 Opt("compose", if (es) "Redactar" else "Compose", l) { pick("compose", m.sender); show(Screen.COMPOSE) },
                 Opt("task", "Task", null) {   // no typing needed: the task is made from the message
                     pick("task", m.sender)
-                    out.addTask("Reply to ${m.sender}: ${MessageLogic.spoken(m.text, m.lang).replace(Regex("\\s+"), " ").trim().take(60)}", vl(m) ?: "")
-                    say(Voice.TASK_ADDED); phase = Phase.WAIT; waitNext = { show(Screen.MESSAGE) }
+                    if (out.aiTasks(m).isNotEmpty()) show(Screen.MSG_TASK) else addReplyTask(m)
                 })
+            Screen.MSG_TASK -> if (m == null) emptyList() else phraseOptions(out.aiTasks(m), "taskmsg") { t ->
+                out.addTask(t.text, t.lang); say(Voice.TASK_ADDED); phase = Phase.WAIT; waitNext = { show(Screen.MESSAGE) }
+            } + Opt("taskreply", "Reply to ${m.sender}", null) { pick("taskreply"); addReplyTask(m) }
             Screen.COMPOSE -> if (m == null) emptyList() else composeOptions(m, l)
             Screen.SENT -> emptyList()
         }
@@ -474,6 +477,11 @@ class ControllerMode(
     }
 
     /** One step: the answer. The time word of the message (today, tonight, tomorrow) is pre-filled in the sent text. */
+    private fun addReplyTask(m: Msg) {
+        out.addTask("Reply to ${m.sender}: ${MessageLogic.spoken(m.text, m.lang).replace(Regex("\\s+"), " ").trim().take(60)}", vl(m) ?: "")
+        say(Voice.TASK_ADDED); phase = Phase.WAIT; waitNext = { show(Screen.MESSAGE) }
+    }
+
     private fun composeOptions(m: Msg, l: String?): List<Opt> =
         phraseOptions(out.replyOffers().take(3), "send:mine") { t -> sendPending(m, t.text, "send:mine") } +
         phraseOptions(out.aiReplies(m), "send:ai") { t -> sendPending(m, t.text, "send:ai") } +   // your own words first, then the model's sentences, then the fixed answers
@@ -541,7 +549,7 @@ class ControllerMode(
     private fun back() {
         when (screen) {
             Screen.MORE_MSG -> show(Screen.MESSAGE)
-            Screen.COMPOSE -> show(Screen.MORE_MSG)
+            Screen.COMPOSE, Screen.MSG_TASK -> show(Screen.MORE_MSG)
             Screen.TIMER_PICK, Screen.VOLUME, Screen.MORE_HUB, Screen.TASK, Screen.TASK_ADD, Screen.GAMES -> show(Screen.HUB)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()

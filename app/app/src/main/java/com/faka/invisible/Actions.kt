@@ -43,6 +43,7 @@ object Actions {
     private var taskMemory = PhraseMemory()
     private var replyMemory = PhraseMemory()
     private val aiCache = java.util.concurrent.ConcurrentHashMap<String, List<String>>()   // reply sentences from the local model, per message
+    private val aiTaskCache = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
     private val aiBusy = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     fun tasks(): List<Task> = taskStore.all()
     /** Splits the note, detects each task's language (off the main thread), saves, then calls [done] on the main thread with the count. */
@@ -81,10 +82,12 @@ object Actions {
                 val k = "${m.key}|${m.at}"
                 if (!LocalAi.available(app) || aiCache.containsKey(k) || !aiBusy.add(k)) return
                 Thread {
-                    try { aiCache[k] = LocalAi.replies(app, "${m.sender}: ${m.text.take(300)}", if (m.lang.startsWith("en")) "en" else "es") }
-                    catch (e: Throwable) { Log.e(TAG, "ai replies failed", e); aiCache[k] = emptyList() } finally { aiBusy.remove(k) }
+                    val msg = "${m.sender}: ${m.text.take(300)}"; val l = if (m.lang.startsWith("en")) "en" else "es"
+                    try { aiCache[k] = LocalAi.replies(app, msg, l); aiTaskCache[k] = LocalAi.tasks(app, msg, l) }
+                    catch (e: Throwable) { Log.e(TAG, "ai failed", e); aiCache.putIfAbsent(k, emptyList()); aiTaskCache.putIfAbsent(k, emptyList()) } finally { aiBusy.remove(k) }
                 }.start()
             }
+            override fun aiTasks(m: Msg) = aiTaskCache["${m.key}|${m.at}"].orEmpty().map { Task(0, it, if (m.lang.startsWith("en")) "en" else "es") }
             override fun aiReplies(m: Msg) = aiCache["${m.key}|${m.at}"].orEmpty().map { Task(0, it, if (m.lang.startsWith("en")) "en" else "es") }
             override fun replyOffers() = replyMemory.offers(3, emptySet())
             override fun rememberReply(text: String, lang: String) = replyMemory.record(text, lang)
