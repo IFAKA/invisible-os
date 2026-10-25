@@ -15,6 +15,8 @@ interface TypeOut {
     fun say(text: String)
     fun cue(c: TypeCue)
     fun finished(text: String)   // the written text; "" = nothing written
+    /** Ask the big model (slow, in the background) for ways to finish [text]; call [then] with them when ready. Default: none. */
+    fun phrases(text: String, then: (List<String>) -> Unit) {}
 }
 
 enum class TypeCue { PICK_LEFT, PICK_RIGHT, NEXT, LETTERS, WORDS, DELETE, DONE, ARMED, MENU }
@@ -55,6 +57,9 @@ class TypeProgram(
     private var menu = false
     private var menuIdx = 0
     private var menuSteps = 0
+    private var phrases: List<String> = emptyList()   // ways to finish the text, from the big model, when ready
+    private var phraseMode = false
+    private var phraseGen = 0
     var active = false; private set
 
     fun start() {
@@ -79,7 +84,8 @@ class TypeProgram(
 
     private fun show(again: Boolean = false) {
         if (!again) replays = 0
-        items = candidates()
+        items = if (phraseMode) phrases else candidates()
+        if (phraseMode && items.isEmpty()) phraseMode = false
         if (items.isEmpty()) { if (letters) { letters = false; page = 0; items = candidates() } else { prefix = ""; items = candidates() } }
         val n = (items.size + 1) / 2
         if (n > 0) page %= n else page = 0
@@ -120,7 +126,11 @@ class TypeProgram(
     }
 
     // ---- the small menu: Done, Delete, Letters/Words, read one at a time ----
-    private fun menuLabels() = listOf(TypeVoice.MENU_DONE, TypeVoice.MENU_DELETE, if (letters) TypeVoice.WORDS else TypeVoice.LETTERS)
+    private fun menuLabels() = listOf(TypeVoice.MENU_DONE, TypeVoice.MENU_DELETE) + (if (phrases.isNotEmpty() && !phraseMode) listOf(TypeVoice.PHRASES) else emptyList()) +
+        (if (letters || phraseMode) TypeVoice.WORDS else TypeVoice.LETTERS)
+
+    /** The big model gets the text so far; a late answer for an older text is ignored. */
+    private fun askPhrases() { phrases = emptyList(); val g = ++phraseGen; if (written.isNotEmpty()) out.phrases(text()) { r -> if (active && g == phraseGen) phrases = r } }
 
     private fun openMenu() { menu = true; menuIdx = 0; menuSteps = 0; timers.clear("t:replay"); out.cue(TypeCue.MENU); speakMenu() }
 
@@ -136,12 +146,13 @@ class TypeProgram(
     private fun closeMenu() { menu = false; timers.clear("t:menu"); out.cue(TypeCue.NEXT); show() }
 
     private fun pickMenu() {
-        val i = menuIdx
+        val label = menuLabels()[menuIdx]
         menu = false; timers.clear("t:menu")
-        when (i) {
-            0 -> leave(true)
-            1 -> { out.cue(TypeCue.DELETE); if (prefix.isNotEmpty()) prefix = "" else if (written.isNotEmpty()) written.removeAt(written.size - 1); letters = false; page = 0; show() }
-            else -> { letters = !letters; page = 0; out.cue(if (letters) TypeCue.LETTERS else TypeCue.WORDS); show() }
+        when (label) {
+            TypeVoice.MENU_DONE -> leave(true)
+            TypeVoice.MENU_DELETE -> { out.cue(TypeCue.DELETE); if (prefix.isNotEmpty()) prefix = "" else if (written.isNotEmpty()) { written.removeAt(written.size - 1); askPhrases() }; letters = false; phraseMode = false; page = 0; show() }
+            TypeVoice.PHRASES -> { phraseMode = true; letters = false; page = 0; out.cue(TypeCue.WORDS); show() }
+            else -> { phraseMode = false; letters = !letters; page = 0; out.cue(if (letters) TypeCue.LETTERS else TypeCue.WORDS); show() }
         }
     }
 
@@ -149,7 +160,8 @@ class TypeProgram(
         val item = items.getOrNull(page * 2 + if (left) 0 else 1)
         if (item == null) { out.cue(TypeCue.NEXT); show(true); return }
         out.cue(if (left) TypeCue.PICK_LEFT else TypeCue.PICK_RIGHT)
-        if (letters) { prefix += item; letters = false; out.say(TypeVoice.WORDS_WITH + " " + prefix.toCharArray().joinToString(" ")) } else { written.add(item); prefix = "" }
+        if (phraseMode) { written.addAll(item.split(' ').filter { it.isNotEmpty() }); phraseMode = false; prefix = ""; askPhrases() }
+        else if (letters) { prefix += item; letters = false; out.say(TypeVoice.WORDS_WITH + " " + prefix.toCharArray().joinToString(" ")) } else { written.add(item); prefix = ""; askPhrases() }
         page = 0
         show()
     }

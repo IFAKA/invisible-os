@@ -54,4 +54,13 @@ object LocalAi {
             "Example for \"${if (es) "Luis: ¿Puedes enviarme el informe el viernes?" else "Kim: Can you send me the report by Friday?"}\":\n" +
             (if (es) "1. Enviar el informe a Luis el viernes" else "1. Send Kim the report by Friday") + "\nNow write the to-do items.", "tasks")
     }
+
+    /** Up to 3 ways to finish a message that starts with [text], in [lang]: only the new words, short. */
+    fun continuations(ctx: Context, text: String, lang: String): List<String> {
+        val es = lang == "es"
+        return ask(ctx, "Someone is writing a message. So far they wrote:\n\"$text\"\nWrite 3 different short endings for it, in ${langName(lang)}. " +
+            "Write only the new words that come next (max 6 words), not the words already written. One per line, numbered 1. 2. 3.\n" +
+            "Example for \"${if (es) "Voy a" else "I will"}\":\n" +
+            (if (es) "1. llegar tarde hoy\n2. salir en cinco minutos\n3. llamarte luego" else "1. be late today\n2. leave in five minutes\n3. call you later") + "\nNow write the 3 endings.", "endings")
+    }
 }

@@ -187,6 +187,8 @@ object Actions {
     // ---- Write: the stereo-pair keyboard (Typing.kt). The OS gives it the raw button and plays the close sound when it ends. ----
     private var typer: TypeProgram? = null
     private var nextWord: Ranker? = null
+    @Volatile private var phraseReq = 0
+    private val phraseWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
     private var clips: WordClips? = null
     private var pairTrack: AudioTrack? = null
     private var pairSeq = 0
@@ -237,6 +239,15 @@ object Actions {
                     override fun prefetch(words: List<String>) { words.forEach { clips?.ensure(it) {} } }
                     override fun say(text: String) { this@Actions.say(text, true) }
                     override fun cue(c: TypeCue) { play(TypeSounds.pcm(c)) }
+                    override fun phrases(text: String, then: (List<String>) -> Unit) {
+                        if (!mode.settings.ai || !LocalAi.available(app)) return
+                        val my = ++phraseReq; val es = lm is NgramWords
+                        phraseWorker.execute {   // one at a time; a request for an older text is dropped before it starts
+                            if (my != phraseReq) return@execute
+                            val r = try { LocalAi.continuations(app, text, if (es) "es" else "en") } catch (e: Throwable) { Log.e(TAG, "endings failed", e); emptyList() }
+                            if (r.isNotEmpty()) handler.post { then(r) }
+                        }
+                    }
                     override fun finished(text: String) {
                         Log.d(TAG, "WRITE result: $text"); EventLog.add("write: $text")
                         handler.postDelayed({ if (text.isEmpty()) this@Actions.say(TypeVoice.EMPTY, false) else this@Actions.say(text, false, if (lm is NgramWords) "es" else null) }, 700)

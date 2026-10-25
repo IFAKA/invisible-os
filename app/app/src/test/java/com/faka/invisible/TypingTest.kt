@@ -38,9 +38,12 @@ class TypingTest {
         override fun say(text: String) { said.add(text) }
         override fun cue(c: TypeCue) { cues.add(c) }
         override fun finished(text: String) { result = text }
+        override fun phrases(text: String, then: (List<String>) -> Unit) { asked.add(text); if (endings.isNotEmpty()) then(endings) }
     }, t, onEnded = {})
 
     private val said = ArrayList<String>()
+    private val asked = ArrayList<String>()
+    private var endings: List<String> = emptyList()
     private fun click() { p.down(t.now); t.advance(80); p.up(t.now); t.advance(120) }
     private fun clicks(n: Int) { repeat(n) { click() }; t.advance(400) }
     private fun hold(ms: Long) { p.down(t.now); t.advance(ms); p.up(t.now); t.advance(20) }
@@ -122,5 +125,25 @@ class TypingTest {
         p.start(); val n = pairs.size
         t.advance(TypeProgram.REPLAY_MS + 10)
         assertEquals(n + 1, pairs.size)
+    }
+
+    @Test fun bigModelEndingsAppearInTheMenuAndAClickAddsTheWholeEnding() {
+        endings = listOf("call you later", "be late")
+        p.start(); clicks(1)                          // "hello": the big model is asked about it
+        assertEquals(listOf("Hello"), asked)
+        said.clear(); clicks(3)
+        t.advance(TypeProgram.MENU_GAP_MS * 2)
+        assertEquals(listOf("Done", "Delete", "Phrases"), said)
+        clicks(1)                                     // Phrases
+        assertEquals("call you later" to "be late", pairs.last())
+        clicks(1)
+        assertEquals("Hello call you later", p.text())
+        assertEquals("Hello call you later", asked.last())
+    }
+
+    @Test fun noEndingsMeansNoPhrasesItem() {
+        p.start(); clicks(1); said.clear(); clicks(3)
+        t.advance(TypeProgram.MENU_GAP_MS * 2)
+        assertEquals(listOf("Done", "Delete", "Letters"), said)
     }
 }

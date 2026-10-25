@@ -186,6 +186,7 @@ object TypeVoice {
     const val START3 = "Three clicks for more."
     const val MENU_DONE = "Done"
     const val MENU_DELETE = "Delete"
+    const val PHRASES = "Phrases"
     const val NO_MODEL = "Write could not start"
     const val EMPTY = "Nothing written"
     const val DELETED = "Deleted"
