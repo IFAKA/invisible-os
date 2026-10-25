@@ -6,6 +6,11 @@ package com.faka.invisible
  * Change a sentence here and it changes everywhere.
  */
 object Voice {
+    // Button rules, same on every screen (the one `when` in ControllerMode.onGesture):
+    // idle:    1 = play/pause, 2 = next, 3 = previous, hold = wake
+    // in menu: 1 = pick the option just spoken, 2 = list again, 3 = back, 4 = leave, hold = exit; any click cancels a pending send
+    const val HINT = "Click when you hear it. Two clicks: start over. Three clicks: go back."
+    const val GESTURE_HELP = "In the menu: click when you hear the option. 2 = start over, 3 = back, 4 = leave. Hold = exit."
     fun timerSet(minutes: Int) = "Timer $minutes minutes"
     const val TIMER_DONE = "Timer done"
     const val ALARM_STOPPED = "Alarm stopped"

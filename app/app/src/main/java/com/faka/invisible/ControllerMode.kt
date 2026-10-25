@@ -259,7 +259,7 @@ class ControllerMode(
         screen = s; phase = Phase.INTRO
         out.tone(tone(s))
         intro.clear()
-        if (hintPending) { hintPending = false; intro += Intro(HINT, null, null, hint = true) }
+        if (hintPending) { hintPending = false; intro += Intro(Voice.HINT, null, null, hint = true) }
         val m = cur
         if (s == Screen.MESSAGE && m != null && hid(m) !in heard) intro += Intro("${m.sender}: ${shortText(m)}", vl(m), hid(m))
         if (s == Screen.TASK) taskList.getOrNull(taskIdx)?.let { t ->
@@ -602,6 +602,5 @@ class ControllerMode(
         const val ITEM_GAP_MS = 1600L
         const val SPEARCON_AFTER = 10   // picks of one option, then it is scanned as a sped-up spearcon
         private const val MAX_SPOKEN = 160
-        private const val HINT = "Click when you hear it. Two clicks: start over. Three clicks: go back."
     }
 }
