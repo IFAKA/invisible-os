@@ -67,10 +67,19 @@ The player sets the pace: every step ends with the player doing something, and n
 answers or skips ahead; hold 3 s leaves. Sentences are at most 7 words, one idea each, spoken at rate 0.75. All pacing is in
 `TellVoice` (Voice.kt): pause after a sentence = 600 ms + 250 ms per word; at least 1.5 s of quiet after a new sound; 800 ms
 for the thumb before an action; a hint after 10 s of no press, the leave line as the third hint, a demo after that.
-Steps: tap (jab); hold to the first click (guard); hold to the second click (charge); three mini-rounds where the robot's move is
-named and the player answers (guard beats jab, jab beats charge, charge beats guard); energy (six rising notes); life and
-the robot on the left; then the first match, 5 s rounds, narrated in at most 5 words ("They jab. You guard. Parry."), life only
-when it changes, "Charge ready." once, "Low energy." at energy 1 or less. `tell_taught` is set when that match ends.
+Teaching is by levels. Each level is a real match, taught in a few lines first. `tell_level` (1..3) is stored in prefs; the
+Duel item starts at it; "How to play" resets it to 1. Level 4 = the full game (`tell_taught` set, no coaching, no narration).
+Each level opens with one line ("Level two. Charge.").
+- Level 1 "Jab and guard": jab and guard only (a hold past the first click is still a guard); no energy, no energy notes;
+  life 3 each. Drills "Tap to jab.", "Hold to the click to guard.", then "Guard beats jab." Narration: "Parry." / "Ouch.",
+  "Last life." at one life. Bed is kick and snare only.
+- Level 2 "Charge": adds the second-click drill and "Charge beats guard. Jab beats charge." Charge is free but never twice in a
+  row (the second attempt becomes a guard and the voice says "Not again."). Narration of 1 to 3 words.
+- Level 3 "Energy": the full game with the energy teaching (six rising notes, "Charge costs three"); trimmed narration. After
+  its first match the level becomes 4 and `tell_taught` is set.
+- Advance: a win, or 2 matches played in the level, goes up; a loss never goes back; level 3 always advances after one match.
+- Levels 1-2 keep energy at 5 inside the game, so `TellRules.resolve` is the same for every level. The robot only plays legal
+  moves in levels 1-2. Hold 3 s leaves at any time.
 
 ### Status (beat 1 of every round, 150 ms, two soft notes, quiet: peak -22 dBFS)
 - Energy is a pitch: 0 C3, 1 Eb3, 2 F3, 3 G3, 4 Bb3, 5 C4. Yours in the centre (bell/mallet), theirs on the left (muted pluck).

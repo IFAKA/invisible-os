@@ -33,7 +33,7 @@ class FakeOut(val world: FakeWorld, var rung: Int = 1) : TellOut {
     val events = ArrayList<Pair<Long, String>>()
     var saved = -1
     var left = false
-    var taughtFlag = true
+    var level = 4
     private fun e(s: String) { events.add(world.now to s) }
     override fun play(cue: Cue, side: Side) = e("play $cue $side")
     override fun status(myEnergy: Int, oppEnergy: Int) = e("status $myEnergy $oppEnergy")
@@ -49,8 +49,8 @@ class FakeOut(val world: FakeWorld, var rung: Int = 1) : TellOut {
     override fun log(line: String) = e("log $line")
     override fun savedRung() = rung
     override fun saveRung(rung: Int) { saved = rung; this.rung = rung; e("saveRung $rung") }
-    override fun taught() = taughtFlag
-    override fun saveTaught() { taughtFlag = true; e("saveTaught") }
+    override fun level() = level
+    override fun saveLevel(level: Int) { this.level = level; e("saveLevel $level") }
     override fun leave() { left = true; e("leave") }
     fun count(prefix: String) = events.count { it.second.startsWith(prefix) }
     fun times(prefix: String) = events.filter { it.second.startsWith(prefix) }.map { it.first }

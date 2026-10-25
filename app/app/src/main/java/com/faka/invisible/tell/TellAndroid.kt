@@ -72,8 +72,8 @@ class TellAndroid(
         override fun log(line: String) = host.log(line)
         override fun savedRung() = prefs.getInt("tellRung", 1)
         override fun saveRung(rung: Int) { prefs.edit().putInt("tellRung", rung).apply() }
-        override fun taught() = prefs.getBoolean("tell_taught", false)
-        override fun saveTaught() { prefs.edit().putBoolean("tell_taught", true).apply() }
+        override fun level() = prefs.getInt("tell_level", if (prefs.getBoolean("tell_taught", false)) 4 else 1)
+        override fun saveLevel(level: Int) { prefs.edit().putInt("tell_level", level).putBoolean("tell_taught", level >= 4).apply() }
         override fun leave() { val g = gen; handler.postDelayed({ if (g == gen) shutdown() }, 900) }   // lets the tape stop and the tails finish
     }
 

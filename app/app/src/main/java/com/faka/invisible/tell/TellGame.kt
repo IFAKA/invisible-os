@@ -20,9 +20,9 @@ interface TellOut {
     fun log(line: String)
     fun savedRung(): Int
     fun saveRung(rung: Int)
-    /** The coach has been through one full match (persisted). Default: taught, so no coaching. */
-    fun taught(): Boolean = true
-    fun saveTaught() {}
+    /** The level the player has reached (1..3 are coached, 4 = the full game, persisted). Default: full game. */
+    fun level(): Int = 4
+    fun saveLevel(level: Int) {}
     /** Speak at the slow coach pace (the practice and the narrated match). */
     fun coachSpeak(text: String) = speak(text)
     /** The game is over for good (leave or forfeit): the host shuts the audio down after the tape stop. */
@@ -53,6 +53,7 @@ class TellGame(
     companion object {
         const val ROUND_MS = 2000L
         const val COACH_ROUND_MS = 5000L
+        const val COACH_SHORT_ROUND_MS = 3000L
         const val DRILL_TRIES = 3
         const val WINDOW_MS = 1500L
         const val LATE_MS = 150L
@@ -75,7 +76,6 @@ class TellGame(
     private var phase = Phase.IDLE
     private var rung = 1
     private var opp: Opponent? = null
-    private var coachNext = false      // the next match is the coached one
     private var narrate = false        // this match speaks each result
     private var roundMs = ROUND_MS
     private var tries = 0
@@ -107,6 +107,8 @@ class TellGame(
 
     /** Level of a hold: 0 = JAB, 1 = GUARD, 2 = CHARGE. */
     fun levelOf(holdMs: Long) = if (holdMs >= CHARGE_MS) 2 else if (holdMs >= GUARD_MS) 1 else 0
+    /** The move of a hold. Before level 2 a hold past the first click is still a guard. */
+    private fun holdMove(holdMs: Long): Move { val l = levelOf(holdMs); return if (l == 2 && !chargeOk) Move.GUARD else moveOf(l) }
     private fun moveOf(level: Int) = when (level) { 0 -> Move.JAB; 1 -> Move.GUARD; else -> Move.CHARGE }
 
     // ---- start ----
@@ -114,23 +116,29 @@ class TellGame(
         if (phase != Phase.IDLE) return
         out.pauseMusic()
         rung = out.savedRung().coerceIn(1, 5)
-        if (forceCoach || !out.taught()) startPractice() else newMatch()
+        level = if (forceCoach) 1 else out.level().coerceIn(1, 4)
+        if (forceCoach) out.saveLevel(1)
+        matchesInLevel = 0
+        if (level <= 3) startPractice() else newMatch()
     }
 
     // ---- coach practice: one idea per step, the player sets the pace, no round clock, no bed ----
-    private enum class Kind { DRILL, ROUND, TAP }
-    private class Step(val kind: Kind, val lines: List<String>, val want: Int = -1, val robot: Move = Move.GUARD, val rule: String = "")
-    private val steps = listOf(
-        Step(Kind.DRILL, TellVoice.S_TAP, 0),
-        Step(Kind.DRILL, TellVoice.S_GUARD, 1),
-        Step(Kind.DRILL, TellVoice.S_CHARGE, 2),
-        Step(Kind.ROUND, TellVoice.S_ROUND_A, 1, Move.JAB, TellVoice.RULE_A),
-        Step(Kind.ROUND, TellVoice.S_ROUND_B, 0, Move.CHARGE, TellVoice.RULE_B),
-        Step(Kind.ROUND, TellVoice.S_ROUND_C, 2, Move.GUARD, TellVoice.RULE_C),
-        Step(Kind.TAP, TellVoice.S_ENERGY),
-        Step(Kind.TAP, TellVoice.S_LIFE),
-        Step(Kind.TAP, TellVoice.S_FIGHT),
-    )
+    private enum class Kind { DRILL, TAP, SAY }
+    private class Step(val kind: Kind, val lines: List<String>, val want: Int = -1)
+    private fun stepsFor(level: Int) = when (level) {
+        1 -> listOf(Step(Kind.DRILL, TellVoice.L1_TAP, 0), Step(Kind.DRILL, TellVoice.L1_GUARD, 1), Step(Kind.SAY, TellVoice.L1_RULE))
+        2 -> listOf(Step(Kind.DRILL, TellVoice.L2_CHARGE, 2), Step(Kind.SAY, TellVoice.L2_RULE))
+        else -> listOf(Step(Kind.TAP, TellVoice.L3_ENERGY))
+    }
+    private var steps: List<Step> = emptyList()
+    private var level = 4              // 1 jab+guard, 2 +charge, 3 +energy, 4 the full game
+    private var matchesInLevel = 0
+    private var advanced = false       // the level just went up: teach it before the next match
+    private var lastMine: Move? = null
+    private var lastTheirs: Move? = null
+    private var notAgain = false
+    private val noEnergy get() = level <= 2
+    private val chargeOk get() = level >= 2
     private var stepNo = 0
     private var hints = 0
     private var fromPress = false      // the step was started by a press: skip its talk, judge the press
@@ -143,6 +151,7 @@ class TellGame(
         phase = Phase.PRACTICE
         pressAt = -1L; pressLive = false; listening = false
         tries = 0; hints = 0; pendingNext = null; doneAction = null
+        steps = stepsFor(level)
         runStep(0)
     }
 
@@ -202,11 +211,14 @@ class TellGame(
 
     private fun runStep(n: Int) {
         if (phase != Phase.PRACTICE) return
-        if (n >= steps.size) { coachNext = true; newMatch(); return }
+        if (n >= steps.size) { newMatch(); return }
+        if (fromPress && steps[n].kind == Kind.SAY) { runStep(n + 1); return }
         stepNo = n; tries = 0; hints = 0; listening = false
         clear("hint")
         if (fromPress) { enterWait(); return }
-        playLines(steps[n].lines, steps[n].kind != Kind.TAP) { enterWait() }
+        val st = steps[n]
+        if (st.kind == Kind.SAY) { playLines(st.lines, false) { goNext() }; return }
+        playLines(st.lines, st.kind == Kind.DRILL) { enterWait() }
     }
 
     private fun enterWait() {
@@ -230,7 +242,6 @@ class TellGame(
     /** Show the right answer, then go on (drills and mini-rounds only). */
     private fun demo() {
         val st = steps[stepNo]
-        if (st.kind == Kind.ROUND) { success(st); return }
         listening = false
         clear("hint")
         val w = st.want
@@ -251,9 +262,9 @@ class TellGame(
         val st = steps[stepNo]
         clear("hint")
         if (st.kind == Kind.TAP) { listening = false; runStep(stepNo + 1); return }
-        val level = levelOf(holdMs)
-        if (level == st.want) { success(st); return }
-        val feedback = TellVoice.wrong(level, st.want)
+        val lv = if (levelOf(holdMs) == 2 && !chargeOk) 1 else levelOf(holdMs)   // before level 2 a long hold is a guard
+        if (lv == st.want) { success(st); return }
+        val feedback = TellVoice.wrong(lv, st.want)
         if (++tries >= DRILL_TRIES) {
             listening = false
             playLines(feedback + TellVoice.SKIP, false) { goNext() }
@@ -267,34 +278,26 @@ class TellGame(
         listening = false
         clear("hint")
         pendingNext = { goNext() }
-        if (st.kind == Kind.DRILL) {
-            out.play(cueOfLevel(st.want))
-            val word = TellVoice.DONE[st.want]
-            speakThen(word, maxOf(TellVoice.pauseAfter(word), TellVoice.SOUND_QUIET_MS)) { goNext() }
-        } else {
-            val r = TellRules.resolve(TellRules.start(), moveOf(st.want), st.robot)
-            reveal(r)
-            at("coach", clock() + TellVoice.quietAfterSound(700)) {
-                speakThen(st.rule, TellVoice.pauseAfter(st.rule)) { goNext() }
-            }
-        }
+        out.play(cueOfLevel(st.want))
+        val word = TellVoice.DONE[st.want]
+        speakThen(word, maxOf(TellVoice.pauseAfter(word), TellVoice.SOUND_QUIET_MS)) { goNext() }
     }
 
     private fun newMatch() {
         clearAll()
-        state = TellRules.start(); rounds = ArrayList(); committed.clear(); holdLens.clear()
+        state = when (level) { 1 -> State(5, 5, 3, 3); 2 -> State(5, 5, TellRules.LIFE, TellRules.LIFE); else -> TellRules.start() }
+        rounds = ArrayList(); committed.clear(); holdLens.clear()
         pressAt = -1L; pressLive = false; pressUsed = false
         roundNo = 0
-        narrate = coachNext || !out.taught()
+        narrate = level <= 3
+        lastMine = null; lastTheirs = null; notAgain = false
         chargeReadySaid = false
-        roundMs = if (narrate) coachRoundMs else ROUND_MS
-        val firstCoached = coachNext
-        coachNext = false
-        opp = opponentFor(if (rung >= 3 && !solved()) 2 else rung, solver, rng.nextLong())
+        roundMs = when (level) { 1, 2 -> COACH_SHORT_ROUND_MS; 3 -> coachRoundMs; else -> ROUND_MS }
+        opp = opponentFor(if (level <= 2) 1 else if (rung >= 3 && !solved()) 2 else rung, solver, rng.nextLong())
         phase = Phase.INTRO
         out.setTension(0)
         out.play(Cue.KICK_ROLL)
-        if (firstCoached) out.coachSpeak(TellVoice.firstMatch(rung)) else out.speak(TellVoice.duelRung(rung))
+        if (level >= 4) out.speak(TellVoice.duelRung(rung))
         at("start", clock() + INTRO_MS) { out.startBed(); beginRound(1, clock()) }
     }
 
@@ -304,7 +307,7 @@ class TellGame(
         val lat = latencyMs().coerceIn(0L, MAX_LATENCY_MS)
         closeAt = start + WINDOW_MS + lat
         out.setTension(tension())
-        out.status(state.myE, state.oppE)
+        if (!noEnergy) out.status(state.myE, state.oppE)
         at("snare", start + WINDOW_MS) { out.play(Cue.SNARE_CLOSE) }
         at("close", closeAt) { closeWindow() }
     }
@@ -326,7 +329,7 @@ class TellGame(
                 pressRound = if (phase == Phase.ROUND && timeMs < closeAt - LATE_MS) roundNo else roundNo + 1
                 if (phase == Phase.ROUND || (phase == Phase.PRACTICE && listening)) {   // clicks while holding
                     at("d1", timeMs + GUARD_MS) { out.play(Cue.DETENT_1); out.setHold(1) }
-                    at("d2", timeMs + CHARGE_MS) { out.play(Cue.DETENT_2); out.setHold(2) }
+                    if (chargeOk) at("d2", timeMs + CHARGE_MS) { out.play(Cue.DETENT_2); out.setHold(2) }
                 }
                 at("f1", timeMs + FORFEIT_CUE_MS) { out.play(Cue.FORFEIT) }
                 at("f3", timeMs + FORFEIT_MS) { forfeit() }
@@ -353,7 +356,7 @@ class TellGame(
         pressAt = -1L
         clear("d1"); clear("d2"); clear("f1"); clear("f3"); clear("leave")
         when (phase) {
-            Phase.AFTER -> { out.stopSpeech(); newMatch() }
+            Phase.AFTER -> { out.stopSpeech(); if (advanced) { advanced = false; startPractice() } else newMatch() }
             Phase.PRACTICE -> {
                 if (!pressLive) return
                 pressLive = false
@@ -377,7 +380,7 @@ class TellGame(
 
     private fun commit(forRound: Int, holdMs: Long) {
         if (committed.containsKey(forRound)) return
-        committed[forRound] = moveOf(levelOf(holdMs))
+        committed[forRound] = holdMove(holdMs)
         holdLens.add(holdMs)
         if (forRound == pressRound) pressUsed = true
     }
@@ -392,13 +395,17 @@ class TellGame(
             out.setHold(0)
             out.play(Cue.STAMP)
         }
-        val mine = committed.remove(roundNo) ?: Move.GUARD
+        var mine = committed.remove(roundNo) ?: Move.GUARD
+        if (level == 2 && mine == Move.CHARGE && lastMine == Move.CHARGE) { mine = Move.GUARD; notAgain = true }
         val o = opp!!
-        val theirs = o.choose(roundNo, TellRules.swap(state), rng)
+        var theirs = o.choose(roundNo, TellRules.swap(state), rng)
+        // the robot plays by the rules of the level, too
+        if (theirs == Move.CHARGE && (level == 1 || (level == 2 && lastTheirs == Move.CHARGE))) theirs = Move.GUARD
         val r = TellRules.resolve(state, mine, theirs, roundNo)
         o.observe(r.mine, roundNo)
+        lastMine = r.mine; lastTheirs = r.theirs
         rounds.add(r)
-        state = r.after
+        state = if (noEnergy) r.after.copy(myE = 5, oppE = 5) else r.after   // no energy before level 3
         reveal(r)
         val done = TellRules.finished(state, roundNo)
         val nextStart = roundStart + roundMs
@@ -419,9 +426,17 @@ class TellGame(
 
     private var chargeReadySaid = false
     private fun narrateRound(r: Round) {
-        val ready = !chargeReadySaid && r.before.myE < 3 && r.after.myE >= 3
-        if (ready) chargeReadySaid = true
-        out.coachSpeak(TellVoice.narration(r, lowEnergy = r.after.myE <= 1, chargeReady = ready))
+        var text = when (level) {
+            1 -> TellVoice.narrationL1(r)
+            2 -> TellVoice.narrationL2(r)
+            else -> {
+                val ready = !chargeReadySaid && r.before.myE < 3 && r.after.myE >= 3
+                if (ready) chargeReadySaid = true
+                TellVoice.narration(r, lowEnergy = r.after.myE <= 1, chargeReady = ready)
+            }
+        }
+        if (notAgain) { notAgain = false; text = (TellVoice.NOT_AGAIN + " " + text).trim() }
+        if (text.isNotEmpty()) out.coachSpeak(text)
     }
 
     private fun cueOf(m: Move) = when (m) { Move.JAB -> Cue.JAB; Move.GUARD -> Cue.GUARD; Move.CHARGE -> Cue.CHARGE }
@@ -454,12 +469,23 @@ class TellGame(
         out.stopBed(false)
         out.play(when (result) { Result.WIN -> Cue.WIN; Result.LOSS -> Cue.LOSS; Result.DRAW -> Cue.DRAW })
         val before = rung
-        if (narrate) { narrate = false; out.saveTaught() }
-        if (result == Result.WIN) rung = minOf(5, rung + 1)
-        if (rung != before) out.saveRung(rung)
+        val playedLevel = level
+        if (level <= 3) {
+            // a win, or the second match of a level, goes up; level 3 goes up after its first match. Losing never goes back.
+            matchesInLevel++
+            if (level == 3 || result == Result.WIN || matchesInLevel >= 2) {
+                level++; matchesInLevel = 0; advanced = level <= 3
+                out.saveLevel(level)
+            }
+        }
+        narrate = false
+        if (playedLevel >= 3) {
+            if (result == Result.WIN) rung = minOf(5, rung + 1)
+            if (rung != before) out.saveRung(rung)
+        }
         log(before, result.name)
         val word = when (result) { Result.WIN -> "You win."; Result.LOSS -> "You lose."; Result.DRAW -> "Draw." }
-        val text = listOf(word, costliestMistake(rounds), "Tap to play again. Hold to leave.").filter { it.isNotEmpty() }.joinToString(" ")
+        val text = listOf(word, if (playedLevel >= 3) costliestMistake(rounds) else "", "Tap to play again. Hold to leave.").filter { it.isNotEmpty() }.joinToString(" ")
         at("speech", clock() + SPEECH_AFTER_MS) { out.speak(text) }
     }
 

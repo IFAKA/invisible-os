@@ -87,27 +87,22 @@ object TellVoice {
     const val CLICK2 = "<click2>"
     const val NOTES = "<notes>"
 
-    // ---- the curriculum ----
-    val S_TAP = listOf("Duel. One button.", "To leave, hold three seconds.", "Tap the button.")
-    val S_GUARD = listOf("Now press and hold.", "Listen for a click.", CLICK1, "Let go after the click.")
-    val S_CHARGE = listOf("Hold longer.", "Two clicks.", CLICK2, "Let go after the second.")
-    val S_ROUND_A = listOf("The robot will jab.", "You guard.")
-    val S_ROUND_B = listOf("The robot will charge.", "You jab.")
-    val S_ROUND_C = listOf("The robot will guard.", "You charge.")
-    val S_ENERGY = listOf("Charge costs energy.", "Three.", "Listen.", NOTES, "More energy, higher note.", "You get one back each round.")
-    val S_LIFE = listOf("You each have four life.", "Take all of theirs.", "The robot is on your left.")
-    val S_FIGHT = listOf("Now a real fight.", "Tap to start.")
+    // ---- the levels: short teaching before each real match ----
+    val L1_TAP = listOf("Level one. Jab and guard.", "To leave, hold three seconds.", "Tap to jab.")
+    val L1_GUARD = listOf("Listen for a click.", CLICK1, "Hold to the click to guard.")
+    val L1_RULE = listOf("Guard beats jab.")
+    val L2_CHARGE = listOf("Level two. Charge.", "Hold longer.", "Two clicks.", CLICK2, "Let go after the second.")
+    val L2_RULE = listOf("Charge beats guard.", "Jab beats charge.", "No charge twice in a row.")
+    val L3_ENERGY = listOf("Level three. Energy.", "Charge costs three.", "Listen.", NOTES, "More energy, higher note.", "You get one back each round.")
     val DONE = listOf("Jab.", "Guard.", "Charge.")
-    const val RULE_A = "Guard beats jab."
-    const val RULE_B = "Jab beats charge."
-    const val RULE_C = "Charge beats guard."
+    const val NOT_AGAIN = "Not again."
     const val SKIP = "Let's move on."
     const val LEAVE_HINT = "Hold three seconds to leave."
     fun hint(tapStep: Boolean) = if (tapStep) "Press to continue." else "Press the button."
     private val NAMES = listOf("jab", "guard", "charge")
     /** Every sentence of the practice (the markers are sounds). Each is at most 7 words. */
-    val ALL: List<String> = (S_TAP + S_GUARD + S_CHARGE + S_ROUND_A + S_ROUND_B + S_ROUND_C + S_ENERGY + S_LIFE + S_FIGHT +
-        DONE + listOf(RULE_A, RULE_B, RULE_C, SKIP, LEAVE_HINT, hint(true), hint(false)) +
+    val ALL: List<String> = (L1_TAP + L1_GUARD + L1_RULE + L2_CHARGE + L2_RULE + L3_ENERGY +
+        DONE + listOf(SKIP, LEAVE_HINT, hint(true), hint(false), NOT_AGAIN, "Last life.", "Their last life.") +
         (0..2).flatMap { w -> (0..2).map { l -> wrong(l, w) } }.flatMap { it }).filter { it != CLICK1 && it != CLICK2 && it != NOTES }
 
     /** Feedback for a wrong hold: what it was, then what to do. Two sentences, spoken with a pause between. */
@@ -141,7 +136,38 @@ object TellVoice {
         return "They ${base(r.theirs)}. You ${base(r.mine)}. $tail"
     }
 
-    /** The coached narration: the result, a life change only when life changed, and two energy remarks. */
+    /** Level 1 (jab and guard): one word, and a warning at the last life. Empty = say nothing. */
+    fun narrationL1(r: com.faka.invisible.tell.Round): String {
+        val sb = StringBuilder(when {
+            r.myParry -> "Parry."
+            r.theirParry -> "Ouch."
+            r.mine == r.theirs && r.damageToMe > 0 -> "Trade."
+            else -> ""
+        })
+        if (r.after.myL == 1 && r.before.myL > 1) sb.append(" Last life.")
+        if (r.after.oppL == 1 && r.before.oppL > 1) sb.append(" Their last life.")
+        return sb.toString().trim()
+    }
+
+    /** Level 2 (charge): one to three words. */
+    fun narrationL2(r: com.faka.invisible.tell.Round): String {
+        val big = com.faka.invisible.tell.Move.CHARGE
+        val sb = StringBuilder(when {
+            r.myParry -> "Parry."
+            r.theirParry -> "Ouch."
+            r.myChargeFizzled -> "Charge broken."
+            r.theirChargeFizzled -> "Their charge broken."
+            r.mine == big && r.damageToOpp > 0 && r.damageToMe > 0 -> "Both hurt."
+            r.mine == big && r.damageToOpp > 0 -> "Big hit."
+            r.theirs == big && r.damageToMe > 0 -> "Big ouch."
+            r.mine == r.theirs && r.damageToMe > 0 -> "Trade."
+            else -> ""
+        })
+        if (r.after.myL == 1 && r.before.myL > 1) sb.append(" Last life.")
+        return sb.toString().trim()
+    }
+
+    /** The coached narration (level 3, the full game): the result, a life change only when life changed, and two energy remarks. */
     fun narration(r: com.faka.invisible.tell.Round, lowEnergy: Boolean = false, chargeReady: Boolean = false): String {
         val sb = StringBuilder(result(r))
         if (r.damageToMe > 0) sb.append(" Your life ").append(n(r.after.myL)).append('.')

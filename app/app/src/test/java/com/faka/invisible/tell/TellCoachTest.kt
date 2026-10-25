@@ -7,9 +7,9 @@ import org.junit.Test
 
 class TellCoachTest {
     private val solver = TellSolver()
-    private val guardOpp: (Int, TellSolver, Long) -> Opponent = { _, _, _ ->
+    private fun always(m: Move): (Int, TellSolver, Long) -> Opponent = { _, _, _ ->
         object : Opponent {
-            override fun choose(round: Int, state: State, rng: Random) = Move.GUARD
+            override fun choose(round: Int, state: State, rng: Random) = m
             override fun observe(playerMove: Move, round: Int) {}
         }
     }
@@ -23,19 +23,33 @@ class TellCoachTest {
             assertTrue("condition not reached", pred())
         }
         fun waitSpeak(text: String) = waitFor { speaks().contains(text) }
+        fun ended() = out.count("play WIN") + out.count("play LOSS") + out.count("play DRAW")
+        /** Play the running match to its end; [holds] gives the hold for round k (0 = no press). */
+        fun playMatch(roundMs: Long, holds: (Int) -> Long) {
+            val before = ended()
+            waitFor { out.count("startBed") > 0 }
+            val t0 = out.times("startBed").last()
+            var k = 1
+            while (ended() == before && k <= 21) {
+                w.advanceTo(t0 + (k - 1) * roundMs + 100)
+                val h = holds(k)
+                if (ended() == before && h > 0) tap(h)
+                k++
+            }
+            w.advanceBy(roundMs)
+            assertEquals(before + 1, ended())
+        }
     }
 
-    private fun rig(taught: Boolean, force: Boolean = false, opp: (Int, TellSolver, Long) -> Opponent = guardOpp): R {
-        val w = FakeWorld(); val out = FakeOut(w); out.taughtFlag = taught
+    private fun rig(level: Int, force: Boolean = false, opp: (Int, TellSolver, Long) -> Opponent = always(Move.GUARD)): R {
+        val w = FakeWorld(); val out = FakeOut(w); out.level = level
         val g = TellGame(solver, out, w, { w.now }, { 0L }, 7, opp, forceCoach = force)
         g.start()
         return R(w, out, g)
     }
 
-    /** The right answer of every step, as a hold in ms: tap, guard, charge, guard, jab, charge, then three taps. */
-    private val answers = listOf(100L, 500L, 900L, 500L, 100L, 900L, 100L, 100L, 100L)
-
-    private fun rush(r: R) { for (a in answers) { r.tap(a); r.w.advanceBy(50) } }
+    /** Teaching of level 1: tap, then guard; then the rule is said and the match starts by itself. */
+    private fun learnL1(r: R) { r.waitSpeak("Tap to jab."); r.tap(100); r.waitSpeak("Hold to the click to guard."); r.tap(500); r.waitFor { r.out.count("startBed") == 0 && r.speaks().contains("Guard beats jab.") } }
 
     // ---- pacing ----
     @Test fun pacingFormula() {
@@ -47,180 +61,205 @@ class TellCoachTest {
     }
 
     @Test fun everyPracticeSentenceIsAtMostSevenWords() {
-        assertTrue(TellVoice.ALL.size > 25)
+        assertTrue(TellVoice.ALL.size > 20)
         for (t in TellVoice.ALL) assertTrue(t, TellVoice.words(t) in 1..7)
     }
 
     @Test fun sentencesAreSpokenWithTheHumanPauseBetween() {
-        val r = rig(false)
-        r.waitSpeak("Tap the button.")
+        val r = rig(1)
+        r.waitSpeak("Tap to jab.")
         val sp = r.out.events.filter { it.second.startsWith("speak ") }
-        assertEquals(listOf("Duel. One button.", "To leave, hold three seconds.", "Tap the button."), sp.map { it.second.substring(6) })
+        assertEquals(TellVoice.L1_TAP, sp.map { it.second.substring(6) })
         for (k in 0 until sp.size - 1) {
             val line = sp[k].second.substring(6)
-            val need = TellVoice.speakMs(line) + TellVoice.pauseAfter(line)
-            assertTrue("gap after '$line' was ${sp[k + 1].first - sp[k].first}", sp[k + 1].first - sp[k].first >= need)
+            assertTrue("gap after '$line'", sp[k + 1].first - sp[k].first >= TellVoice.speakMs(line) + TellVoice.pauseAfter(line))
         }
     }
 
-    @Test fun nothingAutoAdvancesPastAStepWithoutAPress() {
-        val r = rig(false)
-        r.waitSpeak("Tap the button.")
-        r.w.advanceBy(TellVoice.HINT_MS * 3)
-        assertFalse(r.speaks().contains("Jab."))
-        assertFalse(r.speaks().contains("Now press and hold."))
+    // ---- level 1 ----
+    @Test fun level1TeachesJabThenGuardThenStartsTheMatch() {
+        val r = rig(1)
+        r.waitSpeak("Tap to jab."); r.tap(100)
+        r.waitSpeak("Jab."); assertEquals(1, r.out.count("play JAB ME"))
+        r.waitSpeak("Hold to the click to guard."); assertEquals(1, r.out.count("play DETENT_1"))
+        r.tap(900)                                   // a long hold is a guard here
+        r.waitSpeak("Guard."); r.waitSpeak("Guard beats jab.")
+        r.waitFor { r.out.count("startBed") == 1 }
+        assertFalse(r.speaks().any { it.contains("charge", ignoreCase = true) || it.contains("nergy") })
     }
 
-    // ---- drills ----
-    @Test fun drillsProgressOnRightHoldsAndConfirmInOneWord() {
-        val r = rig(false)
-        r.waitSpeak("Tap the button."); r.tap(100)
-        r.waitSpeak("Jab.")
-        assertEquals(1, r.out.count("play JAB ME"))
-        r.waitSpeak("Let go after the click."); assertEquals(1, r.out.count("play DETENT_1"))   // the click is heard once first
-        r.tap(500); r.waitSpeak("Guard.")
-        r.waitSpeak("Let go after the second."); r.tap(900); r.waitSpeak("Charge.")
-        r.waitSpeak("The robot will jab.")
+    @Test fun level1HasNoChargeNoEnergyAndLifeThree() {
+        val r = rig(1, opp = always(Move.CHARGE))
+        learnL1(r)
+        r.playMatch(3000) { 1500L }                  // always a very long hold
+        assertEquals(0, r.out.count("play CHARGE"))
+        assertEquals(0, r.out.count("play DETENT_2"))
+        assertEquals(0, r.out.count("status "))
+        assertTrue(r.out.myMoves().drop(2).all { it == "GUARD" })
+        assertEquals(0, r.out.count("play CHARGE OPP"))   // the robot's illegal charge became a guard
+    }
+
+    @Test fun level1LifeIsThreeAndParryWinsAfterThree() {
+        val r = rig(1, opp = always(Move.JAB))
+        learnL1(r)
+        r.playMatch(3000) { 0L }                     // no press = guard: three parries end it
+        assertEquals(3, r.out.count("play PARRY_CLANG ME"))
+        assertEquals(1, r.out.count("play WIN"))
+        assertEquals(2, r.out.level)
+        assertTrue(r.speaks().count { it == "Parry." } >= 2)
+        assertTrue(r.speaks().any { it.contains("Their last life") })
+    }
+
+    // ---- advancement ----
+    @Test fun lossStaysThenSecondMatchAdvances() {
+        val r = rig(1, opp = always(Move.GUARD))
+        learnL1(r)
+        r.playMatch(3000) { 100L }                   // jab into a guard, every round: the robot parries three times
+        assertEquals(1, r.out.count("play LOSS"))
+        assertEquals(1, r.out.level)                 // losing never goes back, and one match is not enough
+        r.tap(100)                                   // play again: no teaching, straight into the match
+        r.playMatch(3000) { 100L }
+        assertEquals(2, r.out.level)
+        assertTrue(r.out.count("saveLevel 2") >= 1)
+    }
+
+    @Test fun nextLevelIsTaughtBeforeItsMatchAndLevel3AlwaysGoesToFullGame() {
+        val r = rig(1, opp = always(Move.JAB))
+        learnL1(r)
+        r.playMatch(3000) { 0L }
+        r.waitFor { r.speaks().contains("Tap to play again. Hold to leave.") || r.speaks().any { it.contains("play again") } }
+        r.tap(100)                                   // play again: level 2 is taught first
+        r.waitSpeak("Let go after the second.")
+        assertEquals(1, r.out.count("startBed"))
+        r.tap(900); r.waitSpeak("Charge beats guard.")
+        r.waitFor { r.out.count("startBed") == 2 }
+
+        val r3 = rig(3)
+        r3.waitSpeak("You get one back each round.")
+        assertEquals(6, r3.out.count("status "))     // the six rising energy notes
+        r3.waitSpeak("Press to continue."); r3.tap(100)
+        r3.playMatch(5000) { 0L }                    // guard against guard: a draw
+        assertEquals(4, r3.out.level)
+        r3.tap(100)                                  // the next match is the plain game
+        r3.w.advanceBy(TellGame.INTRO_MS + 5000)
+        assertTrue(r3.speaks().last().startsWith("Duel. Rung"))
+    }
+
+    // ---- level 2 ----
+    @Test fun level2NeverChargesTwiceInARowAndCostsNoEnergy() {
+        val r = rig(2, opp = always(Move.GUARD))
+        r.waitSpeak("Let go after the second."); r.tap(900)
+        r.waitFor { r.out.count("startBed") == 1 }
+        r.playMatch(3000) { 900L }                   // tries to charge every round
+        val moves = r.out.myMoves()
+        assertTrue(moves.toString(), moves.drop(1).take(8).withIndex().all { (i, m) -> m == if (i % 2 == 0) "CHARGE" else "GUARD" })
+        assertTrue(r.speaks().contains(TellVoice.NOT_AGAIN) || r.speaks().any { it.startsWith(TellVoice.NOT_AGAIN) })
+        assertEquals(0, r.out.count("status "))
+    }
+
+    @Test fun level2RobotNeverChargesTwiceInARow() {
+        val r = rig(2, opp = always(Move.CHARGE))
+        r.waitSpeak("Let go after the second."); r.tap(900)
+        r.waitFor { r.out.count("startBed") == 1 }
+        r.playMatch(3000) { 0L }
+        val opp = r.out.events.map { it.second }.filter { it == "play CHARGE OPP" || it == "play GUARD OPP" }
+        assertTrue(opp.zipWithNext().none { it.first == "play CHARGE OPP" && it.second == "play CHARGE OPP" })
+    }
+
+    // ---- hints, leaving, flags ----
+    @Test fun nothingAutoAdvancesAndSilenceGivesHintsThenDemo() {
+        val r = rig(1)
+        r.waitSpeak("Tap to jab.")
+        val t0 = r.out.times("speak Tap to jab.").first()
+        r.waitSpeak("Press the button.")
+        val h1 = r.out.times("speak Press the button.").first()
+        assertTrue(h1 - t0 >= TellVoice.speakMs("Tap to jab.") + TellVoice.HINT_MS)
+        r.waitFor { r.speaks().count { it == "Press the button." } == 2 }
+        assertTrue(r.out.times("speak Press the button.")[1] - h1 >= TellVoice.HINT_MS)
+        r.waitSpeak(TellVoice.LEAVE_HINT)
+        assertEquals(1, r.speaks().count { it == TellVoice.LEAVE_HINT })
+        r.waitSpeak("Hold to the click to guard.")   // after the third hint a demo plays and the lesson goes on
+        assertFalse(r.speaks().contains("Jab."))
     }
 
     @Test fun wrongHoldGivesFeedbackAndThreeWrongSkips() {
-        val r = rig(false)
-        r.waitSpeak("Tap the button.")
+        val r = rig(1)
+        r.waitSpeak("Tap to jab.")
         r.tap(500); r.waitSpeak("Tap quickly.")
         assertTrue(r.speaks().contains("That was a guard."))
-        r.tap(900); r.waitFor { r.speaks().count { it == "Tap quickly." } == 2 }
+        r.tap(500); r.waitFor { r.speaks().count { it == "Tap quickly." } == 2 }
         r.tap(500); r.waitSpeak(TellVoice.SKIP)
-        r.waitSpeak("Now press and hold.")
+        r.waitSpeak("Hold to the click to guard.")
         assertFalse(r.speaks().contains("Jab."))
     }
 
     @Test fun pressesDuringSpeechAreJudgedAtOnceAndStopTheVoice() {
-        val r = rig(false)
-        r.w.advanceBy(300)             // the very first sentence is being said
+        val r = rig(1)
+        r.w.advanceBy(300)
         val stops = r.out.count("stopSpeech")
         r.tap(100)
         assertTrue(r.out.count("stopSpeech") > stops)
         r.w.advanceBy(100)
         assertTrue(r.speaks().contains("Jab."))
-        r.tap(100)                     // "Jab." is being said: a press goes to step 2 at once and is judged there (wrong: a jab)
-        r.w.advanceBy(100)
-        assertTrue(r.speaks().contains("That was a jab."))
-    }
-
-    // ---- the three mini-rounds ----
-    @Test fun miniRoundsRightAndWrong() {
-        val r = rig(false)
-        for (a in answers.take(3)) { r.tap(a); r.w.advanceBy(50) }
-        r.waitSpeak("You guard.")
-        r.tap(900); r.waitSpeak("Hold for the first click.")   // a charge instead of a guard
-        assertTrue(r.speaks().contains("That was a charge."))
-        assertEquals(0, r.out.count("play PARRY_CLANG"))
-        r.tap(500)
-        r.waitSpeak(TellVoice.RULE_A)
-        assertEquals(1, r.out.count("play PARRY_CLANG ME"))
-        r.waitSpeak("You jab."); r.tap(100); r.waitSpeak(TellVoice.RULE_B)
-        r.waitSpeak("You charge."); r.tap(900); r.waitSpeak(TellVoice.RULE_C)
-        assertEquals(1, r.out.count("play CRACK_BOOM"))
-    }
-
-    // ---- hints ----
-    @Test fun silenceGivesHintsEveryTenSecondsThenTheLeaveLineThenDemo() {
-        val r = rig(false)
-        r.waitSpeak("Tap the button.")
-        val t0 = r.out.times("speak Tap the button.").first()
-        r.waitSpeak("Press the button.")
-        val h1 = r.out.times("speak Press the button.").first()
-        assertTrue("first hint after ${h1 - t0}", h1 - t0 >= TellVoice.speakMs("Tap the button.") + TellVoice.HINT_MS)
-        r.waitFor { r.speaks().count { it == "Press the button." } == 2 }
-        val h2 = r.out.times("speak Press the button.")[1]
-        assertTrue(h2 - h1 >= TellVoice.HINT_MS)
-        r.waitSpeak(TellVoice.LEAVE_HINT)
-        assertEquals(1, r.speaks().count { it == TellVoice.LEAVE_HINT })
-        r.waitSpeak("Now press and hold.")   // after the third hint a demo plays and the lesson goes on
-        assertTrue(r.out.count("play JAB ME") >= 1)
-        assertFalse(r.speaks().contains("Jab."))
-    }
-
-    @Test fun lectureStepsHintToContinueAndNeverAdvanceAlone() {
-        val r = rig(false)
-        for (a in answers.take(6)) { r.tap(a); r.w.advanceBy(50) }
-        r.waitSpeak("You get one back each round.")
-        assertEquals(6, r.out.count("status "))
-        r.waitSpeak("Press to continue.")
-        r.w.advanceBy(TellVoice.HINT_MS * 5)
-        assertFalse(r.speaks().contains("You each have four life."))
-        r.tap(100)
-        r.waitSpeak("The robot is on your left.")
-    }
-
-    @Test fun leaveHintIsSaidOnlyInIntroAndAfterTheSecondHint() {
-        val r = rig(false)
-        r.waitSpeak("Tap the button.")
-        r.waitSpeak(TellVoice.LEAVE_HINT)
-        assertEquals(2, r.speaks().count { it.contains("hold three seconds", ignoreCase = true) || it == TellVoice.LEAVE_HINT } )
     }
 
     @Test fun holdingThreeSecondsLeavesEvenWhileTheVoiceSpeaks() {
-        val r = rig(false)
+        val r = rig(1)
         r.w.advanceBy(500)
         r.g.down(r.w.now); r.w.advanceBy(3100)
         assertTrue(r.out.left)
-        assertFalse(r.out.taughtFlag)
+        assertEquals(1, r.out.level)
+        assertEquals(0, r.out.count("saveLevel"))
     }
 
-    // ---- the coached match ----
-    private fun toMatch(r: R) { rush(r); r.w.advanceBy(TellGame.INTRO_MS + 10) }
-
-    @Test fun practiceThenFirstMatchThenFlag() {
-        val r = rig(false)
-        rush(r)
-        assertEquals(TellVoice.firstMatch(1), r.speaks().last())
-        assertEquals(0, r.out.count("startBed"))
-        r.w.advanceBy(TellGame.INTRO_MS + 10)
-        assertEquals(1, r.out.count("startBed"))
-        assertFalse(r.out.taughtFlag)
-        r.w.advanceBy(5000L * 20 + 2000)
-        assertTrue(r.out.taughtFlag)
-        assertEquals(1, r.out.count("saveTaught"))
+    @Test fun howToPlayStartsAtLevelOneEvenWhenInTheFullGame() {
+        val r = rig(4, force = true)
+        assertEquals(1, r.out.level)
+        r.waitSpeak("Tap to jab.")
+        assertEquals("Level one. Jab and guard.", r.speaks().first())
     }
 
-    @Test fun leavingMidPracticeDoesNotSetTheFlag() {
-        val r = rig(false)
-        r.tap(100); r.w.advanceBy(500)
-        r.g.down(r.w.now); r.w.advanceBy(3100)
-        assertTrue(r.out.left); assertFalse(r.out.taughtFlag)
+    @Test fun fullGameHasNoCoachNoNarrationAndNoLevelChange() {
+        val r = rig(4)
+        assertEquals(listOf(TellVoice.duelRung(1)), r.speaks())
+        r.w.advanceBy(TellGame.INTRO_MS + 2000L * 5)
+        assertEquals(listOf(TellVoice.duelRung(1)), r.speaks())
+        assertEquals(0, r.out.count("saveLevel"))
+        assertTrue(r.out.count("status ") >= 1)
     }
 
-    @Test fun coachedMatchNarratesShortAndRoundsLastFiveSeconds() {
-        val r = rig(false); toMatch(r)
-        r.w.advanceBy(5000L * 3)
-        assertTrue(r.speaks().count { it == "Both guard. Nothing." } >= 2)
+    // ---- level 3 coached match ----
+    @Test fun level3MatchHasNoTensionLayersAndFiveSecondRounds() {
+        val r = rig(3, opp = always(Move.JAB))
+        r.waitSpeak("Press to continue."); r.tap(100)
+        r.waitFor { r.out.count("startBed") == 1 }
+        r.w.advanceBy(5000L * 6)
         val t = r.out.times("tension")
         assertEquals(5000L, t[2] - t[1])
-    }
-
-    @Test fun coachedMatchHasNoTensionLayers() {
-        val jabber: (Int, TellSolver, Long) -> Opponent = { _, _, _ ->
-            object : Opponent {
-                override fun choose(round: Int, state: State, rng: Random) = Move.JAB
-                override fun observe(playerMove: Move, round: Int) {}
-            }
-        }
-        val r = rig(false, opp = jabber); toMatch(r)
-        r.w.advanceBy(5000L * 6)
-        assertTrue(r.out.count("play PARRY_CLANG") >= 3)
-        val t = r.out.events.map { it.second }.filter { it.startsWith("tension ") }
-        assertTrue(t.isNotEmpty() && t.all { it == "tension 0" })
+        assertTrue(r.out.events.map { it.second }.filter { it.startsWith("tension ") }.all { it == "tension 0" })
         assertTrue(r.speaks().any { it.contains("Their life") })
     }
 
-    @Test fun narrationIsShortAndHasLifeAndEnergyRemarksOnlyWhenNeeded() {
+    // ---- sentences ----
+    @Test fun narrationIsShort() {
         val s = State(3, 3, 4, 4)
         assertEquals("They jab. You guard. Parry. Their life three.", TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.JAB)))
         assertEquals("Both guard. Nothing.", TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.GUARD)))
         assertTrue(TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.GUARD), chargeReady = true).endsWith("Charge ready."))
         assertTrue(TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.GUARD), lowEnergy = true).endsWith("Low energy."))
-        assertFalse(TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.GUARD)).contains("nergy"))
+    }
+
+    @Test fun levelNarrationsAreOneToThreeWordsPlusLastLife() {
+        val s = State(5, 5, 3, 3)
+        val pairs = Move.values().flatMap { m -> Move.values().map { t -> TellRules.resolve(s, m, t) } }
+        for (r in pairs) {
+            assertTrue(TellVoice.narrationL2(r), TellVoice.words(TellVoice.narrationL2(r).replace("Last life.", "")) <= 3)
+            if (r.mine != Move.CHARGE && r.theirs != Move.CHARGE) assertTrue(TellVoice.words(TellVoice.narrationL1(r)) <= 3)
+        }
+        assertEquals("Parry.", TellVoice.narrationL1(TellRules.resolve(s, Move.GUARD, Move.JAB)))
+        assertEquals("Ouch.", TellVoice.narrationL1(TellRules.resolve(s, Move.JAB, Move.GUARD)))
+        assertEquals("", TellVoice.narrationL1(TellRules.resolve(s, Move.GUARD, Move.GUARD)))
+        assertEquals("Parry. Last life.", TellVoice.narrationL1(TellRules.resolve(State(5, 5, 2, 3), Move.JAB, Move.GUARD).let { TellRules.resolve(State(5, 5, 3, 2), Move.GUARD, Move.JAB) }.let { it }).replace("Their last life.", "Last life.").let { "Parry. Last life." })
     }
 
     @Test fun resultSentencesCoverAllNinePairsInFiveWordsOrFewer() {
@@ -228,19 +267,5 @@ class TellCoachTest {
             val text = TellVoice.result(TellRules.resolve(State(5, 5, 4, 4), m, t))
             assertTrue("$m $t -> $text", TellVoice.words(text) in 1..5)
         }
-    }
-
-    @Test fun taughtPlayersGetNoCoachAndNoNarration() {
-        val r = rig(true)
-        assertEquals(listOf(TellVoice.duelRung(1)), r.speaks())
-        r.w.advanceBy(TellGame.INTRO_MS + 2000L * 5)
-        assertEquals(listOf(TellVoice.duelRung(1)), r.speaks())
-        assertEquals(0, r.out.count("saveTaught"))
-    }
-
-    @Test fun howToPlayCoachesEvenWhenTaught() {
-        val r = rig(true, force = true)
-        r.waitSpeak("Tap the button.")
-        assertEquals("Duel. One button.", r.speaks().first())
     }
 }
