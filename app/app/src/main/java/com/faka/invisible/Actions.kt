@@ -31,6 +31,7 @@ object Actions {
     private const val TAG = "Invisible"
     /** Speech rate at the start (1.0 = normal). It rises 0.1 per 20 successful picks, up to 1.8: blind users listen fast. */
     const val SPEECH_RATE = 0.9f
+    private val COACH_RATE = 0.75f
     private fun speechRate() = (mode.settings.speechRate + 0.1f * (prefs().getInt("codeCount", 0) / 20)).coerceAtMost(1.8f)
     @Volatile var accessibilityConnected = false
     private val handler = Handler(Looper.getMainLooper())
@@ -161,7 +162,7 @@ object Actions {
     private fun startDuel(coach: Boolean) {
         duel?.stop()
         duel = TellAndroid(prefs(), handler, object : TellHost {
-            override fun speak(text: String) = say(text, false)
+            override fun speak(text: String, slow: Boolean) = say(text, false, slow = slow)
             override fun stopSpeech() { tts?.stop(); lastUtt = "" }
             override fun pauseMusic() { pauseMusicNow() }
             override fun resumeMusic() = resumeMusicNow()
@@ -263,9 +264,9 @@ object Actions {
     private var lastUtt = ""
 
     /** Only the newest utterance counts: older ones were flushed. Tells the mode the speech is over. */
-    private fun speechEnded(id: String?) { if (id == lastUtt) handler.post { mode.onSpeechDone() } }
+    private fun speechEnded(id: String?) { if (id == lastUtt) handler.post { mode.onSpeechDone(); duel?.takeIf { it.active }?.speechDone() } }
 
-    private fun say(text: String, queue: Boolean, lang: String? = null, fast: Boolean = false) {
+    private fun say(text: String, queue: Boolean, lang: String? = null, fast: Boolean = false, slow: Boolean = false) {
         Log.d(TAG, "SPEAK[$lang] $text ready=$ttsReady fast=$fast")
         if (!ttsReady) { handler.post { mode.onSpeechDone() }; return }
         val spKey = Spearcon.key(text, lang)
@@ -276,7 +277,7 @@ object Actions {
             return
         }
         setVoice(lang)
-        tts?.setSpeechRate(speechRate())
+        tts?.setSpeechRate(if (slow) COACH_RATE else speechRate())   // the Duel coach talks slowly; every other call sets its own rate again
         lastUtt = "inv${++uttSeq}"
         if (fast) { val k = spKey; val l = lang; handler.postDelayed({ makeSpearcon(k, text, l) }, 4000) }   // after the word, not during it
         tts?.speak(text, if (queue) TextToSpeech.QUEUE_ADD else TextToSpeech.QUEUE_FLUSH, null, lastUtt)

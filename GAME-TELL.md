@@ -62,6 +62,16 @@ Layers enter only with danger (peak of the whole bed stays -20 dBFS):
 - A coached match (the narrated first match) uses kick and snare only, never a layer.
 Music stops with a held bass note at match end.
 
+### The coach (first time, and "How to play" in Games)
+The player sets the pace: every step ends with the player doing something, and nothing moves on by itself. A tap at any time
+answers or skips ahead; hold 3 s leaves. Sentences are at most 7 words, one idea each, spoken at rate 0.75. All pacing is in
+`TellVoice` (Voice.kt): pause after a sentence = 600 ms + 250 ms per word; at least 1.5 s of quiet after a new sound; 800 ms
+for the thumb before an action; a hint after 10 s of no press, the leave line as the third hint, a demo after that.
+Steps: tap (jab); hold to the first click (guard); hold to the second click (charge); three mini-rounds where the robot's move is
+named and the player answers (guard beats jab, jab beats charge, charge beats guard); energy (six rising notes); life and
+the robot on the left; then the first match, 5 s rounds, narrated in at most 5 words ("They jab. You guard. Parry."), life only
+when it changes, "Charge ready." once, "Low energy." at energy 1 or less. `tell_taught` is set when that match ends.
+
 ### Status (beat 1 of every round, 150 ms, two soft notes, quiet: peak -22 dBFS)
 - Energy is a pitch: 0 C3, 1 Eb3, 2 F3, 3 G3, 4 Bb3, 5 C4. Yours in the centre (bell/mallet), theirs on the left (muted pluck).
 - Charge-ready (energy >= 3) adds a bright shimmer: a 2x overtone trill, 8 Hz amplitude wobble. So you hear "can charge"

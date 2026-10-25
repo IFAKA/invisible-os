@@ -23,6 +23,8 @@ interface TellOut {
     /** The coach has been through one full match (persisted). Default: taught, so no coaching. */
     fun taught(): Boolean = true
     fun saveTaught() {}
+    /** Speak at the slow coach pace (the practice and the narrated match). */
+    fun coachSpeak(text: String) = speak(text)
     /** The game is over for good (leave or forfeit): the host shuts the audio down after the tape stop. */
     fun leave()
 }
@@ -50,11 +52,8 @@ class TellGame(
 ) {
     companion object {
         const val ROUND_MS = 2000L
-        const val COACH_ROUND_MS = 6000L
+        const val COACH_ROUND_MS = 5000L
         const val DRILL_TRIES = 3
-        const val DRILL_GAP_MS = 300L
-        const val HINT_MS = 7000L
-        const val MAX_HINTS = 3
         const val WINDOW_MS = 1500L
         const val LATE_MS = 150L
         const val GUARD_MS = 300L
@@ -79,7 +78,6 @@ class TellGame(
     private var coachNext = false      // the next match is the coached one
     private var narrate = false        // this match speaks each result
     private var roundMs = ROUND_MS
-    private var drill = 0              // practice: 0 jab, 1 guard, 2 charge, 3 = rule being spoken
     private var tries = 0
     private var listening = false
 
@@ -104,7 +102,7 @@ class TellGame(
     private fun at(key: String, time: Long, task: () -> Unit) = timers.set(K + key, maxOf(0L, time - clock()), task)
     private fun clear(key: String) = timers.clear(K + key)
     private fun clearAll() {
-        for (k in listOf("start", "snare", "close", "next", "result", "life", "end", "speech", "d1", "d2", "f1", "f3", "leave", "coach", "hint", "lead", "lead2", "en0", "en1", "en2", "en3", "en4", "en5")) clear(k)
+        for (k in listOf("start", "snare", "close", "next", "result", "life", "end", "speech", "d1", "d2", "f1", "f3", "leave", "coach", "fb", "hint", "en0", "en1", "en2", "en3", "en4", "en5")) clear(k)
     }
 
     /** Level of a hold: 0 = JAB, 1 = GUARD, 2 = CHARGE. */
@@ -119,113 +117,166 @@ class TellGame(
         if (forceCoach || !out.taught()) startPractice() else newMatch()
     }
 
-    // ---- coach practice: three drills, no round clock, no bed. The player may press at any time. ----
+    // ---- coach practice: one idea per step, the player sets the pace, no round clock, no bed ----
+    private enum class Kind { DRILL, ROUND, TAP }
+    private class Step(val kind: Kind, val lines: List<String>, val want: Int = -1, val robot: Move = Move.GUARD, val rule: String = "")
+    private val steps = listOf(
+        Step(Kind.DRILL, TellVoice.S_TAP, 0),
+        Step(Kind.DRILL, TellVoice.S_GUARD, 1),
+        Step(Kind.DRILL, TellVoice.S_CHARGE, 2),
+        Step(Kind.ROUND, TellVoice.S_ROUND_A, 1, Move.JAB, TellVoice.RULE_A),
+        Step(Kind.ROUND, TellVoice.S_ROUND_B, 0, Move.CHARGE, TellVoice.RULE_B),
+        Step(Kind.ROUND, TellVoice.S_ROUND_C, 2, Move.GUARD, TellVoice.RULE_C),
+        Step(Kind.TAP, TellVoice.S_ENERGY),
+        Step(Kind.TAP, TellVoice.S_LIFE),
+        Step(Kind.TAP, TellVoice.S_FIGHT),
+    )
+    private var stepNo = 0
     private var hints = 0
-    private var fromPress = false     // the drill was started by a press: no lead-in clicks or prompt
-    private var pendingNext: (() -> Unit)? = null   // what happens when the current speech is over (a press runs it at once)
+    private var fromPress = false      // the step was started by a press: skip its talk, judge the press
+    private var pendingNext: (() -> Unit)? = null   // where a press jumps to while the coach is talking
+    private var doneAction: (() -> Unit)? = null    // runs when the current sentence is over (done-callback or estimate)
+    private var doneToken = 0
 
     private fun startPractice() {
         clearAll()
         phase = Phase.PRACTICE
         pressAt = -1L; pressLive = false; listening = false
-        drill = 0; tries = 0; hints = 0
-        say(TellVoice.INTRO) { startDrill(0) }
+        tries = 0; hints = 0; pendingNext = null; doneAction = null
+        runStep(0)
     }
 
-    /** Speak [text], then run [then] shortly after the (estimated) speech is over. */
-    private fun say(text: String, then: () -> Unit) {
-        out.speak(text)
-        pendingNext = then
-        at("coach", clock() + TellVoice.speakMs(text) + DRILL_GAP_MS) { runPending() }
+    /** The speech layer says the last sentence is over (an estimate runs as the fallback). */
+    fun onSpeechDone() { doneAction?.invoke() }
+
+    /** Speak one sentence at the coach pace, wait until it is over, then [pauseMs] of quiet, then [next]. */
+    private fun speakThen(text: String, pauseMs: Long, next: () -> Unit) {
+        out.coachSpeak(text)
+        val tok = ++doneToken
+        doneAction = {
+            if (tok == doneToken) {
+                doneToken++; doneAction = null; clear("fb")
+                at("coach", clock() + pauseMs) { next() }
+            }
+        }
+        at("fb", clock() + TellVoice.speakMs(text)) { doneAction?.invoke() }
+    }
+
+    private fun cancelTalk() {
+        doneToken++; doneAction = null
+        clear("fb"); clear("coach"); clear("hint")
+        for (e in 0..5) clear("en$e")
     }
 
     private fun runPending() {
         val n = pendingNext ?: return
         pendingNext = null
-        clear("coach")
+        cancelTalk()
         n()
     }
 
-    /** Silence is never allowed to last: a hint every HINT_MS, a demo after three hints. */
-    private fun armHint(afterMs: Long) {
-        at("hint", clock() + afterMs) { hint() }
+    /** Say a step's lines one by one, with the human pause after each; then [then]. A press jumps straight to [then]. */
+    private fun playLines(lines: List<String>, action: Boolean, then: () -> Unit) {
+        val finish = { pendingNext = null; then() }
+        pendingNext = then
+        fun item(k: Int) {
+            if (phase != Phase.PRACTICE) return
+            if (k >= lines.size) { finish(); return }
+            val line = lines[k]
+            val last = k == lines.size - 1
+            when (line) {
+                TellVoice.CLICK1 -> { out.play(Cue.DETENT_1); at("coach", clock() + TellVoice.quietAfterSound(400)) { item(k + 1) } }
+                TellVoice.CLICK2 -> {
+                    out.play(Cue.DETENT_1); at("en0", clock() + 450) { out.play(Cue.DETENT_2) }
+                    at("coach", clock() + TellVoice.quietAfterSound(850)) { item(k + 1) }
+                }
+                TellVoice.NOTES -> {
+                    for (e in 0..5) at("en$e", clock() + TellVoice.NOTE_SPACING_MS * e) { out.status(e, e) }
+                    at("coach", clock() + TellVoice.NOTE_SPACING_MS * 5 + TellVoice.quietAfterSound(300)) { item(k + 1) }
+                }
+                else -> speakThen(line, TellVoice.pauseAfter(line) + if (last && action) TellVoice.READY_MS else 0L) { item(k + 1) }
+            }
+        }
+        item(0)
     }
+
+    private fun runStep(n: Int) {
+        if (phase != Phase.PRACTICE) return
+        if (n >= steps.size) { coachNext = true; newMatch(); return }
+        stepNo = n; tries = 0; hints = 0; listening = false
+        clear("hint")
+        if (fromPress) { enterWait(); return }
+        playLines(steps[n].lines, steps[n].kind != Kind.TAP) { enterWait() }
+    }
+
+    private fun enterWait() {
+        if (phase != Phase.PRACTICE) return
+        listening = true
+        armHint()
+    }
+
+    /** Silence is never allowed to last: a hint every HINT_MS, the leave line as the third, a demo after that. */
+    private fun armHint() { at("hint", clock() + TellVoice.HINT_MS) { hint() } }
 
     private fun hint() {
         if (phase != Phase.PRACTICE || !listening || pressLive) return
         hints++
-        if (hints >= MAX_HINTS) { demo(); return }
-        out.speak(TellVoice.hint(hints))
-        armHint(TellVoice.speakMs(TellVoice.hint(hints)) + HINT_MS)
+        val st = steps[stepNo]
+        if (hints >= 4 && st.kind != Kind.TAP) { demo(); return }
+        val text = if (hints == 3) TellVoice.LEAVE_HINT else TellVoice.hint(st.kind == Kind.TAP)
+        speakThen(text, 0L) { if (listening) armHint() }
     }
 
-    /** Play the move the way it sounds while holding, then go on. */
+    /** Show the right answer, then go on (drills and mini-rounds only). */
     private fun demo() {
+        val st = steps[stepNo]
+        if (st.kind == Kind.ROUND) { success(st); return }
         listening = false
-        val i = drill
-        if (i >= 1) at("d1", clock()) { out.play(Cue.DETENT_1) }
-        if (i >= 2) at("d2", clock() + 500) { out.play(Cue.DETENT_2) }
-        at("coach", clock() + 500L * i + 400) { out.play(cueOfLevel(i)) }
-        out.speak(TellVoice.DEMO)
-        pendingNext = { startDrill(i + 1) }
-        at("hint", clock() + 500L * i + 2200) { runPending() }
+        clear("hint")
+        val w = st.want
+        if (w >= 1) out.play(Cue.DETENT_1)
+        if (w >= 2) at("en0", clock() + 450) { out.play(Cue.DETENT_2) }
+        at("en1", clock() + 450L * w + 400) { out.play(cueOfLevel(w)) }
+        pendingNext = { runStep(stepNo + 1) }
+        at("coach", clock() + 450L * w + TellVoice.quietAfterSound(600)) { runPending() }
     }
 
     private fun cueOfLevel(level: Int) = when (level) { 0 -> Cue.JAB; 1 -> Cue.GUARD; else -> Cue.CHARGE }
 
-    private fun startDrill(i: Int) {
-        if (phase != Phase.PRACTICE) return
-        drill = i; tries = 0; hints = 0
-        clear("hint")
-        if (i >= 3) {
-            listening = false
-            if (fromPress) { coachNext = true; newMatch() } else lesson(0)
-            return
-        }
-        listening = true
-        if (fromPress) return
-        if (i == 0) { out.speak(TellVoice.DRILLS[0]); armHint(TellVoice.speakMs(TellVoice.DRILLS[0]) + HINT_MS); return }
-        // let the player hear the click(s) once, then the prompt
-        out.play(Cue.DETENT_1)
-        if (i == 2) at("lead2", clock() + 450) { out.play(Cue.DETENT_2) }
-        val lead = if (i == 2) 1000L else 600L
-        at("lead", clock() + lead) {
-            out.speak(TellVoice.DRILLS[i])
-            armHint(TellVoice.speakMs(TellVoice.DRILLS[i]) + HINT_MS)
-        }
-    }
+    private fun goNext() { pendingNext = null; runStep(stepNo + 1) }
 
-    /** The talk after the drills: goal, places, energy (with the rising notes), the rule. Then the match. */
-    private fun lesson(k: Int) {
-        if (phase != Phase.PRACTICE) return
-        if (k >= TellVoice.LESSONS.size) { coachNext = true; newMatch(); return }
-        say(TellVoice.LESSONS[k]) {
-            if (k == TellVoice.ENERGY_DEMO_AFTER) energyDemo { lesson(k + 1) } else lesson(k + 1)
-        }
-    }
-
-    /** The status note for energy 0..5, rising, once. */
-    private fun energyDemo(then: () -> Unit) {
-        for (e in 0..5) at("en$e", clock() + 400L * e) { out.status(e, e) }
-        pendingNext = then
-        at("coach", clock() + 400L * 6 + 400) { runPending() }
-    }
-
+    /** The player let go after [holdMs]. */
     private fun drillPress(holdMs: Long) {
         if (!listening) return
-        val level = levelOf(holdMs)
+        val st = steps[stepNo]
         clear("hint")
-        if (level == drill) {
+        if (st.kind == Kind.TAP) { listening = false; runStep(stepNo + 1); return }
+        val level = levelOf(holdMs)
+        if (level == st.want) { success(st); return }
+        val feedback = TellVoice.wrong(level, st.want)
+        if (++tries >= DRILL_TRIES) {
             listening = false
-            out.play(cueOfLevel(level))
-            say(TellVoice.DONE[level]) { startDrill(drill + 1) }
-        } else if (++tries >= DRILL_TRIES) {
-            listening = false
-            say(TellVoice.wrong(level, drill) + " " + TellVoice.SKIP) { startDrill(drill + 1) }
+            playLines(feedback + TellVoice.SKIP, false) { goNext() }
+            pendingNext = { goNext() }
         } else {
-            val t = TellVoice.wrong(level, drill)
-            out.speak(t)
-            armHint(TellVoice.speakMs(t) + HINT_MS)
+            playLines(feedback, true) { enterWait() }
+        }
+    }
+
+    private fun success(st: Step) {
+        listening = false
+        clear("hint")
+        pendingNext = { goNext() }
+        if (st.kind == Kind.DRILL) {
+            out.play(cueOfLevel(st.want))
+            val word = TellVoice.DONE[st.want]
+            speakThen(word, maxOf(TellVoice.pauseAfter(word), TellVoice.SOUND_QUIET_MS)) { goNext() }
+        } else {
+            val r = TellRules.resolve(TellRules.start(), moveOf(st.want), st.robot)
+            reveal(r)
+            at("coach", clock() + TellVoice.quietAfterSound(700)) {
+                speakThen(st.rule, TellVoice.pauseAfter(st.rule)) { goNext() }
+            }
         }
     }
 
@@ -235,6 +286,7 @@ class TellGame(
         pressAt = -1L; pressLive = false; pressUsed = false
         roundNo = 0
         narrate = coachNext || !out.taught()
+        chargeReadySaid = false
         roundMs = if (narrate) coachRoundMs else ROUND_MS
         val firstCoached = coachNext
         coachNext = false
@@ -242,7 +294,7 @@ class TellGame(
         phase = Phase.INTRO
         out.setTension(0)
         out.play(Cue.KICK_ROLL)
-        out.speak(if (firstCoached) TellVoice.firstMatch(rung) else TellVoice.duelRung(rung))
+        if (firstCoached) out.coachSpeak(TellVoice.firstMatch(rung)) else out.speak(TellVoice.duelRung(rung))
         at("start", clock() + INTRO_MS) { out.startBed(); beginRound(1, clock()) }
     }
 
@@ -290,9 +342,9 @@ class TellGame(
 
     /** A press in practice: it stops the voice and is judged at once; a pending next step runs first. */
     private fun practiceDown() {
-        if (pendingNext != null) { fromPress = true; runPending(); fromPress = false } else clear("coach")
+        if (pendingNext != null) { fromPress = true; runPending(); fromPress = false } else cancelTalk()
         out.stopSpeech()
-        for (e in 0..5) clear("en$e"); clear("lead"); clear("hint"); clear("d1"); clear("d2")
+        clear("hint"); clear("d1"); clear("d2")
     }
 
     fun up(timeMs: Long) {
@@ -362,7 +414,14 @@ class TellGame(
         out.play(cueOf(r.mine), Side.ME)
         out.play(cueOf(r.theirs), Side.OPP)
         val delay = if (r.mine == Move.CHARGE || r.theirs == Move.CHARGE) 450L else 200L
-        at("result", clock() + delay) { results(r); if (narrate) out.speak(TellVoice.narration(r)) }
+        at("result", clock() + delay) { results(r); if (narrate) narrateRound(r) }
+    }
+
+    private var chargeReadySaid = false
+    private fun narrateRound(r: Round) {
+        val ready = !chargeReadySaid && r.before.myE < 3 && r.after.myE >= 3
+        if (ready) chargeReadySaid = true
+        out.coachSpeak(TellVoice.narration(r, lowEnergy = r.after.myE <= 1, chargeReady = ready))
     }
 
     private fun cueOf(m: Move) = when (m) { Move.JAB -> Cue.JAB; Move.GUARD -> Cue.GUARD; Move.CHARGE -> Cue.CHARGE }

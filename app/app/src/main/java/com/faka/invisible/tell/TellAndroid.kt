@@ -13,7 +13,7 @@ import com.faka.invisible.Timers
 
 /** What the duel needs from the app (speech, the user's music, the log). */
 interface TellHost {
-    fun speak(text: String)
+    fun speak(text: String, slow: Boolean = false)
     fun stopSpeech()
     fun pauseMusic()
     fun resumeMusic()
@@ -65,6 +65,7 @@ class TellAndroid(
         override fun setTension(level: Int) = synchronized(lock) { mixer.setTension(level) }
         override fun stopBed(tapeStop: Boolean) = synchronized(lock) { mixer.stopBed(tapeStop) }
         override fun speak(text: String) = host.speak(text)
+        override fun coachSpeak(text: String) = host.speak(text, true)
         override fun stopSpeech() = host.stopSpeech()
         override fun pauseMusic() = host.pauseMusic()
         override fun resumeMusic() = host.resumeMusic()
@@ -105,6 +106,8 @@ class TellAndroid(
 
     fun down(timeMs: Long) { game?.down(timeMs) }
     fun up(timeMs: Long) { game?.up(timeMs) }
+    /** The speech engine finished the last sentence. */
+    fun speechDone() { game?.onSpeechDone() }
 
     /** Main thread. The app stops the duel from outside (also safe to call twice). */
     fun stop() {
