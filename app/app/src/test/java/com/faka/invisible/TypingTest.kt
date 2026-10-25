@@ -22,8 +22,8 @@ class TypingTest {
 
     private val lm = object : Ranker {
         override fun ranked(context: List<String>): List<Pair<String, Double>> {
-            val ws = if (context.isEmpty()) listOf("hello", "thanks", "yes", "no", "later", "ok", "call", "now")
-            else listOf("you", "me", "now", "later", "home", "work", "there", "here")
+            val ws = if (context.isEmpty()) listOf("hello", "thanks", "yes", "nope", "later", "okay", "call", "nowhere")
+            else listOf("you", "me", "soon", "later", "home", "work", "there", "here")
             return ws.mapIndexed { i, w -> w to -(i + 1).toDouble() }
         }
     }
@@ -55,7 +55,7 @@ class TypingTest {
 
     @Test fun twoClicksShowNextPair() {
         p.start(); clicks(2)
-        assertEquals("yes" to "no", pairs.last())
+        assertEquals("yes" to "nope", pairs.last())
     }
 
     @Test fun fourClicksFinish() {

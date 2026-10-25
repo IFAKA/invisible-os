@@ -224,6 +224,7 @@ object Actions {
                 }
                 val out = object : TypeOut {
                     override fun pair(left: String, right: String?) {
+                        Log.d(TAG, "WRITE pair $left | $right")
                         stopPair(); val me = pairSeq
                         var pending = if (right == null) 1 else 2
                         val one = { if (--pending == 0) playPair(left, right, me) }

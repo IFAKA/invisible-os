@@ -64,7 +64,7 @@ class TypeProgram(
             val mass = LinkedHashMap<Char, Double>()
             for ((w, lp) in all) if (w.length > prefix.length && w.startsWith(prefix) && LETTER_RE.matches(w)) mass.merge(w[prefix.length], Math.exp(lp), Double::plus)
             mass.entries.sortedByDescending { it.value }.map { it.key.toString() }
-        } else all.asSequence().filter { it.first.startsWith(prefix) && LETTER_RE.matches(it.first) }.take(WORD_PAGES * 2).map { it.first }.toList()
+        } else all.asSequence().filter { it.first.startsWith(prefix) && LETTER_RE.matches(it.first) && (prefix.isNotEmpty() || (it.first.length >= 3 && '\'' !in it.first)) }   // alone, a short word or a contraction is hard to hear: those come through letters.take(WORD_PAGES * 2).map { it.first }.toList()
     }
 
     private fun show(again: Boolean = false) {
