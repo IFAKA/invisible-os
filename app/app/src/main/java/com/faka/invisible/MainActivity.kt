@@ -165,6 +165,14 @@ class MainActivity : Activity() {
             addView(k.dragList(s.more, LauncherSettings.MORE_ITEMS, setOf("exit")) { order -> change(s.copy(more = LauncherSettings.cleanMore(order))) })
         }
 
+        card("Inside \"Info\"", "What you hear after you click Info. Same drag and switch.") {
+            addView(k.dragList(s.info, LauncherSettings.INFO_ITEMS, emptySet()) { order -> change(s.copy(info = LauncherSettings.cleanInfo(order))) })
+        }
+
+        card("Inside \"Phone\"", "What you hear after you click Phone. Same drag and switch.") {
+            addView(k.dragList(s.phone, LauncherSettings.PHONE_ITEMS, emptySet()) { order -> change(s.copy(phone = LauncherSettings.cleanPhone(order))) })
+        }
+
     }
 
     private fun voicePage() {

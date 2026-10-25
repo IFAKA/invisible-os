@@ -693,6 +693,16 @@ class ModeTest {
         assertEquals(listOf("say Volume", "say Torch", "say Do not disturb", "say Back"), r.spoken())
     }
 
+    @Test fun infoAndPhoneFollowTheSettings() {
+        assertEquals(listOf("turn", "weather"), LauncherSettings.cleanInfo(listOf("turn", "bogus", "weather", "turn", "back")))
+        assertEquals(listOf("find", "volume"), LauncherSettings.cleanPhone(listOf("find", "x", "volume", "find")))
+        assertEquals(emptyList<String>(), LauncherSettings.cleanInfo(listOf("")))
+        val r = Rig().withInfo(); r.m.settings = r.m.settings.copy(info = listOf("turn", "weather")); r.wake(); r.pick("Info"); r.advance(400 + 1300 * 3 + 100)
+        assertEquals(listOf("say Next turn", "say Weather", "say Back"), r.spoken())
+        val p = Rig(); p.m.settings = p.m.settings.copy(phone = listOf("torch", "volume")); p.wake(); p.pick("Phone"); p.advance(400 + 1300 * 3 + 100)
+        assertEquals(listOf("say Torch", "say Volume", "say Back"), p.spoken())
+    }
+
     @Test fun infoGroupListsItemsInOrderAndBackReturnsToTheHub() {
         val r = Rig().withInfo(); r.wake(); r.pick("Info"); r.advance(400 + 1300 * 3 + 100)
         assertEquals(listOf("say Weather", "say Next event", "say Next turn", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.INFO, r.m.screen)

@@ -9,6 +9,8 @@ import android.content.SharedPreferences
 data class LauncherSettings(
     val hub: List<String> = DEFAULT_HUB,
     val more: List<String> = DEFAULT_MORE,
+    val info: List<String> = DEFAULT_INFO,   // what is inside Info, in order (Back is added by the mode)
+    val phone: List<String> = DEFAULT_PHONE,   // what is inside Phone, in order (Back is added by the mode)
     val timers: List<Int> = listOf(5, 10, 25),
     val itemGapMs: Long = ControllerMode.ITEM_GAP_MS,
     val silentLoops: Int = 2,
@@ -26,6 +28,13 @@ data class LauncherSettings(
         val MORE_ITEMS = linkedMapOf("read" to "Read unread messages", "exit" to "Exit")
         val DEFAULT_MORE = MORE_ITEMS.keys.toList()
         fun cleanMore(keys: List<String>): List<String> = keys.filter { it in MORE_ITEMS }.distinct().let { if ("exit" in it) it else it + "exit" }
+
+        val INFO_ITEMS = linkedMapOf("weather" to "Weather", "calendar" to "Next event", "turn" to "Next turn")
+        val DEFAULT_INFO = INFO_ITEMS.keys.toList()
+        fun cleanInfo(keys: List<String>): List<String> = keys.filter { it in INFO_ITEMS }.distinct()
+        val PHONE_ITEMS = linkedMapOf("volume" to "Volume", "torch" to "Torch", "dnd" to "Do not disturb", "find" to "Find my phone")
+        val DEFAULT_PHONE = PHONE_ITEMS.keys.toList()
+        fun cleanPhone(keys: List<String>): List<String> = keys.filter { it in PHONE_ITEMS }.distinct()
 
         /** Keep known keys once each, in order; "more" is always present (it holds Exit, Torch, Read). */
         fun cleanHub(keys: List<String>): List<String> =
@@ -56,6 +65,8 @@ object SettingsStore {
         return LauncherSettings(
             hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it)))))))) } ?: d.hub,
             more = p.getString("s_more", null)?.split(',')?.let { LauncherSettings.cleanMore(it) } ?: d.more,
+            info = p.getString("s_info", null)?.split(',')?.let { LauncherSettings.cleanInfo(it) } ?: d.info,
+            phone = p.getString("s_phone", null)?.split(',')?.let { LauncherSettings.cleanPhone(it) } ?: d.phone,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
             itemGapMs = p.getLong("s_gap", d.itemGapMs).coerceIn(600, 4000),
             silentLoops = p.getInt("s_loops", d.silentLoops).coerceIn(1, 5),
@@ -133,7 +144,7 @@ object SettingsStore {
     }
 
     fun save(p: SharedPreferences, s: LauncherSettings) {
-        p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_more", s.more.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
+        p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_more", s.more.joinToString(",")).putString("s_info", s.info.joinToString(",")).putString("s_phone", s.phone.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
             .putLong("s_gap", s.itemGapMs).putInt("s_loops", s.silentLoops).putLong("s_undo", s.undoMs)
             .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).putBoolean("s_ai", s.ai).putBoolean("s_groups_saved", true).apply()
     }

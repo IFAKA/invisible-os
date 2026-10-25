@@ -429,17 +429,19 @@ class ControllerMode(
                 "exit" -> Opt("more:exit", "Exit", null) { pick("more:exit"); exit(true) }
                 else -> null
             } }
-            Screen.INFO -> listOf(
-                Opt("info:weather", "Weather", null) { pick("info:weather"); lookup(out::weather) },
-                Opt("info:calendar", "Next event", null) { pick("info:calendar"); lookup(out::nextEvent) },
-                Opt("info:turn", "Next turn", null) { pick("info:turn"); outro(out.navigation() ?: Voice.NO_NAVIGATION) },
-                Opt("info:back", "Back", null) { pick("info:back"); show(Screen.HUB) })
-            Screen.PHONE -> listOfNotNull(
-                Opt("phone:volume", "Volume", null) { pick("phone:volume"); show(Screen.VOLUME) },
-                Opt("phone:torch", "Torch", null) { pick("phone:torch"); out.runAction("Flashlight"); afterSpeech { beginScan() } },
-                if (out.dndAllowed()) Opt("phone:dnd", "Do not disturb", null) { pick("phone:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null,
-                if (!out.wiredConnected()) Opt("phone:find", Voice.FIND_PHONE, null) { pick("phone:find"); find() } else null,
-                Opt("phone:back", "Back", null) { pick("phone:back"); show(Screen.HUB) })
+            Screen.INFO -> settings.info.mapNotNull { k -> when (k) {
+                "weather" -> Opt("info:weather", "Weather", null) { pick("info:weather"); lookup(out::weather) }
+                "calendar" -> Opt("info:calendar", "Next event", null) { pick("info:calendar"); lookup(out::nextEvent) }
+                "turn" -> Opt("info:turn", "Next turn", null) { pick("info:turn"); outro(out.navigation() ?: Voice.NO_NAVIGATION) }
+                else -> null
+            } } + Opt("info:back", "Back", null) { pick("info:back"); show(Screen.HUB) }
+            Screen.PHONE -> settings.phone.mapNotNull { k -> when (k) {
+                "volume" -> Opt("phone:volume", "Volume", null) { pick("phone:volume"); show(Screen.VOLUME) }
+                "torch" -> Opt("phone:torch", "Torch", null) { pick("phone:torch"); out.runAction("Flashlight"); afterSpeech { beginScan() } }
+                "dnd" -> if (out.dndAllowed()) Opt("phone:dnd", "Do not disturb", null) { pick("phone:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null
+                "find" -> if (!out.wiredConnected()) Opt("phone:find", Voice.FIND_PHONE, null) { pick("phone:find"); find() } else null
+                else -> null
+            } } + Opt("phone:back", "Back", null) { pick("phone:back"); show(Screen.HUB) }
             Screen.GAMES -> listOf(   // every game lives here; a new game is one more line
                 Opt("games:duel", "Duel", null) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame(false) },   // music stays paused for the game, which resumes it
                 Opt("games:howto", "How to play", null) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) },
