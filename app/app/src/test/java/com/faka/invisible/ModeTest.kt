@@ -21,6 +21,7 @@ class ModeTest {
         var aiTaskList = listOf<Task>(); var aiList = listOf<Task>(); val prepared = ArrayList<String>()
         var replyOffersList = listOf<Task>(); val remembered = ArrayList<String>()
         var favs = listOf<String>()
+        var suggested = listOf<String>()
         var now = 1_000_000L
         var vol = 7
         var wired = false
@@ -72,6 +73,7 @@ class ModeTest {
             override fun addTask(text: String, lang: String) = taskStore.add(text, lang) != null
             override fun setLastTimer(minutes: Int) { last = minutes }
             override fun favourites() = favs
+            override fun suggest(candidates: Collection<String>, now: Long) = suggested.filter { it in candidates }
             override fun codeCount() = codes
             override fun setCodeCount(n: Int) { codes = n }
             override fun choice(screen: String, code: Int, intent: String, sender: String) { log.add("choice $screen $code $intent") }
@@ -553,6 +555,12 @@ class ModeTest {
         val r = Rig().withTasks(); r.taskStore.add("x".repeat(400)); r.wake(); r.pick("Tasks, 1"); r.advance(3500)
         assertTrue(r.log.any { it.startsWith("say[es] x") && it.endsWith("y más") && it.length < 200 })
         val s = TaskStore(); assertEquals(1, s.addAll("[ ] Buy milk\n[ ] buy MILK")); assertEquals(0, s.addAll("[ ] Buy milk"))
+    }
+
+    @Test fun hubSpeaksSuggestedDeepOptionsFirstAndLeavesTheRestInPlace() {
+        val r = Rig(); r.suggested = listOf("phone:torch", "info:weather", "phone:back", "hub:status")   // Back and non-deep keys are never offered
+        r.wake(); r.advance(1300 * 6 + 50)
+        assertEquals(listOf("say Torch", "say Weather", "say Timer", "say Phone"), r.spoken().take(4))
     }
 
     @Test fun hubOrderMatchesWhatIsSpoken() {

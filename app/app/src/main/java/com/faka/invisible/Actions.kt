@@ -135,6 +135,7 @@ object Actions {
             override fun startWrite() = launchWrite()
             override fun pickCount(intent: String) = choices.intentCount(intent)
             override fun favourites() = choices.favourites()
+            override fun suggest(candidates: Collection<String>, now: Long) = Suggester.top(choices.history(), candidates, now)
             override fun choice(screen: String, code: Int, intent: String, sender: String) {
                 choices.record(System.currentTimeMillis(), screen, code, intent, sender)
             }

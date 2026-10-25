@@ -1,0 +1,44 @@
+package com.faka.invisible
+
+import java.util.Calendar
+
+/**
+ * The OS menu model's "Suggested" slot: which deep options to offer first in the hub.
+ * Pure. Score = recent picks count more (half-life 14 days) and picks near the same hour of day count double.
+ * Lists stay in a fixed order (research: moving items breaks position memory); only this small slot adapts.
+ */
+object Suggester {
+    const val MIN_PICKS = 2
+    private const val HALF_LIFE_DAYS = 14.0
+    private const val NEAR_HOURS = 2
+
+    class Pick(val ts: Long, val intent: String)
+
+    private fun hourOf(ts: Long) = Calendar.getInstance().apply { timeInMillis = ts }.get(Calendar.HOUR_OF_DAY)
+    private fun hourGap(a: Int, b: Int) = minOf((a - b + 24) % 24, (b - a + 24) % 24)
+
+    /** Up to [n] of [candidates], best first. An option needs [MIN_PICKS] picks before it can be suggested. */
+    fun top(history: List<Pick>, candidates: Collection<String>, now: Long, n: Int = 3): List<String> {
+        val hour = hourOf(now)
+        val score = HashMap<String, Double>(); val picks = HashMap<String, Int>()
+        for (p in history) {
+            if (p.intent !in candidates || p.ts > now) continue
+            val ageDays = (now - p.ts) / 86_400_000.0
+            val w = Math.pow(0.5, ageDays / HALF_LIFE_DAYS) * (if (hourGap(hourOf(p.ts), hour) <= NEAR_HOURS) 2.0 else 1.0)
+            score[p.intent] = (score[p.intent] ?: 0.0) + w; picks[p.intent] = (picks[p.intent] ?: 0) + 1
+        }
+        return score.keys.filter { (picks[it] ?: 0) >= MIN_PICKS }
+            .sortedWith(compareBy({ -(score[it] ?: 0.0) }, { it })).take(n)
+    }
+
+    /** Replay the history: how often was each pick of a candidate inside the 3 suggested from the picks before it? */
+    fun hitRate(history: List<Pick>, candidates: Collection<String>, n: Int = 3): Pair<Int, Int> {
+        var hits = 0; var total = 0
+        val seen = ArrayList<Pick>()
+        for (p in history) {
+            if (p.intent in candidates) { total++; if (p.intent in top(seen, candidates, p.ts, n)) hits++ }
+            seen += p
+        }
+        return hits to total
+    }
+}

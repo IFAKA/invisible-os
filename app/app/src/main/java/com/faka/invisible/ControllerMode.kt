@@ -58,6 +58,7 @@ interface ModeOutput {
     fun wiredConnected(): Boolean = false   // a wired headset or USB audio is plugged in: then "Find my phone" is not offered
     fun navigation(): String? = null   // the latest Google Maps instruction as one sentence; null = not navigating
     fun findPhone(on: Boolean) {}   // ring loudly on the alarm stream (on) or stop (off)
+    fun suggest(candidates: Collection<String>, now: Long): List<String> = emptyList()   // the OS's "Suggested" slot: up to 3 of these deep options, best first
     fun pickCount(intent: String): Int = 0   // how often this option was picked (spearcon after [ControllerMode.SPEARCON_AFTER] picks)
 }
 
@@ -397,7 +398,11 @@ class ControllerMode(
                     "phone" -> all["hub:phone"] = Opt("hub:phone", "Phone", null) { pick("hub:phone"); show(Screen.PHONE) }
                     "games" -> all["hub:games"] = Opt("hub:games", "Games", null) { pick("hub:games"); show(Screen.GAMES) }
                 }
-                all.values.toList()   // the menu order is the user's own; learning only reorders replies
+                suggestedKeys = emptyList()
+                val deep = deepOptions()
+                val sug = out.suggest(deep.keys, clock()).mapNotNull { deep[it] }
+                suggestedKeys = sug.map { it.key }
+                sug + all.values.toList()   // the menu order is the user's own; only the small Suggested slot in front adapts
             }
             Screen.TASK -> {   // "Add task" first, then this page of tasks (a click right after hearing one = done), then "More tasks"
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)
@@ -462,6 +467,15 @@ class ControllerMode(
             Screen.COMPOSE -> if (m == null) emptyList() else composeOptions(m, l)
             Screen.SENT -> emptyList()
         }
+    }
+
+    /** The options one level down that can be offered straight from the hub (never Back or Done). */
+    private fun deepOptions(): Map<String, Opt> {
+        val keep = screen
+        try {
+            return listOf(Screen.INFO, Screen.PHONE, Screen.GAMES).flatMap { screen = it; buildOptions() }
+                .filter { !it.key.endsWith(":back") }.associateBy { it.key }
+        } finally { screen = keep }
     }
 
     private fun messageOptions(m: Msg): List<Opt> {
@@ -629,11 +643,13 @@ class ControllerMode(
     private fun tn(t: Tone) { tonesPlayed++; out.tone(t) }
 
     private var backPicked = false
+    private var suggestedKeys = listOf<String>()   // what the hub offered first (for the hit log)
     private var backNav = false   // going back: only the falling Back tone sounds; the screen's own (rising) arrival tone is skipped
     /** True once after the user picked a "Back" item: the click should sound like leaving (falling), not like entering. */
     fun consumeBackPick(): Boolean = backPicked.also { backPicked = false }
 
     private fun pick(intent: String, sender: String = "") {
+        if (suggestedKeys.isNotEmpty() && screen == Screen.HUB) out.log("SUGGEST ${if (intent in suggestedKeys) "hit" else "miss"} $intent")
         backPicked = intent.endsWith(":back") || intent == "volume:done"
         if (backPicked) backNav = true
         out.choice(screen.name, code, intent, sender)
