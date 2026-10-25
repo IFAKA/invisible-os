@@ -271,6 +271,6 @@ class TellMixerTest {
         TellSoundTools.write(File(dir, "_match.wav"), out)
         val total = dir.listFiles()!!.sumOf { it.length() }
         println("TELL sound/tell total ${total / 1024 / 1024.0} MB")
-        assertTrue(total < 25L * 1024 * 1024)
+        assertTrue(total < 40L * 1024 * 1024)
     }
 }

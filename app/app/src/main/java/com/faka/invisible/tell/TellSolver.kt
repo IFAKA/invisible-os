@@ -14,6 +14,7 @@ class TellSolver {
     private val value = Array(h + 1) { DoubleArray(eN * eN * lMax * lMax) }
     private val mixes = Array(h) { arrayOfNulls<DoubleArray>(eN * eN * lMax * lMax) }
     @Volatile private var solved = false
+    val isSolved: Boolean get() = solved
 
     private fun idx(s: State) = ((s.myE * eN + s.oppE) * lMax + (s.myL - 1)) * lMax + (s.oppL - 1)
 
