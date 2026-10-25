@@ -40,3 +40,40 @@ Not needed: kernel, drivers, file manager, icon launcher (Android has them).
 
 ## Later (only with real users)
 Custom Android build (AOSP) that boots into this shell. Linux only after that: the design is ideas, not Android code, so keep OS parts clean.
+
+## The one-button keyboard for every app (design, 2026-10-26)
+Goal: one keyboard that works in any app and gets better the more specific the place is. Idea: **the keyboard is a candidate chooser.** The phone offers two things, you click or hold. What changes with the place is only where the candidates come from.
+
+### 1. The door: how it reaches any app
+- **Input method service (IME)**: Android lets one app be "the keyboard" for every text field. It is told the app, the kind of field (`EditorInfo`: text, number, email, URL, password, search; the hint; the send/search/go action) and the text already in the field (`InputConnection`). It writes with `commitText` / `deleteSurroundingText`; Done runs the field's action (Send, Search).
+- **Accessibility service (already in the app)**: reads the screen around the field and can set text where an IME is not used. **Notification listener (already in the app)**: sees the incoming message.
+- Risk to test first: does it work with the screen off, and in apps that block accessibility? Check: type "hola" into a notes app with only the button.
+
+### 2. The context frame (one small record, built each time a field gets focus)
+`app`, `field kind`, `field id/hint` (Gmail "To" vs "Subject" vs body), `text before the cursor`, `thread` (who, from the window title), `last messages` on screen or the notification, `time of day`. Everything stays on the phone.
+
+### 3. Candidate sources ("providers"), one interface: `candidates(frame) -> units`
+A unit is a letter, a word, a phrase or a whole value. The Write program does not change: it plays pairs of units, takes click/hold, offers next pair and the 3-click menu.
+| Field kind | What is offered |
+|---|---|
+| chat, notes, mail body | words (your model), endings and whole replies (Gemma, sees the thread) |
+| number, phone | digits first by recent use, then whole numbers you used here |
+| email address | whole addresses from contacts and history, then letters |
+| name | contacts, then letters |
+| URL, search | recent and frequent for this app, then words |
+| password | **never spoken, never logged, never sent to Gemma.** Own design later (pick from a vault). |
+
+### 4. Learning by context, scalable
+- Counts are kept in a tree of buckets: `kind > app > app+field > app+thread`. A guess uses the most specific bucket that has data, and backs off up the tree (the same idea as the 2-word backoff, one level higher). New apps start from the field kind and from Gemma reading the screen.
+- Every finished text updates its buckets on the phone. Weights between buckets (general, kind, app, thread, you) are tuned from hit rate: which source had the picked word in its top 2.
+- Gemma is one more source. It runs in the background with the frame and never makes you wait.
+
+### 5. Steps, each with a check
+1. **Units + providers**: split `Ranker` into providers; same behaviour. Check: unit tests unchanged.
+2. **IME shell**: commit text, read `EditorInfo`, button routed to Write. Check: write a note in a real app, screen on, then screen off.
+3. **Field kinds**: digits, email, name, password rule. Check: one test per kind, password never logged.
+4. **Frame from screen and notification**: reply in WhatsApp offers answers to the message. Check: on the phone.
+5. **Bucket store + back-off**: Check: replay of logged finishes; hit@2 per bucket beats the global model.
+6. **Gemma with the frame**: Check: endings use the message topic; time stays background.
+7. **Learned weights**: Check: hit@2 up over a week of use.
+Measure with one number: hit@2 per bucket and seconds per text. Not built yet: all of the above (Write today uses only the last 2 words and starts from Games).
