@@ -220,7 +220,7 @@ object Actions {
             } catch (e: Throwable) { Log.e(TAG, "word model failed", e); null }
             handler.post {
                 if (lm == null) { say(TypeVoice.NO_MODEL, false); gameEnded(); return@post }
-                if (clips == null) clips = WordClips(java.io.File(app.cacheDir, "words"), { text, f, id -> tts?.setSpeechRate(TypeVoice.WORD_RATE); tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS }, { handler.post(it) })
+                if (clips == null) clips = WordClips(java.io.File(app.cacheDir, "words"), { text, f, id -> setVoice(if (lm is NgramWords) "es" else null); tts?.setSpeechRate(TypeVoice.WORD_RATE); tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS }, { handler.post(it) })
                 val timers = object : Timers {
                     override fun set(key: String, delayMs: Long, task: () -> Unit) { clear(key); val r = Runnable { typeTimers.remove(key); task() }; typeTimers[key] = r; handler.postDelayed(r, delayMs) }
                     override fun clear(key: String) { typeTimers.remove(key)?.let { handler.removeCallbacks(it) } }
@@ -239,7 +239,7 @@ object Actions {
                     override fun cue(c: TypeCue) { play(TypeSounds.pcm(c)) }
                     override fun finished(text: String) {
                         Log.d(TAG, "WRITE result: $text"); EventLog.add("write: $text")
-                        handler.postDelayed({ this@Actions.say(text.ifEmpty { TypeVoice.EMPTY }, false) }, 700)
+                        handler.postDelayed({ if (text.isEmpty()) this@Actions.say(TypeVoice.EMPTY, false) else this@Actions.say(text, false, if (lm is NgramWords) "es" else null) }, 700)
                     }
                 }
                 typer = TypeProgram(lm, out, timers) { typer = null; stopPair(); gameEnded() }.also { it.start() }
