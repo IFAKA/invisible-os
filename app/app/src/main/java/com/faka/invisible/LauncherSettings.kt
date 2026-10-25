@@ -21,7 +21,7 @@ data class LauncherSettings(
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** What is inside "More", in the order spoken. "exit" is always kept. */
-        val MORE_ITEMS = linkedMapOf("read" to "Read unread messages", "torch" to "Torch", "dnd" to "Do not disturb", "addtask" to "Add task", "exit" to "Exit")
+        val MORE_ITEMS = linkedMapOf("read" to "Read unread messages", "torch" to "Torch", "dnd" to "Do not disturb", "exit" to "Exit")
         val DEFAULT_MORE = MORE_ITEMS.keys.toList()
         fun cleanMore(keys: List<String>): List<String> = keys.filter { it in MORE_ITEMS }.distinct().let { if ("exit" in it) it else it + "exit" }
 
@@ -41,7 +41,7 @@ object SettingsStore {
         val d = LauncherSettings()
         return LauncherSettings(
             hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withTasks(p, withPlaying(p, it))) } ?: d.hub,
-            more = p.getString("s_more", null)?.split(',')?.let { LauncherSettings.cleanMore(withAddTask(p, it)) } ?: d.more,
+            more = p.getString("s_more", null)?.split(',')?.let { LauncherSettings.cleanMore(it) } ?: d.more,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
             itemGapMs = p.getLong("s_gap", d.itemGapMs).coerceIn(600, 4000),
             silentLoops = p.getInt("s_loops", d.silentLoops).coerceIn(1, 5),
@@ -66,16 +66,6 @@ object SettingsStore {
         val at = rest.indexOf("messages") + 1
         val moved = rest.take(at) + "tasks" + rest.drop(at)
         p.edit().putBoolean("s_tasks_saved", true).putString("s_hub", moved.joinToString(",")).apply()
-        return moved
-    }
-
-    /** A saved "More" from before "Add task" existed gets it once, just before Exit. */
-    private fun withAddTask(p: SharedPreferences, keys: List<String>): List<String> {
-        if (p.getBoolean("s_addtask_saved", false)) return keys
-        val rest = keys.filter { it != "addtask" }
-        val at = rest.indexOf("exit").let { if (it < 0) rest.size else it }
-        val moved = rest.take(at) + "addtask" + rest.drop(at)
-        p.edit().putBoolean("s_addtask_saved", true).putString("s_more", moved.joinToString(",")).apply()
         return moved
     }
 

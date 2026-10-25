@@ -63,6 +63,8 @@ class ModeTest {
             override fun set(key: String, delayMs: Long, task: () -> Unit) { timers[key] = (now + delayMs) to task }
             override fun clear(key: String) { timers.remove(key) }
         }, { now }, ranker, pauseMs = gap)
+        init { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks") }   // the older timing tests count menu items
+        fun withTasks() = apply { m.settings = LauncherSettings() }
         fun g(vararg x: Gesture) = x.forEach { m.onGesture(it) }
         fun advance(ms: Long) {
             val end = now + ms
@@ -422,9 +424,9 @@ class ModeTest {
     }
 
     @Test fun tasksAreInTheHubOnlyWhenOpenAndDoneRemovesThemOneByOne() {
-        val r0 = Rig(); r0.wake(); r0.advance(400 + 1300 * 6)
-        assertFalse(r0.spoken().any { it.startsWith("say Tasks") })
-        val r = Rig(); r.taskStore.add("Buy milk"); r.taskStore.add("Call mum")
+        val r0 = Rig().withTasks(); r0.wake(); r0.advance(400 + 1300 * 8)
+        assertTrue(r0.spoken().contains("say Tasks, none"))   // always in the menu
+        val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.taskStore.add("Call mum")
         r.wake(); r.pick("Tasks, 2")
         r.advance(400 + 600)
         assertTrue(r.log.contains("say[es] 1 of 2: Buy milk"))
@@ -437,14 +439,14 @@ class ModeTest {
     }
 
     @Test fun clickingDuringTheCancelWindowKeepsTheTask() {
-        val r = Rig(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1000)
+        val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1000)
         r.pick("Done"); r.advance(1000); r.click()
         r.advance(5000)
         assertEquals(1, r.taskStore.all().size)
     }
 
     @Test fun longTasksAreCutAndDuplicatesAreSkipped() {
-        val r = Rig(); r.taskStore.add("x".repeat(400)); r.wake(); r.pick("Tasks, 1"); r.advance(1000)
+        val r = Rig().withTasks(); r.taskStore.add("x".repeat(400)); r.wake(); r.pick("Tasks, 1"); r.advance(1000)
         assertTrue(r.log.any { it.startsWith("say[es] x") && it.endsWith("y más") && it.length < 200 })
         val s = TaskStore(); assertEquals(1, s.addAll("[ ] Buy milk\n[ ] buy MILK")); assertEquals(0, s.addAll("[ ] Buy milk"))
     }
@@ -490,8 +492,8 @@ class ModeTest {
     }
 
     @Test fun addTaskMenuOffersPastTasksAndAddsTheChosenOne() {
-        val r = Rig(); r.offers = listOf(Task(0, "Buy milk", "en"), Task(0, "Call mum", "es"))
-        r.wake(); r.pick("More"); r.pick("Add task"); r.pick("Call mum")
+        val r = Rig().withTasks(); r.offers = listOf(Task(0, "Buy milk", "en"), Task(0, "Call mum", "es"))
+        r.wake(); r.pick("Tasks, none"); r.advance(1500); assertTrue(r.log.contains("say Add a task")); r.pick("Call mum")
         assertEquals(listOf("Call mum"), r.taskStore.all().map { it.text })
         r.advance(2000); assertTrue(r.log.contains("say Task added"))
     }

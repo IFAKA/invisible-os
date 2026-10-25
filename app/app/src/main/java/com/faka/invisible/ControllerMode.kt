@@ -267,6 +267,7 @@ class ControllerMode(
             val body = t.text.let { x -> if (x.length <= MAX_SPOKEN) x else x.take(MAX_SPOKEN).trimEnd() + (if (lang == "es") " y más" else " and more") }
             intro += Intro(if (taskList.size > 1) "${taskIdx + 1} of ${taskList.size}: $body" else body, lang, null)
         }
+        if (s == Screen.TASK_ADD) intro += Intro("Add a task", null, null)
         if (s == Screen.TIMER_DONE) intro += Intro("Timer done", null, null)
         curIntro = null
         timers.set("scan", toneGapMs) { nextIntro() }
@@ -371,7 +372,14 @@ class ControllerMode(
                 for (k in settings.hub) when (k) {
                     "messages" -> if (n > 0) all["hub:messages"] = Opt("hub:messages", "Messages, $n unread", null) { readUnread("hub:messages") }
                     "playing" -> out.nowPlaying()?.let { song -> all["hub:playing"] = Opt("hub:playing", "Playing", null) { pick("hub:playing"); outro(song, out.songLang(song)) } }   // only when the music app has a song
-                    "tasks" -> out.tasks().let { ts -> if (ts.isNotEmpty()) all["hub:tasks"] = Opt("hub:tasks", "Tasks, ${ts.size}", null) { pick("hub:tasks"); taskList = ts; taskIdx = 0; show(Screen.TASK) } }
+                    "tasks" -> out.tasks().let { ts -> all["hub:tasks"] = Opt("hub:tasks", if (ts.isEmpty()) "Tasks, none" else "Tasks, ${ts.size}", null) {
+                        pick("hub:tasks"); taskList = ts; taskIdx = 0
+                        when {
+                            ts.isNotEmpty() -> show(Screen.TASK)
+                            out.taskOffers().isNotEmpty() -> show(Screen.TASK_ADD)
+                            else -> { say("No tasks yet"); phase = Phase.WAIT; waitNext = { beginScan() } }
+                        }
+                    } }
                     "timer" -> all["hub:timer"] = Opt("hub:timer", "Timer", null) { pick("hub:timer"); show(Screen.TIMER_PICK) }
                     "volume" -> all["hub:volume"] = Opt("hub:volume", "Volume", null) { pick("hub:volume"); show(Screen.VOLUME) }
                     "status" -> all["hub:status"] = Opt("hub:status", "Status", null) { pick("hub:status"); outro(Spoken.status(out.status(), unread().size)) }
@@ -385,11 +393,11 @@ class ControllerMode(
                     val t = taskList.getOrNull(taskIdx)
                     if (t != null) startPending(null, "Done. Click to cancel", { out.completeTask(t.id); true }, onCancel = { show(Screen.TASK) }, after = {
                         taskList = taskList - t
-                        if (taskList.isEmpty()) { say("All done"); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } }
+                        if (taskList.isEmpty()) { say("All done"); phase = Phase.WAIT; waitNext = { afterTasks() } }
                         else { if (taskIdx >= taskList.size) taskIdx = 0; show(Screen.TASK) }
                     })
                 },
-                Opt("task:next", "Next", null) { pick("task:next"); taskIdx++; show(if (taskIdx >= taskList.size) Screen.HUB else Screen.TASK) })
+                Opt("task:next", "Next", null) { pick("task:next"); taskIdx++; if (taskIdx >= taskList.size) afterTasks() else show(Screen.TASK) })
             Screen.TASK_ADD -> out.taskOffers().map { t ->
                 Opt("taskadd", t.text.take(MAX_SPOKEN), t.lang.ifEmpty { null }) {
                     pick("taskadd"); out.addTask(t.text, t.lang); say("Task added"); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
@@ -406,7 +414,6 @@ class ControllerMode(
                 "read" -> Opt("more:read", "Read unread messages", null) { readUnread("more:read") }
                 "torch" -> Opt("more:torch", "Torch", null) { pick("more:torch"); out.runAction("Flashlight"); afterSpeech { beginScan() } }
                 "dnd" -> if (out.dndAllowed()) Opt("more:dnd", "Do not disturb", null) { pick("more:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null
-                "addtask" -> if (out.taskOffers().isNotEmpty()) Opt("more:addtask", "Add task", null) { pick("more:addtask"); show(Screen.TASK_ADD) } else null
                 "exit" -> Opt("more:exit", "Exit", null) { pick("more:exit"); exit(true) }
                 else -> null
             } }
@@ -464,6 +471,9 @@ class ControllerMode(
 
     /** Menu keys in the order the phone speaks them (the order the user set). Items with nothing to say right now are still listed. */
     fun hubOrder(): List<String> = settings.hub
+
+    /** The end of the task list: your own past tasks to add, or the menu if there are none. */
+    private fun afterTasks() = show(if (out.taskOffers().isNotEmpty()) Screen.TASK_ADD else Screen.HUB)
 
     private fun lastTimer() = out.lastTimer().let { if (it > 0) it else 15 }
 
