@@ -23,7 +23,7 @@ class TypingTest {
     private val lm = object : Ranker {
         override fun ranked(context: List<String>): List<Pair<String, Double>> {
             val ws = if (context.isEmpty()) listOf("hello", "thanks", "yes", "nope", "later", "okay", "call", "nowhere")
-            else listOf("you", "me", "soon", "later", "home", "work", "there", "here")
+            else listOf("you", "mate", "soon", "later", "home", "work", "there", "here")
             return ws.mapIndexed { i, w -> w to -(i + 1).toDouble() }
         }
     }
@@ -48,9 +48,9 @@ class TypingTest {
         p.start()
         assertEquals("hello" to "thanks", pairs.last())
         clicks(1)
-        assertEquals("you" to "me", pairs.last())
+        assertEquals("you" to "mate", pairs.last())
         hold(700)
-        assertEquals("Hello me", p.text())
+        assertEquals("Hello mate", p.text())
     }
 
     @Test fun twoClicksShowNextPair() {
