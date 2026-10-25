@@ -14,6 +14,7 @@ class ModeTest {
         var ringing = false
         var dnd = true
         var last = 0
+        var song: String? = null
         var favs = listOf<String>()
         var now = 1_000_000L
         var vol = 7
@@ -45,6 +46,7 @@ class ModeTest {
             override fun status() = Status(15, 5, 80, 7, 30)
             override fun dndAllowed() = dnd
             override fun lastTimer() = last
+            override fun nowPlaying() = song
             override fun setLastTimer(minutes: Int) { last = minutes }
             override fun favourites() = favs
             override fun codeCount() = codes
@@ -406,10 +408,17 @@ class ModeTest {
         assertFalse(r.m.active)
     }
 
+    @Test fun playingIsInTheHubOnlyWhenASongExistsAndIsSpokenThenLeaves() {
+        val r = Rig(); r.wake(); r.advance(400 + 1300 * 5)
+        assertFalse(r.spoken().contains("say Playing"))
+        val q = Rig(); q.song = "Blue, Ana"; q.wake(); q.pick("Playing")
+        assertTrue(q.log.contains("say Blue, Ana"))
+    }
+
     @Test fun timerOptionsAndLastUsed() {
         val r = Rig(); r.last = 7; r.wake(); r.pick("Timer")
-        r.advance(400 + 1300 * 3 + 600)
-        assertEquals(listOf("say Five minutes", "say Ten minutes", "say Twenty five minutes", "say Last used"), r.spoken())
+        r.advance(400 + 600)
+        assertEquals(listOf("say Last used"), r.spoken())   // the last timer is the first option: one click repeats it
         r.click(); assertTrue(r.log.contains("say Starting. Click to cancel"))
         r.advance(4000); assertTrue(r.log.contains("timer 7"))
     }

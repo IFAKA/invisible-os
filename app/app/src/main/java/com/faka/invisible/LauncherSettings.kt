@@ -16,7 +16,7 @@ data class LauncherSettings(
     val learnOrder: Boolean = true,
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "more" to "More")
+        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "playing" to "Playing", "more" to "More")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** Keep known keys once each, in order; "more" is always present (it holds Exit, Torch, Read). */
@@ -34,7 +34,7 @@ object SettingsStore {
     fun load(p: SharedPreferences): LauncherSettings {
         val d = LauncherSettings()
         return LauncherSettings(
-            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(it) } ?: d.hub,
+            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withPlaying(p, it)) } ?: d.hub,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
             itemGapMs = p.getLong("s_gap", d.itemGapMs).coerceIn(600, 4000),
             silentLoops = p.getInt("s_loops", d.silentLoops).coerceIn(1, 5),
@@ -42,6 +42,15 @@ object SettingsStore {
             speechRate = p.getFloat("s_rate", d.speechRate).coerceIn(0.6f, 1.8f),
             learnOrder = p.getBoolean("s_learn", d.learnOrder),
         )
+    }
+
+    /** A saved menu from before "Playing" existed gets it once, before More (the user can switch it off in settings). */
+    private fun withPlaying(p: SharedPreferences, keys: List<String>): List<String> {
+        if (p.getBoolean("s_playing_added", false)) return keys
+        p.edit().putBoolean("s_playing_added", true).apply()
+        if ("playing" in keys) return keys
+        val i = keys.indexOf("more").let { if (it < 0) keys.size else it }
+        return keys.take(i) + "playing" + keys.drop(i)
     }
 
     fun save(p: SharedPreferences, s: LauncherSettings) {

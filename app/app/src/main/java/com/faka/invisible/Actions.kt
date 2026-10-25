@@ -57,6 +57,13 @@ object Actions {
             override fun runAction(name: String) = menuAction(name)
             override fun forward(what: Forward) = forwardToMusic(what)
             override fun log(line: String) { Log.d(TAG, line); if (line.startsWith("MODE")) EventLog.add(line) }
+            override fun nowPlaying(): String? = otherSessions().firstNotNullOfOrNull { c ->
+                c.metadata?.let { md ->
+                    val title = md.getString(android.media.MediaMetadata.METADATA_KEY_TITLE)
+                    val artist = md.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST)
+                    if (title.isNullOrBlank()) null else if (artist.isNullOrBlank()) title else "$title, $artist"
+                }
+            }
             override fun pauseMusic() = pauseMusicNow()
             override fun resumeMusic() = resumeMusicNow()
             override fun volume(up: Boolean) = adjustVolume(up)

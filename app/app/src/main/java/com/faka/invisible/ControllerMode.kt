@@ -33,6 +33,7 @@ interface ModeOutput {
     fun messages(): List<Msg>        // latest unread messages, newest first
     fun reply(key: String, text: String): Boolean   // true if the reply was sent
     fun status(): Status
+    fun nowPlaying(): String? = null   // "Title, Artist" of the music app, null if none
     fun dndAllowed(): Boolean
     fun lastTimer(): Int             // minutes, 0 = none yet
     fun setLastTimer(minutes: Int)
@@ -357,6 +358,7 @@ class ControllerMode(
                 val n = unread().size
                 for (k in settings.hub) when (k) {
                     "messages" -> if (n > 0) all["hub:messages"] = Opt("hub:messages", "Messages, $n unread", null) { readUnread("hub:messages") }
+                    "playing" -> out.nowPlaying()?.let { song -> all["hub:playing"] = Opt("hub:playing", "Playing", null) { pick("hub:playing"); outro(song) } }   // only when the music app has a song
                     "timer" -> all["hub:timer"] = Opt("hub:timer", "Timer", null) { pick("hub:timer"); show(Screen.TIMER_PICK) }
                     "volume" -> all["hub:volume"] = Opt("hub:volume", "Volume", null) { pick("hub:volume"); show(Screen.VOLUME) }
                     "status" -> all["hub:status"] = Opt("hub:status", "Status", null) { pick("hub:status"); outro(Spoken.status(out.status(), unread().size)) }
@@ -364,7 +366,7 @@ class ControllerMode(
                 }
                 if (settings.learnOrder) ranker.rank("HUB", "", all.keys.toList()).mapNotNull { all[it] } else all.values.toList()
             }
-            Screen.TIMER_PICK -> (settings.timers.map { it to Spoken.minutes(it) } + (lastTimer() to "Last used")).map { (min, label) ->
+            Screen.TIMER_PICK -> (settings.timers.map { it to Spoken.minutes(it) }.let { t -> if (out.lastTimer() > 0) listOf(lastTimer() to "Last used") + t else t + (lastTimer() to "Last used") }).map { (min, label) ->
                 Opt("timer:$min", label, null) { pick("timer:$min"); startTimerPending(min) }
             }
             Screen.VOLUME -> listOf(
