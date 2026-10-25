@@ -181,6 +181,10 @@ object Actions {
     }
 
     private var duel: TellAndroid? = null
+
+    /** The OS rule for every game: when a game gives the phone back, the OS says goodbye with its own close sound. A game never plays it. */
+    private fun gameEnded() { handler.post { beep(Tone.EXIT) } }
+
     private fun startDuel(coach: Boolean) {
         duel?.stop()
         duel = TellAndroid(prefs(), handler, object : TellHost {
@@ -189,7 +193,7 @@ object Actions {
             override fun pauseMusic() { pauseMusicNow() }
             override fun resumeMusic() = resumeMusicNow()
             override fun log(line: String) { Log.d(TAG, line); EventLog.add(line) }
-        }, onEnded = { duel = null; handler.post { beep(Tone.EXIT) } }, coach = coach).also { it.start() }
+        }, onEnded = { duel = null; gameEnded() }, coach = coach).also { it.start() }
     }
 
     /** Call on the main thread. repeatCount > 0 is ignored (the hold timer handles holds). */
