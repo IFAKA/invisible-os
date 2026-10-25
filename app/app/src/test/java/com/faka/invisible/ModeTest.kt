@@ -18,6 +18,7 @@ class ModeTest {
         var song: String? = null
         val taskStore = TaskStore()
         var offers = listOf<Task>()
+        var aiList = listOf<Task>(); val prepared = ArrayList<String>()
         var replyOffersList = listOf<Task>(); val remembered = ArrayList<String>()
         var favs = listOf<String>()
         var now = 1_000_000L
@@ -54,6 +55,8 @@ class ModeTest {
             override fun tasks() = taskStore.all()
             override fun completeTask(id: Long) = taskStore.done(id)
             override fun taskOffers() = offers
+            override fun prepareAiReplies(m: Msg) { prepared.add(m.key) }
+            override fun aiReplies(m: Msg) = aiList
             override fun replyOffers() = replyOffersList
             override fun rememberReply(text: String, lang: String) { remembered.add(text) }
             override fun addTask(text: String, lang: String) = taskStore.add(text, lang) != null
@@ -533,6 +536,13 @@ class ModeTest {
         val r = Rig(); r.msgs = listOf(bob); r.replyOffersList = listOf(Task(0, "On my way", "en"))
         r.wake(); r.advance(500); r.click(); r.pick("More"); r.pick("Compose"); r.advance(9000)
         assertTrue(r.log.contains("say[en] On my way"))
+    }
+
+    @Test fun aMessageStartsTheLocalModelAndComposeOffersItsSentences() {
+        val r = Rig(); r.msgs = listOf(bob); r.aiList = listOf(Task(0, "Sí, me encantaría ir.", "es"))
+        r.wake(); r.advance(500); assertTrue(r.prepared.isNotEmpty())
+        r.click(); r.pick("More"); r.pick("Compose"); r.advance(5000)
+        assertTrue(r.log.contains("say[es] Sí, me encantaría ir."))
     }
 
     @Test fun aSentReplyIsRemembered() {

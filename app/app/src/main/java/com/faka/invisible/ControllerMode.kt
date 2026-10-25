@@ -40,6 +40,8 @@ interface ModeOutput {
     fun addTask(text: String, lang: String): Boolean = false
     fun replyOffers(): List<Task> = emptyList()   // the user's own past replies, most used first
     fun rememberReply(text: String, lang: String) {}
+    fun prepareAiReplies(m: Msg) {}              // start writing reply sentences with the local model (background, cached)
+    fun aiReplies(m: Msg): List<Task> = emptyList()   // the cached sentences, empty if not ready
     fun nowPlaying(): String? = null   // "Title, Artist" of the music app, null if none
     fun dndAllowed(): Boolean
     fun lastTimer(): Int             // minutes, 0 = none yet
@@ -265,6 +267,7 @@ class ControllerMode(
         intro.clear()
         if (hintPending) { hintPending = false; intro += Intro(Voice.HINT, null, null, hint = true) }
         val m = cur
+        if (s == Screen.MESSAGE && m != null) out.prepareAiReplies(m)
         if (s == Screen.MESSAGE && m != null && hid(m) !in heard) intro += Intro("${m.sender}: ${shortText(m)}", vl(m), hid(m))
         if (s == Screen.TASK_ADD) intro += Intro("Add a task", null, null)
         if (s == Screen.TIMER_DONE) intro += Intro("Timer done", null, null)
@@ -461,12 +464,14 @@ class ControllerMode(
     }
 
     /** One step: the answer. The time word of the message (today, tonight, tomorrow) is pre-filled in the sent text. */
-    private fun composeOptions(m: Msg, l: String?): List<Opt> = listOf(Answer.YES, Answer.NO, Answer.MAYBE).map { a ->
-        Opt("send:compose:$a", MessageLogic.word(a, "en"), l) {
-            sendPending(m, MessageLogic.compose(a, MessageLogic.timeWord(m.text), Extra.NOTHING, m.lang), "send:compose $a")
-        }
-    } + Opt("send:ask_details", "Ask details", l) { sendPending(m, MessageLogic.tellMeMore(m.lang), "send:ask_details") } +
-        phraseOptions(out.replyOffers().take(3), "send:mine") { t -> sendPending(m, t.text, "send:mine") }
+    private fun composeOptions(m: Msg, l: String?): List<Opt> =
+        phraseOptions(out.replyOffers().take(3), "send:mine") { t -> sendPending(m, t.text, "send:mine") } +
+        phraseOptions(out.aiReplies(m), "send:ai") { t -> sendPending(m, t.text, "send:ai") } +   // your own words first, then the model's sentences, then the fixed answers
+        listOf(Answer.YES, Answer.NO, Answer.MAYBE).map { a ->
+            Opt("send:compose:$a", MessageLogic.word(a, "en"), l) {
+                sendPending(m, MessageLogic.compose(a, MessageLogic.timeWord(m.text), Extra.NOTHING, m.lang), "send:compose $a")
+            }
+        } + Opt("send:ask_details", "Ask details", l) { sendPending(m, MessageLogic.tellMeMore(m.lang), "send:ask_details") }
 
     /** Your own past tasks first, then starters (so "Add task" works on day one); open tasks are left out. */
     private fun taskChoices(): List<Task> {
