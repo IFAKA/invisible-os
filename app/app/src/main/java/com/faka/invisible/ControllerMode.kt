@@ -58,6 +58,7 @@ interface ModeOutput {
     fun wiredConnected(): Boolean = false   // a wired headset or USB audio is plugged in: then "Find my phone" is not offered
     fun navigation(): String? = null   // the latest Google Maps instruction as one sentence; null = not navigating
     fun findPhone(on: Boolean) {}   // ring loudly on the alarm stream (on) or stop (off)
+    fun setContext(tags: Set<String>) {}   // the situation now (Suggester.TAGS); it is stored with every choice
     fun suggest(candidates: Collection<String>, now: Long): List<String> = emptyList()   // the OS's "Suggested" slot: up to 3 of these deep options, best first
     fun pickCount(intent: String): Int = 0   // how often this option was picked (spearcon after [ControllerMode.SPEARCON_AFTER] picks)
 }
@@ -406,6 +407,7 @@ class ControllerMode(
                     "games" -> all["hub:games"] = Opt("hub:games", "Games", null) { pick("hub:games"); show(Screen.GAMES) }
                 }
                 suggestedKeys = emptyList()
+                out.setContext(buildSet { if (n > 0) add("unread"); if (out.nowPlaying() != null) add("playing"); if (out.navigation() != null) add("navigating"); if (out.wiredConnected()) add("wired") })
                 val deep = deepOptions()
                 val sug = out.suggest(deep.keys, clock()).mapNotNull { deep[it] }
                 suggestedKeys = sug.map { it.key }

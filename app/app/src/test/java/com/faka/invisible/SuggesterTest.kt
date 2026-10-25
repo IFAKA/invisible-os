@@ -40,4 +40,22 @@ class SuggesterTest {
         val (hits, total) = Suggester.hitRate(h, cands)
         assertEquals(10, total); assertEquals(8, hits)   // the first two picks cannot be predicted
     }
+
+    private fun q(d: Int, h: Int, i: String, vararg t: String) = Suggester.Pick(at(d, h), i, t.toSet())
+
+    @Test fun theSameSituationWinsOverPlainCounts() {
+        // weather is picked more often, but "next turn" was always picked while navigating
+        val h = listOf(q(-3, 8, "info:weather"), q(-3, 9, "info:weather"), q(-2, 8, "info:weather"),
+            q(-2, 8, "info:turn", "navigating"), q(-1, 8, "info:turn", "navigating"))
+        assertEquals("info:weather", Suggester.top(h, setOf("info:weather", "info:turn"), at(0, 8))[0])
+        assertEquals("info:turn", Suggester.top(h, setOf("info:weather", "info:turn"), at(0, 8), tags = setOf("navigating"))[0])
+    }
+
+    @Test fun choiceLogKeepsTheSituationOfEachPick() {
+        val log = ChoiceLog()
+        val line = log.record(5L, "HUB", 1, "phone:torch", "", setOf("wired", "unread"))
+        val back = ChoiceLog(listOf(line))
+        assertEquals(setOf("unread", "wired"), back.history().single().tags)
+        assertEquals(emptySet<String>(), ChoiceLog(listOf("5\tHUB\t1\tphone:torch\t")).history().single().tags)   // an old line without the column
+    }
 }

@@ -12,8 +12,9 @@ class ChoiceLog(initial: List<String> = emptyList(), private val append: (String
 
     init { initial.forEach { count(it) } }
 
-    fun record(ts: Long, screen: String, code: Int, intent: String, sender: String = ""): String {
-        val line = listOf(ts.toString(), screen, code.toString(), intent, sender).joinToString("\t") { it.replace(Regex("[\\t\\n\\r]"), " ") }
+    /** [tags] = the situation (see [Suggester.TAGS]) as a 6th column. */
+    fun record(ts: Long, screen: String, code: Int, intent: String, sender: String = "", tags: Set<String> = emptySet()): String {
+        val line = listOf(ts.toString(), screen, code.toString(), intent, sender, tags.sorted().joinToString(",")).joinToString("\t") { it.replace(Regex("[\\t\\n\\r]"), " ") }
         count(line)
         append(line)
         return line
@@ -23,7 +24,7 @@ class ChoiceLog(initial: List<String> = emptyList(), private val append: (String
         val p = line.split('\t')
         if (p.size < 5) return
         intents[p[3]] = (intents[p[3]] ?: 0) + 1
-        p[0].toLongOrNull()?.let { picks += Suggester.Pick(it, p[3]) }
+        p[0].toLongOrNull()?.let { picks += Suggester.Pick(it, p[3], p.getOrNull(5)?.split(',')?.filter { t -> t.isNotBlank() }?.toSet() ?: emptySet()) }
         if (p[3].startsWith("send") && p[4].isNotBlank()) senders[p[4]] = (senders[p[4]] ?: 0) + 1
     }
 

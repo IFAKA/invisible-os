@@ -68,6 +68,7 @@ object Actions {
 
     private val modeTimers = HashMap<String, Runnable>()
     var choices = ChoiceLog()
+    private var context: Set<String> = emptySet()   // what the OS saw when the hub was last built (see Suggester.TAGS)
         private set
     val mode: ControllerMode = ControllerMode(
         out = object : ModeOutput {
@@ -135,9 +136,10 @@ object Actions {
             override fun startWrite() = launchWrite()
             override fun pickCount(intent: String) = choices.intentCount(intent)
             override fun favourites() = choices.favourites()
-            override fun suggest(candidates: Collection<String>, now: Long) = Suggester.top(choices.history(), candidates, now)
+            override fun suggest(candidates: Collection<String>, now: Long) = Suggester.top(choices.history(), candidates, now, tags = context)
+            override fun setContext(tags: Set<String>) { context = tags }
             override fun choice(screen: String, code: Int, intent: String, sender: String) {
-                choices.record(System.currentTimeMillis(), screen, code, intent, sender)
+                choices.record(System.currentTimeMillis(), screen, code, intent, sender, context)
             }
         },
         timers = object : Timers {
