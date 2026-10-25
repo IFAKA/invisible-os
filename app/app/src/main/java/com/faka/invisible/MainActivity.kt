@@ -140,11 +140,11 @@ class MainActivity : Activity() {
                         change(s.copy(hub = LauncherSettings.cleanHub(if (v) s.hub + k else s.hub - k)))
                     } },
                     grow(text("  " + LauncherSettings.HUB_ITEMS[k] + if (locked) "  (has Exit, Torch)" else "", 16f, if (on) ink else soft)),
-                    if (on && !s.learnOrder && shown.indexOf(k) > 0) btn("↑") { move(k, -1) }.apply { minWidth = dp(48) } else spacer(),
-                    if (on && !s.learnOrder && shown.indexOf(k) < shown.size - 1) btn("↓") { move(k, 1) }.apply { minWidth = dp(48) } else spacer()))
+                    if (on && shown.indexOf(k) > 0) btn("↑") { move(k, -1) }.apply { minWidth = dp(48) } else spacer(),
+                    if (on && shown.indexOf(k) < shown.size - 1) btn("↓") { move(k, 1) }.apply { minWidth = dp(48) } else spacer()))
             }
-            addView(text((if (s.learnOrder) "Order is automatic (most picked first). You hear: " else "You hear: ") + shown.joinToString(", ") { LauncherSettings.HUB_ITEMS[it]!! }, 14f, accent).apply { setPadding(0, dp(8), 0, 0) })
-            addView(row(grow(text("Move the options you pick most to the front (automatic)", 15f)),
+            addView(text("You hear: " + shown.joinToString(", ") { LauncherSettings.HUB_ITEMS[it]!! }, 14f, accent).apply { setPadding(0, dp(8), 0, 0) })
+            addView(row(grow(text("Reply options: put the ones you pick most first (automatic)", 15f)),
                 Switch(this@MainActivity).apply { isChecked = s.learnOrder; setOnCheckedChangeListener { _, v -> change(s.copy(learnOrder = v)) } }))
         }
 

@@ -437,7 +437,7 @@ class ModeTest {
         val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("timer", "volume", "more"), learnOrder = false)
         assertEquals(listOf("timer", "volume", "more"), r.m.hubOrder())
         r.m.settings = r.m.settings.copy(learnOrder = true)
-        assertEquals(setOf("timer", "volume", "more"), r.m.hubOrder().toSet())
+        assertEquals(listOf("timer", "volume", "more"), r.m.hubOrder())   // learning never changes the user's menu order
     }
 
     @Test fun taskStoreSavesAndReloads() {

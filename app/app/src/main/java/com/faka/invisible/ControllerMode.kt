@@ -373,7 +373,7 @@ class ControllerMode(
                     "status" -> all["hub:status"] = Opt("hub:status", "Status", null) { pick("hub:status"); outro(Spoken.status(out.status(), unread().size)) }
                     "more" -> all["hub:more"] = Opt("hub:more", "More", null) { pick("hub:more"); show(Screen.MORE_HUB) }
                 }
-                if (settings.learnOrder) ranker.rank("HUB", "", all.keys.toList()).mapNotNull { all[it] } else all.values.toList()
+                all.values.toList()   // the menu order is the user's own; learning only reorders replies
             }
             Screen.TASK -> listOf(
                 Opt("task:done", "Done", null) {
@@ -443,9 +443,8 @@ class ControllerMode(
         phase = Phase.WAIT; waitNext = { beginScan() }
     }
 
-    /** Menu keys in the order the phone speaks them (the app's "Your menu" shows this). Items with nothing to say right now are still listed. */
-    fun hubOrder(): List<String> =
-        if (settings.learnOrder) ranker.rank("HUB", "", settings.hub.map { "hub:$it" }).map { it.removePrefix("hub:") } else settings.hub
+    /** Menu keys in the order the phone speaks them (the order the user set). Items with nothing to say right now are still listed. */
+    fun hubOrder(): List<String> = settings.hub
 
     private fun lastTimer() = out.lastTimer().let { if (it > 0) it else 15 }
 
