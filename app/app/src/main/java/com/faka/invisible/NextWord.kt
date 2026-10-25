@@ -68,7 +68,7 @@ class NextWord(bin: InputStream, vocabText: String) : Ranker {
         return s
     }
 
-    private var rankedKey = ""
+    private var rankedKey: String? = null
     private var rankedAll: List<Pair<String, Double>> = emptyList()
 
     /** Every word, most likely first, for [context]. Kept for the last context, so paging and letter views cost nothing. */

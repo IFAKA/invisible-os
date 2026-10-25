@@ -13,6 +13,12 @@ class NextWordTest {
         assertTrue(top.toString(), "you" in top)
     }
 
+    @Test fun firstPairOfAnEmptyTextIsNotEmpty() {
+        val r = lm.ranked(emptyList())
+        assertTrue(r.size > 1000)
+        assertTrue(lm.ranked(listOf("call")).first().first != r.first().first || r.size > 1000)
+    }
+
     @Test fun probabilitiesAreSane() {
         val t = lm.top(NextWord.words("see you"), 4)
         assertTrue(t.all { it.second < 0.0 } && t[0].second >= t[3].second)
