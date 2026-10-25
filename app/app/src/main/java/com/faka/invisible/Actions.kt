@@ -284,8 +284,9 @@ object Actions {
         EventLog.add("${g.name.lowercase()}  ${dur}ms")
         val inMode = mode.active && mode.screen != ControllerMode.Screen.SENT   // a click that cancels a send has its own tone
         val before = mode.tonesPlayed
+        val scan = inMode && mode.scanning()   // while options are read: 1 click = next (step tone), 2 clicks = choose (pick tone)
         mode.onGesture(g, dur)
-        if (inMode && mode.tonesPlayed == before) when (g) { Gesture.SINGLE -> beep(if (mode.consumeBackPick()) Tone.BACK else Tone.PICK); Gesture.DOUBLE -> beep(Tone.AGAIN); Gesture.TRIPLE -> beep(Tone.BACK); else -> {} }
+        if (inMode && mode.tonesPlayed == before) when (g) { Gesture.SINGLE -> beep(if (scan) Tone.AGAIN else if (mode.consumeBackPick()) Tone.BACK else Tone.PICK); Gesture.DOUBLE -> beep(if (scan) (if (mode.consumeBackPick()) Tone.BACK else Tone.PICK) else Tone.AGAIN); Gesture.TRIPLE -> beep(Tone.BACK); else -> {} }
     }
 
     private var spTrack: AudioTrack? = null

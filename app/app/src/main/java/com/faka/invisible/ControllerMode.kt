@@ -108,7 +108,7 @@ class CountRanker(private val count: (String) -> Int) : OptionRanker {
  * Pure state machine for the v4 auto-scan launcher.
  * Idle: clicks go to the music app, hold = WAKE. In the mode ONE rule on every screen: the phone speaks the
  * options one at a time (pause, tick between items, ding at the end) and loops. 1 click = the option spoken last,
- * 2 = next option now, 3 = back one level (top: leave), 4 = leave. Two silent loops = leave. Hold = exit.
+ * 1 = next option now, 2 = choose the option spoken last, 3 = back one level (top: leave), 4 = leave. Two silent loops = leave. Hold = exit.
  * Sends and timer starts wait [undoMs] after "Click to cancel"; any click inside cancels them.
  * Events in: onGesture, onSpeechStarted, onSpeechDone. Time and timers are injected.
  */
@@ -200,12 +200,16 @@ class ControllerMode(
             Gesture.HOLD -> { stopAll(); out.choice(screen.name, 9, "exit", ""); exit(true) }
             Gesture.QUAD -> { stopAll(); out.choice(screen.name, 4, "leave", ""); leaveSilent() }
             Gesture.TRIPLE -> { stopAll(); out.choice(screen.name, 3, "back", ""); back() }
-            Gesture.DOUBLE -> { if (phase == Phase.OUTRO) { stopAll(); exit(true) } else again() }
-            Gesture.SINGLE -> when (phase) {
-                Phase.SCAN -> {
+            Gesture.DOUBLE -> when (phase) {
+                Phase.OUTRO -> { stopAll(); exit(true) }
+                Phase.SCAN -> {   // two clicks choose the option spoken last
                     val i = bind(firstPress) ?: return    // nothing spoken yet: ignore
                     stopAll(); code = i + 1; opts[i].run()
                 }
+                else -> again()
+            }
+            Gesture.SINGLE -> when (phase) {
+                Phase.SCAN -> again()   // one click: the next option now
                 Phase.INTRO -> skipIntro()
                 Phase.WAIT -> { val n = waitNext; stopAll(); n?.invoke() }
                 Phase.OUTRO -> { stopAll(); exit(true) }
@@ -353,7 +357,10 @@ class ControllerMode(
         }
     }
 
-    /** Two clicks: the next option right now (while scanning; after the last one, the first); in the other phases the list again from the first. */
+    /** One click while scanning: the next option right now (after the last one, the first). In the other phases (two clicks): the list again from the first. */
+    /** True while the options are being read: there one click moves on and two clicks choose (the tones follow). */
+    fun scanning() = active && phase == Phase.SCAN
+
     private fun again() {
         stopAll()
         out.choice(screen.name, 2, "again", "")
@@ -698,7 +705,7 @@ class ControllerMode(
 
     companion object {
         /** Pause between scanned items, from the end of one item's speech to the start of the next. Easy to change. */
-        const val SKIP_MS = 60L   // two clicks: how soon the next option starts
+        const val SKIP_MS = 60L   // one click while scanning: how soon the next option starts
         const val ITEM_GAP_MS = 1600L
         const val FIND_MS = 20_000L   // "Find my phone" rings this long
         const val SPEARCON_AFTER = 30   // picks of one option, then it is scanned as a sped-up spearcon

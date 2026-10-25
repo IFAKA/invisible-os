@@ -9,7 +9,7 @@ object Voice {
     // Button rules, same on every screen (the one `when` in ControllerMode.onGesture):
     // idle:    1 = play/pause, 2 = next, 3 = previous, hold = wake
     // in menu: 1 = pick the option just spoken, 2 = one back, 3 = back, 4 = leave, hold = exit; any click cancels a pending send
-    const val HINT = "Click when you hear it. Two clicks: next. Three clicks: go back."
+    const val HINT = "Two clicks when you hear it. One click: next. Three clicks: go back."
     const val GESTURE_HELP = "In the menu: click when you hear the option. 2 = one back, 3 = back, 4 = leave. Hold = exit."
     fun timerSet(minutes: Int) = "Timer $minutes minutes"
     const val TIMER_DONE = "Timer done"

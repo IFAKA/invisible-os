@@ -94,7 +94,9 @@ class ModeTest {
             now = end
         }
         /** The user presses NOW; the gesture is detected 350 ms later (the click gap). */
-        fun click(x: Gesture = Gesture.SINGLE) { advance(350); m.onGesture(x, 0) }
+        /** In the tests a plain click() means "choose" (the old meaning): while options are read, that is two clicks. skip() is the one click that moves on. */
+        fun click(x: Gesture = Gesture.SINGLE) { advance(350); m.onGesture(if (x == Gesture.SINGLE && m.scanning()) Gesture.DOUBLE else x, 0) }
+        fun skip() { advance(350); m.onGesture(Gesture.SINGLE, 0) }
         fun clearLog() = log.clear()
         fun wake() { g(Gesture.HOLD) }
         fun ev() = log.filter { !it.startsWith("choice") && it != "stopspeech" }
@@ -306,9 +308,9 @@ class ModeTest {
         r.advance(60_000); assertFalse(r.m.active)
     }
 
-    @Test fun twoClicksSkipToTheNextOptionAtOnce() {
+    @Test fun oneClickSkipsToTheNextOptionAtOnce() {
         val r = Rig(); r.wake(); r.advance(3100)   // Status is being spoken
-        r.clearLog(); r.click(D)
+        r.clearLog(); r.skip()
         assertTrue(r.m.active); assertEquals(ControllerMode.Screen.HUB, r.m.screen)
         r.advance(150)                              // no pause: far sooner than the 800 ms gap
         assertEquals(listOf("say Games"), r.spoken())
@@ -317,7 +319,7 @@ class ModeTest {
 
     @Test fun skippingPastTheLastOptionStartsOver() {
         val r = Rig(); r.wake(); r.advance(3100 + 1300)   // Games (the last) is being spoken
-        r.clearLog(); r.click(D); r.advance(150)
+        r.clearLog(); r.skip(); r.advance(150)
         assertEquals(listOf("say Timer"), r.spoken())
     }
 
@@ -805,14 +807,14 @@ class ModeTest {
     @Test fun learningModeSpeaksOneHintAtWakeThenOptions() {
         val r = Rig(); r.codes = 0; r.wake()
         r.advance(400)
-        assertEquals(listOf("say Click when you hear it. Two clicks: next. Three clicks: go back."), r.spoken())
+        assertEquals(listOf("say Two clicks when you hear it. One click: next. Three clicks: go back."), r.spoken())
         r.advance(500); assertEquals("say Timer", r.spoken().last())
-        r.advance(60_000); assertEquals(1, r.spoken().count { it.contains("Click when") })
+        r.advance(60_000); assertEquals(1, r.spoken().count { it.contains("Two clicks when") })
     }
 
     @Test fun noHintAfterFifteenPicks() {
         val r = Rig(); r.codes = 15; r.wake(); r.advance(450)
-        assertFalse(r.spoken().any { it.contains("Click when") })
+        assertFalse(r.spoken().any { it.contains("Two clicks when") })
     }
 
     @Test fun clickSkipsTheHintAndStartsTheOptions() {
@@ -827,7 +829,7 @@ class ModeTest {
 
     @Test fun hintComesBeforeTheMessageText() {
         val r = Rig(); r.codes = 0; r.msgs = listOf(bob); r.wake(); r.advance(500)
-        assertTrue(r.spoken().single().contains("Click when"))
+        assertTrue(r.spoken().single().contains("Two clicks when"))
         r.advance(800); assertEquals("say[en] Bob: what time is it", r.spoken().last())
     }
 
