@@ -117,5 +117,6 @@ object TypeSounds {
         TypeCue.DELETE -> tone(300.0 to 60, 200.0 to 80)
         TypeCue.DONE -> tone(523.0 to 80, 659.0 to 80, 784.0 to 140)
         TypeCue.ARMED -> tone(1000.0 to 25)
+        TypeCue.MENU -> tone(392.0 to 50, 392.0 to 50)
     }
 }

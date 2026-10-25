@@ -17,11 +17,12 @@ interface TypeOut {
     fun finished(text: String)   // the written text; "" = nothing written
 }
 
-enum class TypeCue { PICK_LEFT, PICK_RIGHT, NEXT, LETTERS, WORDS, DELETE, DONE, ARMED }
+enum class TypeCue { PICK_LEFT, PICK_RIGHT, NEXT, LETTERS, WORDS, DELETE, DONE, ARMED, MENU }
 
 /**
  * Write: a one-button keyboard (PLAN-OS.md). The phone plays two likely items one after the other, the first in the left ear, the second in the right.
- * click = left, hold (0.5 s up to 3 s) = right, 2 clicks = next pair, 3 clicks = words/letters, 4 clicks = done, 5 clicks = delete.
+ * click = left, hold (0.5 s up to 3 s) = right, 2 clicks = next pair, 3 clicks = the small menu: Done, Delete, Letters (or Words).
+ * The menu is read one item at a time; a click picks the item just spoken; a hold, 2 clicks or 3 clicks closes it.
  * Hold 3 s always leaves. It gets the raw button ([down]/[up]) and owns no menu. Time and timers are injected.
  */
 class TypeProgram(
@@ -36,6 +37,8 @@ class TypeProgram(
         const val GAP_MS = 350L
         const val REPLAY_MS = 7000L
         const val MAX_REPLAYS = 3
+        const val MENU_GAP_MS = 2000L
+        const val MENU_LOOPS = 2
         const val WORD_PAGES = 4
         val LETTER_RE = Regex("[a-záéíóúüñ']+")
     }
@@ -49,15 +52,18 @@ class TypeProgram(
     private var clicks = 0
     private var downAt = -1L
     private var armed = false
+    private var menu = false
+    private var menuIdx = 0
+    private var menuSteps = 0
     var active = false; private set
 
     fun start() {
         active = true
-        out.say(TypeVoice.START); out.say(TypeVoice.START2)
+        out.say(TypeVoice.START); out.say(TypeVoice.START2); out.say(TypeVoice.START3)
         show()
     }
 
-    fun stop() { if (active) { active = false; timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:replay") } }
+    fun stop() { if (active) { active = false; menu = false; timers.clear("t:menu"); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:replay") } }
 
     fun text(): String = written.joinToString(" ").replaceFirstChar { it.uppercase() }
 
@@ -87,7 +93,7 @@ class TypeProgram(
     // ---- the raw button ----
     fun down(time: Long) {
         if (!active) return
-        out.hush(); timers.clear("t:gap"); timers.clear("t:replay")
+        out.hush(); timers.clear("t:gap"); timers.clear("t:replay"); timers.clear("t:menu")
         downAt = time; armed = false
         timers.set("t:hold", HOLD_MS) { if (active && downAt >= 0) { armed = true; out.cue(TypeCue.ARMED) } }
         timers.set("t:leave", LEAVE_MS) { if (active && downAt >= 0) leave(false) }
@@ -98,17 +104,45 @@ class TypeProgram(
         timers.clear("t:hold"); timers.clear("t:leave")
         val long = armed || time - downAt >= HOLD_MS
         downAt = -1; armed = false
-        if (long) { clicks = 0; choose(false); return }
+        if (long) { clicks = 0; if (menu) closeMenu() else choose(false); return }
         clicks++
         timers.set("t:gap", GAP_MS) { val n = clicks; clicks = 0; if (active) many(n) }
     }
 
-    private fun many(n: Int) = when (n) {
-        1 -> choose(true)
-        2 -> { out.cue(TypeCue.NEXT); page++; show() }
-        3 -> { letters = !letters; page = 0; out.cue(if (letters) TypeCue.LETTERS else TypeCue.WORDS); show() }
-        4 -> leave(true)
-        else -> { out.cue(TypeCue.DELETE); if (prefix.isNotEmpty()) prefix = "" else if (written.isNotEmpty()) written.removeAt(written.size - 1); letters = false; page = 0; show() }
+    private fun many(n: Int) {
+        if (menu) { if (n == 1) pickMenu() else closeMenu(); return }
+        when (n) {
+            1 -> choose(true)
+            2 -> { out.cue(TypeCue.NEXT); page++; show() }
+            3 -> openMenu()
+            else -> show(true)   // 4 or more clicks mean nothing: play the pair again
+        }
+    }
+
+    // ---- the small menu: Done, Delete, Letters/Words, read one at a time ----
+    private fun menuLabels() = listOf(TypeVoice.MENU_DONE, TypeVoice.MENU_DELETE, if (letters) TypeVoice.WORDS else TypeVoice.LETTERS)
+
+    private fun openMenu() { menu = true; menuIdx = 0; menuSteps = 0; timers.clear("t:replay"); out.cue(TypeCue.MENU); speakMenu() }
+
+    private fun speakMenu() {
+        out.say(menuLabels()[menuIdx])
+        timers.set("t:menu", MENU_GAP_MS) {
+            if (!active || !menu) return@set
+            menuSteps++
+            if (menuSteps >= menuLabels().size * MENU_LOOPS) closeMenu() else { menuIdx = (menuIdx + 1) % menuLabels().size; speakMenu() }
+        }
+    }
+
+    private fun closeMenu() { menu = false; timers.clear("t:menu"); out.cue(TypeCue.NEXT); show() }
+
+    private fun pickMenu() {
+        val i = menuIdx
+        menu = false; timers.clear("t:menu")
+        when (i) {
+            0 -> leave(true)
+            1 -> { out.cue(TypeCue.DELETE); if (prefix.isNotEmpty()) prefix = "" else if (written.isNotEmpty()) written.removeAt(written.size - 1); letters = false; page = 0; show() }
+            else -> { letters = !letters; page = 0; out.cue(if (letters) TypeCue.LETTERS else TypeCue.WORDS); show() }
+        }
     }
 
     private fun choose(left: Boolean) {

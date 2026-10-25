@@ -182,6 +182,9 @@ object TellVoice {
 object TypeVoice {
     const val START = "Write. Click on the first word."
     const val START2 = "Hold on the second word."
+    const val START3 = "Three clicks for more."
+    const val MENU_DONE = "Done"
+    const val MENU_DELETE = "Delete"
     const val NO_MODEL = "Write could not start"
     const val EMPTY = "Nothing written"
     const val DELETED = "Deleted"

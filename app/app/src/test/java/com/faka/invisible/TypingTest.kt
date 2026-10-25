@@ -35,11 +35,12 @@ class TypingTest {
         override fun pair(left: String, right: String?) { pairs.add(left to right) }
         override fun hush() {}
         override fun prefetch(words: List<String>) {}
-        override fun say(text: String) {}
+        override fun say(text: String) { said.add(text) }
         override fun cue(c: TypeCue) { cues.add(c) }
         override fun finished(text: String) { result = text }
     }, t, onEnded = {})
 
+    private val said = ArrayList<String>()
     private fun click() { p.down(t.now); t.advance(80); p.up(t.now); t.advance(120) }
     private fun clicks(n: Int) { repeat(n) { click() }; t.advance(400) }
     private fun hold(ms: Long) { p.down(t.now); t.advance(ms); p.up(t.now); t.advance(20) }
@@ -58,25 +59,57 @@ class TypingTest {
         assertEquals("yes" to "nope", pairs.last())
     }
 
-    @Test fun fourClicksFinish() {
-        p.start(); clicks(1); clicks(4)
+    @Test fun threeClicksOpenTheMenuAndAClickOnDonePicksDone() {
+        p.start(); clicks(1); said.clear(); clicks(3)
+        assertEquals(listOf("Done"), said)
+        clicks(1)
         assertEquals("Hello", result)
         assertTrue(!p.active)
     }
 
-    @Test fun fiveClicksDeleteLastWord() {
-        p.start(); clicks(1); clicks(5)
+    @Test fun menuReadsDoneDeleteLettersAndAClickPicksTheLastSpoken() {
+        p.start(); clicks(1); said.clear(); clicks(3)
+        t.advance(TypeProgram.MENU_GAP_MS)
+        assertEquals(listOf("Done", "Delete"), said)
+        clicks(1)                                   // Delete: the last word goes
         assertEquals("", p.text())
         assertEquals("hello" to "thanks", pairs.last())
     }
 
-    @Test fun threeClicksShowLettersThenWordsWithThatPrefix() {
-        p.start(); clicks(3)
-        assertEquals(TypeCue.LETTERS, cues.last { it == TypeCue.LETTERS })
+    @Test fun menuLettersItemSpellsAndThenOffersWords() {
+        p.start(); said.clear(); clicks(3)
+        t.advance(TypeProgram.MENU_GAP_MS * 2)
+        assertEquals(listOf("Done", "Delete", "Letters"), said)
+        clicks(1)
+        assertTrue(cues.contains(TypeCue.LETTERS))
         val (l, _) = pairs.last()
         assertEquals(1, l.length)
-        clicks(1)                                   // pick the left letter; words now start with it
-        assertTrue(pairs.last().first.startsWith(l))
+        said.clear(); clicks(3)
+        t.advance(TypeProgram.MENU_GAP_MS * 2)
+        assertEquals("Words", said.last())          // while the letters are offered, the third item is the way back
+        clicks(1)
+        assertTrue(cues.contains(TypeCue.WORDS))
+    }
+
+    @Test fun holdOrTwoClicksCloseTheMenuWithoutAnAction() {
+        p.start(); clicks(3); val n = pairs.size
+        clicks(2)
+        assertEquals(n + 1, pairs.size); assertTrue(p.active)
+        clicks(3); hold(700)
+        assertEquals(n + 2, pairs.size); assertTrue(p.active)
+        assertEquals("", p.text())
+    }
+
+    @Test fun menuClosesByItselfAfterTwoSilentLoops() {
+        p.start(); clicks(3); val n = pairs.size
+        t.advance(TypeProgram.MENU_GAP_MS * 6 + 50)
+        assertEquals(n + 1, pairs.size); assertTrue(p.active)
+    }
+
+    @Test fun fourOrFiveClicksDoNothingButReplay() {
+        p.start(); clicks(1); val n = pairs.size
+        clicks(4); clicks(5)
+        assertTrue(p.active); assertEquals("Hello", p.text()); assertEquals(n + 2, pairs.size)
     }
 
     @Test fun holdThreeSecondsLeavesWithNothing() {
