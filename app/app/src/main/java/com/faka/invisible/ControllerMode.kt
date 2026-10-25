@@ -138,7 +138,8 @@ class ControllerMode(
     private var queue = mutableListOf<Msg?>()   // null = the finished timer
     private var qi = 0
     private var taskList = listOf<Task>()   // snapshot while the Tasks screen is open
-    private var taskIdx = 0
+    private var taskIdx = 0   // first task of the page being read
+    private val TASK_PAGE = 5
     private val handled = HashSet<String>()   // wake queue: text spoken, answered or skipped (id = key + arrival time)
     private val replied = HashSet<String>()   // answered: no longer unread
     private val heard = HashSet<String>()     // text spoken to the end (or cut by the user's click after it started)
@@ -262,11 +263,6 @@ class ControllerMode(
         if (hintPending) { hintPending = false; intro += Intro(Voice.HINT, null, null, hint = true) }
         val m = cur
         if (s == Screen.MESSAGE && m != null && hid(m) !in heard) intro += Intro("${m.sender}: ${shortText(m)}", vl(m), hid(m))
-        if (s == Screen.TASK) taskList.getOrNull(taskIdx)?.let { t ->
-            val lang = t.lang.ifEmpty { out.songLang(t.text) ?: "es" }
-            val body = t.text.let { x -> if (x.length <= MAX_SPOKEN) x else x.take(MAX_SPOKEN).trimEnd() + (if (lang == "es") " y más" else " and more") }
-            intro += Intro(if (taskList.size > 1) "${taskIdx + 1} of ${taskList.size}: $body" else body, lang, null)
-        }
         if (s == Screen.TASK_ADD) intro += Intro("Add a task", null, null)
         if (s == Screen.TIMER_DONE) intro += Intro("Timer done", null, null)
         curIntro = null
@@ -387,17 +383,21 @@ class ControllerMode(
                 }
                 all.values.toList()   // the menu order is the user's own; learning only reorders replies
             }
-            Screen.TASK -> listOf(
-                Opt("task:done", "Done", null) {
+            Screen.TASK -> {   // "Add task" first, then this page of tasks (a click right after hearing one = done), then "More tasks"
+                val page = taskList.drop(taskIdx).take(TASK_PAGE)
+                val opts = ArrayList<Opt>()
+                if (out.taskOffers().isNotEmpty()) opts += Opt("task:add", "Add task", null) { pick("task:add"); show(Screen.TASK_ADD) }
+                for (t in page) opts += Opt("task:done", t.text.let { x -> if (x.length <= MAX_SPOKEN) x else x.take(MAX_SPOKEN).trimEnd() + (if (t.lang == "en") " and more" else " y más") }, t.lang.ifEmpty { out.songLang(t.text) ?: "es" }) {
                     pick("task:done")
-                    val t = taskList.getOrNull(taskIdx)
-                    if (t != null) startPending(null, "Done. Click to cancel", { out.completeTask(t.id); true }, onCancel = { show(Screen.TASK) }, after = {
+                    startPending(null, "Done. Click to cancel", { out.completeTask(t.id); true }, onCancel = { show(Screen.TASK) }, after = {
                         taskList = taskList - t
-                        if (taskList.isEmpty()) { say(Voice.ALL_DONE); phase = Phase.WAIT; waitNext = { afterTasks() } }
+                        if (taskList.isEmpty()) { say(Voice.ALL_DONE); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } }
                         else { if (taskIdx >= taskList.size) taskIdx = 0; show(Screen.TASK) }
                     })
-                },
-                Opt("task:next", "Next", null) { pick("task:next"); taskIdx++; if (taskIdx >= taskList.size) afterTasks() else show(Screen.TASK) })
+                }
+                if (taskIdx + TASK_PAGE < taskList.size) opts += Opt("task:more", "More tasks", null) { pick("task:more"); taskIdx += TASK_PAGE; show(Screen.TASK) }
+                opts
+            }
             Screen.TASK_ADD -> out.taskOffers().map { t ->
                 Opt("taskadd", t.text.take(MAX_SPOKEN), t.lang.ifEmpty { null }) {
                     pick("taskadd"); out.addTask(t.text, t.lang); say(Voice.TASK_ADDED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
@@ -473,7 +473,6 @@ class ControllerMode(
     fun hubOrder(): List<String> = settings.hub
 
     /** The end of the task list: your own past tasks to add, or the menu if there are none. */
-    private fun afterTasks() = show(if (out.taskOffers().isNotEmpty()) Screen.TASK_ADD else Screen.HUB)
 
     private fun lastTimer() = out.lastTimer().let { if (it > 0) it else 15 }
 

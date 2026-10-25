@@ -423,24 +423,42 @@ class ModeTest {
         assertTrue(q.log.contains("say Blue, Ana"))
     }
 
-    @Test fun tasksAreInTheHubOnlyWhenOpenAndDoneRemovesThemOneByOne() {
+    @Test fun tasksAreAlwaysInTheMenu() {
         val r0 = Rig().withTasks(); r0.wake(); r0.advance(400 + 1300 * 8)
-        assertTrue(r0.spoken().contains("say Tasks, none"))   // always in the menu
+        assertTrue(r0.spoken().contains("say Tasks, none"))
+    }
+
+    @Test fun pickingATaskMarksItDoneAfterTheCancelWindow() {
         val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.taskStore.add("Call mum")
-        r.wake(); r.pick("Tasks, 2")
-        r.advance(400 + 600)
-        assertTrue(r.log.contains("say[es] 1 of 2: Buy milk"))
-        r.pick("Done"); assertEquals(2, r.taskStore.all().size)   // not removed yet: the cancel window
+        r.wake(); r.pick("Tasks, 2"); r.advance(1500)
+        assertTrue(r.log.contains("say[es] Buy milk"))
+        r.pick("Buy milk"); assertEquals(2, r.taskStore.all().size)   // not removed yet
         r.advance(5000)
         assertEquals(listOf("Call mum"), r.taskStore.all().map { it.text })
-        r.advance(1000); assertTrue(r.log.contains("say[es] Call mum"))
-        r.clearLog(); r.pick("Done"); r.advance(6000)
+    }
+
+    @Test fun lastTaskDoneSaysAllDone() {
+        val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1500)
+        r.pick("Buy milk"); r.advance(6000)
         assertTrue(r.taskStore.all().isEmpty()); assertTrue(r.log.contains("say All done"))
+    }
+
+    @Test fun addTaskIsTheFirstOptionWhenThereAreOffers() {
+        val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.offers = listOf(Task(0, "Call mum", "es"))
+        r.wake(); r.pick("Tasks, 1"); r.advance(1000)
+        assertTrue(r.log.contains("say Add task"))
+        assertFalse(r.log.contains("say[es] Buy milk"))   // not yet: Add task is spoken first
+    }
+
+    @Test fun moreTasksPagesByFive() {
+        val r = Rig().withTasks(); for (i in 1..6) r.taskStore.add("task $i")
+        r.wake(); r.pick("Tasks, 6"); r.pick("More tasks"); r.advance(1500)
+        assertTrue(r.log.contains("say[es] task 6"))
     }
 
     @Test fun clickingDuringTheCancelWindowKeepsTheTask() {
         val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1000)
-        r.pick("Done"); r.advance(1000); r.click()
+        r.pick("Buy milk"); r.advance(1000); r.click()
         r.advance(5000)
         assertEquals(1, r.taskStore.all().size)
     }
