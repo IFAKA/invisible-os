@@ -6,6 +6,7 @@ import re, sys, json, glob, os, argparse, collections
 
 LINE = re.compile(r"^\[?(\d{1,4}[/.\-]\d{1,2}[/.\-]\d{1,4}),? \d{1,2}[:.]\d{2}(?:[:.]\d{2})?(?:\s?[APap]\.?[Mm]\.?)?\]?\s*-?\s*([^:]{1,60}?): (.*)$")
 SKIP = ("<media omitted>", "<multimedia omitido>", "this message was deleted", "se eliminó este mensaje", "null", "<this message was edited>")
+SYSTEM = re.compile(r"^(image|sticker|video|audio|gif|document|contact card|voice call|missed voice call|missed video call|imagen|video|audio|documento)( omitted| omitido)?$|this message was edited|se editó este mensaje|<attached:.*>", re.I)
 WORD = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)?", re.U)
 
 def read(paths):
@@ -22,7 +23,7 @@ def read(paths):
                 cur = [m.group(2).strip(), m.group(3)]
             elif cur: cur[1] += " " + line
         if cur: msgs.append(cur)
-    return [(s, t) for s, t in msgs if t.strip().lower() not in SKIP and not t.startswith("http")]
+    return [(s, t) for s, t in msgs if t.strip().lower() not in SKIP and not t.startswith("http") and not SYSTEM.search(t.strip().replace("<This message was edited>", "").strip() or "image omitted")]
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("paths", nargs="+"); ap.add_argument("--me"); ap.add_argument("--top", type=int, default=40); ap.add_argument("--out")
