@@ -33,7 +33,7 @@ interface ModeOutput {
     fun messages(): List<Msg>        // latest unread messages, newest first
     fun reply(key: String, text: String): Boolean   // true if the reply was sent
     fun status(): Status
-    fun songLang(text: String): String? = null   // "es" / "en" for the voice, null = default voice
+    fun songLang(text: String): String? = null   // "es" or "en" for the voice
     fun nowPlaying(): String? = null   // "Title, Artist" of the music app, null if none
     fun dndAllowed(): Boolean
     fun lastTimer(): Int             // minutes, 0 = none yet
