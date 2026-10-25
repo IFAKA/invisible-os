@@ -425,11 +425,25 @@ class ModeTest {
         r.wake(); r.pick("Tasks, 2")
         r.advance(400 + 600)
         assertTrue(r.log.contains("say[es] 1 of 2: Buy milk"))
-        r.pick("Done")
+        r.pick("Done"); assertEquals(2, r.taskStore.all().size)   // not removed yet: the cancel window
+        r.advance(5000)
         assertEquals(listOf("Call mum"), r.taskStore.all().map { it.text })
         r.advance(1000); assertTrue(r.log.contains("say[es] Call mum"))
-        r.pick("Done")
+        r.clearLog(); r.pick("Done"); r.advance(6000)
         assertTrue(r.taskStore.all().isEmpty()); assertTrue(r.log.contains("say All done"))
+    }
+
+    @Test fun clickingDuringTheCancelWindowKeepsTheTask() {
+        val r = Rig(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1000)
+        r.pick("Done"); r.advance(1000); r.click()
+        r.advance(5000)
+        assertEquals(1, r.taskStore.all().size)
+    }
+
+    @Test fun longTasksAreCutAndDuplicatesAreSkipped() {
+        val r = Rig(); r.taskStore.add("x".repeat(400)); r.wake(); r.pick("Tasks, 1"); r.advance(1000)
+        assertTrue(r.log.any { it.startsWith("say[es] x") && it.endsWith("y más") && it.length < 200 })
+        val s = TaskStore(); assertEquals(1, s.addAll("[ ] Buy milk\n[ ] buy MILK")); assertEquals(0, s.addAll("[ ] Buy milk"))
     }
 
     @Test fun hubOrderMatchesWhatIsSpoken() {

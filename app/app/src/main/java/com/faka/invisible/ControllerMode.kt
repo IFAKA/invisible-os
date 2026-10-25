@@ -261,7 +261,9 @@ class ControllerMode(
         val m = cur
         if (s == Screen.MESSAGE && m != null && hid(m) !in heard) intro += Intro("${m.sender}: ${shortText(m)}", vl(m), hid(m))
         if (s == Screen.TASK) taskList.getOrNull(taskIdx)?.let { t ->
-            intro += Intro(if (taskList.size > 1) "${taskIdx + 1} of ${taskList.size}: ${t.text}" else t.text, t.lang.ifEmpty { out.songLang(t.text) ?: "es" }, null)
+            val lang = t.lang.ifEmpty { out.songLang(t.text) ?: "es" }
+            val body = t.text.let { x -> if (x.length <= MAX_SPOKEN) x else x.take(MAX_SPOKEN).trimEnd() + (if (lang == "es") " y más" else " and more") }
+            intro += Intro(if (taskList.size > 1) "${taskIdx + 1} of ${taskList.size}: $body" else body, lang, null)
         }
         if (s == Screen.TIMER_DONE) intro += Intro("Timer done", null, null)
         curIntro = null
@@ -377,9 +379,13 @@ class ControllerMode(
             }
             Screen.TASK -> listOf(
                 Opt("task:done", "Done", null) {
-                    pick("task:done"); taskList.getOrNull(taskIdx)?.let { out.completeTask(it.id); taskList = taskList - it }
-                    if (taskList.isEmpty()) { say("All done"); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } }
-                    else { if (taskIdx >= taskList.size) taskIdx = 0; show(Screen.TASK) }
+                    pick("task:done")
+                    val t = taskList.getOrNull(taskIdx)
+                    if (t != null) startPending(null, "Done. Click to cancel", { out.completeTask(t.id); true }, onCancel = { show(Screen.TASK) }, after = {
+                        taskList = taskList - t
+                        if (taskList.isEmpty()) { say("All done"); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } }
+                        else { if (taskIdx >= taskList.size) taskIdx = 0; show(Screen.TASK) }
+                    })
                 },
                 Opt("task:next", "Next", null) { pick("task:next"); taskIdx++; show(if (taskIdx >= taskList.size) Screen.HUB else Screen.TASK) })
             Screen.TIMER_PICK -> (settings.timers.map { it to Spoken.minutes(it) }.let { t -> if (out.lastTimer() > 0) listOf(lastTimer() to "Last used") + t else t + (lastTimer() to "Last used") }).map { (min, label) ->

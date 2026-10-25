@@ -21,10 +21,10 @@ class TaskStore(lines: List<String> = emptyList(), private val save: (List<Strin
         }
     }
 
-    /** Adds a task (blank text is ignored, line breaks become spaces). Returns it, or null if blank. */
+    /** Adds a task (line breaks become spaces). Returns it, or null if blank or the same task is already open. */
     @Synchronized fun add(text: String, lang: String = ""): Task? {
         val t = text.replace(Regex("\\s+"), " ").trim()
-        if (t.isEmpty()) return null
+        if (t.isEmpty() || list.any { it.text.equals(t, ignoreCase = true) }) return null   // blank or already there
         return Task(nextId++, t, lang).also { list.add(it); persist() }
     }
 
