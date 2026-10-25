@@ -189,7 +189,7 @@ object Actions {
             override fun pauseMusic() { pauseMusicNow() }
             override fun resumeMusic() = resumeMusicNow()
             override fun log(line: String) { Log.d(TAG, line); EventLog.add(line) }
-        }, onEnded = { duel = null }, coach = coach).also { it.start() }
+        }, onEnded = { duel = null; handler.post { beep(Tone.EXIT) } }, coach = coach).also { it.start() }
     }
 
     /** Call on the main thread. repeatCount > 0 is ignored (the hold timer handles holds). */
