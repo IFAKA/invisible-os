@@ -131,13 +131,19 @@ class BucketRanker(private val base: Ranker, private val store: BucketStore, pri
     private var cacheKey: String? = null
     private var cache: List<Pair<String, Double>> = emptyList()
 
-    private val prior = mapOf("t" to 1.2, "f" to 1.0, "a" to 0.8, "k" to 0.6, "s" to 0.5)
+    private val prior = mapOf("t" to 1.2, "f" to 1.0, "a" to 0.8, "k" to 0.6, "s" to 0.5, "g" to 1.5)
     /** Words on the screen (the chat you answer): likely to come back in the reply ("cenar" -> "cenar"). */
+    /** What the big model said fits this place (the newest answers first): a topic that is kept while you write. */
+    private var topic: List<String> = emptyList()
+    private fun topicLayer(): Map<String, Int> = topic.withIndex().associate { (i, w) -> w to maxOf(1, 40 - i) }
+
+    override fun hint(words: List<String>) { topic = (words + topic).distinct().take(40); cacheKey = null }
+
     private val screen: Map<String, Int> = frame.around.flatMap { Regex("[\\p{L}']+").findAll(it).map { m -> m.value.lowercase() }.toList() }
-        .filter { it.length >= 3 }.groupingBy { it }.eachCount()
+        .filter { it.length >= 3 }.let { ws -> HashMap<String, Int>().also { m -> for (w in ws) m.merge(w, 1, Int::plus) } }
 
     private fun layers(prev: String): List<Pair<String, Map<String, Int>>> =
-        frame.keys().mapNotNull { k -> store.counts(k, prev)?.let { k.substringBefore(':') to it } } + (if (screen.isEmpty()) emptyList() else listOf("s" to screen))
+        frame.keys().mapNotNull { k -> store.counts(k, prev)?.let { k.substringBefore(':') to it } } + (if (screen.isEmpty()) emptyList() else listOf("s" to screen)) + (if (topic.isEmpty()) emptyList() else listOf("g" to topicLayer()))
 
     override fun ranked(context: List<String>): List<Pair<String, Double>> {
         val prev = context.lastOrNull()?.lowercase() ?: "<s>"
@@ -167,7 +173,7 @@ class BucketRanker(private val base: Ranker, private val store: BucketStore, pri
         val prev = context.lastOrNull()?.lowercase() ?: "<s>"
         val w = word.lowercase()
         store.scored("base", base.ranked(context).asSequence().filter { it.first.length >= 1 }.take(2).any { it.first == w })
-        for ((l, m) in layers(prev)) store.scored(l, if (l == "s") w in m else m.entries.sortedByDescending { it.value }.take(2).any { it.key == w })
+        for ((l, m) in layers(prev)) store.scored(l, if (l == "s" || l == "g") (m[w] ?: 0) >= if (l == "g") 37 else 1 else m.entries.sortedByDescending { it.value }.take(2).any { it.key == w })
         cacheKey = null
     }
 }

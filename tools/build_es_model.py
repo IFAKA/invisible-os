@@ -99,16 +99,16 @@ def evaluate(sents_train, sents_test, gen, gcounts=None, w=3, gmin=3):
     for k in (2, 4, 6): print(f"  next word in top {k}: your model {100*hit[k]/n:.0f}%   (most common words only: {100*hit_u[k]/n:.0f}%)")
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("paths", nargs="+"); ap.add_argument("--me"); ap.add_argument("--text", action="append", default=[], help="plain text file of your own writing (Keep notes, tasks): one note per line")
+    ap = argparse.ArgumentParser(); ap.add_argument("paths", nargs="*"); ap.add_argument("--me"); ap.add_argument("--text", action="append", default=[], help="plain text file of your own writing (Keep notes, tasks): one note per line")
     ap.add_argument("--general", default=os.path.expanduser("~/code/projects/hardware/health/utter/app/Sources/TypingCore/Resources/words_es.txt"))
     ap.add_argument("--out", default=os.path.expanduser("~/wa_words/words_es.txt")); ap.add_argument("--eval", action="store_true"); ap.add_argument("--min", type=int, default=2)
     ap.add_argument("--corpus", help="general Spanish sentences (tsv, text in the last column), e.g. Tatoeba; makes the model general-purpose")
     ap.add_argument("--weight", type=int, default=3, help="how many times your own counts count against the corpus")
     ap.add_argument("--gmin", type=int, default=3, help="drop corpus pairs/triples seen fewer times than this")
     a = ap.parse_args()
-    msgs = cw.read(a.paths)
-    me = a.me or collections.Counter(s for s, _ in msgs).most_common(1)[0][0]
-    sents = sentences(msgs, me); gen = general(a.general)
+    msgs = cw.read(a.paths) if a.paths else []
+    me = a.me or (collections.Counter(s for s, _ in msgs).most_common(1)[0][0] if msgs else "")
+    sents = sentences(msgs, me) if msgs else []; gen = general(a.general)
     for tf in a.text:
         sents += sentences([(me, l) for l in open(os.path.expanduser(tf), encoding="utf-8").read().split("\n")], me)
     print(f"{len(sents)} of your sentences, {len(gen)} general words")

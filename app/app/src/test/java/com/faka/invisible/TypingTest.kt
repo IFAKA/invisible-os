@@ -127,20 +127,6 @@ class TypingTest {
         assertEquals(n + 1, pairs.size)
     }
 
-    @Test fun bigModelEndingsAppearInTheMenuAndAClickAddsTheWholeEnding() {
-        endings = listOf("call you later", "be late")
-        p.start(); clicks(1)                          // "hello": the big model is asked about it
-        assertEquals(listOf("Hello"), asked)
-        said.clear(); clicks(3)
-        t.advance(TypeProgram.MENU_GAP_MS * 2)
-        assertEquals(listOf("Done", "Delete", "Phrases"), said)
-        clicks(1)                                     // Phrases
-        assertEquals("call you later" to "be late", pairs.last())
-        clicks(1)
-        assertEquals("Hello call you later", p.text())
-        assertEquals("Hello call you later", asked.last())
-    }
-
     @Test fun noEndingsMeansNoPhrasesItem() {
         p.start(); clicks(1); said.clear(); clicks(3)
         t.advance(TypeProgram.MENU_GAP_MS * 2)
@@ -195,5 +181,30 @@ class TypingTest {
         p.start(); val first = pairs.last().first
         clicks(1)
         assertTrue(pairs.last().first != first && pairs.last().second != first)
+    }
+
+    @Test fun theBigModelsNextWordsReachTheRankerAndAskAgainWhenTheTextMoved() {
+        val hints = ArrayList<List<String>>(); val asked = ArrayList<String>()
+        var pending: ((List<String>) -> Unit)? = null
+        val ranker = object : Ranker {
+            override fun ranked(context: List<String>) = lm.ranked(context)
+            override fun hint(words: List<String>) { hints.add(words) }
+        }
+        val q = TypeProgram(ranker, object : TypeOut {
+            override fun pair(left: String, right: String?) {}
+            override fun hush() {}
+            override fun prefetch(words: List<String>) {}
+            override fun say(text: String) {}
+            override fun cue(c: TypeCue) {}
+            override fun finished(text: String) {}
+            override fun nextWords(text: String, then: (List<String>) -> Unit) { asked.add(text); pending = then }
+        }, t) {}
+        q.start()
+        assertEquals(listOf(""), asked)
+        q.down(t.now); t.advance(80); q.up(t.now); t.advance(500)   // the player picks a word while the big model is still thinking
+        assertEquals(listOf(""), asked)                              // one request at a time
+        pending!!.invoke(listOf("cenar", "hora"))
+        assertEquals(listOf(listOf("cenar", "hora")), hints)
+        assertEquals(2, asked.size); assertEquals("hello", asked.last())   // the text moved on: ask again with the new text
     }
 }

@@ -25,12 +25,12 @@ object LocalAi {
 
     private val numbered = Regex("^(?:line\\s*)?\\d\\s*[.=:)]\\s*=?\\s*(.+)$", RegexOption.IGNORE_CASE)   // the model adds a preface line; keep only the numbered ones
 
-    private fun ask(ctx: Context, prompt: String, what: String): List<String> {
+    private fun ask(ctx: Context, prompt: String, what: String, max: Int = 3): List<String> {
         val t0 = System.currentTimeMillis()
         val e = engine(ctx)
         val t1 = System.currentTimeMillis()
         val text = synchronized(this) { e.createConversation().use { it.sendMessage(prompt).toString() } }
-        val out = text.lines().mapNotNull { numbered.find(it.trim())?.groupValues?.get(1)?.trim('*', ' ', '"') }.filter { it.isNotEmpty() }.distinct().take(3)
+        val out = text.lines().mapNotNull { numbered.find(it.trim())?.groupValues?.get(1)?.trim('*', ' ', '"') }.filter { it.isNotEmpty() }.distinct().take(max)
         Log.d(TAG, "$what load=${t1 - t0}ms generate=${System.currentTimeMillis() - t1}ms -> $out")
         return out
     }
@@ -53,6 +53,15 @@ object LocalAi {
             "each starting with a verb, max 8 words, numbered 1. 2. 3. If it asks for nothing, write only: none\n" +
             "Example for \"${if (es) "Luis: ¿Puedes enviarme el informe el viernes?" else "Kim: Can you send me the report by Friday?"}\":\n" +
             (if (es) "1. Enviar el informe a Luis el viernes" else "1. Send Kim the report by Friday") + "\nNow write the to-do items.", "tasks")
+    }
+
+    /** The words most likely to come next in this place, most likely first: the keyboard's contextual guess. [brief] says what the screen is about. */
+    fun nextWords(ctx: Context, text: String, lang: String, brief: String = ""): List<String> {
+        val language = if (brief.contains("Messages on the screen")) "in the same language as the messages" else "in ${langName(lang)}"
+        val raw = ask(ctx, "You are the autocomplete of a phone keyboard.\n" + brief +
+            (if (text.isBlank()) "Nothing is written yet: this is the start of the message.\n" else "The text so far: \"$text\"\n") +
+            "List the 7 single words most likely to come next, most likely first, $language. One word per line, numbered 1. to 7. No explanations.", "next", 7)
+        return raw.mapNotNull { it.trim().split(Regex("\\s+")).firstOrNull()?.lowercase()?.filter { c -> c.isLetter() || c == '\'' }?.takeIf { w -> w.isNotEmpty() } }.distinct()
     }
 
     /** Up to 3 ways to finish a message that starts with [text], in [lang]: only the new words, short. [brief] says what the screen is about. */

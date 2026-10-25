@@ -5,6 +5,8 @@ interface Ranker {
     fun ranked(context: List<String>): List<Pair<String, Double>>
     /** True when short words and contractions are too hard to hear alone, so the first pair skips them (English voice). Spanish words are short and clear. */
     val skipShortFirst: Boolean get() = false
+    /** Words the big model thinks fit this place (most likely first): a layer of the ranker can use them. */
+    fun hint(words: List<String>) {}
     /** [word] was chosen after [context]: a ranker that learns by place can credit its layers. */
     fun picked(context: List<String>, word: String) {}
 }
@@ -21,6 +23,8 @@ interface TypeOut {
     fun phrases(text: String, then: (List<String>) -> Unit) {}
     /** Whole values you used in this place before (addresses, names, searches, numbers). Default: none. */
     fun suggestions(): List<String> = emptyList()
+    /** Ask the big model (slow, background) for the next words after [text]; call [then] always, with the words or an empty list. Default: never. */
+    fun nextWords(text: String, then: (List<String>) -> Unit) {}
 }
 
 enum class TypeCue { PICK_LEFT, PICK_RIGHT, NEXT, LETTERS, WORDS, DELETE, DONE, ARMED, MENU }
@@ -65,6 +69,8 @@ class TypeProgram(
     private var phrases: List<String> = emptyList()   // ways to finish the text, from the big model, when ready
     private var phraseMode = false
     private var phraseGen = 0
+    private var guessing = false
+    private var pressedSinceShow = false
     private var touched = false   // the player has pressed since the start
     var active = false; private set
 
@@ -104,13 +110,14 @@ class TypeProgram(
         val r = items.getOrNull(page * 2 + 1)
         out.prefetch(items.drop(page * 2 + 2).take(4) )
         out.pair(l, r)
+        pressedSinceShow = false
         timers.set("t:replay", REPLAY_MS) { if (active && replays < MAX_REPLAYS) { replays++; show(true) } }
     }
 
     // ---- the raw button ----
     fun down(time: Long) {
         if (!active) return
-        touched = true
+        touched = true; pressedSinceShow = true
         out.hush(); timers.clear("t:gap"); timers.clear("t:replay"); timers.clear("t:menu")
         downAt = time; armed = false
         timers.set("t:hold", HOLD_MS) { if (active && downAt >= 0) { armed = true; out.cue(TypeCue.ARMED) } }
@@ -145,12 +152,32 @@ class TypeProgram(
     private fun askPhrases() {
         phrases = if (written.isEmpty()) out.suggestions() else emptyList()
         val g = ++phraseGen
-        if (!frame.digits && (written.isNotEmpty() || frame.around.isNotEmpty())) out.phrases(text()) { r ->
+        if (!frame.digits && written.isEmpty() && frame.around.isNotEmpty()) out.phrases(text()) { r ->
             if (!active || g != phraseGen) return@phrases
             phrases = r
             // answering a chat: the replies that fit it come first, as soon as they are ready, unless the player is already busy
-            if (written.isEmpty() && frame.around.isNotEmpty() && r.isNotEmpty() && !touched && !menu) { phraseMode = true; page = 0; out.cue(TypeCue.NEXT); show() }
+            if (r.isNotEmpty() && !touched && !menu) { phraseMode = true; page = 0; out.cue(TypeCue.NEXT); show() }
         }
+        if (!frame.digits) guess()
+    }
+
+    /** One request at a time; when the answer comes and the text moved on, ask again at once. The words are kept as a topic of this place, even when a little late. */
+    private fun guess() {
+        if (guessing) return
+        guessing = true
+        val asked = written.joinToString(" ")
+        out.nextWords(asked) { words ->
+            guessing = false
+            if (!active) return@nextWords
+            if (words.isNotEmpty()) lm.hint(words)
+            if (written.joinToString(" ") != asked) guess() else refreshIfIdle()
+        }
+    }
+
+    /** New guesses arrived: if the pair now playing is stale and the player has not pressed, play the better one. */
+    private fun refreshIfIdle() {
+        if (pressedSinceShow || menu || phraseMode || letters || frame.digits) return
+        if (candidates().take(2) != items.drop(page * 2).take(2)) show()
     }
 
     private fun openMenu() { menu = true; menuIdx = 0; menuSteps = 0; timers.clear("t:replay"); out.cue(TypeCue.MENU); speakMenu() }

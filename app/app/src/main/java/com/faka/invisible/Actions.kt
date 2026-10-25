@@ -246,6 +246,14 @@ object Actions {
                 Log.d(TAG, "WRITE frame app=${frame.app} kind=${frame.kind} field=${frame.field} thread=${frame.thread} around=${frame.around.size} before=${frame.before.length}")
                 val out = object : TypeOut {
                     override fun suggestions() = buckets.suggestions(frame)
+                    override fun nextWords(text: String, then: (List<String>) -> Unit) {
+                        if (!mode.settings.ai || !LocalAi.available(app)) return
+                        val es = lm is NgramWords
+                        phraseWorker.execute {
+                            val r = try { LocalAi.nextWords(app, text, if (es) "es" else "en", frame.brief()) } catch (e: Throwable) { Log.e(TAG, "next words failed", e); emptyList() }
+                            handler.post { then(r) }
+                        }
+                    }
                     override fun pair(left: String, right: String?) {
                         Log.d(TAG, "WRITE pair $left | $right")
                         stopPair(); val me = pairSeq
