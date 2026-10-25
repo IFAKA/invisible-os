@@ -45,7 +45,7 @@ def next_words(gen, ctx, prefix, lang):
     for t in top:
         w = norm(t["token"])
         if t["token"].startswith(" ") and w and w not in out: out.append(w)
-    return out[:4]
+    return out[:6]
 
 def method_c(gen, ctx, target, lang):
     t = 0.0; prefix = ""
@@ -70,6 +70,28 @@ def method_d(gen, ctx, target, lang, spell):
         prefix = (prefix + " " + w).strip()
     return t + DEC                                 # final confirm
 
+def method_e(gen, ctx, target, lang, spell, per=3, dec=2.6):
+    """Three words per round (left ear, both ears, right ear), one after the other; 3 rounds max, then spell."""
+    t = 0.0; prefix = ""
+    for w in words(target):
+        guess = next_words(gen, ctx, prefix, lang)[:per * 2]
+        nw = norm(w)
+        if nw in guess: t += dec * (guess.index(nw) // per + 1)
+        else: t += dec * 2 + spell
+        prefix = (prefix + " " + w).strip()
+    return t + dec
+
+def method_e(gen, ctx, target, lang, spell, per=3, dec=2.6):
+    """Groups of 3 words (left, middle, right), one decision per group; 2 groups, then spell."""
+    t = 0.0; prefix = ""
+    for w in words(target):
+        guess = next_words(gen, ctx, prefix, lang)[:per * 2]
+        nw = norm(w)
+        if nw in guess: t += dec * (guess.index(nw) // per + 1) + (0.35 if guess.index(nw) % per == 1 else 0)   # 2 clicks wait 0.35 s
+        else: t += dec * 2 + spell
+        prefix = (prefix + " " + w).strip()
+    return t + dec
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--gen", default="gemma3:1b"); ap.add_argument("--judge", default="gemma3:4b")
     ap.add_argument("--strict", action="store_true"); a = ap.parse_args()
@@ -93,6 +115,9 @@ def main():
             rows[k]["  (B hit rate)"].append(1.0 if hitB is not None else 0.0)
         rows[k]["C word by word only"].append(c_cost)
         rows[k]["D stereo pair (spell 8 s)"].append(method_d(a.gen, it["ctx"], it["text"], it["lang"], SPELL))
+        rows[k]["E three words (spell 8 s)"].append(method_e(a.gen, it["ctx"], it["text"], it["lang"], SPELL))
+        rows[k]["E three words (fast spell)"].append(method_e(a.gen, it["ctx"], it["text"], it["lang"], SPELL_D))
+        rows[k]["E three words (spell 8 s)"].append(method_e(a.gen, it["ctx"], it["text"], it["lang"], SPELL))
         rows[k]["D stereo pair (stereo spell)"].append(method_d(a.gen, it["ctx"], it["text"], it["lang"], SPELL_D))
         print(f"{i+1}/{len(corpus)}", end="\r", file=sys.stderr)
     for k, d in rows.items():
