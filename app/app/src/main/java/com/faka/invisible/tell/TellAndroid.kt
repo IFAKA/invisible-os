@@ -33,7 +33,7 @@ class TellAndroid(
     private val sr = 44100
     private val block = sr * 5 / 1000   // 220 frames
     private val lock = Any()
-    private val mixer = TellMixer(sr)
+    private lateinit var mixer: TellMixer   // built on a background thread: it takes seconds on a phone
     private val solver = TellSolver()
     private val keyed = HashMap<String, Runnable>()
     @Volatile private var running = false
@@ -72,14 +72,26 @@ class TellAndroid(
         override fun leave() { val g = gen; handler.postDelayed({ if (g == gen) shutdown() }, 900) }   // lets the tape stop and the tails finish
     }
 
-    /** Main thread. Starts the audio, the solver and the first match. */
+    /** Main thread. Loads the sounds in the background, then starts the audio, the solver and the first match. */
     fun start() {
         if (running) return
-        val track = try { buildTrack() } catch (e: Exception) { Log.e("TELL", "AudioTrack failed", e); null }
-        if (track == null) { host.speak("Duel could not start"); onEnded(); return }
         running = true
         gen++
+        val g = gen
         latency = 0.0
+        if (!TellSynth.warmed) host.speak("Loading the duel")
+        Thread({
+            val t0 = SystemClock.uptimeMillis()
+            val m = try { TellMixer(sr) } catch (e: Throwable) { Log.e("TELL", "mixer failed", e); null }
+            Log.d("TELL", "sounds ready in ${SystemClock.uptimeMillis() - t0} ms")
+            handler.post { if (g == gen && running) begin(m) }
+        }, "tell-load").start()
+    }
+
+    private fun begin(m: TellMixer?) {
+        val track = try { buildTrack() } catch (e: Exception) { Log.e("TELL", "AudioTrack failed", e); null }
+        if (m == null || track == null) { host.speak("Duel could not start"); running = false; onEnded(); return }
+        mixer = m
         thread = Thread({ pump(track) }, "tell-audio").also { it.start() }
         solverThread = Thread({ try { solver.solve() } catch (e: Throwable) { Log.e("TELL", "solve failed", e) } }, "tell-solver")
             .also { it.priority = Thread.MIN_PRIORITY; it.start() }

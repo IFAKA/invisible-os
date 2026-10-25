@@ -77,8 +77,8 @@ object Actions {
             override fun replyOffers() = replyMemory.offers(3, emptySet())
             override fun rememberReply(text: String, lang: String) = replyMemory.record(text, lang)
             override fun taskOffers() = taskMemory.offers(5, taskStore.all().map { it.text.lowercase() }.toSet())
-            override fun addTask(text: String, lang: String) = taskStore.add(text, lang) != null
-            override fun completeTask(id: Long) = taskStore.done(id)
+            override fun addTask(text: String, lang: String) = (taskStore.add(text, lang) != null).also { EventLog.refresh() }
+            override fun completeTask(id: Long) { taskStore.done(id); EventLog.refresh() }
             override fun nowPlaying(): String? = otherSessions().firstNotNullOfOrNull { c ->
                 c.metadata?.let { md ->
                     val title = md.getString(android.media.MediaMetadata.METADATA_KEY_TITLE)
@@ -134,6 +134,7 @@ object Actions {
     fun init(ctx: Context) {
         if (::app.isInitialized) return
         app = ctx.applicationContext
+        com.faka.invisible.tell.TellSynth.warmAsync()   // the Duel's sounds take seconds to build on a phone: do it now, quietly
         mode.settings = SettingsStore.load(prefs())
         val f = java.io.File(app.filesDir, "choices.log")
         choices = ChoiceLog(if (f.exists()) f.readLines() else emptyList()) { line -> try { f.appendText(line + "\n") } catch (e: Exception) { Log.e(TAG, "choices.log write failed", e) } }

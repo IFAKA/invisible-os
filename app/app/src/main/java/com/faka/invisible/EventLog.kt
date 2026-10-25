@@ -10,6 +10,9 @@ object EventLog {
     var running = false
     private val main = Handler(Looper.getMainLooper())
 
+    /** Redraw the app screen now (a task changed by the voice menu). */
+    fun refresh() { main.post { onChange?.invoke() } }
+
     fun add(text: String) {
         main.post {
             items.add(0, text)

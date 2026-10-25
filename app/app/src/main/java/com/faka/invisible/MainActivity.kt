@@ -90,7 +90,7 @@ class MainActivity : Activity() {
                 }))
         }
 
-        card("Tasks" + Actions.tasks().size.let { if (it > 0) " ($it)" else "" }, "Hold the button, then click \"Tasks\" to hear them. Click Done to finish one, Next to skip it.") {
+        card("Tasks" + Actions.tasks().size.let { if (it > 0) " ($it)" else "" }, "Hold the button, then click \"Tasks\". Click \"Add task\" to add one. Click a task right after you hear it to finish it.") {
             val input = k.input("Write a task, or paste a checklist")
             val note = k.text(taskNote, 14f, if (taskNoteBad) Ui.bad else Ui.good).apply { setPadding(0, k.dp(6), 0, 0) }
             fun add() {

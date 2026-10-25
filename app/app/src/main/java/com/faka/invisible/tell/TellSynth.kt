@@ -450,11 +450,22 @@ object TellSynth {
         )
     }
 
-    /** Build everything now (call once, off the audio thread). Idempotent. */
-    fun warm() {
+    @Volatile var warmed = false
+
+    /** Build everything now (call once, off the audio thread). Idempotent; a second caller waits for the first. */
+    @Synchronized fun warm() {
+        if (warmed) return
         for (c in Cue.values()) cue(c)
         for (e in 0..5) { statusNote(e, true); statusNote(e, false) }
         for (l in 1..4) { lifeNotes(l, true); lifeNotes(l, false) }
         holdHum(1); holdHum(2); holdRiser(); bassHold(); bed()
+        warmed = true
+    }
+
+    /** Start the build in the background (low priority) so the sounds are ready before the player opens the Duel. */
+    fun warmAsync() {
+        if (warmed) return
+        Thread({ try { val t0 = System.nanoTime(); warm(); android.util.Log.d("TELL", "warm took ${(System.nanoTime() - t0) / 1_000_000} ms") } catch (e: Throwable) { android.util.Log.e("TELL", "warm failed", e) } }, "tell-warm")
+            .also { it.priority = Thread.MIN_PRIORITY; it.start() }
     }
 }
