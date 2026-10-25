@@ -395,13 +395,13 @@ class ControllerMode(
                 Opt("volume:up", "Louder", null) { pick("volume:up"); out.volume(true); sayLevel() },
                 Opt("volume:down", "Quieter", null) { pick("volume:down"); out.volume(false); sayLevel() },
                 Opt("volume:done", "Done", null) { pick("volume:done"); show(Screen.HUB) })
-            Screen.MORE_HUB -> {
-                val l2 = mutableListOf(Opt("more:read", "Read unread messages", null) { readUnread("more:read") },
-                    Opt("more:torch", "Torch", null) { pick("more:torch"); out.runAction("Flashlight"); afterSpeech { beginScan() } })
-                if (out.dndAllowed()) l2 += Opt("more:dnd", "Do not disturb", null) { pick("more:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } }
-                l2 += Opt("more:exit", "Exit", null) { pick("more:exit"); exit(true) }
-                l2
-            }
+            Screen.MORE_HUB -> settings.more.mapNotNull { k -> when (k) {   // what is inside "More" and its order are the user's choice
+                "read" -> Opt("more:read", "Read unread messages", null) { readUnread("more:read") }
+                "torch" -> Opt("more:torch", "Torch", null) { pick("more:torch"); out.runAction("Flashlight"); afterSpeech { beginScan() } }
+                "dnd" -> if (out.dndAllowed()) Opt("more:dnd", "Do not disturb", null) { pick("more:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null
+                "exit" -> Opt("more:exit", "Exit", null) { pick("more:exit"); exit(true) }
+                else -> null
+            } }
             Screen.TIMER_DONE -> listOf(
                 Opt("timer:stop", "Stop", null) { pick("timer:stop"); out.stopAlarm(); afterSpeech { advance() } },
                 Opt("timer:plus5", "Five more minutes", null) { pick("timer:plus5"); out.stopAlarm(); queue.removeAt(qi); startTimerPending(5) },

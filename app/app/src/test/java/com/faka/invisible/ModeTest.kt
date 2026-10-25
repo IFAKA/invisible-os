@@ -462,6 +462,21 @@ class ModeTest {
         assertEquals(listOf("b"), TaskStore.parse("☑ a\n☐ b\n✅ c"))
     }
 
+    @Test fun moreMenuFollowsTheSettingsAndAlwaysKeepsExit() {
+        assertEquals(listOf("torch", "exit"), LauncherSettings.cleanMore(listOf("torch", "bogus", "torch")))
+        val r = Rig(); r.m.settings = LauncherSettings(more = listOf("exit", "torch")); r.wake(); r.pick("More"); r.advance(400 + 100)
+        assertEquals(listOf("say Exit"), r.spoken().takeLast(1))
+    }
+
+    @Test fun tasksCanBeReorderedAndTheOrderIsSaved() {
+        var saved = listOf<String>()
+        val a = TaskStore { saved = it }
+        listOf("a", "b", "c").forEach { a.add(it) }
+        a.move(2, 0); assertEquals(listOf("c", "a", "b"), a.all().map { it.text })
+        assertEquals(listOf("c", "a", "b"), TaskStore(saved).all().map { it.text })
+        a.move(0, 9); assertEquals(listOf("c", "a", "b"), a.all().map { it.text })   // out of range: ignored
+    }
+
     @Test fun taskStoreSavesAndReloads() {
         var saved = listOf<String>()
         val a = TaskStore { saved = it }

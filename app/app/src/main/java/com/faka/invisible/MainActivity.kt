@@ -2,6 +2,7 @@ package com.faka.invisible
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -9,8 +10,10 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
+import android.widget.NumberPicker
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -157,41 +160,41 @@ class MainActivity : Activity() {
             if (taskNote.isNotEmpty()) addView(note)
             val ts = Actions.tasks()
             if (ts.isEmpty()) addView(text("No tasks yet.\nIn Google Keep: open a note, tap Share, choose \"Invisible task\". Only unchecked items are added.", 14f, soft).apply { setPadding(0, dp(12), 0, 0) })
+            val taskRows = ArrayList<View>()
+            val th = dp(68)
             ts.forEachIndexed { i, t ->
-                val item = row(grow(text(t.text, 16f).apply { maxLines = 3; ellipsize = android.text.TextUtils.TruncateAt.END }),
+                val handle = TextView(this@MainActivity).apply { text = "\u2261"; textSize = 26f; setTextColor(soft); gravity = Gravity.CENTER; layoutParams = LinearLayout.LayoutParams(dp(40), -1) }
+                val item = row(handle, grow(text(t.text, 16f).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }),
                     btn("Done") { Actions.completeTask(t.id); taskNote = ""; render() }.apply { minWidth = dp(84) })
-                item.setPadding(dp(14), dp(6), dp(8), dp(6))
+                item.setPadding(dp(4), 0, dp(8), 0)
                 item.background = GradientDrawable().apply { setColor(Color.parseColor("#F3F4F7")); cornerRadius = dp(12).toFloat() }
-                addView(item, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(if (i == 0) 14 else 8) })
+                taskRows.add(item)
+                if (ts.size > 1) makeDraggable(handle, taskRows, ts.size - 1, th + dp(8)) { from, to -> Actions.moveTask(from, to); render() } else handle.setTextColor(Color.TRANSPARENT)
+                addView(item, LinearLayout.LayoutParams(-1, th).apply { topMargin = dp(if (i == 0) 14 else 8) })
             }
         }
 
-        card("Your menu", "The phone says these one by one. Click when you hear the one you want. Turn off what you never use.") {
-            val shown = Actions.mode.hubOrder()   // the order you hear
-            val rest = LauncherSettings.HUB_ITEMS.keys.filter { it !in shown }
-            (shown + rest).forEach { k ->
-                val on = k in shown
-                val locked = k == "more"
-                addView(row(
-                    Switch(this@MainActivity).apply { isChecked = on; isEnabled = !locked; setOnCheckedChangeListener { _, v ->
-                        change(s.copy(hub = LauncherSettings.cleanHub(if (v) s.hub + k else s.hub - k)))
-                    } },
-                    grow(text("  " + LauncherSettings.HUB_ITEMS[k] + if (locked) "  (has Exit, Torch)" else "", 16f, if (on) ink else soft)),
-                    if (on && shown.indexOf(k) > 0) btn("↑") { move(k, -1) }.apply { minWidth = dp(48) } else spacer(),
-                    if (on && shown.indexOf(k) < shown.size - 1) btn("↓") { move(k, 1) }.apply { minWidth = dp(48) } else spacer()))
-            }
-            addView(text("You hear: " + shown.joinToString(", ") { LauncherSettings.HUB_ITEMS[it]!! }, 14f, accent).apply { setPadding(0, dp(8), 0, 0) })
-            addView(row(grow(text("Reply options: put the ones you pick most first (automatic)", 15f)),
-                Switch(this@MainActivity).apply { isChecked = s.learnOrder; setOnCheckedChangeListener { _, v -> change(s.copy(learnOrder = v)) } }))
+        card("Your menu", "Hold \u2261 and drag to reorder. The switch turns an item off.") {
+            addView(dragList(s.hub, LauncherSettings.HUB_ITEMS, setOf("more")) { order -> change(s.copy(hub = LauncherSettings.cleanHub(order))) })
+            addView(row(grow(text("Reply options: put the ones you pick most first (automatic)", 14f, soft)),
+                Switch(this@MainActivity).apply { isChecked = s.learnOrder; setOnCheckedChangeListener { _, v -> change(s.copy(learnOrder = v)) } }),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         }
 
-        card("Timer", "Three lengths in minutes. \"Last used\" is always added.") {
+        card("Inside \"More\"", "What you hear after you click More. Same drag and switch.") {
+            addView(dragList(s.more, LauncherSettings.MORE_ITEMS, setOf("exit")) { order -> change(s.copy(more = LauncherSettings.cleanMore(order))) })
+        }
+
+        card("Timer", "Tap a time to change it, like the clock app. These are the choices you hear. \"Last used\" is always added.") {
+            val chips = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
             s.timers.forEachIndexed { i, m ->
-                fun set(v: Int) = change(s.copy(timers = LauncherSettings.cleanTimers(s.timers.toMutableList().also { it[i] = v })))
-                addView(row(grow(text(Spoken.minutes(m), 16f)),
-                    btn("−") { set(if (m > 10) m - 5 else m - 1) }.apply { minWidth = dp(56) },
-                    btn("+") { set(if (m >= 10) m + 5 else m + 1) }.apply { minWidth = dp(56) }))
+                chips.addView(Button(this@MainActivity).apply {
+                    text = clockText(m); isAllCaps = false; textSize = 18f; setTextColor(accent); stateListAnimator = null; elevation = 0f
+                    background = GradientDrawable().apply { setColor(Color.parseColor("#E8EDFB")); cornerRadius = dp(16).toFloat() }
+                    setOnClickListener { pickTime(m) { v -> change(s.copy(timers = LauncherSettings.cleanTimers(s.timers.toMutableList().also { it[i] = v }))) } }
+                }, LinearLayout.LayoutParams(0, dp(64), 1f).apply { if (i > 0) marginStart = dp(8) })
             }
+            addView(chips, LinearLayout.LayoutParams(-1, -2))
         }
 
         card("Speed", "Find what feels right. You can change it any time.") {
@@ -217,10 +220,72 @@ class MainActivity : Activity() {
         body.addView(btn("Reset settings") { change(LauncherSettings()) }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
     }
 
-    private fun move(k: String, d: Int) {
-        val l = s.hub.toMutableList(); val i = l.indexOf(k); val j = i + d
-        if (i < 0 || j !in l.indices) return
-        l[i] = l[j].also { l[j] = l[i] }
-        change(s.copy(hub = l))
+    /** "25 min", "1 h", "1 h 30". */
+    private fun clockText(min: Int) = if (min < 60) "$min min" else "${min / 60} h" + if (min % 60 > 0) " ${min % 60}" else ""
+
+    /** Native-style wheels for hours and minutes. */
+    private fun pickTime(now: Int, set: (Int) -> Unit) {
+        fun wheel(max: Int, v: Int) = NumberPicker(this).apply { minValue = 0; maxValue = max; value = v; wrapSelectorWheel = true; setFormatter { "%02d".format(it) } }
+        val h = wheel(3, now / 60); val m = wheel(59, now % 60)
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(16), dp(16), dp(16), dp(8))
+            addView(h); addView(text("h", 16f, soft).apply { setPadding(dp(8), 0, dp(24), 0) })
+            addView(m); addView(text("min", 16f, soft).apply { setPadding(dp(8), 0, 0, 0) })
+        }
+        AlertDialog.Builder(this).setTitle("Timer length").setView(box)
+            .setPositiveButton("Set") { _, _ -> set((h.value * 60 + m.value).coerceIn(1, 180)) }
+            .setNegativeButton("Cancel", null).show()
+    }
+
+    /** Drag [handle] to move its row inside [rows] (equal heights [rowH], draggable ones are 0..[last]). The others slide aside; [onMove] gets the positions when you let go. */
+    private fun makeDraggable(handle: View, rows: List<View>, last: Int, rowH: Int, onMove: (from: Int, to: Int) -> Unit) {
+        val r = handle.parent as View
+        var startY = 0f
+        handle.setOnTouchListener { v, e ->
+            val orig = rows.indexOf(r)
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { startY = e.rawY; v.parent.requestDisallowInterceptTouchEvent(true); r.elevation = dp(8).toFloat() }
+                MotionEvent.ACTION_MOVE -> {
+                    val dy = (e.rawY - startY).coerceIn(-orig * rowH.toFloat(), (last - orig) * rowH.toFloat())
+                    r.translationY = dy
+                    val target = (orig + Math.round(dy / rowH)).coerceIn(0, last)
+                    rows.forEachIndexed { i, o -> if (o !== r && i <= last) o.translationY = when {
+                        orig < target && i in (orig + 1)..target -> -rowH.toFloat()
+                        orig > target && i in target until orig -> rowH.toFloat()
+                        else -> 0f } }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    val target = (orig + Math.round(r.translationY / rowH)).coerceIn(0, last)
+                    rows.forEach { it.translationY = 0f }; r.elevation = 0f
+                    if (e.actionMasked == MotionEvent.ACTION_UP && target != orig) onMove(orig, target)
+                }
+            }
+            true
+        }
+    }
+
+    /**
+     * Compact reorder list. [keys] = the ON items in order; off items follow. Drag the \u2261 handle: the other rows slide
+     * aside while you move, and [onOrder] gets the new ON order when you let go. [locked] items cannot be switched off.
+     */
+    private fun dragList(on: List<String>, names: Map<String, String>, locked: Set<String>, onOrder: (List<String>) -> Unit): View {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val rowH = dp(52)
+        val rows = ArrayList<View>()
+        val all = on + names.keys.filter { it !in on }
+        all.forEach { k ->
+            val isOn = k in on
+            val handle = TextView(this).apply {
+                text = "\u2261"; textSize = 26f; setTextColor(if (isOn) soft else Color.TRANSPARENT); gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(dp(48), rowH)
+            }
+            val r = row(handle, grow(text(names[k]!!, 16f, if (isOn) ink else soft)),
+                Switch(this).apply { isChecked = isOn; isEnabled = k !in locked; setOnCheckedChangeListener { _, v -> onOrder(if (v) on + k else on - k) } })
+            r.tag = k; r.minimumHeight = rowH
+            box.addView(r, LinearLayout.LayoutParams(-1, rowH))
+            rows.add(r)
+            if (isOn) makeDraggable(handle, rows, on.size - 1, rowH) { from, to -> onOrder(on.toMutableList().also { it.add(to, it.removeAt(from)) }) }
+        }
+        return box
     }
 }

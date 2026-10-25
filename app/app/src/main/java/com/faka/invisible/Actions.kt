@@ -47,6 +47,7 @@ object Actions {
         }.start()
     }
     fun completeTask(id: Long) = taskStore.done(id)
+    fun moveTask(from: Int, to: Int) = taskStore.move(from, to)
     private val deduper = Deduper()
     private var lastHoldAt = 0L
 

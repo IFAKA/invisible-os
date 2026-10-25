@@ -8,6 +8,7 @@ import android.content.SharedPreferences
  */
 data class LauncherSettings(
     val hub: List<String> = DEFAULT_HUB,
+    val more: List<String> = DEFAULT_MORE,
     val timers: List<Int> = listOf(5, 10, 25),
     val itemGapMs: Long = ControllerMode.ITEM_GAP_MS,
     val silentLoops: Int = 2,
@@ -18,6 +19,11 @@ data class LauncherSettings(
     companion object {
         val HUB_ITEMS = linkedMapOf("playing" to "Playing", "messages" to "Messages", "tasks" to "Tasks", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "more" to "More")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
+
+        /** What is inside "More", in the order spoken. "exit" is always kept. */
+        val MORE_ITEMS = linkedMapOf("read" to "Read unread messages", "torch" to "Torch", "dnd" to "Do not disturb", "exit" to "Exit")
+        val DEFAULT_MORE = MORE_ITEMS.keys.toList()
+        fun cleanMore(keys: List<String>): List<String> = keys.filter { it in MORE_ITEMS }.distinct().let { if ("exit" in it) it else it + "exit" }
 
         /** Keep known keys once each, in order; "more" is always present (it holds Exit, Torch, Read). */
         fun cleanHub(keys: List<String>): List<String> =
@@ -35,6 +41,7 @@ object SettingsStore {
         val d = LauncherSettings()
         return LauncherSettings(
             hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withTasks(p, withPlaying(p, it))) } ?: d.hub,
+            more = p.getString("s_more", null)?.split(',')?.let { LauncherSettings.cleanMore(it) } ?: d.more,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
             itemGapMs = p.getLong("s_gap", d.itemGapMs).coerceIn(600, 4000),
             silentLoops = p.getInt("s_loops", d.silentLoops).coerceIn(1, 5),
@@ -63,7 +70,7 @@ object SettingsStore {
     }
 
     fun save(p: SharedPreferences, s: LauncherSettings) {
-        p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
+        p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_more", s.more.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
             .putLong("s_gap", s.itemGapMs).putInt("s_loops", s.silentLoops).putLong("s_undo", s.undoMs)
             .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).apply()
     }

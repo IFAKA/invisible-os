@@ -32,6 +32,12 @@ class TaskStore(lines: List<String> = emptyList(), private val save: (List<Strin
     fun addAll(text: String, detect: (String) -> String = { "" }): Int = parse(text).count { add(it, detect(it)) != null }
 
     @Synchronized fun done(id: Long) { if (list.removeAll { it.id == id }) persist() }
+    /** Moves the task at position [from] to position [to] (both 0-based). */
+    @Synchronized fun move(from: Int, to: Int) {
+        if (from !in list.indices || to !in list.indices || from == to) return
+        list.add(to, list.removeAt(from)); persist()
+    }
+
     @Synchronized fun all(): List<Task> = list.toList()
     companion object {
         private val box = Regex("""\[[ xX✓✔]?\]|[☐☑☒✅⬜]""")
