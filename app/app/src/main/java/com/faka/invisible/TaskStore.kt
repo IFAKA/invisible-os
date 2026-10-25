@@ -26,7 +26,34 @@ class TaskStore(lines: List<String> = emptyList(), private val save: (List<Strin
         return Task(nextId++, t).also { list.add(it); persist() }
     }
 
+    /** Adds every task found in [text] (see [parse]). Returns how many were added. */
+    fun addAll(text: String): Int = parse(text).count { add(it) != null }
+
     @Synchronized fun done(id: Long) { if (list.removeAll { it.id == id }) persist() }
     @Synchronized fun all(): List<Task> = list.toList()
+    companion object {
+        private val box = Regex("""\[[ xX✓✔]?\]""")
+        private val bullet = Regex("""^\s*(?:[-*•▪◦]|\d+[.)])\s+(.+)$""")
+
+        /**
+         * Splits a shared note into tasks. Checklist (Keep: "[ ] open", "[X] done"): only the open items, even if the lines
+         * were joined. Else bullet or numbered lines. Else the whole text is one task.
+         */
+        fun parse(text: String): List<String> {
+            val t = text.replace("\r", "")
+            if (box.containsMatchIn(t)) {
+                val starts = box.findAll(t).toList()
+                return starts.mapIndexedNotNull { i, m ->
+                    val end = starts.getOrNull(i + 1)?.range?.first ?: t.length
+                    val checked = m.value.length > 2 && m.value[1] != ' '
+                    t.substring(m.range.last + 1, end).replace(Regex("\\s+"), " ").trim().takeIf { !checked && it.isNotEmpty() }
+                }
+            }
+            val bullets = t.lines().mapNotNull { bullet.find(it)?.groupValues?.get(1)?.trim() }
+            if (bullets.isNotEmpty()) return bullets
+            return listOf(t.replace(Regex("\\s+"), " ").trim()).filter { it.isNotEmpty() }
+        }
+    }
+
     private fun persist() = save(list.map { "${it.id}\t${it.text}" })
 }

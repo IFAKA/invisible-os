@@ -11,8 +11,8 @@ class AddTaskActivity : Activity() {
         super.onCreate(b)
         Actions.init(applicationContext)
         val t = intent?.takeIf { it.action == Intent.ACTION_SEND }?.getStringExtra(Intent.EXTRA_TEXT)
-        val task = t?.let { Actions.addTask(it) }
-        Toast.makeText(this, if (task != null) "Task added" else "Nothing to add", Toast.LENGTH_SHORT).show()
+        val n = t?.let { Actions.addTasks(it) } ?: 0
+        Toast.makeText(this, when (n) { 0 -> "No open tasks found"; 1 -> "1 task added"; else -> "$n tasks added" }, Toast.LENGTH_SHORT).show()
         finish()
     }
 }

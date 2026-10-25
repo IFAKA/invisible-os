@@ -150,10 +150,10 @@ class MainActivity : Activity() {
 
         card("Tasks", "Say them from the menu: Done or Next. Add here, or share text from Keep to Invisible.") {
             val input = EditText(this@MainActivity).apply { hint = "New task"; setSingleLine() }
-            fun add() { if (Actions.addTask(input.text.toString()) != null) render() }
+            fun add() { if (Actions.addTasks(input.text.toString()) > 0) render() }
             input.setOnEditorActionListener { _, _, _ -> add(); true }
-            addView(row(grow(input), btn("Add", true) { add() }))
-            Actions.tasks().forEach { t -> addView(row(grow(text(t.text, 15f)), btn("Done") { Actions.completeTask(t.id); render() })) }
+            addView(row(grow(input), btn("Add", true) { add() }), LinearLayout.LayoutParams(-1, -2))
+            Actions.tasks().forEach { t -> addView(row(grow(text(t.text, 15f).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }), btn("Done") { Actions.completeTask(t.id); render() }), LinearLayout.LayoutParams(-1, -2)) }
         }
 
         card("Timer", "Three lengths in minutes. \"Last used\" is always added.") {

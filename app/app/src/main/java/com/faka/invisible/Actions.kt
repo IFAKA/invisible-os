@@ -38,7 +38,7 @@ object Actions {
     private var torchOn = false
     private var taskStore = TaskStore()
     fun tasks(): List<Task> = taskStore.all()
-    fun addTask(text: String): Task? = taskStore.add(text)
+    fun addTasks(text: String): Int = taskStore.addAll(text)
     fun completeTask(id: Long) = taskStore.done(id)
     private val deduper = Deduper()
     private var lastHoldAt = 0L

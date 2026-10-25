@@ -439,6 +439,14 @@ class ModeTest {
         assertEquals(listOf("timer", "volume", "more"), r.m.hubOrder())   // learning never changes the user's menu order
     }
 
+    @Test fun sharedNotesAreSplitIntoOpenTasks() {
+        assertEquals(listOf("wait clio", "send exam"), TaskStore.parse("Papers\n[X] passport\n[ ] wait clio\n[x] nie\n[ ] send exam"))
+        assertEquals(listOf("a b", "c"), TaskStore.parse("[ ] a\n b [X] z [ ] c"))   // joined lines too
+        assertEquals(listOf("milk", "eggs"), TaskStore.parse("Shopping\n- milk\n2. eggs"))
+        assertEquals(listOf("call mum tonight"), TaskStore.parse("call mum\ntonight"))
+        assertTrue(TaskStore.parse("[X] only done").isEmpty())
+    }
+
     @Test fun taskStoreSavesAndReloads() {
         var saved = listOf<String>()
         val a = TaskStore { saved = it }
