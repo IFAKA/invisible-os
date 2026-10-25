@@ -34,6 +34,7 @@ object Voice {
     const val NO_EVENTS = "No events today."
     const val EVENT_UNNAMED = "Event"
     const val FIND_PHONE = "Find my phone"
+    const val NO_NAVIGATION = "No navigation."
     /** "Now 18 degrees, rain in 2 hours." [rainInHours]: 0 = raining now, null = none soon. */
     fun weather(degrees: Int, rainInHours: Int?): String {
         val t = if (degrees < 0) "minus ${-degrees}" else "$degrees"

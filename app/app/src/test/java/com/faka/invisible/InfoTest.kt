@@ -24,5 +24,10 @@ class InfoTest {
     @Test fun eventExactHoursAndMorning() = assertEquals("Run at 12 AM, in 2 hours.", Agenda.sentence("Run", 24 * 60 * min, 22 * 60 * min, 0))
     @Test fun eventUsesTimeZoneOffset() = assertEquals("Call at 9 AM, in 1 minute.", Agenda.sentence("Call", 7 * 60 * min, 7 * 60 * min - min, 2 * 60 * min))
     @Test fun eventNowAndUnnamed() { assertEquals("Call, now.", Agenda.sentence("Call", 1000, 5000, 0)); assertEquals("Event, now.", Agenda.sentence(null, 0, 0, 0)) }
+    @Test fun navInstructionAndDistance() = assertEquals("Turn left onto Calle Mayor, 200 m.", Navigation.sentence("Turn left onto Calle Mayor", "200 m", "12 min"))
+    @Test fun navDistanceFirstAndTrailingDots() = assertEquals("200 m, Turn left onto Calle Mayor.", Navigation.sentence("200 m", "Turn left onto Calle Mayor.", null))
+    @Test fun navSameTitleAndTextOnce() = assertEquals("Continue straight.", Navigation.sentence("Continue straight", " Continue  straight ", "5 min"))
+    @Test fun navSubTextOnlyWhenNothingElse() { assertEquals("5 min.", Navigation.sentence(null, "", "5 min")); assertNull(Navigation.sentence(null, " ", null)) }
+    @Test fun noNavigationSentence() = assertEquals("No navigation.", Voice.NO_NAVIGATION)
     @Test fun noEventsSentence() = assertEquals("No events today.", Voice.NO_EVENTS)
 }

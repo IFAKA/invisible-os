@@ -35,6 +35,19 @@ object Weather {
     }
 }
 
+/** Pure: a Google Maps navigation notification (title, text, subText strings) as ONE spoken sentence. */
+object Navigation {
+    const val PACKAGE = "com.google.android.apps.maps"
+    /** Title and text are the instruction and the distance (Maps orders them either way); the sub text (arrival time) is used only if both are empty. Null if nothing to say. */
+    fun sentence(title: String?, text: String?, subText: String?): String? {
+        fun clean(s: String?) = s?.replace(Regex("\\s+"), " ")?.trim()?.trimEnd('.', ',', ' ').orEmpty()
+        val main = listOf(clean(title), clean(text)).filter { it.isNotEmpty() }.distinct()
+        val parts = main.ifEmpty { listOf(clean(subText)).filter { it.isNotEmpty() } }
+        if (parts.isEmpty()) return null
+        return parts.joinToString(", ").let { if (it.length > 160) it.take(160).trimEnd() else it } + "."
+    }
+}
+
 /** Pure: the next calendar event as ONE spoken sentence. */
 object Agenda {
     /** [offsetMs] = the time zone offset of the phone, to read the clock time of [beginMs]. */

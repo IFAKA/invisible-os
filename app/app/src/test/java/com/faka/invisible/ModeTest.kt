@@ -24,6 +24,7 @@ class ModeTest {
         var now = 1_000_000L
         var vol = 7
         var wired = false
+        var nav: String? = null
         var weatherAnswer: String? = null     // null = the answer has not come yet
         var pendingWeather: ((String) -> Unit)? = null
         var codes = 100          // experienced by default; learning tests set 0
@@ -55,6 +56,7 @@ class ModeTest {
             override fun dndAllowed() = dnd
             override fun wiredConnected() = wired
             override fun findPhone(on: Boolean) { log.add("find $on") }
+            override fun navigation() = nav
             override fun weather(done: (String) -> Unit) { val a = weatherAnswer; if (a != null) done(a) else pendingWeather = done }
             override fun nextEvent(done: (String) -> Unit) { done("Dentist at 4 PM, in 40 minutes.") }
             override fun lastTimer() = last
@@ -77,7 +79,7 @@ class ModeTest {
             override fun set(key: String, delayMs: Long, task: () -> Unit) { timers[key] = (now + delayMs) to task }
             override fun clear(key: String) { timers.remove(key) }
         }, { now }, ranker, pauseMs = gap)
-        init { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks" - "weather" - "calendar" - "find") }   // the older timing tests count menu items
+        init { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks" - "weather" - "calendar" - "find" - "turn") }   // the older timing tests count menu items
         fun withTasks() = apply { m.settings = LauncherSettings() }
         fun withInfo() = apply { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks") }
         fun g(vararg x: Gesture) = x.forEach { m.onGesture(it) }
@@ -135,6 +137,16 @@ class ModeTest {
     @Test fun weatherFailureSpeaksFixedSentence() {
         val r = Rig().withInfo(); r.weatherAnswer = Voice.WEATHER_FAILED; r.wake(); r.pick("Weather")
         r.advance(100); assertEquals(listOf("say ${Voice.WEATHER_FAILED}"), r.spoken())
+    }
+
+    @Test fun nextTurnSpeaksTheInstruction() {
+        val r = Rig().withInfo(); r.nav = "Turn left onto Calle Mayor, 200 m."; r.wake(); r.pick("Next turn")
+        r.advance(100); assertEquals(listOf("say Turn left onto Calle Mayor, 200 m."), r.spoken())
+    }
+
+    @Test fun nextTurnWithoutNavigationSaysSoFixedSentence() {
+        val r = Rig().withInfo(); r.wake(); r.pick("Next turn")
+        r.advance(100); assertEquals(listOf("say ${Voice.NO_NAVIGATION}"), r.spoken())
     }
 
     @Test fun nextEventIsSpoken() {

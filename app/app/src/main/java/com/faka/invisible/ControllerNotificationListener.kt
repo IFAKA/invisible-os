@@ -16,6 +16,9 @@ class ControllerNotificationListener : NotificationListenerService() {
     companion object {
         val apps = setOf("com.whatsapp", "com.microsoft.teams", "com.tencent.mm", "com.anthropic.claude")
         val store = MessageStore()
+        /** The latest Google Maps navigation sentence while it is active, else null. */
+        @Volatile var navigation: String? = null
+        @Volatile private var navKey: String? = null
         /** Voice for a song name: English only when the detector clearly says English, otherwise Spanish (same rule as messages). */
         fun voiceFor(text: String): String {
             val d = try { detector.detect(text) } catch (e: Exception) { "" }
@@ -49,7 +52,7 @@ class ControllerNotificationListener : NotificationListenerService() {
         convLang = ConvLang(prefs.all.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }.toMap()) { m ->
             prefs.edit().clear().apply { m.forEach { (k, v) -> putString(k, v) } }.apply()
         }
-        store.clear(); synchronized(Companion) { replies.clear() }
+        store.clear(); synchronized(Companion) { replies.clear() }; navigation = null; navKey = null
         try { activeNotifications?.forEach { take(it) } } catch (e: Exception) { Log.e("Invisible", "NL load failed", e) }
         loaded = true
     }
@@ -57,11 +60,19 @@ class ControllerNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) = take(sbn)
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        if (sbn.packageName == Navigation.PACKAGE && sbn.key == navKey) { navigation = null; navKey = null }
         if (sbn.packageName !in apps) return
         store.remove(sbn.key); synchronized(Companion) { replies.remove(sbn.key) }
     }
 
     private fun take(sbn: StatusBarNotification) {
+        if (sbn.packageName == Navigation.PACKAGE) {
+            val x = sbn.notification.extras
+            fun s(k: String) = x.getCharSequence(k)?.toString()
+            val t = Navigation.sentence(s(Notification.EXTRA_TITLE), s(Notification.EXTRA_TEXT), s(Notification.EXTRA_SUB_TEXT))
+            if (t != null && sbn.notification.flags and Notification.FLAG_ONGOING_EVENT != 0) { navigation = t; navKey = sbn.key }
+            return
+        }
         if (sbn.packageName !in apps) return
         val n = sbn.notification
         if (n.flags and (Notification.FLAG_GROUP_SUMMARY or Notification.FLAG_ONGOING_EVENT) != 0) return

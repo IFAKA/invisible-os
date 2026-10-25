@@ -124,6 +124,7 @@ object Actions {
                 it.type in setOf(android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET, android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
                     android.media.AudioDeviceInfo.TYPE_USB_HEADSET, android.media.AudioDeviceInfo.TYPE_USB_DEVICE)
             }
+            override fun navigation() = ControllerNotificationListener.navigation
             override fun findPhone(on: Boolean) = ringFind(on)
             override fun dndAllowed() = this@Actions.dndAllowed()
             override fun codeCount() = prefs().getInt("codeCount", 0)

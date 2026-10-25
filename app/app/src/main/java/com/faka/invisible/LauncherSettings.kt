@@ -19,7 +19,7 @@ data class LauncherSettings(
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("playing" to "Playing", "messages" to "Messages", "tasks" to "Tasks", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "weather" to "Weather", "calendar" to "Next event", "find" to "Find my phone (only without wired headphones)", "games" to "Games", "more" to "More")
+        val HUB_ITEMS = linkedMapOf("playing" to "Playing", "messages" to "Messages", "tasks" to "Tasks", "timer" to "Timer", "volume" to "Volume", "status" to "Status", "weather" to "Weather", "calendar" to "Next event", "turn" to "Next turn (Google Maps)", "find" to "Find my phone (only without wired headphones)", "games" to "Games", "more" to "More")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** What is inside "More", in the order spoken. "exit" is always kept. */
@@ -42,7 +42,7 @@ object SettingsStore {
     fun load(p: SharedPreferences): LauncherSettings {
         val d = LauncherSettings()
         return LauncherSettings(
-            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withInfo(p, withGames(p, withTasks(p, withPlaying(p, it))))) } ?: d.hub,
+            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it)))))) } ?: d.hub,
             more = p.getString("s_more", null)?.split(',')?.let { LauncherSettings.cleanMore(it) } ?: d.more,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
             itemGapMs = p.getLong("s_gap", d.itemGapMs).coerceIn(600, 4000),
@@ -90,6 +90,16 @@ object SettingsStore {
         val at = rest.indexOf("games").let { if (it < 0) rest.indexOf("more").let { m -> if (m < 0) rest.size else m } else it }
         val moved = rest.take(at) + listOf("weather", "calendar", "find") + rest.drop(at)
         p.edit().putBoolean("s_info_saved", true).putString("s_hub", moved.joinToString(",")).apply()
+        return moved
+    }
+
+    /** A saved menu from before "Next turn" existed gets it once, just before "Games". */
+    private fun withNav(p: SharedPreferences, keys: List<String>): List<String> {
+        if (p.getBoolean("s_nav_saved", false)) return keys
+        val rest = keys.filter { it != "turn" }
+        val at = rest.indexOf("games").let { if (it < 0) rest.indexOf("more").let { m -> if (m < 0) rest.size else m } else it }
+        val moved = rest.take(at) + "turn" + rest.drop(at)
+        p.edit().putBoolean("s_nav_saved", true).putString("s_hub", moved.joinToString(",")).apply()
         return moved
     }
 

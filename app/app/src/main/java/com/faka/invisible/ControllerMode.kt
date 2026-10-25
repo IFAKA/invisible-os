@@ -55,6 +55,7 @@ interface ModeOutput {
     fun weather(done: (String) -> Unit) { done(Voice.WEATHER_FAILED) }   // off the main thread inside; [done] runs on the main thread with ONE sentence
     fun nextEvent(done: (String) -> Unit) { done(Voice.CALENDAR_FAILED) }   // same: the next calendar event sentence
     fun wiredConnected(): Boolean = false   // a wired headset or USB audio is plugged in: then "Find my phone" is not offered
+    fun navigation(): String? = null   // the latest Google Maps instruction as one sentence; null = not navigating
     fun findPhone(on: Boolean) {}   // ring loudly on the alarm stream (on) or stop (off)
     fun pickCount(intent: String): Int = 0   // how often this option was picked (spearcon after [ControllerMode.SPEARCON_AFTER] picks)
 }
@@ -394,6 +395,7 @@ class ControllerMode(
                     "status" -> all["hub:status"] = Opt("hub:status", "Status", null) { pick("hub:status"); outro(Spoken.status(out.status(), unread().size)) }
                     "weather" -> all["hub:weather"] = Opt("hub:weather", "Weather", null) { pick("hub:weather"); lookup(out::weather) }
                     "calendar" -> all["hub:calendar"] = Opt("hub:calendar", "Next event", null) { pick("hub:calendar"); lookup(out::nextEvent) }
+                    "turn" -> all["hub:turn"] = Opt("hub:turn", "Next turn", null) { pick("hub:turn"); outro(out.navigation() ?: Voice.NO_NAVIGATION) }
                     "find" -> if (!out.wiredConnected()) all["hub:find"] = Opt("hub:find", Voice.FIND_PHONE, null) { pick("hub:find"); find() }
                     "games" -> all["hub:games"] = Opt("hub:games", "Games", null) { pick("hub:games"); show(Screen.GAMES) }
                     "more" -> all["hub:more"] = Opt("hub:more", "More", null) { pick("hub:more"); show(Screen.MORE_HUB) }
