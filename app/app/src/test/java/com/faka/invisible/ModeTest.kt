@@ -445,6 +445,7 @@ class ModeTest {
         assertEquals(listOf("milk", "eggs"), TaskStore.parse("Shopping\n- milk\n2. eggs"))
         assertEquals(listOf("call mum tonight"), TaskStore.parse("call mum\ntonight"))
         assertTrue(TaskStore.parse("[X] only done").isEmpty())
+        assertEquals(listOf("b"), TaskStore.parse("☑ a\n☐ b\n✅ c"))
     }
 
     @Test fun taskStoreSavesAndReloads() {

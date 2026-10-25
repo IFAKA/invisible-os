@@ -32,7 +32,7 @@ class TaskStore(lines: List<String> = emptyList(), private val save: (List<Strin
     @Synchronized fun done(id: Long) { if (list.removeAll { it.id == id }) persist() }
     @Synchronized fun all(): List<Task> = list.toList()
     companion object {
-        private val box = Regex("""\[[ xX✓✔]?\]""")
+        private val box = Regex("""\[[ xX✓✔]?\]|[☐☑☒✅⬜]""")
         private val bullet = Regex("""^\s*(?:[-*•▪◦]|\d+[.)])\s+(.+)$""")
 
         /**
@@ -45,7 +45,7 @@ class TaskStore(lines: List<String> = emptyList(), private val save: (List<Strin
                 val starts = box.findAll(t).toList()
                 return starts.mapIndexedNotNull { i, m ->
                     val end = starts.getOrNull(i + 1)?.range?.first ?: t.length
-                    val checked = m.value.length > 2 && m.value[1] != ' '
+                    val checked = if (m.value.length > 1) m.value[1] != ' ' else m.value in "☑☒✅"
                     t.substring(m.range.last + 1, end).replace(Regex("\\s+"), " ").trim().takeIf { !checked && it.isNotEmpty() }
                 }
             }
