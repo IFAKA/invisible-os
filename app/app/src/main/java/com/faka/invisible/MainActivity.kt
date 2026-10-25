@@ -143,7 +143,7 @@ class MainActivity : Activity() {
                     if (on && shown.indexOf(k) < shown.size - 1) btn("↓") { move(k, 1) }.apply { minWidth = dp(48) } else spacer()))
             }
             addView(text("You hear: " + shown.joinToString(", ") { LauncherSettings.HUB_ITEMS[it]!! }, 14f, accent).apply { setPadding(0, dp(8), 0, 0) })
-            addView(row(grow(text("Put the options you pick most first, by myself", 15f)),
+            addView(row(grow(text("Move the options you pick most to the front (automatic)", 15f)),
                 Switch(this@MainActivity).apply { isChecked = s.learnOrder; setOnCheckedChangeListener { _, v -> change(s.copy(learnOrder = v)) } }))
         }
 
