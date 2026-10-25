@@ -24,7 +24,7 @@ class ChoiceLog(initial: List<String> = emptyList(), private val append: (String
         val p = line.split('\t')
         if (p.size < 5) return
         intents[p[3]] = (intents[p[3]] ?: 0) + 1
-        p[0].toLongOrNull()?.let { picks += Suggester.Pick(it, p[3], p.getOrNull(5)?.split(',')?.filter { t -> t.isNotBlank() }?.toSet() ?: emptySet()) }
+        p[0].toLongOrNull()?.let { picks += Suggester.Pick(it, Suggester.alias(p[3]), p.getOrNull(5)?.split(',')?.filter { t -> t.isNotBlank() }?.toSet() ?: emptySet()) }
         if (p[3].startsWith("send") && p[4].isNotBlank()) senders[p[4]] = (senders[p[4]] ?: 0) + 1
     }
 

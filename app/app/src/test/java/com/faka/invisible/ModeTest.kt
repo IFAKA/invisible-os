@@ -41,6 +41,8 @@ class ModeTest {
             }
             override fun stopSpeech() { log.add("stopspeech"); timers.remove("tts"); timers.remove("tts-start") }
             override fun tone(kind: Tone) { log.add("tone $kind") }
+            override fun startWrite() { log.add("startWrite") }
+            override fun startGame(coach: Boolean) { log.add("startGame $coach") }
             override fun runAction(name: String) { log.add("run $name"); speech() }
             override fun forward(what: Forward) { log.add("fwd $what") }
             override fun log(line: String) {}
@@ -81,7 +83,7 @@ class ModeTest {
             override fun set(key: String, delayMs: Long, task: () -> Unit) { timers[key] = (now + delayMs) to task }
             override fun clear(key: String) { timers.remove(key) }
         }, { now }, ranker, pauseMs = gap)
-        init { m.settings = LauncherSettings(hub = listOf("messages", "playing", "timer", "phone", "status", "games")) }   // the older timing tests count menu items
+        init { m.settings = LauncherSettings(hub = listOf("messages", "music", "timer", "phone", "today", "duel")) }   // the older timing tests count menu items
         fun withTasks() = apply { m.settings = LauncherSettings() }
         fun withInfo() = apply { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks") }
         fun g(vararg x: Gesture) = x.forEach { m.onGesture(it) }
@@ -125,36 +127,36 @@ class ModeTest {
 
     // ---------- weather, next event, find my phone ----------
     @Test fun weatherSpeaksTheAnswerAfterItArrives() {
-        val r = Rig().withInfo(); r.wake(); r.pick("Info"); r.pick("Weather")
+        val r = Rig().withInfo(); r.wake(); r.pick("Today"); r.pick("Weather")
         r.advance(300); assertTrue(r.spoken().isEmpty())   // waiting, nothing said yet
         r.weatherAnswer = "Now 18 degrees, rain in 2 hours."; r.pendingWeather?.invoke(r.weatherAnswer!!)
         r.advance(100); assertEquals(listOf("say Now 18 degrees, rain in 2 hours."), r.spoken())
     }
 
     @Test fun weatherClickWhileWaitingCancelsAndLateAnswerIsDropped() {
-        val r = Rig().withInfo(); r.wake(); r.pick("Info"); r.pick("Weather")
+        val r = Rig().withInfo(); r.wake(); r.pick("Today"); r.pick("Weather")
         r.click(); r.clearLog()
         r.pendingWeather?.invoke("Now 1 degrees, no rain soon.")
         r.advance(100); assertFalse(r.spoken().contains("say Now 1 degrees, no rain soon."))
     }
 
     @Test fun weatherFailureSpeaksFixedSentence() {
-        val r = Rig().withInfo(); r.weatherAnswer = Voice.WEATHER_FAILED; r.wake(); r.pick("Info"); r.pick("Weather")
+        val r = Rig().withInfo(); r.weatherAnswer = Voice.WEATHER_FAILED; r.wake(); r.pick("Today"); r.pick("Weather")
         r.advance(100); assertEquals(listOf("say ${Voice.WEATHER_FAILED}"), r.spoken())
     }
 
     @Test fun nextTurnSpeaksTheInstruction() {
-        val r = Rig().withInfo(); r.nav = "Turn left onto Calle Mayor, 200 m."; r.wake(); r.pick("Info"); r.pick("Next turn")
+        val r = Rig().withInfo(); r.nav = "Turn left onto Calle Mayor, 200 m."; r.wake(); r.pick("Today"); r.pick("Next turn")
         r.advance(100); assertEquals(listOf("say Turn left onto Calle Mayor, 200 m."), r.spoken())
     }
 
     @Test fun nextTurnWithoutNavigationSaysSoFixedSentence() {
-        val r = Rig().withInfo(); r.wake(); r.pick("Info"); r.pick("Next turn")
+        val r = Rig().withInfo(); r.wake(); r.pick("Today"); r.pick("Next turn")
         r.advance(100); assertEquals(listOf("say ${Voice.NO_NAVIGATION}"), r.spoken())
     }
 
     @Test fun nextEventIsSpoken() {
-        val r = Rig().withInfo(); r.wake(); r.pick("Info"); r.pick("Next event")
+        val r = Rig().withInfo(); r.wake(); r.pick("Today"); r.pick("Next event")
         r.advance(100); assertEquals(listOf("say Dentist at 4 PM, in 40 minutes."), r.spoken())
     }
 
@@ -241,7 +243,7 @@ class ModeTest {
         r.advance(1); assertEquals("tone TICK", r.log.last())                    // t=1500
         r.advance(199); assertFalse(r.log.contains("say Phone"))
         r.advance(1); assertEquals("say Phone", r.log.last())                   // t=1700 = 800 ms after "done"
-        r.advance(1300 * 3 + 50); assertEquals(listOf("say Timer", "say Phone", "say Status", "say Games"), r.spoken())
+        r.advance(1300 * 3 + 50); assertEquals(listOf("say Timer", "say Phone", "say Today", "say Duel"), r.spoken())
         r.advance(1300) // Games ends, pause, ding
         assertEquals(1, r.count("tone DING"))
     }
@@ -250,7 +252,7 @@ class ModeTest {
         val r = Rig(); r.wake()
         r.advance(400 + 4 * 1300 + 800 + 600)
         assertEquals(1, r.count("tone DING"))
-        assertEquals(listOf("say Timer", "say Phone", "say Status", "say Games", "say Timer"), r.spoken())
+        assertEquals(listOf("say Timer", "say Phone", "say Today", "say Duel", "say Timer"), r.spoken())
         assertTrue(r.m.active)
     }
 
@@ -313,8 +315,8 @@ class ModeTest {
         r.clearLog(); r.skip()
         assertTrue(r.m.active); assertEquals(ControllerMode.Screen.HUB, r.m.screen)
         r.advance(150)                              // no pause: far sooner than the 800 ms gap
-        assertEquals(listOf("say Games"), r.spoken())
-        r.advance(600); r.click(); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
+        assertEquals(listOf("say Duel"), r.spoken())
+        r.advance(600); r.click(); assertEquals(ControllerMode.Screen.DUEL, r.m.screen)
     }
 
     @Test fun skippingPastTheLastOptionStartsOver() {
@@ -464,7 +466,7 @@ class ModeTest {
     @Test fun rankerNeverReordersTheHub() {
         val rev = object : OptionRanker { override fun rank(screen: String, context: String, keys: List<String>) = keys.reversed() }
         val r = Rig(rev); r.wake(); r.advance(400 + 1300 * 4 + 100)
-        assertEquals(listOf("say Timer", "say Phone", "say Status", "say Games"), r.spoken())   // the hub keeps the user's order
+        assertEquals(listOf("say Timer", "say Phone", "say Today", "say Duel"), r.spoken())   // the hub keeps the user's order
     }
 
     @Test fun countRankerPutsMostPickedFirstAndTiesKeepDefaultOrder() {
@@ -509,8 +511,8 @@ class ModeTest {
 
     @Test fun playingIsInTheHubOnlyWhenASongExistsAndIsSpokenThenLeaves() {
         val r = Rig(); r.wake(); r.advance(400 + 1300 * 5)
-        assertFalse(r.spoken().contains("say Playing"))
-        val q = Rig(); q.song = "Blue, Ana"; q.wake(); q.pick("Playing")
+        assertFalse(r.spoken().contains("say Music"))
+        val q = Rig(); q.song = "Blue, Ana"; q.wake(); q.pick("Music")
         assertTrue(q.log.contains("say Blue, Ana"))
     }
 
@@ -566,16 +568,16 @@ class ModeTest {
     }
 
     @Test fun hubSpeaksSuggestedDeepOptionsFirstAndLeavesTheRestInPlace() {
-        val r = Rig(); r.suggested = listOf("phone:torch", "info:weather", "phone:back", "hub:status")   // Back and non-deep keys are never offered
+        val r = Rig(); r.suggested = listOf("phone:torch", "info:weather", "phone:back", "hub:today")   // Back and non-deep keys are never offered
         r.wake(); r.advance(1300 * 6 + 50)
         assertEquals(listOf("say Torch", "say Weather", "say Timer", "say Phone"), r.spoken().take(4))
     }
 
     @Test fun hubOrderMatchesWhatIsSpoken() {
-        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("timer", "status", "games"), learnOrder = false)
-        assertEquals(listOf("timer", "status", "games"), r.m.hubOrder())
+        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("timer", "today", "duel"), learnOrder = false)
+        assertEquals(listOf("timer", "today", "duel"), r.m.hubOrder())
         r.m.settings = r.m.settings.copy(learnOrder = true)
-        assertEquals(listOf("timer", "status", "games"), r.m.hubOrder())   // learning never changes the user's menu order
+        assertEquals(listOf("timer", "today", "duel"), r.m.hubOrder())   // learning never changes the user's menu order
     }
 
     @Test fun sharedNotesAreSplitIntoOpenTasks() {
@@ -689,7 +691,7 @@ class ModeTest {
     }
 
     @Test fun statusSpeaksOneSentenceThenLeaves() {
-        val r = Rig(); r.msgs = emptyList(); r.wake(); r.pick("Status")
+        val r = Rig(); r.msgs = emptyList(); r.wake(); r.pick("Phone"); r.pick("Status")
         r.advance(10); assertTrue(r.spoken().single().startsWith("say 3 05 PM, battery 80 percent, no unread messages, next alarm 7 30 AM"))
         assertTrue(r.m.active)
         r.advance(600); assertFalse(r.m.active); assertTrue(r.log.contains("tone EXIT"))
@@ -697,41 +699,41 @@ class ModeTest {
 
     @Test fun noMoreInTheHubAndOrderIsFixed() {
         val a = Rig(); a.m.settings = LauncherSettings(); a.msgs = listOf(bob.copy(at = 1)); a.wake()
-        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "playing", "timer", "status", "info", "phone", "games"), LauncherSettings.DEFAULT_HUB)
+        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "write", "duel"), LauncherSettings.DEFAULT_HUB)
         a.advance(400 + 1300 * 8); assertFalse(a.spoken().contains("say More")); assertFalse(a.spoken().contains("say Exit"))
     }
 
     @Test fun phoneGroupListsItemsInOrderAndDndOnlyWithAccess() {
-        val a = Rig(); a.wake(); a.pick("Phone"); a.advance(400 + 1300 * 4 + 100)
-        assertEquals(listOf("say Volume", "say Torch", "say Do not disturb", "say ${Voice.FIND_PHONE}", "say Back"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
-        val b = Rig(); b.dnd = false; b.wake(); b.pick("Phone"); b.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Volume", "say Torch", "say ${Voice.FIND_PHONE}", "say Back"), b.spoken())
+        val a = Rig(); a.wake(); a.pick("Phone"); a.advance(400 + 1300 * 5 + 100)
+        assertEquals(listOf("say Status", "say Volume", "say Torch", "say Do not disturb", "say ${Voice.FIND_PHONE}", "say Back"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
+        val b = Rig(); b.dnd = false; b.wake(); b.pick("Phone"); b.advance(400 + 1300 * 4 + 100)
+        assertEquals(listOf("say Status", "say Volume", "say Torch", "say ${Voice.FIND_PHONE}", "say Back"), b.spoken())
     }
 
     @Test fun phoneGroupHidesFindWhenWired() {
-        val r = Rig(); r.wired = true; r.wake(); r.pick("Phone"); r.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Volume", "say Torch", "say Do not disturb", "say Back"), r.spoken())
+        val r = Rig(); r.wired = true; r.wake(); r.pick("Phone"); r.advance(400 + 1300 * 4 + 100)
+        assertEquals(listOf("say Status", "say Volume", "say Torch", "say Do not disturb", "say Back"), r.spoken())
     }
 
     @Test fun infoAndPhoneFollowTheSettings() {
         assertEquals(listOf("turn", "weather"), LauncherSettings.cleanInfo(listOf("turn", "bogus", "weather", "turn", "back")))
         assertEquals(listOf("find", "volume"), LauncherSettings.cleanPhone(listOf("find", "x", "volume", "find")))
         assertEquals(emptyList<String>(), LauncherSettings.cleanInfo(listOf("")))
-        val r = Rig().withInfo(); r.m.settings = r.m.settings.copy(info = listOf("turn", "weather")); r.wake(); r.pick("Info"); r.advance(400 + 1300 * 3 + 100)
+        val r = Rig().withInfo(); r.m.settings = r.m.settings.copy(info = listOf("turn", "weather")); r.wake(); r.pick("Today"); r.advance(400 + 1300 * 3 + 100)
         assertEquals(listOf("say Next turn", "say Weather", "say Back"), r.spoken())
         val p = Rig(); p.m.settings = p.m.settings.copy(phone = listOf("torch", "volume")); p.wake(); p.pick("Phone"); p.advance(400 + 1300 * 3 + 100)
         assertEquals(listOf("say Torch", "say Volume", "say Back"), p.spoken())
     }
 
     @Test fun infoGroupListsItemsInOrderAndBackReturnsToTheHub() {
-        val r = Rig().withInfo(); r.wake(); r.pick("Info"); r.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Weather", "say Next event", "say Next turn", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.INFO, r.m.screen)
+        val r = Rig().withInfo(); r.wake(); r.pick("Today"); r.advance(400 + 1300 * 3 + 100)
+        assertEquals(listOf("say Weather", "say Next event", "say Next turn", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.TODAY, r.m.screen)
         r.pick("Back"); assertEquals(ControllerMode.Screen.HUB, r.m.screen)
         val p = Rig(); p.wake(); p.pick("Phone"); p.pick("Back"); assertEquals(ControllerMode.Screen.HUB, p.m.screen)
     }
 
     @Test fun picksInsideGroupsAreLoggedWithTheirKey() {
-        val a = Rig().withInfo(); a.wake(); a.pick("Info"); a.pick("Weather"); assertTrue(a.log.any { it.endsWith("info:weather") })
+        val a = Rig().withInfo(); a.wake(); a.pick("Today"); a.pick("Weather"); assertTrue(a.log.any { it.endsWith("info:weather") })
         val b = Rig(); b.wake(); b.pick("Phone"); b.pick("Torch")
         assertTrue(b.log.any { it.endsWith("phone:torch") }); assertTrue(b.has("run Flashlight"))
     }
@@ -739,11 +741,11 @@ class ModeTest {
     @Test fun torchRunsAndTheListRestartsAfterItsSpeech() {
         val r = Rig(); r.wake(); r.pick("Phone"); r.pick("Torch")
         assertTrue(r.has("run Flashlight")); r.advance(1500)
-        assertTrue(r.spoken().contains("say Volume")); assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
+        assertTrue(r.spoken().contains("say Status")); assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
     }
 
     @Test fun firstLayerIsShortAndInOrder() {
-        assertEquals(listOf("messages", "tasks", "playing", "timer", "status", "info", "phone", "games"), LauncherSettings.DEFAULT_HUB)
+        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "write", "duel"), LauncherSettings.DEFAULT_HUB)
         assertEquals(listOf("timer"), LauncherSettings.cleanHub(listOf("weather", "timer", "volume")))
     }
 
@@ -755,26 +757,52 @@ class ModeTest {
 
     @Test fun oldFlatMenuBecomesGroupedKeepingOffChoices() {
         val old = listOf("playing", "tasks", "messages", "timer", "volume", "status", "weather", "turn", "calendar", "games", "find")
-        assertEquals(LauncherSettings.DEFAULT_HUB, LauncherSettings.groupHub(old, listOf("read", "torch", "dnd", "exit")))
+        assertEquals(listOf("messages", "tasks", "playing", "timer", "status", "info", "phone", "games"), LauncherSettings.groupHub(old, listOf("read", "torch", "dnd", "exit")))
         assertEquals(listOf("messages", "tasks", "timer", "games"), LauncherSettings.groupHub(listOf("tasks", "messages", "timer", "games", "more"), listOf("read", "exit")))
         assertEquals(listOf("messages", "timer", "phone"), LauncherSettings.groupHub(listOf("messages", "timer", "more"), listOf("torch", "exit")))   // Torch was ON in More
         assertEquals(listOf("messages", "info"), LauncherSettings.groupHub(listOf("messages", "turn", "more"), listOf("exit")))
         assertEquals(listOf("timer", "info"), LauncherSettings.groupHub(listOf("timer", "info"), listOf("exit")))   // already grouped: untouched
     }
 
-    @Test fun gamesHubListsDuelAndBack() {
-        val r = Rig(); r.wake(); r.pick("Games"); r.advance(400 + 1300 * 2 + 100)
-        assertEquals(listOf("say Duel", "say Write", "say How to play"), r.spoken()); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
+    @Test fun duelListsPlayHowToPlayAndBack() {
+        val r = Rig(); r.wake(); r.pick("Duel"); r.advance(400 + 1300 * 2 + 100)
+        assertEquals(listOf("say Play", "say How to play", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.DUEL, r.m.screen)
     }
 
     @Test fun pickingDuelLeavesTheMenuForTheGame() {
-        val r = Rig(); r.wake(); r.pick("Games"); r.pick("Duel")
+        val r = Rig(); r.wake(); r.pick("Duel"); r.pick("Play")
         assertFalse(r.m.active)   // the game takes the button
     }
 
     @Test fun pickingHowToPlayLeavesTheMenuForTheCoach() {
-        val r = Rig(); r.wake(); r.pick("Games"); r.pick("How to play")
+        val r = Rig(); r.wake(); r.pick("Duel"); r.pick("How to play")
         assertFalse(r.m.active)
+    }
+
+    @Test fun duelLogsItsIntentsAndWriteStartsAtOnce() {
+        val r = Rig(); r.wake(); r.pick("Duel"); r.pick("Play"); assertTrue(r.log.any { it.endsWith("duel:play") }); assertTrue(r.has("startGame false"))
+        val h = Rig(); h.wake(); h.pick("Duel"); h.pick("How to play"); assertTrue(h.log.any { it.endsWith("duel:howto") })
+        val w = Rig(); w.m.settings = LauncherSettings(hub = listOf("write", "timer")); w.wake(); w.pick("Write")
+        assertFalse(w.m.active); assertTrue(w.has("startWrite")); assertTrue(w.log.any { it.endsWith("hub:write") })
+    }
+
+    @Test fun statusIsInsideThePhoneListAndLogged() {
+        val r = Rig(); r.msgs = emptyList(); r.wake(); r.pick("Phone"); r.pick("Status"); assertTrue(r.log.any { it.endsWith("phone:status") })
+        assertFalse(Rig().also { it.wake(); it.advance(400 + 1300 * 5) }.spoken().contains("say Status"))   // not in the home menu
+    }
+
+    @Test fun suggestedDrawsFromTodayPhoneAndDuel() {
+        val r = Rig(); r.suggested = listOf("duel:play", "phone:status", "info:turn", "duel:back", "today:back")
+        r.wake(); r.advance(1300 * 4 + 50)
+        assertEquals(listOf("say Play", "say Status", "say Next turn", "say Timer"), r.spoken().take(4))
+    }
+
+    @Test fun oldSavedMenuMapsToApps() {
+        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "write", "duel"),
+            LauncherSettings.migrateApps(listOf("messages", "tasks", "playing", "timer", "status", "info", "phone", "games")))
+        assertEquals(listOf("music", "today", "bogus".let { "timer" }), LauncherSettings.migrateApps(listOf("playing", "bogus", "info", "more", "timer")))
+        assertEquals(listOf("timer"), LauncherSettings.migrateApps(listOf("status", "timer", "timer")))
+        assertEquals(listOf("music", "timer"), LauncherSettings.migrateApps(listOf("music", "timer")))   // already new: untouched
     }
 
     @Test fun readUnreadIsInsideMessagesAndReadsTheUnread() {

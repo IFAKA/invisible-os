@@ -76,4 +76,4 @@ A unit is a letter, a word, a phrase or a whole value. The Write program does no
 5. **Bucket store + back-off**: Check: replay of logged finishes; hit@2 per bucket beats the global model.
 6. **Gemma with the frame**: Check: endings use the message topic; time stays background.
 7. **Learned weights**: Check: hit@2 up over a week of use.
-Measure with one number: hit@2 per bucket and seconds per text. Not built yet: all of the above (Write today uses only the last 2 words and starts from Games).
+Measure with one number: hit@2 per bucket and seconds per text. Not built yet: all of the above (Write today uses only the last 2 words and starts from the Write item in the home menu).

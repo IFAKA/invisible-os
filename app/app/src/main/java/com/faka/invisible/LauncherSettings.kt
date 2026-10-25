@@ -20,13 +20,21 @@ data class LauncherSettings(
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "playing" to "Playing", "timer" to "Timer", "status" to "Status", "info" to "Info (weather, next event, next turn)", "phone" to "Phone (volume, torch, do not disturb, find my phone)", "games" to "Games")
+        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "write" to "Write", "duel" to "Duel (play, how to play)")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
+
+        /** Every key a saved menu has ever used, in a fixed order. Only the old migration steps use it; [cleanHub] drops what is no longer an app. */
+        val LEGACY_ORDER = listOf("messages", "tasks", "playing", "music", "timer", "status", "info", "today", "phone", "games", "write", "duel")
+
+        /** Old apps -> new apps, once: playing->music, info->today, games->duel+write, status->dropped (it is a Phone option now). Unknown keys are dropped. */
+        fun migrateApps(keys: List<String>): List<String> = cleanHub(keys.flatMap { k ->
+            when (k) { "playing" -> listOf("music"); "info" -> listOf("today"); "games" -> listOf("write", "duel"); "status" -> emptyList(); else -> listOf(k) }
+        })
 
         val INFO_ITEMS = linkedMapOf("weather" to "Weather", "calendar" to "Next event", "turn" to "Next turn")
         val DEFAULT_INFO = INFO_ITEMS.keys.toList()
         fun cleanInfo(keys: List<String>): List<String> = keys.filter { it in INFO_ITEMS }.distinct()
-        val PHONE_ITEMS = linkedMapOf("volume" to "Volume", "torch" to "Torch", "dnd" to "Do not disturb", "find" to "Find my phone")
+        val PHONE_ITEMS = linkedMapOf("status" to "Status", "volume" to "Volume", "torch" to "Torch", "dnd" to "Do not disturb", "find" to "Find my phone")
         val DEFAULT_PHONE = PHONE_ITEMS.keys.toList()
         fun cleanPhone(keys: List<String>): List<String> = keys.filter { it in PHONE_ITEMS }.distinct()
 
@@ -34,18 +42,18 @@ data class LauncherSettings(
         fun cleanHub(keys: List<String>): List<String> = keys.filter { it in HUB_ITEMS }.distinct()
 
         /** Menu without "More": drop it and any unknown key, keep the other ON/OFF choices, use the default order. */
-        fun withoutMore(keys: List<String>): List<String> = DEFAULT_HUB.filter { it in keys }
+        fun withoutMore(keys: List<String>): List<String> = LEGACY_ORDER.filter { it in keys }
 
         /**
          * Old flat menu -> grouped menu. "info" is ON if any of weather/calendar/turn was; "phone" is ON if any of volume/find (hub) or torch/dnd ([oldMore]) was.
          * Other OFF choices stay OFF. Result is in the new default order. A menu that already has "info" or "phone" is only cleaned.
          */
         fun groupHub(keys: List<String>, oldMore: List<String>): List<String> {
-            if ("info" in keys || "phone" in keys) return cleanHub(keys)
+            if ("info" in keys || "phone" in keys) return keys.filter { it in LEGACY_ORDER }.distinct()
             val on = keys.toMutableSet()
             if (keys.any { it in setOf("weather", "calendar", "turn") }) on += "info"
             if (keys.any { it in setOf("volume", "find") } || oldMore.any { it in setOf("torch", "dnd") }) on += "phone"
-            return cleanHub(DEFAULT_HUB.filter { it in on })
+            return LEGACY_ORDER.filter { it in on }
         }
 
         fun cleanTimers(t: List<Int>): List<Int> {
@@ -59,9 +67,9 @@ object SettingsStore {
     fun load(p: SharedPreferences): LauncherSettings {
         val d = LauncherSettings()
         return LauncherSettings(
-            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withNoMore(p, withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it))))))))) } ?: d.hub,
+            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withApps(p, withNoMore(p, withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it)))))))))) } ?: d.hub,
             info = p.getString("s_info", null)?.split(',')?.let { LauncherSettings.cleanInfo(it) } ?: d.info,
-            phone = p.getString("s_phone", null)?.split(',')?.let { LauncherSettings.cleanPhone(it) } ?: d.phone,
+            phone = p.getString("s_phone", null)?.split(',')?.let { LauncherSettings.cleanPhone(withStatus(p, it)) } ?: d.phone,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
             itemGapMs = p.getLong("s_gap", d.itemGapMs).coerceIn(600, 4000),
             silentLoops = p.getInt("s_loops", d.silentLoops).coerceIn(1, 5),
@@ -71,6 +79,22 @@ object SettingsStore {
             ai = p.getBoolean("s_ai", d.ai),
             spearcons = p.getBoolean("s_spearcons", d.spearcons),
         )
+    }
+
+    /** Once, last: the grouped menu becomes the apps menu (see [LauncherSettings.migrateApps]). */
+    private fun withApps(p: SharedPreferences, keys: List<String>): List<String> {
+        if (p.getBoolean("s_apps_saved", false)) return keys
+        val moved = LauncherSettings.migrateApps(keys)
+        p.edit().putBoolean("s_apps_saved", true).putString("s_hub", moved.joinToString(",")).apply()
+        return moved
+    }
+
+    /** Once: a saved Phone list gets "status" as its first item (it used to be in the home menu). */
+    private fun withStatus(p: SharedPreferences, keys: List<String>): List<String> {
+        if (p.getBoolean("s_status_phone_saved", false)) return keys
+        val moved = listOf("status") + keys.filter { it != "status" }
+        p.edit().putBoolean("s_status_phone_saved", true).putString("s_phone", moved.joinToString(",")).apply()
+        return moved
     }
 
     /** A saved menu from before "Playing" existed (or from when it was last) gets it once, as the first item; the user can move or switch it off in settings. */
@@ -133,7 +157,7 @@ object SettingsStore {
     /** Once: put the user's ON items in the fastest order (most used first, "More" last). Items that are OFF stay OFF. */
     private fun withOrder(p: SharedPreferences, keys: List<String>): List<String> {
         if (p.getBoolean("s_order_saved", false)) return keys
-        val moved = LauncherSettings.DEFAULT_HUB.filter { it in keys }
+        val moved = LauncherSettings.LEGACY_ORDER.filter { it in keys }
         p.edit().putBoolean("s_order_saved", true).putString("s_hub", moved.joinToString(",")).apply()
         return moved
     }
@@ -149,6 +173,6 @@ object SettingsStore {
     fun save(p: SharedPreferences, s: LauncherSettings) {
         p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_info", s.info.joinToString(",")).putString("s_phone", s.phone.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
             .putLong("s_gap", s.itemGapMs).putInt("s_loops", s.silentLoops).putLong("s_undo", s.undoMs)
-            .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).putBoolean("s_ai", s.ai).putBoolean("s_groups_saved", true).apply()
+            .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).putBoolean("s_ai", s.ai).putBoolean("s_groups_saved", true).putBoolean("s_apps_saved", true).putBoolean("s_status_phone_saved", true).apply()
     }
 }

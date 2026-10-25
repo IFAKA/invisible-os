@@ -7,7 +7,7 @@ import java.util.Calendar
 
 class SuggesterTest {
     private val day = 86_400_000L
-    private val cands = setOf("phone:torch", "info:weather", "games:duel", "games:write")
+    private val cands = setOf("phone:torch", "info:weather", "duel:play", "duel:howto")
     private fun at(dayOffset: Int, hour: Int): Long = Calendar.getInstance().apply {
         timeInMillis = 1_700_000_000_000L; set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, 0); add(Calendar.DAY_OF_YEAR, dayOffset)
     }.timeInMillis
@@ -25,9 +25,9 @@ class SuggesterTest {
     }
 
     @Test fun picksAtTheSameHourOfDayWin() {
-        val h = listOf(p(0, 8, "info:weather"), p(0, 8, "info:weather"), p(0, 21, "games:duel"), p(0, 21, "games:duel"))
+        val h = listOf(p(0, 8, "info:weather"), p(0, 8, "info:weather"), p(0, 21, "duel:play"), p(0, 21, "duel:play"))
         assertEquals("info:weather", Suggester.top(h, cands, at(1, 8))[0])
-        assertEquals("games:duel", Suggester.top(h, cands, at(1, 22))[0])
+        assertEquals("duel:play", Suggester.top(h, cands, at(1, 22))[0])
     }
 
     @Test fun recentBeatsOld() {
@@ -57,5 +57,10 @@ class SuggesterTest {
         val back = ChoiceLog(listOf(line))
         assertEquals(setOf("unread", "wired"), back.history().single().tags)
         assertEquals(emptySet<String>(), ChoiceLog(listOf("5\tHUB\t1\tphone:torch\t")).history().single().tags)   // an old line without the column
+    }
+
+    @Test fun oldIntentNamesInTheLogCountForTheNewOnes() {
+        val back = ChoiceLog(listOf("1\tHUB\t1\tgames:duel\t", "2\tHUB\t1\tgames:howto\t", "3\tHUB\t1\thub:status\t", "4\tHUB\t1\tinfo:weather\t"))
+        assertEquals(listOf("duel:play", "duel:howto", "phone:status", "info:weather"), back.history().map { it.intent })
     }
 }

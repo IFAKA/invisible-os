@@ -132,7 +132,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, INFO, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, SENT }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, DUEL, SENT }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: String, val lang: String?, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: String, val lang: String?, val run: () -> Unit)
@@ -270,7 +270,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.INFO, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.DUEL -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -392,7 +392,7 @@ class ControllerMode(
                 val n = unread().size
                 for (k in settings.hub) when (k) {
                     "messages" -> if (n > 0) all["hub:messages"] = Opt("hub:messages", "Messages, $n unread", null) { readUnread("hub:messages") }
-                    "playing" -> out.nowPlaying()?.let { song -> all["hub:playing"] = Opt("hub:playing", "Playing", null) { pick("hub:playing"); outro(song, out.songLang(song)) } }   // only when the music app has a song
+                    "music" -> out.nowPlaying()?.let { song -> all["hub:music"] = Opt("hub:music", "Music", null) { pick("hub:music"); outro(song, out.songLang(song)) } }   // only when the music app has a song
                     "tasks" -> out.tasks().let { ts -> all["hub:tasks"] = Opt("hub:tasks", if (ts.isEmpty()) "Tasks, none" else "Tasks, ${ts.size}", null) {
                         pick("hub:tasks"); taskList = ts; taskIdx = 0
                         when {
@@ -401,10 +401,10 @@ class ControllerMode(
                         }
                     } }
                     "timer" -> all["hub:timer"] = Opt("hub:timer", "Timer", null) { pick("hub:timer"); show(Screen.TIMER_PICK) }
-                    "status" -> all["hub:status"] = Opt("hub:status", "Status", null) { pick("hub:status"); outro(Spoken.status(out.status(), unread().size)) }
-                    "info" -> all["hub:info"] = Opt("hub:info", "Info", null) { pick("hub:info"); show(Screen.INFO) }
+                    "today" -> all["hub:today"] = Opt("hub:today", "Today", null) { pick("hub:today"); show(Screen.TODAY) }
                     "phone" -> all["hub:phone"] = Opt("hub:phone", "Phone", null) { pick("hub:phone"); show(Screen.PHONE) }
-                    "games" -> all["hub:games"] = Opt("hub:games", "Games", null) { pick("hub:games"); show(Screen.GAMES) }
+                    "write" -> all["hub:write"] = Opt("hub:write", "Write", null) { pick("hub:write"); pausedByUs = false; exit(false); out.startWrite() }   // a program: starts at once
+                    "duel" -> all["hub:duel"] = Opt("hub:duel", "Duel", null) { pick("hub:duel"); show(Screen.DUEL) }
                 }
                 suggestedKeys = emptyList()
                 out.setContext(buildSet { if (n > 0) add("unread"); if (out.nowPlaying() != null) add("playing"); if (out.navigation() != null) add("navigating"); if (out.wiredConnected()) add("wired") })
@@ -438,24 +438,24 @@ class ControllerMode(
                 Opt("volume:up", "Louder", null) { pick("volume:up"); out.volume(true); sayLevel() },
                 Opt("volume:down", "Quieter", null) { pick("volume:down"); out.volume(false); sayLevel() },
                 Opt("volume:done", "Done", null) { pick("volume:done"); show(Screen.PHONE) })
-            Screen.INFO -> settings.info.mapNotNull { k -> when (k) {
+            Screen.TODAY -> settings.info.mapNotNull { k -> when (k) {
                 "weather" -> Opt("info:weather", "Weather", null) { pick("info:weather"); lookup(out::weather) }
                 "calendar" -> Opt("info:calendar", "Next event", null) { pick("info:calendar"); lookup(out::nextEvent) }
                 "turn" -> Opt("info:turn", "Next turn", null) { pick("info:turn"); outro(out.navigation() ?: Voice.NO_NAVIGATION) }
                 else -> null
-            } } + Opt("info:back", "Back", null) { pick("info:back"); show(Screen.HUB) }
+            } } + Opt("today:back", "Back", null) { pick("today:back"); show(Screen.HUB) }
             Screen.PHONE -> settings.phone.mapNotNull { k -> when (k) {
+                "status" -> Opt("phone:status", "Status", null) { pick("phone:status"); outro(Spoken.status(out.status(), unread().size)) }
                 "volume" -> Opt("phone:volume", "Volume", null) { pick("phone:volume"); show(Screen.VOLUME) }
                 "torch" -> Opt("phone:torch", "Torch", null) { pick("phone:torch"); out.runAction("Flashlight"); afterSpeech { beginScan() } }
                 "dnd" -> if (out.dndAllowed()) Opt("phone:dnd", "Do not disturb", null) { pick("phone:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null
                 "find" -> if (!out.wiredConnected()) Opt("phone:find", Voice.FIND_PHONE, null) { pick("phone:find"); find() } else null
                 else -> null
             } } + Opt("phone:back", "Back", null) { pick("phone:back"); show(Screen.HUB) }
-            Screen.GAMES -> listOf(   // every game lives here; a new game is one more line
-                Opt("games:duel", "Duel", null) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame(false) },   // music stays paused for the game, which resumes it
-                Opt("games:write", "Write", null) { pick("games:write"); pausedByUs = false; exit(false); out.startWrite() },   // a program of the OS, not a game; reachable here until it has its own place
-                Opt("games:howto", "How to play", null) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) },
-                Opt("games:back", "Back", null) { pick("games:back"); show(Screen.HUB) })
+            Screen.DUEL -> listOf(   // the Duel's own options
+                Opt("duel:play", "Play", null) { pick("duel:play"); pausedByUs = false; exit(false); out.startGame(false) },   // music stays paused for the game, which resumes it
+                Opt("duel:howto", "How to play", null) { pick("duel:howto"); pausedByUs = false; exit(false); out.startGame(true) },
+                Opt("duel:back", "Back", null) { pick("duel:back"); show(Screen.HUB) })
             Screen.TIMER_DONE -> listOf(
                 Opt("timer:stop", "Stop", null) { pick("timer:stop"); out.stopAlarm(); afterSpeech { advance() } },
                 Opt("timer:plus5", "Five more minutes", null) { pick("timer:plus5"); out.stopAlarm(); queue.removeAt(qi); startTimerPending(5) },
@@ -482,7 +482,7 @@ class ControllerMode(
     private fun deepOptions(): Map<String, Opt> {
         val keep = screen
         try {
-            return listOf(Screen.INFO, Screen.PHONE, Screen.GAMES).flatMap { screen = it; buildOptions() }
+            return listOf(Screen.TODAY, Screen.PHONE, Screen.DUEL).flatMap { screen = it; buildOptions() }
                 .filter { !it.key.endsWith(":back") }.associateBy { it.key }
         } finally { screen = keep }
     }
@@ -585,7 +585,7 @@ class ControllerMode(
             Screen.MORE_MSG -> show(Screen.MESSAGE)
             Screen.COMPOSE, Screen.MSG_TASK -> show(Screen.MORE_MSG)
             Screen.VOLUME -> show(Screen.PHONE)
-            Screen.TIMER_PICK, Screen.INFO, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES -> show(Screen.HUB)
+            Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.DUEL -> show(Screen.HUB)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()
         }

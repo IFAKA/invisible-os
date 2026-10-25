@@ -161,7 +161,7 @@ class MainActivity : Activity() {
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
         }
 
-        card("Inside \"Info\"", "What you hear after you click Info. Same drag and switch.") {
+        card("Inside \"Today\"", "What you hear after you click Today. Same drag and switch.") {
             addView(k.dragList(s.info, LauncherSettings.INFO_ITEMS, emptySet()) { order -> change(s.copy(info = LauncherSettings.cleanInfo(order))) })
         }
 
