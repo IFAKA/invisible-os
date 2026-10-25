@@ -23,6 +23,8 @@ import android.widget.TextView
 class MainActivity : Activity() {
     private lateinit var body: LinearLayout
     private var s = LauncherSettings()
+    private var taskNote = ""        // result of the last Add, shown under the button
+    private var taskNoteBad = false
 
     private val ink = Color.parseColor("#1B1F23")
     private val soft = Color.parseColor("#5F6872")
@@ -72,7 +74,9 @@ class MainActivity : Activity() {
 
     private fun btn(label: String, filled: Boolean = false, onClick: () -> Unit) = Button(this).apply {
         text = label; isAllCaps = false; minHeight = dp(48); minimumHeight = dp(48)
+        stateListAnimator = null; elevation = 0f
         if (filled) { setTextColor(Color.WHITE); background = GradientDrawable().apply { setColor(accent); cornerRadius = dp(24).toFloat() } }
+        else { setTextColor(accent); background = GradientDrawable().apply { setColor(Color.parseColor("#E8EDFB")); cornerRadius = dp(24).toFloat() } }
         setOnClickListener { onClick() }
     }
 
@@ -130,23 +134,36 @@ class MainActivity : Activity() {
                 }))
         }
 
-        card("Tasks" + Actions.tasks().size.let { if (it > 0) " ($it)" else "" }, "Hold the button, then click \"Tasks\" to hear them. Done removes one, Next skips it.") {
+        card("Tasks" + Actions.tasks().size.let { if (it > 0) " ($it)" else "" }, "Hold the button, then click \"Tasks\" to hear them. Click Done to finish one, Next to skip it.") {
             val input = EditText(this@MainActivity).apply {
-                hint = "Type a task, or paste a checklist"; setTextColor(ink); minLines = 1; maxLines = 4
-                imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                hint = "Write a task, or paste a checklist"; setHintTextColor(soft); setTextColor(ink); textSize = 16f
+                minLines = 2; maxLines = 5; gravity = Gravity.TOP or Gravity.START
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                background = GradientDrawable().apply { setColor(Color.WHITE); setStroke(dp(2), Color.parseColor("#B8C0CC")); cornerRadius = dp(12).toFloat() }
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             }
+            val note = text(taskNote, 14f, if (taskNoteBad) bad else good).apply { setPadding(0, dp(6), 0, 0) }
             fun add() {
                 val t = input.text.toString()
-                if (t.isBlank()) { Toast.makeText(this@MainActivity, "Type a task first", Toast.LENGTH_SHORT).show(); return }
+                if (t.isBlank()) { taskNote = "Write a task in the box first."; taskNoteBad = true; render(); return }
                 Actions.addTasks(t) { n ->
-                    Toast.makeText(this@MainActivity, when (n) { 0 -> "Already in the list"; 1 -> "Task added"; else -> "$n tasks added" }, Toast.LENGTH_SHORT).show()
+                    taskNoteBad = n == 0
+                    taskNote = when (n) { 0 -> "Nothing new: already in the list, or all items were checked."; 1 -> "Added 1 task."; else -> "Added $n tasks." }
                     render()
                 }
             }
-            addView(row(grow(input), btn("Add", true) { add() }), LinearLayout.LayoutParams(-1, -2))
+            addView(input, LinearLayout.LayoutParams(-1, -2))
+            addView(btn("Add task", true) { add() }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(10) })
+            if (taskNote.isNotEmpty()) addView(note)
             val ts = Actions.tasks()
-            if (ts.isEmpty()) addView(text("No tasks yet. In Google Keep: open a note, Share, Invisible task. Only the unchecked items are added.", 14f, soft).apply { setPadding(0, dp(10), 0, 0) })
-            ts.forEach { t -> addView(row(grow(text(t.text, 15f).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }), btn("Done") { Actions.completeTask(t.id); render() }), LinearLayout.LayoutParams(-1, -2)) }
+            if (ts.isEmpty()) addView(text("No tasks yet.\nIn Google Keep: open a note, tap Share, choose \"Invisible task\". Only unchecked items are added.", 14f, soft).apply { setPadding(0, dp(12), 0, 0) })
+            ts.forEachIndexed { i, t ->
+                val item = row(grow(text(t.text, 16f).apply { maxLines = 3; ellipsize = android.text.TextUtils.TruncateAt.END }),
+                    btn("Done") { Actions.completeTask(t.id); taskNote = ""; render() }.apply { minWidth = dp(84) })
+                item.setPadding(dp(14), dp(6), dp(8), dp(6))
+                item.background = GradientDrawable().apply { setColor(Color.parseColor("#F3F4F7")); cornerRadius = dp(12).toFloat() }
+                addView(item, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(if (i == 0) 14 else 8) })
+            }
         }
 
         card("Your menu", "The phone says these one by one. Click when you hear the one you want. Turn off what you never use.") {
