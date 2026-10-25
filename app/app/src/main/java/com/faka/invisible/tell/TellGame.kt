@@ -242,6 +242,7 @@ class TellGame(
     }
 
     private fun tension(): Int {
+        if (narrate) return 0   // a coached match is only a clock: kick and snare
         val low = minOf(state.myL, state.oppL)
         return if (low <= 1) 2 else if (low <= 2) 1 else 0
     }

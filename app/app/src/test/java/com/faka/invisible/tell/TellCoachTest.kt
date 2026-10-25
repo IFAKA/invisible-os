@@ -19,9 +19,9 @@ class TellCoachTest {
         fun speaks() = out.events.map { it.second }.filter { it.startsWith("speak ") }.map { it.substring(6) }
     }
 
-    private fun rig(taught: Boolean, force: Boolean = false): R {
+    private fun rig(taught: Boolean, force: Boolean = false, opp: (Int, TellSolver, Long) -> Opponent = guardOpp): R {
         val w = FakeWorld(); val out = FakeOut(w); out.taughtFlag = taught
-        val g = TellGame(solver, out, w, { w.now }, { 0L }, 7, guardOpp, forceCoach = force)
+        val g = TellGame(solver, out, w, { w.now }, { 0L }, 7, opp, forceCoach = force)
         g.start()
         return R(w, out, g)
     }
@@ -138,6 +138,20 @@ class TellCoachTest {
         assertTrue(r.speaks().count { it == "Nothing happens." } >= 2)
         val beds = r.out.times("tension")
         assertEquals(4000L, beds[2] - beds[1])
+    }
+
+    @Test fun coachedMatchHasNoTensionLayers() {
+        val jabber: (Int, TellSolver, Long) -> Opponent = { _, _, _ ->
+            object : Opponent {
+                override fun choose(round: Int, state: State, rng: Random) = Move.JAB
+                override fun observe(playerMove: Move, round: Int) {}
+            }
+        }
+        val r = rig(false, opp = jabber); playCoached(r)
+        r.w.advanceBy(4000L * 6)
+        assertTrue(r.out.count("play PARRY_CLANG") >= 3)   // the opponent is being hurt: normally tension would rise
+        val t = r.out.events.map { it.second }.filter { it.startsWith("tension ") }
+        assertTrue(t.isNotEmpty() && t.all { it == "tension 0" })
     }
 
     @Test fun taughtPlayersGetNoCoachAndNoNarration() {

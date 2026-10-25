@@ -147,7 +147,11 @@ class TellMixer(val sampleRate: Int = 44100) {
         }
     }
 
-    private fun bedMix(i: Int) = bed.kick[i] + bed.hat[i] + bed.bass[i] + bed.bright[i] * g1 + bed.ostinato[i] * g2
+    /** The kick alone (tension 0) is lifted to peak 1.0 so the bed keeps its -20 dBFS peak; the lift fades out as layers enter. */
+    private val kickLift = 1f / bed.kick.maxOf { abs(it) }
+
+    /** Kick always; bass (and its bright copy) from tension 1; hi-hat and the high ostinato from tension 2. */
+    private fun bedMix(i: Int) = bed.kick[i] * (1f + (kickLift - 1f) * (1f - g1)) + (bed.bass[i] + bed.bright[i]) * g1 + (bed.hat[i] + bed.ostinato[i]) * g2
 
     // ---- internals ----
     private fun add(src: FloatArray, db: Double, side: Side, wait: Int = 0, loop: Boolean = false, attack: Int = 0): Voice {

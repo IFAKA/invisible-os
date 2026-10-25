@@ -127,6 +127,20 @@ class TellMixerTest {
         for (i in 0 until 88200) assertEquals(l[i], l[i + 88200], 1e-5f)
     }
 
+    @Test fun bedIsOnlyAClockAtTensionZeroAndLayersEnterWithLife() {
+        val b = TellSynth.bed(); val lift = 1f / b.kick.maxOf { abs(it) }; val top = 0.1f   // BED_DB = -20
+        fun expected(t: Int, i: Int) = top * when (t) {
+            0 -> b.kick[i] * lift
+            1 -> b.kick[i] + b.bass[i] + b.bright[i]
+            else -> b.kick[i] + b.bass[i] + b.bright[i] + b.hat[i] + b.ostinato[i]
+        }
+        for (t in 0..2) {
+            val m = TellMixer(); m.setTension(t); m.startBed()
+            val l = channel(renderAll(m, 88200), 0)
+            for (i in 0 until 88200 step 7) assertEquals("tension $t frame $i", expected(t, i), l[i], 1e-4f)
+        }
+    }
+
     @Test fun tensionAddsLayers() {
         val r = DoubleArray(3)
         for (t in 0..2) { val m = TellMixer(); m.setTension(t); m.startBed(); val o = renderAll(m, SR * 4); r[t] = rms(channel(o, 0)) }

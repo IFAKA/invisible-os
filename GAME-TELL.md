@@ -54,11 +54,13 @@ hits, short room tail. All pitched notes are in the C minor pentatonic set (C Eb
   the far ear scaled by the pan amount. Mono sources only; no reverb on the near side.
 
 ### The clock (the bed)
-- 120 bpm kick (soft, sub 55 Hz, 90 ms) on every beat, always, from the first round to the end: the pulse tells you where in
-  the round you are. Beat 1 is accented. Hi-hat on every off-beat, very quiet. At 1.5 s a snare/clap = the window closed.
-- Bass: root C2 / fifth G2 eighth-note pulse, -18 LUFS-ish (peak -20 dBFS), rises one layer per tension step:
-  tension 0 normal, 1 when anyone has 2 life, 2 when anyone has 1 life (adds a high 16th ostinato on G4/Bb4, lower in the mix than
-  the cues). Music stops with a held bass note at match end.
+The bed is only a clock. 120 bpm kick (soft, sub 55 Hz, 90 ms) on every beat, always, from the first round to the end: the pulse
+tells you where in the round you are. Beat 1 is accented. At 1.5 s a snare/clap = the window closed. Nothing else plays at tension 0.
+Layers enter only with danger (peak of the whole bed stays -20 dBFS):
+- Tension 1 (anyone has 2 life): adds the bass, root C2 / fifth G2 eighth-note pulse.
+- Tension 2 (anyone has 1 life): adds the bass, the off-beat hi-hat (very quiet) and a high 16th ostinato on G4/Bb4 (lower in the mix than the cues).
+- A coached match (the narrated first match) uses kick and snare only, never a layer.
+Music stops with a held bass note at match end.
 
 ### Status (beat 1 of every round, 150 ms, two soft notes, quiet: peak -22 dBFS)
 - Energy is a pitch: 0 C3, 1 Eb3, 2 F3, 3 G3, 4 Bb3, 5 C4. Yours in the centre (bell/mallet), theirs on the left (muted pluck).
