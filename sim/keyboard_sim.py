@@ -8,6 +8,8 @@ import json, re, sys, urllib.request, collections, statistics, argparse
 SCAN = 1.3     # seconds to hear one option (same as the app's scan step)
 SPELL = 8.0    # assumed seconds to spell one word the model missed
 K = 3          # options per layer before moving on
+DEC = 1.2      # method D: seconds for one stereo decision (hear two words at once, click = left, hold = right)
+SPELL_D = 4.0  # method D: spelling a missed word by halving the alphabet left/right (about 4 decisions)
 
 def llm(model, prompt, n=120):
     req = urllib.request.Request("http://localhost:11434/api/generate", json.dumps(
@@ -57,6 +59,17 @@ def method_c(gen, ctx, target, lang):
         prefix = (prefix + " " + w).strip()
     return t + SCAN                                # final Done
 
+def method_d(gen, ctx, target, lang, spell):
+    """Stereo pair: top 2 words (left/right ear) per decision, 2 clicks = next pair; 2 pairs, then spell."""
+    t = 0.0; prefix = ""
+    for w in words(target):
+        guess = next_words(gen, ctx, prefix, lang)[:4]
+        nw = norm(w)
+        if nw in guess: t += DEC * (guess.index(nw) // 2 + 1)
+        else: t += DEC * 2 + spell
+        prefix = (prefix + " " + w).strip()
+    return t + DEC                                 # final confirm
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--gen", default="gemma3:1b"); ap.add_argument("--judge", default="gemma3:4b")
     ap.add_argument("--strict", action="store_true"); a = ap.parse_args()
@@ -79,6 +92,8 @@ def main():
             rows[k]["B memory + AI sentences"].append(costB)
             rows[k]["  (B hit rate)"].append(1.0 if hitB is not None else 0.0)
         rows[k]["C word by word only"].append(c_cost)
+        rows[k]["D stereo pair (spell 8 s)"].append(method_d(a.gen, it["ctx"], it["text"], it["lang"], SPELL))
+        rows[k]["D stereo pair (stereo spell)"].append(method_d(a.gen, it["ctx"], it["text"], it["lang"], SPELL_D))
         print(f"{i+1}/{len(corpus)}", end="\r", file=sys.stderr)
     for k, d in rows.items():
         print(f"\n{k.upper()}  ({sum(1 for c in corpus if c['kind']==k)} texts, mean seconds of listening per text)")
