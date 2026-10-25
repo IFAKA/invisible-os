@@ -91,13 +91,7 @@ class MainActivity : Activity() {
         }
 
         card("Tasks" + Actions.tasks().size.let { if (it > 0) " ($it)" else "" }, "Hold the button, then click \"Tasks\" to hear them. Click Done to finish one, Next to skip it.") {
-            val input = EditText(this@MainActivity).apply {
-                hint = "Write a task, or paste a checklist"; setHintTextColor(Ui.soft); setTextColor(Ui.ink); textSize = 16f
-                minLines = 2; maxLines = 5; gravity = Gravity.TOP or Gravity.START
-                setPadding(k.dp(14), k.dp(12), k.dp(14), k.dp(12))
-                background = GradientDrawable().apply { setColor(Ui.card); setStroke(k.dp(2), Ui.edge); cornerRadius = k.dp(Ui.RADIUS_ROW).toFloat() }
-                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            }
+            val input = k.input("Write a task, or paste a checklist")
             val note = k.text(taskNote, 14f, if (taskNoteBad) Ui.bad else Ui.good).apply { setPadding(0, k.dp(6), 0, 0) }
             fun add() {
                 val t = input.text.toString()
@@ -116,13 +110,13 @@ class MainActivity : Activity() {
             val taskRows = ArrayList<View>()
             val th = k.dp(68)
             ts.forEachIndexed { i, t ->
-                val handle = TextView(this@MainActivity).apply { text = "\u2261"; textSize = 26f; setTextColor(Ui.soft); gravity = Gravity.CENTER; layoutParams = LinearLayout.LayoutParams(k.dp(40), -1) }
+                val handle = k.handle(40, visible = ts.size > 1)
                 val item = k.row(handle, k.grow(k.text(t.text, 16f).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }),
                     k.btn("Done") { Actions.completeTask(t.id); taskNote = ""; render() }.apply { minWidth = k.dp(84) })
                 item.setPadding(k.dp(4), 0, k.dp(8), 0)
-                item.background = GradientDrawable().apply { setColor(Ui.page); cornerRadius = k.dp(Ui.RADIUS_ROW).toFloat() }
+                k.surface(item)
                 taskRows.add(item)
-                if (ts.size > 1) k.makeDraggable(handle, taskRows, ts.size - 1, th + k.dp(8)) { from, to -> Actions.moveTask(from, to); render() } else handle.setTextColor(Color.TRANSPARENT)
+                if (ts.size > 1) k.makeDraggable(handle, taskRows, ts.size - 1, th + k.dp(8)) { from, to -> Actions.moveTask(from, to); render() }
                 addView(item, LinearLayout.LayoutParams(-1, th).apply { topMargin = k.dp(if (i == 0) 14 else 8) })
             }
         }
@@ -141,11 +135,7 @@ class MainActivity : Activity() {
         card("Timer", "Tap a time to change it, like the clock app. These are the choices you hear. \"Last used\" is always added.") {
             val chips = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
             s.timers.forEachIndexed { i, m ->
-                chips.addView(Button(this@MainActivity).apply {
-                    text = clockText(m); isAllCaps = false; textSize = 18f; setTextColor(Ui.accent); stateListAnimator = null; elevation = 0f
-                    background = GradientDrawable().apply { setColor(Ui.tint); cornerRadius = k.dp(Ui.RADIUS_CHIP).toFloat() }
-                    setOnClickListener { k.pickTime(m) { v -> change(s.copy(timers = LauncherSettings.cleanTimers(s.timers.toMutableList().also { it[i] = v }))) } }
-                }, LinearLayout.LayoutParams(0, k.dp(64), 1f).apply { if (i > 0) marginStart = k.dp(8) })
+                chips.addView(k.chip(clockText(m)) { k.pickTime(m) { v -> change(s.copy(timers = LauncherSettings.cleanTimers(s.timers.toMutableList().also { it[i] = v }))) } }, LinearLayout.LayoutParams(0, k.dp(64), 1f).apply { if (i > 0) marginStart = k.dp(8) })
             }
             addView(chips, LinearLayout.LayoutParams(-1, -2))
         }

@@ -62,6 +62,31 @@ class Kit(private val c: Context) {
 
     fun grow(v: View) = v.apply { layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
 
+    /** Multi-line text box with an outline. */
+    fun input(hintText: String) = android.widget.EditText(c).apply {
+        hint = hintText; setHintTextColor(Ui.soft); setTextColor(Ui.ink); textSize = 16f
+        minLines = 2; maxLines = 5; gravity = Gravity.TOP or Gravity.START
+        setPadding(dp(14), dp(12), dp(14), dp(12))
+        background = GradientDrawable().apply { setColor(Ui.card); setStroke(dp(2), Ui.edge); cornerRadius = dp(Ui.RADIUS_ROW).toFloat() }
+        inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+    }
+
+    /** The ≡ grip of a draggable row; [visible] false keeps the space but hides it. */
+    fun handle(widthDp: Int, visible: Boolean = true) = TextView(c).apply {
+        text = "\u2261"; textSize = 26f; setTextColor(if (visible) Ui.soft else Ui.clear); gravity = Gravity.CENTER
+        layoutParams = LinearLayout.LayoutParams(dp(widthDp), -1)
+    }
+
+    /** Grey rounded background of a list row. */
+    fun surface(v: View) { v.background = GradientDrawable().apply { setColor(Ui.page); cornerRadius = dp(Ui.RADIUS_ROW).toFloat() } }
+
+    /** Big tinted button for one value (a timer length). */
+    fun chip(label: String, onClick: () -> Unit) = Button(c).apply {
+        text = label; isAllCaps = false; textSize = 18f; setTextColor(Ui.accent); stateListAnimator = null; elevation = 0f
+        background = GradientDrawable().apply { setColor(Ui.tint); cornerRadius = dp(Ui.RADIUS_CHIP).toFloat() }
+        setOnClickListener { onClick() }
+    }
+
     /** A white card with a title and optional hint; [fill] adds the content. Added to [parent]. */
     fun card(parent: LinearLayout, title: String, hint: String? = null, fill: LinearLayout.() -> Unit) {
         val v = LinearLayout(c).apply {
