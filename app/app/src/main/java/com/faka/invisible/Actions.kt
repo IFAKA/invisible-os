@@ -229,6 +229,7 @@ object Actions {
                         val one = { if (--pending == 0) playPair(left, right, me) }
                         clips?.ensure(left, one); right?.let { clips?.ensure(it, one) }
                     }
+                    override fun hush() { stopPair() }
                     override fun prefetch(words: List<String>) { words.forEach { clips?.ensure(it) {} } }
                     override fun say(text: String) { this@Actions.say(text, true) }
                     override fun cue(c: TypeCue) { play(TypeSounds.pcm(c)) }

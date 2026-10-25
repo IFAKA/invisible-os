@@ -4,8 +4,8 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Spoken words as PCM, made by the TTS engine in the background and kept in memory, so two words can be mixed into
- * one stereo sound (left ear, right ear). The right voice is the same clip played lower and slower, so the ears can tell them apart.
+ * Spoken words as PCM, made by the TTS engine in the background and kept in memory, so two words can be joined into
+ * one stereo sound: first the left ear, then the right ear. The right voice is the same clip played lower and slower, so the ears can tell them apart.
  */
 class WordClips(private val dir: File, private val synth: (text: String, file: File, id: String) -> Boolean, private val post: (() -> Unit) -> Unit) {
     private val mem = ConcurrentHashMap<String, Spearcon.Pcm>()
@@ -40,17 +40,15 @@ class WordClips(private val dir: File, private val synth: (text: String, file: F
         return x.copyOfRange(a, b)
     }
 
-    /** Interleaved stereo (left word | right word) and its sample rate; null if the left clip is missing. */
+    /** Interleaved stereo and its sample rate: the left word in the left ear, a short gap, then the right word in the right ear (lower voice). Null if the left clip is missing. */
     fun stereo(left: String, right: String?): Pair<ShortArray, Int>? {
         val l = mem[key(left)] ?: return null
-        val r = right?.let { mem[key(it)] }
-        val rr = r?.let { lower(it.samples) }
-        val n = maxOf(l.samples.size, rr?.size ?: 0)
-        val out = ShortArray(n * 2)
-        for (i in 0 until n) {
-            out[2 * i] = if (i < l.samples.size) l.samples[i] else 0
-            out[2 * i + 1] = if (rr != null && i < rr.size) rr[i] else 0
-        }
+        val rr = right?.let { mem[key(it)] }?.let { lower(it.samples) }
+        val gap = l.rate * 150 / 1000
+        val frames = l.samples.size + (if (rr != null) gap + rr.size else 0)
+        val out = ShortArray(frames * 2)
+        for (i in l.samples.indices) out[2 * i] = l.samples[i]
+        if (rr != null) for (i in rr.indices) out[2 * (l.samples.size + gap + i) + 1] = rr[i]
         return out to l.rate
     }
 

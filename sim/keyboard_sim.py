@@ -8,7 +8,7 @@ import json, re, sys, urllib.request, collections, statistics, argparse
 SCAN = 1.3     # seconds to hear one option (same as the app's scan step)
 SPELL = 8.0    # assumed seconds to spell one word the model missed
 K = 3          # options per layer before moving on
-DEC = 1.2      # method D: seconds for one stereo decision (hear two words at once, click = left, hold = right)
+DEC = 1.9      # method D: seconds for one pair decision (hear the left word, then the right word, one after the other; 1.2 if both could be heard at once)
 SPELL_D = 4.0  # method D: spelling a missed word by halving the alphabet left/right (about 4 decisions)
 
 def llm(model, prompt, n=120):

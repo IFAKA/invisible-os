@@ -33,6 +33,7 @@ class TypingTest {
     private val t = Fake()
     private val p = TypeProgram(lm, object : TypeOut {
         override fun pair(left: String, right: String?) { pairs.add(left to right) }
+        override fun hush() {}
         override fun prefetch(words: List<String>) {}
         override fun say(text: String) {}
         override fun cue(c: TypeCue) { cues.add(c) }

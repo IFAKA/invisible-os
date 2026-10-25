@@ -3,9 +3,10 @@ package com.faka.invisible
 /** What the Write program needs to know about the words: all words, most likely first, after the given words. */
 interface Ranker { fun ranked(context: List<String>): List<Pair<String, Double>> }
 
-/** What the Write program asks of the app. The words of a pair are heard together: left ear and right ear. */
+/** What the Write program asks of the app. The words of a pair are heard one after the other: the left word in the left ear, then the right word in the right ear. */
 interface TypeOut {
     fun pair(left: String, right: String?)
+    fun hush()   // a press stops the words that are playing
     fun prefetch(words: List<String>)
     fun say(text: String)
     fun cue(c: TypeCue)
@@ -15,7 +16,7 @@ interface TypeOut {
 enum class TypeCue { PICK_LEFT, PICK_RIGHT, NEXT, LETTERS, WORDS, DELETE, DONE, ARMED }
 
 /**
- * Write: a one-button keyboard (PLAN-OS.md). The phone plays two likely items at once, one in each ear.
+ * Write: a one-button keyboard (PLAN-OS.md). The phone plays two likely items one after the other, the first in the left ear, the second in the right.
  * click = left, hold (0.5 s up to 3 s) = right, 2 clicks = next pair, 3 clicks = words/letters, 4 clicks = done, 5 clicks = delete.
  * Hold 3 s always leaves. It gets the raw button ([down]/[up]) and owns no menu. Time and timers are injected.
  */
@@ -82,7 +83,7 @@ class TypeProgram(
     // ---- the raw button ----
     fun down(time: Long) {
         if (!active) return
-        timers.clear("t:gap"); timers.clear("t:replay")
+        out.hush(); timers.clear("t:gap"); timers.clear("t:replay")
         downAt = time; armed = false
         timers.set("t:hold", HOLD_MS) { if (active && downAt >= 0) { armed = true; out.cue(TypeCue.ARMED) } }
         timers.set("t:leave", LEAVE_MS) { if (active && downAt >= 0) leave(false) }
