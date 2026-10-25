@@ -424,10 +424,10 @@ class ModeTest {
         val r = Rig(); r.taskStore.add("Buy milk"); r.taskStore.add("Call mum")
         r.wake(); r.pick("Tasks, 2")
         r.advance(400 + 600)
-        assertTrue(r.log.contains("say 1 of 2: Buy milk"))
+        assertTrue(r.log.contains("say[es] 1 of 2: Buy milk"))
         r.pick("Done")
         assertEquals(listOf("Call mum"), r.taskStore.all().map { it.text })
-        r.advance(1000); assertTrue(r.log.contains("say Call mum"))
+        r.advance(1000); assertTrue(r.log.contains("say[es] Call mum"))
         r.pick("Done")
         assertTrue(r.taskStore.all().isEmpty()); assertTrue(r.log.contains("say All done"))
     }
