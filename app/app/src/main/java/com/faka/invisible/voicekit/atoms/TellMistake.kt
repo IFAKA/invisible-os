@@ -1,4 +1,10 @@
-package com.faka.invisible.tell
+@file:OptIn(KitOnly::class)
+
+package com.faka.invisible.voicekit
+
+import com.faka.invisible.tell.Move
+import com.faka.invisible.tell.Round
+import com.faka.invisible.tell.TellRules
 
 private fun verb(m: Move) = when (m) { Move.JAB -> "jabbed"; Move.GUARD -> "guarded"; Move.CHARGE -> "charged" }
 
@@ -8,8 +14,8 @@ private fun score(r: Round): Double =
 private fun lives(n: Int) = (when (n) { 1 -> "one"; 2 -> "two"; 3 -> "three"; else -> n.toString() }) + if (n == 1) " life" else " lives"
 
 /** The round where a different move would have scored best against the opponent's actual move. */
-fun costliestMistake(rounds: List<Round>): String {
-    if (rounds.isEmpty()) return ""
+fun costliestMistake(rounds: List<Round>): Phrase {
+    if (rounds.isEmpty()) return Phrase.fixed("")
     var worst: Round? = null
     var worstGap = 0.0
     var alt: Round? = null
@@ -41,5 +47,5 @@ fun costliestMistake(rounds: List<Round>): String {
         if (sb.isNotEmpty()) sb.append(' ')
         sb.append("You ${verb(top.key)} $pct percent.")
     }
-    return sb.toString()
+    return Phrase.fixed(sb.toString())
 }

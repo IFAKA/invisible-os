@@ -1,4 +1,4 @@
-package com.faka.invisible
+package com.faka.invisible.voicekit
 
 import kotlin.math.PI
 import kotlin.math.exp

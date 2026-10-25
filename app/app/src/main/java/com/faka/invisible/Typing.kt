@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.voicekit.*
+
 /** What the Write program needs to know about the words: all words, most likely first, after the given words. */
 interface Ranker {
     fun ranked(context: List<String>): List<Pair<String, Double>>
@@ -16,7 +18,7 @@ interface TypeOut {
     fun pair(left: String, right: String?)
     fun hush()   // a press stops the words that are playing
     fun prefetch(words: List<String>)
-    fun say(text: String)
+    fun say(text: Phrase)
     fun cue(c: TypeCue)
     fun finished(text: String)   // the written text; "" = nothing written
     /** Ask the big model (slow, in the background) for ways to finish [text]; call [then] with them when ready. Default: none. */
@@ -37,10 +39,8 @@ interface TypeOut {
 sealed class Translation {
     object Same : Translation()                         // the place uses the writing language: send as written
     data class Done(val text: String) : Translation()   // translated: read it back, send only after a click
-    data class Failed(val say: String) : Translation()  // could not translate: say why, send nothing
+    data class Failed(val say: Phrase) : Translation()  // could not translate: say why, send nothing
 }
-
-enum class TypeCue { PICK_LEFT, PICK_RIGHT, NEXT, LETTERS, WORDS, DELETE, DONE, ARMED, MENU }
 
 /**
  * Write: a one-button keyboard (PLAN-OS.md). The phone plays two likely items one after the other, the first in the left ear, the second in the right.
@@ -56,9 +56,6 @@ class TypeProgram(
     private val onEnded: () -> Unit,
 ) {
     companion object {
-        const val HOLD_MS = 500L
-        const val LEAVE_MS = 3000L
-        const val GAP_MS = 350L
         const val REPLAY_MS = 7000L
         const val MAX_REPLAYS = 3
         const val MENU_GAP_MS = 2000L
@@ -77,7 +74,7 @@ class TypeProgram(
     private var downAt = -1L
     private var armed = false
     private var menu = false
-    private var menuList = ScanList<String>(emptyList())   // the small menu, read one item at a time
+    private var menuList = ScanList<Phrase>(emptyList())   // the small menu, read one item at a time
     private var phrases: List<String> = emptyList()   // ways to finish the text, from the big model, when ready
     private var phraseMode = false
     private var phraseGen = 0
@@ -134,18 +131,18 @@ class TypeProgram(
         touched = true; pressedSinceShow = true
         out.hush(); timers.clear("t:gap"); timers.clear("t:replay"); timers.clear("t:menu")
         downAt = time; armed = false
-        timers.set("t:hold", HOLD_MS) { if (active && downAt >= 0) { armed = true; out.cue(TypeCue.ARMED) } }
-        timers.set("t:leave", LEAVE_MS) { if (active && downAt >= 0) leave(false) }
+        timers.set("t:hold", Pacing.HOLD_MS) { if (active && downAt >= 0) { armed = true; out.cue(TypeCue.ARMED) } }
+        timers.set("t:leave", Pacing.LEAVE_MS) { if (active && downAt >= 0) leave(false) }
     }
 
     fun up(time: Long) {
         if (!active || downAt < 0) return
         timers.clear("t:hold"); timers.clear("t:leave")
-        val long = armed || time - downAt >= HOLD_MS
+        val long = armed || time - downAt >= Pacing.HOLD_MS
         downAt = -1; armed = false
         if (long) { clicks = 0; if (waiting) return; if (pending != null) backToEdit() else if (menu) closeMenu() else choose(false); return }
         clicks++
-        timers.set("t:gap", GAP_MS) { val n = clicks; clicks = 0; if (active) many(n) }
+        timers.set("t:gap", Pacing.GAP_MS) { val n = clicks; clicks = 0; if (active) many(n) }
     }
 
     private fun many(n: Int) {
@@ -161,7 +158,7 @@ class TypeProgram(
     }
 
     // ---- the small menu: Done, Delete, Letters/Words, read one at a time ----
-    private fun menuLabels() = listOf(TypeVoice.MENU_DONE, TypeVoice.MENU_DELETE) + (if (phrases.isNotEmpty() && !phraseMode) listOf(TypeVoice.PHRASES) else emptyList()) +
+    private fun menuLabels(): List<Phrase> = listOf(TypeVoice.MENU_DONE, TypeVoice.MENU_DELETE) + (if (phrases.isNotEmpty() && !phraseMode) listOf(TypeVoice.PHRASES) else emptyList()) +
         (if (frame.digits) (if (phraseMode) listOf(TypeVoice.DIGITS) else emptyList()) else listOf(if (letters || phraseMode) TypeVoice.WORDS else TypeVoice.LETTERS))
 
     /** The big model gets the text so far; a late answer for an older text is ignored. */
@@ -226,7 +223,7 @@ class TypeProgram(
         if (item == null) { out.cue(TypeCue.NEXT); show(true); return }
         out.cue(if (left) TypeCue.PICK_LEFT else TypeCue.PICK_RIGHT)
         if (phraseMode) { written.addAll(item.split(' ').filter { it.isNotEmpty() }); phraseMode = false; prefix = ""; askPhrases() }
-        else if (letters) { prefix += item; letters = false; out.say(TypeVoice.WORDS_WITH + " " + prefix.toCharArray().joinToString(" ")) } else { lm.picked(written.takeLast(8), item); written.add(item); prefix = ""; askPhrases() }
+        else if (letters) { prefix += item; letters = false; out.say(TypeVoice.wordsWith(prefix)) } else { lm.picked(written.takeLast(8), item); written.add(item); prefix = ""; askPhrases() }
         page = 0
         show()
     }

@@ -1,4 +1,4 @@
-package com.faka.invisible
+package com.faka.invisible.voicekit
 
 /**
  * The one list of the OS: items read one at a time, a current index, next / again, wrap-around and a loop count.
@@ -39,7 +39,7 @@ class ScanList<T>(val items: List<T>) {
 
     companion object {
         /** About 4 steps per second while the button is held. */
-        const val FAST_MS = 250L
+        const val FAST_MS = Pacing.FAST_MS
 
         fun firstWord(label: String): String = label.trim().split(Regex("\\s+"), limit = 2).first().trimEnd(',', '.', ':', ';')
     }

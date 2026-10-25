@@ -8,12 +8,13 @@ import android.media.AudioTrack
 import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
-import com.faka.invisible.TellVoice
-import com.faka.invisible.Timers
+import com.faka.invisible.voicekit.Phrase
+import com.faka.invisible.voicekit.TellVoice
+import com.faka.invisible.voicekit.Timers
 
 /** What the duel needs from the app (speech, the user's music, the log). */
 interface TellHost {
-    fun speak(text: String, slow: Boolean = false)
+    fun speak(text: Phrase, slow: Boolean = false)
     fun stopSpeech()
     fun pauseMusic()
     fun resumeMusic()
@@ -64,8 +65,8 @@ class TellAndroid(
         override fun startBed() = synchronized(lock) { mixer.startBed() }
         override fun setTension(level: Int) = synchronized(lock) { mixer.setTension(level) }
         override fun stopBed(tapeStop: Boolean) = synchronized(lock) { mixer.stopBed(tapeStop) }
-        override fun speak(text: String) = host.speak(text)
-        override fun coachSpeak(text: String) = host.speak(text, true)
+        override fun speak(text: Phrase) = host.speak(text)
+        override fun coachSpeak(text: Phrase) = host.speak(text, true)
         override fun stopSpeech() = host.stopSpeech()
         override fun pauseMusic() = host.pauseMusic()
         override fun resumeMusic() = host.resumeMusic()

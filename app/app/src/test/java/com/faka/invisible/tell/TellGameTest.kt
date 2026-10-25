@@ -1,6 +1,7 @@
 package com.faka.invisible.tell
 
-import com.faka.invisible.Timers
+import com.faka.invisible.voicekit.*
+
 import java.io.File
 import java.util.Random
 import org.junit.Assert.*
@@ -42,7 +43,7 @@ class FakeOut(val world: FakeWorld, var rung: Int = 1) : TellOut {
     override fun startBed() = e("startBed")
     override fun setTension(level: Int) = e("tension $level")
     override fun stopBed(tapeStop: Boolean) = e("stopBed $tapeStop")
-    override fun speak(text: String) = e("speak $text")
+    override fun speak(text: Phrase) = e("speak ${text.text}")
     override fun stopSpeech() = e("stopSpeech")
     override fun pauseMusic() = e("pauseMusic")
     override fun resumeMusic() = e("resumeMusic")
@@ -312,7 +313,7 @@ class TellGameTest {
             override fun startBed() = mixer.startBed()
             override fun setTension(level: Int) = mixer.setTension(level)
             override fun stopBed(tapeStop: Boolean) = mixer.stopBed(tapeStop)
-            override fun speak(text: String) { marks.add("${w.now}: $text") }   // spoken in the silent gaps (no speech audio here)
+            override fun speak(text: Phrase) { marks.add("${w.now}: ${text.text}") }   // spoken in the silent gaps (no speech audio here)
             override fun stopSpeech() {}
             override fun pauseMusic() {}
             override fun resumeMusic() {}

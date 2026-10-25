@@ -1,6 +1,7 @@
 package com.faka.invisible.tell
 
-import com.faka.invisible.TellVoice
+import com.faka.invisible.voicekit.*
+
 import java.util.Random
 import org.junit.Assert.*
 import org.junit.Test
@@ -53,26 +54,26 @@ class TellCoachTest {
 
     // ---- pacing ----
     @Test fun pacingFormula() {
-        assertEquals(600L + 250L * 5, TellVoice.pauseAfter("one two three four five"))   // 1.85 s
-        assertEquals(850L, TellVoice.pauseAfter("Jab."))
-        assertEquals(400L + 550L * 3, TellVoice.speakMs("Duel. One button."))
-        assertEquals(1500L + 400L, TellVoice.quietAfterSound(400))
-        assertEquals(10000L, TellVoice.HINT_MS)
+        assertEquals(600L + 250L * 5, Pacing.pauseAfter("one two three four five"))   // 1.85 s
+        assertEquals(850L, Pacing.pauseAfter("Jab."))
+        assertEquals(400L + 550L * 3, Pacing.speakMs("Duel. One button."))
+        assertEquals(1500L + 400L, Pacing.quietAfterSound(400))
+        assertEquals(10000L, Pacing.HINT_MS)
     }
 
     @Test fun everyPracticeSentenceIsAtMostSevenWords() {
         assertTrue(TellVoice.ALL.size > 20)
-        for (t in TellVoice.ALL) assertTrue(t, TellVoice.words(t) in 1..7)
+        for (t in TellVoice.ALL) assertTrue(t.text, Pacing.words(t) in 1..7)
     }
 
     @Test fun sentencesAreSpokenWithTheHumanPauseBetween() {
         val r = rig(1)
         r.waitSpeak("Tap to jab.")
         val sp = r.out.events.filter { it.second.startsWith("speak ") }
-        assertEquals(TellVoice.L1_TAP, sp.map { it.second.substring(6) })
+        assertEquals(TellVoice.L1_TAP.map { it.text }, sp.map { it.second.substring(6) })
         for (k in 0 until sp.size - 1) {
             val line = sp[k].second.substring(6)
-            assertTrue("gap after '$line'", sp[k + 1].first - sp[k].first >= TellVoice.speakMs(line) + TellVoice.pauseAfter(line))
+            assertTrue("gap after '$line'", sp[k + 1].first - sp[k].first >= Pacing.speakMs(line) + Pacing.pauseAfter(line))
         }
     }
 
@@ -167,7 +168,7 @@ class TellCoachTest {
         r.playMatch(3000) { 900L }                   // tries to charge every round
         val moves = r.out.myMoves()
         assertTrue(moves.toString(), moves.drop(1).take(8).withIndex().all { (i, m) -> m == if (i % 2 == 0) "CHARGE" else "GUARD" })
-        assertTrue(r.speaks().contains(TellVoice.NOT_AGAIN) || r.speaks().any { it.startsWith(TellVoice.NOT_AGAIN) })
+        assertTrue(r.speaks().any { it.startsWith(TellVoice.NOT_AGAIN.text) })
         assertEquals(0, r.out.count("status "))
     }
 
@@ -187,11 +188,11 @@ class TellCoachTest {
         val t0 = r.out.times("speak Tap to jab.").first()
         r.waitSpeak("Press the button.")
         val h1 = r.out.times("speak Press the button.").first()
-        assertTrue(h1 - t0 >= TellVoice.speakMs("Tap to jab.") + TellVoice.HINT_MS)
+        assertTrue(h1 - t0 >= Pacing.speakMs("Tap to jab.") + Pacing.HINT_MS)
         r.waitFor { r.speaks().count { it == "Press the button." } == 2 }
-        assertTrue(r.out.times("speak Press the button.")[1] - h1 >= TellVoice.HINT_MS)
-        r.waitSpeak(TellVoice.LEAVE_HINT)
-        assertEquals(1, r.speaks().count { it == TellVoice.LEAVE_HINT })
+        assertTrue(r.out.times("speak Press the button.")[1] - h1 >= Pacing.HINT_MS)
+        r.waitSpeak(TellVoice.LEAVE_HINT.text)
+        assertEquals(1, r.speaks().count { it == TellVoice.LEAVE_HINT.text })
         r.waitSpeak("Hold to the click to guard.")   // after the third hint a demo plays and the lesson goes on
         assertFalse(r.speaks().contains("Jab."))
     }
@@ -202,7 +203,7 @@ class TellCoachTest {
         r.tap(500); r.waitSpeak("Tap quickly.")
         assertTrue(r.speaks().contains("That was a guard."))
         r.tap(500); r.waitFor { r.speaks().count { it == "Tap quickly." } == 2 }
-        r.tap(500); r.waitSpeak(TellVoice.SKIP)
+        r.tap(500); r.waitSpeak(TellVoice.SKIP.text)
         r.waitSpeak("Hold to the click to guard.")
         assertFalse(r.speaks().contains("Jab."))
     }
@@ -267,9 +268,9 @@ class TellCoachTest {
 
     @Test fun fullGameHasNoCoachNoNarrationAndNoLevelChange() {
         val r = rig(4)
-        assertEquals(listOf(TellVoice.duelRung(1)), r.speaks())
+        assertEquals(listOf(TellVoice.duelRung(1).text), r.speaks())
         r.w.advanceBy(TellGame.INTRO_MS + 2000L * 5)
-        assertEquals(listOf(TellVoice.duelRung(1)), r.speaks())
+        assertEquals(listOf(TellVoice.duelRung(1).text), r.speaks())
         assertEquals(0, r.out.count("saveLevel"))
         assertTrue(r.out.count("status ") >= 1)
     }
@@ -289,29 +290,29 @@ class TellCoachTest {
     // ---- sentences ----
     @Test fun narrationIsShort() {
         val s = State(3, 3, 4, 4)
-        assertEquals("They jab. You guard. Parry. Their life three.", TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.JAB)))
-        assertEquals("Both guard. Nothing.", TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.GUARD)))
-        assertTrue(TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.GUARD), chargeReady = true).endsWith("Charge ready."))
-        assertTrue(TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.GUARD), lowEnergy = true).endsWith("Low energy."))
+        assertEquals("They jab. You guard. Parry. Their life three.", TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.JAB)).text)
+        assertEquals("Both guard. Nothing.", TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.GUARD)).text)
+        assertTrue(TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.GUARD), chargeReady = true).text.endsWith("Charge ready."))
+        assertTrue(TellVoice.narration(TellRules.resolve(s, Move.GUARD, Move.GUARD), lowEnergy = true).text.endsWith("Low energy."))
     }
 
     @Test fun levelNarrationsAreOneToThreeWordsPlusLastLife() {
         val s = State(5, 5, 3, 3)
         val pairs = Move.values().flatMap { m -> Move.values().map { t -> TellRules.resolve(s, m, t) } }
         for (r in pairs) {
-            assertTrue(TellVoice.narrationL2(r), TellVoice.words(TellVoice.narrationL2(r).replace("Last life.", "")) <= 3)
-            if (r.mine != Move.CHARGE && r.theirs != Move.CHARGE) assertTrue(TellVoice.words(TellVoice.narrationL1(r)) <= 3)
+            assertTrue(TellVoice.narrationL2(r).text, Pacing.words(TellVoice.narrationL2(r).text.replace("Last life.", "")) <= 3)
+            if (r.mine != Move.CHARGE && r.theirs != Move.CHARGE) assertTrue(Pacing.words(TellVoice.narrationL1(r).text) <= 3)
         }
-        assertEquals("Parry.", TellVoice.narrationL1(TellRules.resolve(s, Move.GUARD, Move.JAB)))
-        assertEquals("Ouch.", TellVoice.narrationL1(TellRules.resolve(s, Move.JAB, Move.GUARD)))
-        assertEquals("", TellVoice.narrationL1(TellRules.resolve(s, Move.GUARD, Move.GUARD)))
-        assertEquals("Parry. Last life.", TellVoice.narrationL1(TellRules.resolve(State(5, 5, 2, 3), Move.JAB, Move.GUARD).let { TellRules.resolve(State(5, 5, 3, 2), Move.GUARD, Move.JAB) }.let { it }).replace("Their last life.", "Last life.").let { "Parry. Last life." })
+        assertEquals("Parry.", TellVoice.narrationL1(TellRules.resolve(s, Move.GUARD, Move.JAB)).text)
+        assertEquals("Ouch.", TellVoice.narrationL1(TellRules.resolve(s, Move.JAB, Move.GUARD)).text)
+        assertEquals("", TellVoice.narrationL1(TellRules.resolve(s, Move.GUARD, Move.GUARD)).text)
+        assertEquals("Parry. Last life.", TellVoice.narrationL1(TellRules.resolve(State(5, 5, 2, 3), Move.JAB, Move.GUARD).let { TellRules.resolve(State(5, 5, 3, 2), Move.GUARD, Move.JAB) }.let { it }).text.replace("Their last life.", "Last life.").let { "Parry. Last life." })
     }
 
     @Test fun resultSentencesCoverAllNinePairsInFiveWordsOrFewer() {
         for (m in Move.values()) for (t in Move.values()) {
             val text = TellVoice.result(TellRules.resolve(State(5, 5, 4, 4), m, t))
-            assertTrue("$m $t -> $text", TellVoice.words(text) in 1..5)
+            assertTrue("$m $t -> $text", Pacing.words(text) in 1..5)
         }
     }
 }

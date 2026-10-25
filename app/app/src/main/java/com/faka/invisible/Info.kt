@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.voicekit.*
+
 import android.Manifest
 import android.content.ContentUris
 import android.content.Context
@@ -26,7 +28,7 @@ object Weather {
     fun rainIn(hourly: List<Double>) = hourly.indexOfFirst { it >= 50 }.takeIf { it >= 0 }
 
     /** The sentence, or null if the JSON has no temperature. */
-    fun sentence(json: String): String? {
+    fun sentence(json: String): Phrase? {
         val cur = after(json, "current") ?: return null
         val temp = number(cur, "temperature_2m") ?: return null
         val code = number(cur, "weather_code")?.toInt() ?: -1
@@ -51,7 +53,7 @@ object Navigation {
 /** Pure: the next calendar event as ONE spoken sentence. */
 object Agenda {
     /** [offsetMs] = the time zone offset of the phone, to read the clock time of [beginMs]. */
-    fun sentence(title: String?, beginMs: Long, nowMs: Long, offsetMs: Long): String {
+    fun sentence(title: String?, beginMs: Long, nowMs: Long, offsetMs: Long): Phrase {
         val name = title?.replace(Regex("\\s+"), " ")?.trim().orEmpty().ifEmpty { Voice.EVENT_UNNAMED }.let { if (it.length > 60) it.take(60).trimEnd() else it }
         val mins = ((beginMs - nowMs) / 60_000).toInt()
         if (mins <= 0) return Voice.eventNow(name)
@@ -62,7 +64,7 @@ object Agenda {
 
 /** Android side of the two lookups. Both run off the main thread and call [done] on that same worker thread. */
 object PhoneInfo {
-    fun weather(ctx: Context, done: (String) -> Unit) {
+    fun weather(ctx: Context, done: (Phrase) -> Unit) {
         if (ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) { done(Voice.NEED_LOCATION); return }
         Thread {
             done(try {
@@ -77,7 +79,7 @@ object PhoneInfo {
         }.start()
     }
 
-    fun nextEvent(ctx: Context, done: (String) -> Unit) {
+    fun nextEvent(ctx: Context, done: (Phrase) -> Unit) {
         if (ctx.checkSelfPermission(Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) { done(Voice.NEED_CALENDAR); return }
         Thread {
             done(try {

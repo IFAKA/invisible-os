@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.voicekit.*
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -35,7 +37,7 @@ class TypingTest {
         override fun pair(left: String, right: String?) { pairs.add(left to right) }
         override fun hush() {}
         override fun prefetch(words: List<String>) {}
-        override fun say(text: String) { said.add(text) }
+        override fun say(text: Phrase) { said.add(text.text) }
         override fun cue(c: TypeCue) { cues.add(c) }
         override fun finished(text: String) { result = text }
         override fun phrases(text: String, then: (List<String>) -> Unit) { asked.add(text); if (endings.isNotEmpty()) then(endings) }
@@ -137,7 +139,7 @@ class TypingTest {
         override fun pair(left: String, right: String?) { pairs.add(left to right) }
         override fun hush() {}
         override fun prefetch(words: List<String>) {}
-        override fun say(text: String) { said.add(text) }
+        override fun say(text: Phrase) { said.add(text.text) }
         override fun cue(c: TypeCue) { cues.add(c) }
         override fun finished(text: String) { result = text }
         override fun suggestions() = sug
@@ -147,7 +149,7 @@ class TypingTest {
         var ended = false
         val q = program(Frame(kind = FieldKind.PASSWORD)) { ended = true }
         q.start()
-        assertTrue(ended); assertTrue(!q.active); assertTrue(pairs.isEmpty()); assertEquals(listOf(TypeVoice.PASSWORD), said)
+        assertTrue(ended); assertTrue(!q.active); assertTrue(pairs.isEmpty()); assertEquals(listOf(TypeVoice.PASSWORD.text), said)
     }
 
     @Test fun aNumberFieldOffersDigitsAndWritesThemWithoutSpaces() {
@@ -168,7 +170,7 @@ class TypingTest {
             override fun pair(left: String, right: String?) { pairs.add(left to right) }
             override fun hush() {}
             override fun prefetch(words: List<String>) {}
-            override fun say(text: String) {}
+            override fun say(text: Phrase) {}
             override fun cue(c: TypeCue) {}
             override fun finished(text: String) {}
             override fun phrases(text: String, then: (List<String>) -> Unit) { then(listOf("sí, voy", "no puedo hoy")) }
@@ -194,7 +196,7 @@ class TypingTest {
             override fun pair(left: String, right: String?) {}
             override fun hush() {}
             override fun prefetch(words: List<String>) {}
-            override fun say(text: String) {}
+            override fun say(text: Phrase) {}
             override fun cue(c: TypeCue) {}
             override fun finished(text: String) {}
             override fun nextWords(text: String, then: (List<String>) -> Unit) { asked.add(text); pending = then }
@@ -217,7 +219,7 @@ class TypingTest {
         override fun pair(left: String, right: String?) { pairs.add(left to right) }
         override fun hush() {}
         override fun prefetch(words: List<String>) {}
-        override fun say(text: String) { said.add(text) }
+        override fun say(text: Phrase) { said.add(text.text) }
         override fun cue(c: TypeCue) { cues.add(c) }
         override fun finished(text: String) { result = text }
         override fun translate(text: String, then: (Translation) -> Unit) { trAsked++; then(tr) }
@@ -234,7 +236,7 @@ class TypingTest {
     @Test fun aTranslationIsReadBackAndSentOnlyAfterAClick() {
         tr = Translation.Done("Hola"); val q = translating(); writeHelloAndDone(q)
         assertEquals(listOf("Hola"), readBacks); assertEquals(null, result); assertTrue(q.active)
-        assertEquals(TypeVoice.CONFIRM, said.last())
+        assertEquals(TypeVoice.CONFIRM.text, said.last())
         q.down(t.now); t.advance(80); q.up(t.now); t.advance(500)
         assertEquals("Hola", result); assertEquals(listOf("Hello"), learned); assertTrue(!q.active)
     }
@@ -247,7 +249,7 @@ class TypingTest {
 
     @Test fun aFailedTranslationIsSpokenAndNothingIsSent() {
         tr = Translation.Failed(TypeVoice.TRANSLATION_MISSING); val q = translating(); writeHelloAndDone(q)
-        assertEquals(TypeVoice.TRANSLATION_MISSING, said.last()); assertEquals(null, result); assertTrue(q.active); assertTrue(readBacks.isEmpty())
+        assertEquals(TypeVoice.TRANSLATION_MISSING.text, said.last()); assertEquals(null, result); assertTrue(q.active); assertTrue(readBacks.isEmpty())
     }
 
     @Test fun whenNoTranslationIsNeededTheEnglishIsSentAsWritten() {

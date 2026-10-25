@@ -1,7 +1,10 @@
 package com.faka.invisible.tell
 
-import com.faka.invisible.TellVoice
-import com.faka.invisible.Timers
+import com.faka.invisible.voicekit.Pacing
+import com.faka.invisible.voicekit.Phrase
+import com.faka.invisible.voicekit.TellVoice
+import com.faka.invisible.voicekit.Timers
+import com.faka.invisible.voicekit.costliestMistake
 import java.util.Random
 
 /** Everything the game asks the outside world to do. The Android side and the tests both implement it. */
@@ -13,7 +16,7 @@ interface TellOut {
     fun startBed()
     fun setTension(level: Int)
     fun stopBed(tapeStop: Boolean)
-    fun speak(text: String)
+    fun speak(text: Phrase)
     fun stopSpeech()
     fun pauseMusic()
     fun resumeMusic()
@@ -24,7 +27,7 @@ interface TellOut {
     fun level(): Int = 4
     fun saveLevel(level: Int) {}
     /** Speak at the slow coach pace (the practice and the narrated match). */
-    fun coachSpeak(text: String) = speak(text)
+    fun coachSpeak(text: Phrase) = speak(text)
     /** The game is over for good (leave or forfeit): the host shuts the audio down after the tape stop. */
     fun leave()
 }
@@ -125,7 +128,7 @@ class TellGame(
 
     // ---- coach practice: one idea per step, the player sets the pace, no round clock, no bed ----
     private enum class Kind { DRILL, TAP, SAY }
-    private class Step(val kind: Kind, val lines: List<String>, val want: Int = -1)
+    private class Step(val kind: Kind, val lines: List<Phrase>, val want: Int = -1)
     private fun stepsFor(level: Int) = when (level) {
         1 -> listOf(Step(Kind.DRILL, TellVoice.L1_TAP, 0), Step(Kind.DRILL, TellVoice.L1_GUARD, 1), Step(Kind.SAY, TellVoice.L1_RULE))
         2 -> listOf(Step(Kind.DRILL, TellVoice.L2_CHARGE, 2), Step(Kind.SAY, TellVoice.L2_RULE))
@@ -161,7 +164,7 @@ class TellGame(
     fun onSpeechDone() { doneAction?.invoke() }
 
     /** Speak one sentence at the coach pace, wait until it is over, then [pauseMs] of quiet, then [next]. */
-    private fun speakThen(text: String, pauseMs: Long, next: () -> Unit) {
+    private fun speakThen(text: Phrase, pauseMs: Long, next: () -> Unit) {
         out.coachSpeak(text)
         val tok = ++doneToken
         doneAction = {
@@ -170,7 +173,7 @@ class TellGame(
                 at("coach", clock() + pauseMs) { next() }
             }
         }
-        at("fb", clock() + TellVoice.speakMs(text)) { doneAction?.invoke() }
+        at("fb", clock() + Pacing.speakMs(text)) { doneAction?.invoke() }
     }
 
     private fun cancelTalk() {
@@ -187,7 +190,7 @@ class TellGame(
     }
 
     /** Say a step's lines one by one, with the human pause after each; then [then]. A press jumps straight to [then]. */
-    private fun playLines(lines: List<String>, action: Boolean, then: () -> Unit) {
+    private fun playLines(lines: List<Phrase>, action: Boolean, then: () -> Unit) {
         val finish = { pendingNext = null; then() }
         pendingNext = then
         fun item(k: Int) {
@@ -196,16 +199,16 @@ class TellGame(
             val line = lines[k]
             val last = k == lines.size - 1
             when (line) {
-                TellVoice.CLICK1 -> { out.play(Cue.DETENT_1); at("coach", clock() + TellVoice.quietAfterSound(400)) { item(k + 1) } }
+                TellVoice.CLICK1 -> { out.play(Cue.DETENT_1); at("coach", clock() + Pacing.quietAfterSound(400)) { item(k + 1) } }
                 TellVoice.CLICK2 -> {
                     out.play(Cue.DETENT_1); at("en0", clock() + 450) { out.play(Cue.DETENT_2) }
-                    at("coach", clock() + TellVoice.quietAfterSound(850)) { item(k + 1) }
+                    at("coach", clock() + Pacing.quietAfterSound(850)) { item(k + 1) }
                 }
                 TellVoice.NOTES -> {
-                    for (e in 0..5) at("en$e", clock() + TellVoice.NOTE_SPACING_MS * e) { out.status(e, e) }
-                    at("coach", clock() + TellVoice.NOTE_SPACING_MS * 5 + TellVoice.quietAfterSound(300)) { item(k + 1) }
+                    for (e in 0..5) at("en$e", clock() + Pacing.NOTE_SPACING_MS * e) { out.status(e, e) }
+                    at("coach", clock() + Pacing.NOTE_SPACING_MS * 5 + Pacing.quietAfterSound(300)) { item(k + 1) }
                 }
-                else -> speakThen(line, TellVoice.pauseAfter(line) + if (last && action) TellVoice.READY_MS else 0L) { item(k + 1) }
+                else -> speakThen(line, Pacing.pauseAfter(line) + if (last && action) Pacing.READY_MS else 0L) { item(k + 1) }
             }
         }
         item(0)
@@ -230,7 +233,7 @@ class TellGame(
     }
 
     /** Silence is never allowed to last: a hint every HINT_MS, the leave line as the third, a demo after that. */
-    private fun armHint() { at("hint", clock() + TellVoice.HINT_MS) { hint() } }
+    private fun armHint() { at("hint", clock() + Pacing.HINT_MS) { hint() } }
 
     private fun hint() {
         if (phase != Phase.PRACTICE || !listening || pressLive) return
@@ -251,7 +254,7 @@ class TellGame(
         if (w >= 2) at("en0", clock() + 450) { out.play(Cue.DETENT_2) }
         at("en1", clock() + 450L * w + 400) { out.play(cueOfLevel(w)) }
         pendingNext = { runStep(stepNo + 1) }
-        at("coach", clock() + 450L * w + TellVoice.quietAfterSound(600)) { runPending() }
+        at("coach", clock() + 450L * w + Pacing.quietAfterSound(600)) { runPending() }
     }
 
     private fun cueOfLevel(level: Int) = when (level) { 0 -> Cue.JAB; 1 -> Cue.GUARD; else -> Cue.CHARGE }
@@ -282,7 +285,7 @@ class TellGame(
         pendingNext = { goNext() }
         out.play(cueOfLevel(st.want))
         val word = TellVoice.DONE[st.want]
-        speakThen(word, maxOf(TellVoice.pauseAfter(word), TellVoice.SOUND_QUIET_MS)) { goNext() }
+        speakThen(word, maxOf(Pacing.pauseAfter(word), Pacing.SOUND_QUIET_MS)) { goNext() }
     }
 
     private fun newMatch() {
@@ -368,7 +371,7 @@ class TellGame(
                     val n = afterTaps; afterTaps = 0
                     when (n) {
                         1 -> if (advanced) { advanced = false; startPractice() } else newMatch()
-                        2 -> out.speak(mistakeText.ifEmpty { summaryText() })   // two taps: hear the costliest mistake again
+                        2 -> out.speak(if (mistakeText.isEmpty) summaryText() else mistakeText)   // two taps: hear the costliest mistake again
                         else -> out.speak(summaryText())                        // three taps: the score and your moves
                     }
                 }
@@ -451,8 +454,8 @@ class TellGame(
                 TellVoice.narration(r, lowEnergy = r.after.myE <= 1, chargeReady = ready)
             }
         }
-        if (notAgain) { notAgain = false; text = (TellVoice.NOT_AGAIN + " " + text).trim() }
-        if (text.isNotEmpty()) out.coachSpeak(text)
+        if (notAgain) { notAgain = false; text = TellVoice.notAgainThen(text) }
+        if (text.isNotEmpty) out.coachSpeak(text)
     }
 
     private fun cueOf(m: Move) = when (m) { Move.JAB -> Cue.JAB; Move.GUARD -> Cue.GUARD; Move.CHARGE -> Cue.CHARGE }
@@ -500,20 +503,20 @@ class TellGame(
             if (rung != before) out.saveRung(rung)
         }
         log(before, result.name)
-        val word = when (result) { Result.WIN -> "You win."; Result.LOSS -> "You lose."; Result.DRAW -> "Draw." }
+        val word = when (result) { Result.WIN -> TellVoice.WIN; Result.LOSS -> TellVoice.LOSE; Result.DRAW -> TellVoice.DRAW }
         afterTaps = 0
-        mistakeText = if (playedLevel >= 3) costliestMistake(rounds) else ""
-        val text = listOf(word, mistakeText, "Tap to play again. Hold to leave.").filter { it.isNotEmpty() }.joinToString(" ")
+        mistakeText = if (playedLevel >= 3) costliestMistake(rounds) else NOTHING_SAID
+        val text = TellVoice.matchEnd(word, mistakeText)
         at("speech", clock() + SPEECH_AFTER_MS) { out.speak(text) }
     }
 
     private var afterTaps = 0
-    private var mistakeText = ""
-    private fun summaryText(): String {
+    private val NOTHING_SAID = costliestMistake(emptyList())
+    private var mistakeText = NOTHING_SAID
+    private fun summaryText(): Phrase {
         val c = Move.values().associateWith { m -> rounds.count { it.mine == m } }
         val last = rounds.lastOrNull()?.after
-        val life = if (last != null) " Life ${last.myL} to ${last.oppL}." else ""
-        return "${rounds.size} rounds.$life Jab ${c[Move.JAB]}, guard ${c[Move.GUARD]}, charge ${c[Move.CHARGE]}."
+        return TellVoice.summary(rounds.size, last?.myL, last?.oppL, c.getValue(Move.JAB), c.getValue(Move.GUARD), c.getValue(Move.CHARGE))
     }
 
     private fun log(rungPlayed: Int, result: String) {

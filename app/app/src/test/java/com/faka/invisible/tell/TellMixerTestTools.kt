@@ -1,5 +1,7 @@
 package com.faka.invisible.tell
 
+import com.faka.invisible.voicekit.*
+
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

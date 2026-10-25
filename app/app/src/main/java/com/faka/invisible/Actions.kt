@@ -22,6 +22,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import com.faka.invisible.tell.TellAndroid
+import com.faka.invisible.voicekit.*
 import com.faka.invisible.tell.TellHost
 import java.util.Calendar
 import java.util.Locale
@@ -31,7 +32,7 @@ object Actions {
     private const val TAG = "Invisible"
     /** Speech rate at the start (1.0 = normal). It rises 0.1 per 20 successful picks, up to 1.8: blind users listen fast. */
     const val SPEECH_RATE = 0.9f
-    private val COACH_RATE = 0.75f
+    private val COACH_RATE = Pacing.COACH_RATE
     private fun speechRate() = (mode.settings.speechRate + 0.1f * (prefs().getInt("codeCount", 0) / 20)).coerceAtMost(1.8f)
     @Volatile var accessibilityConnected = false
     private val handler = Handler(Looper.getMainLooper())
@@ -73,7 +74,7 @@ object Actions {
         private set
     val mode: ControllerMode = ControllerMode(
         out = object : ModeOutput {
-            override fun speak(text: String, queue: Boolean, lang: String?, fast: Boolean) = say(text, queue, lang, fast)
+            override fun speak(text: Phrase, queue: Boolean, fast: Boolean) = say(text, queue, fast)
             override fun stopSpeech() { tts?.stop(); spTrack?.let { try { it.stop() } catch (e: Exception) {} }; spTrack = null; lastUtt = "" }
             override fun tone(kind: Tone) = beep(kind)
             override fun runAction(name: String) = menuAction(name)
@@ -120,8 +121,8 @@ object Actions {
                 val a = t?.let { Calendar.getInstance().apply { timeInMillis = it } }
                 return Status(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), b, a?.get(Calendar.HOUR_OF_DAY), a?.get(Calendar.MINUTE))
             }
-            override fun weather(done: (String) -> Unit) = PhoneInfo.weather(app) { t -> handler.post { done(t) } }
-            override fun nextEvent(done: (String) -> Unit) = PhoneInfo.nextEvent(app) { t -> handler.post { done(t) } }
+            override fun weather(done: (Phrase) -> Unit) = PhoneInfo.weather(app) { t -> handler.post { done(t) } }
+            override fun nextEvent(done: (Phrase) -> Unit) = PhoneInfo.nextEvent(app) { t -> handler.post { done(t) } }
             override fun wiredConnected() = app.getSystemService(AudioManager::class.java).getDevices(AudioManager.GET_DEVICES_OUTPUTS).any {
                 it.type in setOf(android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET, android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
                     android.media.AudioDeviceInfo.TYPE_USB_HEADSET, android.media.AudioDeviceInfo.TYPE_USB_DEVICE)
@@ -209,7 +210,7 @@ object Actions {
     private fun playPair(left: String, right: String?, me: Int) {
         if (me != pairSeq) return
         if (tts?.isSpeaking == true) { handler.postDelayed({ playPair(left, right, me) }, 300); return }   // the sentence first
-        val (pcm, rate) = clips?.stereo(left, right, TypeVoice.PAIR_GAP_MS, prefs().getBoolean("swap_ears", true))   /* these earbuds play the first word on the right: swapped by default */ ?: run { say(left, false); return }
+        val (pcm, rate) = clips?.stereo(left, right, Pacing.PAIR_GAP_MS, prefs().getBoolean("swap_ears", true)) ?: run { say(Phrase.content(left), false); return }   // these earbuds play the first word on the right: swapped by default
         pairTrack = try {
             val t = AudioTrack.Builder()
                 .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
@@ -239,7 +240,7 @@ object Actions {
             val lm = wordModel()
             handler.post {
                 if (lm == null) { say(TypeVoice.NO_MODEL, false); gameEnded(); return@post }
-                if (clips == null) clips = WordClips(java.io.File(app.cacheDir, "words"), { text, f, id -> setVoice(null); tts?.setSpeechRate(TypeVoice.WORD_RATE); tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS }, { handler.post(it) })
+                if (clips == null) clips = WordClips(java.io.File(app.cacheDir, "words"), { text, f, id -> setVoice(null); tts?.setSpeechRate(Pacing.WORD_RATE); tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS }, { handler.post(it) })
                 val timers = object : Timers {
                     override fun set(key: String, delayMs: Long, task: () -> Unit) { clear(key); val r = Runnable { typeTimers.remove(key); task() }; typeTimers[key] = r; handler.postDelayed(r, delayMs) }
                     override fun clear(key: String) { typeTimers.remove(key)?.let { handler.removeCallbacks(it) } }
@@ -272,7 +273,7 @@ object Actions {
                     }
                     override fun hush() { stopPair() }
                     override fun prefetch(words: List<String>) { words.forEach { clips?.ensure(it) {} } }
-                    override fun say(text: String) { this@Actions.say(text, true) }
+                    override fun say(text: Phrase) { this@Actions.say(text, true) }
                     override fun cue(c: TypeCue) { play(TypeSounds.pcm(c)) }
                     override fun phrases(text: String, then: (List<String>) -> Unit) {
                         if (!mode.settings.ai || !LocalAi.available(app)) return
@@ -297,13 +298,13 @@ object Actions {
                             handler.post { then(r) }
                         }
                     }
-                    override fun readBack(text: String) { this@Actions.say(text, false, chatLang) }
+                    override fun readBack(text: String) { this@Actions.say(Phrase.content(text, chatLang), false) }
                     override fun finished(text: String) {
                         Log.d(TAG, "WRITE result [${frame.app} ${frame.kind}]: ${if (frame.kind == FieldKind.PASSWORD) "-" else text}"); EventLog.add("write: ${frame.app} ${text.length} chars")
                         if (text.isNotEmpty()) {
                             if (frame.hasField) { val all = if (frame.before.isBlank()) text else frame.before.trimEnd() + (if (frame.digits) "" else " ") + text; if (!(ButtonAccessibilityService.inst?.setFieldText(all) ?: false)) Log.d(TAG, "WRITE could not set the field") }
                         }
-                        handler.postDelayed({ if (text.isEmpty()) this@Actions.say(TypeVoice.EMPTY, false) else this@Actions.say(text, false) }, 700)
+                        handler.postDelayed({ if (text.isEmpty()) this@Actions.say(TypeVoice.EMPTY, false) else this@Actions.say(Phrase.content(text), false) }, 700)
                     }
                 }
                 typer = TypeProgram(BucketRanker(lm, buckets, frame), out, timers, frame) { typer = null; stopPair(); gameEnded() }.also { it.start() }
@@ -317,7 +318,7 @@ object Actions {
     private fun startDuel(coach: Boolean) {
         duel?.stop()
         duel = TellAndroid(prefs(), handler, object : TellHost {
-            override fun speak(text: String, slow: Boolean) = say(text, false, slow = slow)
+            override fun speak(text: Phrase, slow: Boolean) = say(text, false, slow = slow)
             override fun stopSpeech() { tts?.stop(); lastUtt = "" }
             override fun pauseMusic() { pauseMusicNow() }
             override fun resumeMusic() = resumeMusicNow()
@@ -425,7 +426,8 @@ object Actions {
     /** Only the newest utterance counts: older ones were flushed. Tells the mode the speech is over. */
     private fun speechEnded(id: String?) { if (id == lastUtt) handler.post { mode.onSpeechDone(); duel?.takeIf { it.active }?.speechDone() } }
 
-    private fun say(text: String, queue: Boolean, lang: String? = null, fast: Boolean = false, slow: Boolean = false) {
+    private fun say(p: Phrase, queue: Boolean, fast: Boolean = false, slow: Boolean = false) {
+        val text = p.text; val lang = p.lang
         Log.d(TAG, "SPEAK[$lang] $text ready=$ttsReady fast=$fast")
         if (!ttsReady) { handler.post { mode.onSpeechDone() }; return }
         val spKey = Spearcon.key(text, lang)
@@ -441,9 +443,6 @@ object Actions {
         if (fast) { val k = spKey; val l = lang; handler.postDelayed({ makeSpearcon(k, text, l) }, 4000) }   // after the word, not during it
         tts?.speak(text, if (queue) TextToSpeech.QUEUE_ADD else TextToSpeech.QUEUE_FLUSH, null, lastUtt)
     }
-
-    private fun spokenTime(c: Calendar) =
-        "${c.get(Calendar.HOUR).let { if (it == 0) 12 else it }} ${"%02d".format(c.get(Calendar.MINUTE))} ${if (c.get(Calendar.AM_PM) == Calendar.AM) "AM" else "PM"}"
 
     private fun adjustVolume(up: Boolean) {
         val am = app.getSystemService(AudioManager::class.java)
@@ -523,10 +522,10 @@ object Actions {
     private fun menuAction(name: String) {
         when (name) {
             "Flashlight" -> say(Voice.flashlight(toggleTorch()), false)
-            "Time" -> say(spokenTime(Calendar.getInstance()), false)
+            "Time" -> Calendar.getInstance().let { c -> say(Voice.time(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE)), false) }
             "Next alarm" -> {
                 val t = app.getSystemService(AlarmManager::class.java).nextAlarmClock?.triggerTime
-                say(if (t == null) "No alarm" else "Alarm " + spokenTime(Calendar.getInstance().apply { timeInMillis = t }), false)
+                say(if (t == null) Voice.NO_ALARM else Calendar.getInstance().apply { timeInMillis = t }.let { Voice.alarmAt(it.get(Calendar.HOUR_OF_DAY), it.get(Calendar.MINUTE)) }, false)
             }
             "Battery" -> {
                 val b = app.getSystemService(BatteryManager::class.java).getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)

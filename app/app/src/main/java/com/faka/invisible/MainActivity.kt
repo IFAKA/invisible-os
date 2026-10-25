@@ -212,7 +212,7 @@ class MainActivity : Activity() {
         card("How to use it") {
             addView(k.text("Music playing or phone idle: click = play/pause, 2 = next, 3 = previous.\n" +
                 "Hold: wake the menu.\n" +
-                Voice.GESTURE_HELP, 14f, Ui.soft))
+                com.faka.invisible.voicekit.Voice.GESTURE_HELP.text, 14f, Ui.soft))
         }
 
         card("Last button presses") {

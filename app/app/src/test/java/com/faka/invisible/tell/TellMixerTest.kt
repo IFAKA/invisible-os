@@ -1,5 +1,7 @@
 package com.faka.invisible.tell
 
+import com.faka.invisible.voicekit.*
+
 import com.faka.invisible.tell.TellSoundTools.channel
 import com.faka.invisible.tell.TellSoundTools.db
 import com.faka.invisible.tell.TellSoundTools.peakDb

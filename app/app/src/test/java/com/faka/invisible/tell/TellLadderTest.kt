@@ -1,5 +1,7 @@
 package com.faka.invisible.tell
 
+import com.faka.invisible.voicekit.*
+
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Random

@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.voicekit.*
+
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

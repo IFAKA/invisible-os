@@ -1,4 +1,4 @@
-package com.faka.invisible
+package com.faka.invisible.voicekit
 
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap

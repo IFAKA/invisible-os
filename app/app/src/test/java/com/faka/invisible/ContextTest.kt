@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.voicekit.*
+
 import android.text.InputType
 import org.junit.Assert.*
 import org.junit.Test

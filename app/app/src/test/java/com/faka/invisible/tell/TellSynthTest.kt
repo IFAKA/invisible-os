@@ -1,5 +1,7 @@
 package com.faka.invisible.tell
 
+import com.faka.invisible.voicekit.*
+
 import com.faka.invisible.tell.TellSoundTools.centroidHz
 import com.faka.invisible.tell.TellSoundTools.centsFromScale
 import com.faka.invisible.tell.TellSoundTools.dominantHz
