@@ -149,7 +149,7 @@ class TypeProgram(
         val item = items.getOrNull(page * 2 + if (left) 0 else 1)
         if (item == null) { out.cue(TypeCue.NEXT); show(true); return }
         out.cue(if (left) TypeCue.PICK_LEFT else TypeCue.PICK_RIGHT)
-        if (letters) { prefix += item; letters = false } else { written.add(item); prefix = "" }
+        if (letters) { prefix += item; letters = false; out.say(TypeVoice.WORDS_WITH + " " + prefix.toCharArray().joinToString(" ")) } else { written.add(item); prefix = "" }
         page = 0
         show()
     }
