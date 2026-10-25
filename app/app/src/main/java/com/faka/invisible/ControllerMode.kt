@@ -52,6 +52,9 @@ object Spoken {
         "catorce", "quince", "dieciséis", "diecisiete", "dieciocho", "diecinueve", "veinte", "veintiuno", "veintidós", "veintitrés", "veinticuatro",
         "veinticinco", "veintiséis", "veintisiete", "veintiocho", "veintinueve", "treinta")
 
+    /** "Five minutes", "One minute", "90 minutes". */
+    fun minutes(n: Int): String = number(n).replaceFirstChar { it.uppercase() } + if (n == 1) " minute" else " minutes"
+
     /** A small number as a word (digits above 30). */
     fun number(n: Int, spanish: Boolean = false): String = (if (spanish) es else en).getOrNull(n) ?: n.toString()
 
@@ -97,12 +100,12 @@ class ControllerMode(
     private val ranker: OptionRanker = OptionRanker.DEFAULT,
     private val learnActions: Int = 15,
     private val toneGapMs: Long = 400,         // earcon of a new screen, then speech
-    private val pauseMs: Long = ITEM_GAP_MS,  // silence after an option, measured from the END of its speech
+    private val pauseMs: Long? = null,  // silence after an option, measured from the END of its speech
     private val tickLeadMs: Long = 200,
     private val restartLeadMs: Long = 450,     // the rising start-over sound begins this long before item 1        // tick this long before the next option starts
     private val graceMs: Long = 500,           // a click this soon after an item started means the item before
-    private val silentLoops: Int = 2,          // full loops without a click, then leave
-    private val undoMs: Long = 3000,
+    private val silentLoopsOverride: Int? = null,          // full loops without a click, then leave
+    private val undoMsOverride: Long? = null,
     private val waitCapMs: Long = 4000,        // never wait longer than this for speech we did not start
     private val speechCapMs: Long = 20_000,    // watchdog if the platform never says "done"
     private val gapMs: Long = GestureRules.GAP_MS,   // the gesture fires this long after its last press
@@ -113,6 +116,12 @@ class ControllerMode(
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: String, val lang: String?, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: String, val lang: String?, val run: () -> Unit)
+
+    /** Set from the app's settings screen; read at use, so changes apply at once. */
+    var settings = LauncherSettings()
+    private val pause get() = pauseMs ?: settings.itemGapMs
+    private val silentLoops get() = silentLoopsOverride ?: settings.silentLoops
+    private val undoMs get() = undoMsOverride ?: settings.undoMs
 
     var active = false
         private set
@@ -305,14 +314,14 @@ class ControllerMode(
     private fun itemDone() {
         recordStart()
         if (scanIdx < opts.size - 1) {
-            timers.set("tick", maxOf(0L, pauseMs - tickLeadMs)) { out.tone(Tone.TICK) }
-            timers.set("scan", pauseMs) { speakItem(scanIdx + 1) }
-        } else timers.set("scan", pauseMs) {
+            timers.set("tick", maxOf(0L, pause - tickLeadMs)) { out.tone(Tone.TICK) }
+            timers.set("scan", pause) { speakItem(scanIdx + 1) }
+        } else timers.set("scan", pause) {
             out.tone(Tone.DING); loops++   // falls: the list ended
-            if (loops >= silentLoops) timers.set("scan", pauseMs) { leaveSilent() }
+            if (loops >= silentLoops) timers.set("scan", pause) { leaveSilent() }
             else {
-                timers.set("tick", maxOf(0L, pauseMs - restartLeadMs)) { out.tone(Tone.RESTART) }   // rises: it starts over
-                timers.set("scan", pauseMs) { speakItem(0) }
+                timers.set("tick", maxOf(0L, pause - restartLeadMs)) { out.tone(Tone.RESTART) }   // rises: it starts over
+                timers.set("scan", pause) { speakItem(0) }
             }
         }
     }
@@ -343,16 +352,18 @@ class ControllerMode(
         val l: String? = null
         return when (screen) {
             Screen.HUB -> {
-                val all = mutableMapOf<String, Opt>()
+                val all = linkedMapOf<String, Opt>()
                 val n = unread().size
-                if (n > 0) all["hub:messages"] = Opt("hub:messages", "Messages, $n unread", null) { readUnread("hub:messages") }
-                all["hub:timer"] = Opt("hub:timer", "Timer", null) { pick("hub:timer"); show(Screen.TIMER_PICK) }
-                all["hub:volume"] = Opt("hub:volume", "Volume", null) { pick("hub:volume"); show(Screen.VOLUME) }
-                all["hub:status"] = Opt("hub:status", "Status", null) { pick("hub:status"); outro(Spoken.status(out.status(), unread().size)) }
-                all["hub:more"] = Opt("hub:more", "More", null) { pick("hub:more"); show(Screen.MORE_HUB) }
-                ranker.rank("HUB", "", all.keys.toList()).mapNotNull { all[it] }
+                for (k in settings.hub) when (k) {
+                    "messages" -> if (n > 0) all["hub:messages"] = Opt("hub:messages", "Messages, $n unread", null) { readUnread("hub:messages") }
+                    "timer" -> all["hub:timer"] = Opt("hub:timer", "Timer", null) { pick("hub:timer"); show(Screen.TIMER_PICK) }
+                    "volume" -> all["hub:volume"] = Opt("hub:volume", "Volume", null) { pick("hub:volume"); show(Screen.VOLUME) }
+                    "status" -> all["hub:status"] = Opt("hub:status", "Status", null) { pick("hub:status"); outro(Spoken.status(out.status(), unread().size)) }
+                    "more" -> all["hub:more"] = Opt("hub:more", "More", null) { pick("hub:more"); show(Screen.MORE_HUB) }
+                }
+                if (settings.learnOrder) ranker.rank("HUB", "", all.keys.toList()).mapNotNull { all[it] } else all.values.toList()
             }
-            Screen.TIMER_PICK -> listOf(5 to "Five minutes", 10 to "Ten minutes", 25 to "Twenty five minutes", lastTimer() to "Last used").map { (min, label) ->
+            Screen.TIMER_PICK -> (settings.timers.map { it to Spoken.minutes(it) } + (lastTimer() to "Last used")).map { (min, label) ->
                 Opt("timer:$min", label, null) { pick("timer:$min"); startTimerPending(min) }
             }
             Screen.VOLUME -> listOf(
@@ -396,7 +407,7 @@ class ControllerMode(
         }
         all[skip] = Opt(skip, if (es) "Saltar" else "Skip", l) { pick(skip, m.sender); handled.add(hid(m)); skip() }
         all[more] = Opt(more, if (es) "Más" else "More", l) { pick(more, m.sender); show(Screen.MORE_MSG) }
-        return ranker.rank("MESSAGE", type.name, all.keys.toList()).mapNotNull { all[it] }
+        return if (!settings.learnOrder) all.values.toList() else ranker.rank("MESSAGE", type.name, all.keys.toList()).mapNotNull { all[it] }
     }
 
     /** One step: the answer. The time word of the message (today, tonight, tomorrow) is pre-filled in the sent text. */

@@ -29,7 +29,7 @@ object Actions {
     private const val TAG = "Invisible"
     /** Speech rate at the start (1.0 = normal). It rises 0.1 per 20 successful picks, up to 1.8: blind users listen fast. */
     const val SPEECH_RATE = 0.9f
-    private fun speechRate() = (SPEECH_RATE + 0.1f * (prefs().getInt("codeCount", 0) / 20)).coerceAtMost(1.8f)
+    private fun speechRate() = (mode.settings.speechRate + 0.1f * (prefs().getInt("codeCount", 0) / 20)).coerceAtMost(1.8f)
     @Volatile var accessibilityConnected = false
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var app: Context
@@ -96,11 +96,14 @@ object Actions {
         ranker = CountRanker { choices.intentCount(it) },   // HOOK: replace with a language-model ranker later
     )
 
+    fun saveSettings(s: LauncherSettings) { mode.settings = s; SettingsStore.save(prefs(), s) }
+
     private fun prefs() = app.getSharedPreferences("invisible", Context.MODE_PRIVATE)
 
     fun init(ctx: Context) {
         if (::app.isInitialized) return
         app = ctx.applicationContext
+        mode.settings = SettingsStore.load(prefs())
         val f = java.io.File(app.filesDir, "choices.log")
         choices = ChoiceLog(if (f.exists()) f.readLines() else emptyList()) { line -> try { f.appendText(line + "\n") } catch (e: Exception) { Log.e(TAG, "choices.log write failed", e) } }
         tts = TextToSpeech(app) { s ->
