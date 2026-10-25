@@ -196,7 +196,7 @@ object Actions {
     private fun playPair(left: String, right: String?, me: Int) {
         if (me != pairSeq) return
         if (tts?.isSpeaking == true) { handler.postDelayed({ playPair(left, right, me) }, 300); return }   // the sentence first
-        val (pcm, rate) = clips?.stereo(left, right) ?: run { say(left, false); return }
+        val (pcm, rate) = clips?.stereo(left, right, TypeVoice.PAIR_GAP_MS) ?: run { say(left, false); return }
         pairTrack = try {
             val t = AudioTrack.Builder()
                 .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
@@ -217,7 +217,7 @@ object Actions {
             } catch (e: Throwable) { Log.e(TAG, "word model failed", e); null }
             handler.post {
                 if (lm == null) { say(TypeVoice.NO_MODEL, false); gameEnded(); return@post }
-                if (clips == null) clips = WordClips(java.io.File(app.cacheDir, "words"), { text, f, id -> tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS }, { handler.post(it) })
+                if (clips == null) clips = WordClips(java.io.File(app.cacheDir, "words"), { text, f, id -> tts?.setSpeechRate(TypeVoice.WORD_RATE); tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS }, { handler.post(it) })
                 val timers = object : Timers {
                     override fun set(key: String, delayMs: Long, task: () -> Unit) { clear(key); val r = Runnable { typeTimers.remove(key); task() }; typeTimers[key] = r; handler.postDelayed(r, delayMs) }
                     override fun clear(key: String) { typeTimers.remove(key)?.let { handler.removeCallbacks(it) } }

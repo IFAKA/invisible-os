@@ -188,4 +188,7 @@ object TypeVoice {
     const val LETTERS = "Letters"
     const val WORDS = "Words"
     const val CHECKING = "Pick the left or the right"
+    /** Pacing of the two words: ONE place, tune here. Slow, clear, a long gap (the ear needs time to take a word in). */
+    const val WORD_RATE = 0.75f
+    const val PAIR_GAP_MS = 800
 }
