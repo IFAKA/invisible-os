@@ -1,50 +1,223 @@
 #!/usr/bin/env python3
-"""End-to-end check on the real phone, no human: presses go through the real button path (debug hook `press`),
-what the OS says is read from the SAY log. Run: tools/e2e.py  (needs the debug build installed and the phone lease).
-Each scenario prints PASS/FAIL with what was heard. Exit code 1 if any fails."""
-import subprocess, sys, time, re
-PKG = "com.faka.invisible"
-def adb(*a): return subprocess.run(["adb", *a], capture_output=True, text=True).stdout
-def press(ms): adb("shell", "am", "broadcast", "-n", f"{PKG}/.AiTestReceiver", "--es", "press", ms)
-def clear(): adb("logcat", "-c")
-def said():
-    out = adb("logcat", "-d", "-v", "time", "-s", "SAY:D")
-    return [l.split("): ",1)[1].strip() for l in out.splitlines() if "D/SAY" in l and "): " in l]
-def settle(quiet=4.0, limit=40.0):
-    """Wait until nothing new is spoken for `quiet` seconds."""
-    t0 = last = time.time(); n = -1
-    while time.time() - t0 < limit:
-        k = len(said())
-        if k != n: n = k; last = time.time()
-        if time.time() - last >= quiet: break
-        time.sleep(0.5)
-    return said()
-def stop(): press("3200")   # hold 3 s leaves a program / stops
-results = []
-def check(name, ok, heard):
-    results.append(ok); print(("PASS " if ok else "FAIL ") + name + "\n     heard: " + " | ".join(heard[:12]))
+"""End-to-end suite on the real phone, no human. Presses go through the real button path (debug hook `press`);
+what the OS says is read from the SAY log (and the SPEAK log for the voice rate). Needs the debug build installed
+(app/run.sh) and the phone lease (~/.claude/bin/phone take MIN why).
 
-def wake_reads_menu():
-    clear(); press("900"); h = settle(quiet=3)
-    check("hold wakes the OS and reads the home menu", len(h) >= 3, h)
-def click_picks_first_item():
-    clear(); press("120"); h = settle(quiet=3)   # a click picks the item being read
-    check("one click picks and opens something new", len(h) >= 1, h)
+  tools/e2e.py                run every scenario, one line each, log in app/logs/e2e.log
+  tools/e2e.py --only NAME    run scenarios whose name contains NAME (comma-separate for several)
+  tools/e2e.py --list         list the scenarios
+
+Every scenario starts with the debug hook `reset` (no program, menu closed, speech stopped, fake notifications gone)
+and waits on log events, never on fixed sleeps. Safety: no scenario ever picks "Yes, call now", Answer, Reject or a
+real reply; the fake call and chat are notifications posted by the app itself whose buttons point at nobody.
+Exit code 1 if any scenario fails."""
+import subprocess, sys, time, re, threading, os, datetime
+
+PKG = "com.faka.invisible"
+RECV = f"{PKG}/.AiTestReceiver"
+HERE = os.path.dirname(os.path.abspath(__file__))
+LOG = os.path.join(HERE, "..", "app", "logs", "e2e.log")
+
+def adb(*a, timeout=20):
+    return subprocess.run(["adb", *a], capture_output=True, text=True, timeout=timeout).stdout
+
+def bcast(*extra):
+    adb("shell", "am", "broadcast", "-n", RECV, *extra)
+
+# ---- log reader: one logcat process for the whole run; events are (time, kind, text) ----
+events = []
+lock = threading.Lock()
+LINE = re.compile(r"^\s*([\d.]+)\s+\d+\s+\d+\s+D\s+(SAY|E2E|Invisible)\s*:\s*(.*)$")
+
+def reader():
+    p = subprocess.Popen(["adb", "logcat", "-T", "1", "-v", "epoch", "-s", "SAY:D", "E2E:D", "Invisible:D"], stdout=subprocess.PIPE, text=True, bufsize=1)
+    for line in p.stdout:
+        m = LINE.match(line.rstrip("\n"))
+        if not m: continue
+        kind, text = m.group(2), m.group(3)
+        if kind == "Invisible" and not text.startswith("SPEAK["): continue
+        with lock: events.append((time.time(), kind, text))
+
+def mark():
+    with lock: return len(events)
+
+def since(i, kind=None):
+    with lock: ev = events[i:]
+    return [t for _, k, t in ev if kind is None or k == kind]
+
+def wait(pred, i, kind=None, timeout=15.0):
+    """Wait until an event after index i of this kind satisfies pred(text); return its text or None."""
+    t0 = time.time(); seen = i
+    while time.time() - t0 < timeout:
+        with lock: ev = events[seen:]; n = len(events)
+        for _, k, t in ev:
+            if (kind is None or k == kind) and pred(t): return t
+        seen = n
+        time.sleep(0.03)
+    return None
+
+def said(text, i, timeout=15.0):
+    """Wait for a spoken line (SAY) that contains `text` (case-insensitive)."""
+    return wait(lambda t: text.lower() in t.lower(), i, "SAY", timeout)
+
+class Fail(Exception): pass
+
+# ---- phone helpers ----
+def press(ms): bcast("--es", "press", ms)
+def reset(practice_done=True):
+    i = mark(); bcast("--ez", "reset", "true" if practice_done else "false")
+    if not wait(lambda t: t == "reset done", i, "E2E", 8): raise Fail("reset hook did not answer (is the debug build installed?)")
+def show(screen):
+    i = mark(); bcast("--es", "show", screen)
+    if not wait(lambda t: t == "show " + screen, i, "E2E", 8): raise Fail("show hook did not answer")
+def state():
+    i = mark(); bcast("--ez", "state", "true")
+    t = wait(lambda t: t.startswith("state "), i, "E2E", 8)
+    if not t: raise Fail("state hook did not answer")
+    return dict(kv.split("=", 1) for kv in t.split()[1:])
+def wait_screen(screen, timeout=8.0):
+    t0 = time.time(); s = {}
+    while time.time() - t0 < timeout:
+        s = state()
+        if s.get("active") == "true" and s.get("screen") == screen: return s
+    raise Fail(f"expected screen {screen}, state is {s}")
+def wait_closed(timeout=8.0):
+    t0 = time.time(); s = {}
+    while time.time() - t0 < timeout:
+        s = state()
+        if s.get("active") == "false": return s
+    raise Fail(f"menu still open: {s}")
+def need(text, i, timeout=15.0):
+    r = said(text, i, timeout)
+    if r is None: raise Fail(f"never heard {text!r}; heard: " + " | ".join(since(i, "SAY")[:8]))
+    return r
+
+# ---- scenarios ----
+def wake_reads_home_menu():
+    reset(); i = mark(); press("900")
+    wait(lambda t: len(set(since(i, "SAY"))) >= 3, i, "SAY", 20)
+    h = list(dict.fromkeys(since(i, "SAY")))
+    if len(h) < 3: raise Fail("home menu not read; heard: " + " | ".join(h))
+    wait_screen("HUB")
+    return "heard " + ", ".join(h[:4])
+
+def click_picks():
+    reset(); show("PHONE"); i = mark()
+    need("Emergency", i)
+    press("120")   # a click right after hearing an item picks it
+    need("Call the emergency number", i)
+    wait_screen("EMERGENCY")
+    return "Emergency picked"
+
 def triple_click_goes_back():
-    clear(); press("100,150,100,150,100"); h = settle(quiet=3)
-    check("three clicks go back (the OS speaks again) [FINDING: says nothing when already at the top]", len(h) >= 1, h)
-def practice_runs():
-    clear(); adb("shell", "am", "broadcast", "-n", f"{PKG}/.AiTestReceiver", "--es", "start", "practice"); h = settle(quiet=6)
-    check("practice starts and speaks its first prompt", any("practice" in x.lower() or "click" in x.lower() for x in h), h)
-    press("120"); h = settle(quiet=6)
-    check("practice answers a click with the next step", any("twice" in x.lower() for x in h), h)
-    stop(); time.sleep(3)
+    reset(); show("PHONE"); i = mark(); need("Emergency", i); press("120"); wait_screen("EMERGENCY")
+    j = mark(); need("No, go back", j)
+    press("100,150,100,150,100")
+    wait_screen("PHONE")
+    return "Emergency -> Phone"
+
+def click_hold_closes():
+    reset(); show("PHONE"); i = mark(); need("Emergency", i)
+    press("120,150,900")
+    wait_closed()
+    return "menu closed"
+
+def practice_end_to_end():
+    reset(False); i = mark(); press("900")
+    need("click once now", i, 20)
+    press("120"); need("click twice", i)
+    press("120,150,120"); need("click three times", i)
+    press("100,150,100,150,100"); need("click, then hold", i)
+    j = mark(); press("120,150,900")
+    # the practice ends, the OS plays the close sound, then the home menu opens by itself
+    t0 = time.time(); s = {}
+    while time.time() - t0 < 12:
+        s = state()
+        if s.get("active") == "true" and s.get("screen") == "HUB" and s.get("running") == "false": break
+    else: raise Fail(f"home menu did not open after the practice: {s}")
+    h = list(dict.fromkeys(since(j, "SAY")))
+    if not h: raise Fail("home menu opened but nothing was said")
+    return "practice done, home says " + h[0]
+
+def phone_list():
+    reset(); show("PHONE"); i = mark()
+    need("Emergency", i); need("Call a contact", i)
+    h = since(i, "SAY")
+    if h[0] != "Emergency": raise Fail(f"first item is {h[0]!r}, not Emergency")
+    return "Emergency, Call a contact"
+
+def emergency_confirm_goes_back():
+    reset(); show("PHONE"); i = mark(); need("Emergency", i); press("120"); wait_screen("EMERGENCY")
+    j = mark(); need("No, go back", j)
+    if any("yes, call" in t.lower() for t in since(j, "SAY")): raise Fail("Yes was read before our click; refusing to click")   # safety: never risk the call
+    press("120")   # the click lands on "No, go back"
+    wait_screen("PHONE")
+    if any("calling" in t.lower() for t in since(j, "SAY")): raise Fail("a call was started")
+    return "No, go back -> Phone"
+
+def fake_incoming_call():
+    reset(); i = mark(); bcast("--es", "fake", "call")
+    need("Call from E2E Caller", i, 12)
+    need("Answer", i); need("Reject", i)
+    wait_screen("CALL_IN")
+    return "Call from E2E Caller, Answer, Reject"
+
+def fake_chat_message():
+    reset(); i = mark(); bcast("--es", "fake", "chat")
+    time.sleep(1.0)   # the listener must take the notification before the wake
+    press("900")
+    need("E2E Friend", i, 15); need("dinner", i)
+    t0 = time.time()   # the reply options follow the message
+    while time.time() - t0 < 15 and len(set(since(i, "SAY"))) < 3: time.sleep(0.2)
+    h = list(dict.fromkeys(since(i, "SAY")))
+    if len(h) < 3: raise Fail("message read but no options: " + " | ".join(h))
+    return " | ".join(h[:5])
+
+def voice_speed_applied():
+    old = float(state()["rate"])
+    try:
+        i = mark(); bcast("--ef", "rate", "1.4"); wait(lambda t: t.startswith("rate set"), i, "E2E", 8)
+        reset(); j = mark(); press("900")
+        t = wait(lambda t: "rate=" in t, j, "Invisible", 15)
+        if not t: raise Fail("no SPEAK line with a rate")
+        r = float(re.search(r"rate=([\d.]+)", t).group(1))
+        if not 1.4 <= r <= 1.61: raise Fail(f"voice rate {r}, expected 1.4 to 1.6")
+        return f"rate {r}"
+    finally:
+        bcast("--ef", "rate", str(old)); reset()
+
+SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, practice_end_to_end,
+             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, voice_speed_applied]
+
+def main():
+    args = sys.argv[1:]
+    if "--list" in args: print("\n".join(f.__name__ for f in SCENARIOS)); return 0
+    only = []
+    if "--only" in args:
+        k = args.index("--only"); only = [x for a in args[k + 1:k + 2] for x in a.split(",")]
+    chosen = [f for f in SCENARIOS if not only or any(o in f.__name__ for o in only)]
+    if "device" not in adb("devices"): sys.exit("no phone connected (adb mdns services; adb connect IP:PORT)")
+    threading.Thread(target=reader, daemon=True).start()
+    time.sleep(0.5)
+    os.makedirs(os.path.dirname(LOG), exist_ok=True)
+    lines = []; fails = 0; t_all = time.time()
+    adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity"); time.sleep(0.8)
+    for f in chosen:
+        t0 = time.time()
+        try: detail = f(); ok = True
+        except Fail as e: detail = str(e); ok = False
+        except Exception as e: detail = repr(e); ok = False
+        fails += not ok
+        line = f"{'PASS' if ok else 'FAIL'} {f.__name__:<28} {time.time()-t0:5.1f}s  {detail}"
+        print(line, flush=True); lines.append(line)
+    try: reset()
+    except Fail: pass
+    adb("shell", "input", "keyevent", "KEYCODE_HOME")
+    summary = f"{len(chosen)-fails}/{len(chosen)} passed in {time.time()-t_all:.0f}s"
+    print(summary)
+    with open(LOG, "a") as fh:
+        fh.write(f"# {datetime.datetime.now():%Y-%m-%d %H:%M:%S} {summary}\n" + "\n".join(lines) + "\n")
+    return 1 if fails else 0
 
 if __name__ == "__main__":
-    if "device" not in adb("devices"): sys.exit("no phone connected")
-    adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity"); time.sleep(1)
-    for f in (wake_reads_menu, click_picks_first_item, triple_click_goes_back, practice_runs):
-        try: f()
-        except Exception as e: check(f.__name__, False, [repr(e)])
-    adb("shell", "input", "keyevent", "KEYCODE_HOME")
-    print(f"\n{sum(results)}/{len(results)} passed"); sys.exit(0 if all(results) else 1)
+    sys.exit(main())

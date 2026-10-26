@@ -101,7 +101,7 @@ class TtsSpeech(
     private fun googleSpeak(p: Phrase, queue: Boolean, fast: Boolean, slow: Boolean) {
         if (!queue) neural.stop()
         val text = p.text; val lang = p.lang
-        Log.d(tag, "SPEAK[$lang] $text ready=$ready fast=$fast")
+        Log.d(tag, "SPEAK[$lang] $text ready=$ready fast=$fast rate=${if (slow) Pacing.COACH_RATE else rate()}")
         if (!ready) { handler.post { listener.ended() }; return }
         if (CLIPS && p.isFixed && !fast && sayClip(p, queue)) return   // the recorded voice; free text (messages, tasks) always uses the live voice
         if (!queue) stopClips()

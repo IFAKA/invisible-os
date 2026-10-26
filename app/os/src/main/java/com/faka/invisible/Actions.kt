@@ -292,6 +292,17 @@ object Actions {
             backAfterEnd = { gameEnded(); handler.postDelayed({ if (running == null && !mode.active) mode.onGesture(Gesture.HOLD, 0) }, 1500); true }
         }
     }
+    /** Dev (e2e): back to a known state: no program, menu closed, nothing spoken, practice marked done (or not), fake notifications gone. */
+    fun resetDev(practiceDone: Boolean) = handler.post {
+        backAfterEnd = null
+        running?.stop(); running = null
+        mode.exit(false); narrator.stopSpeech()
+        prefs().edit().putBoolean(PracticeProgram.DONE_KEY, practiceDone).apply()
+        Log.d("E2E", "reset done")
+    }
+    fun showDev(name: String) = handler.post { mode.devShow(name); Log.d("E2E", "show $name") }
+    fun stateDev() = handler.post { Log.d("E2E", "state ${mode.devState()} running=${running != null} rate=${mode.settings.speechRate}") }
+    fun rateDev(r: Float) = handler.post { saveSettings(mode.settings.copy(speechRate = r)); Log.d("E2E", "rate set $r") }
     fun startDev(name: String) = handler.post { Programs.byDevName(name)?.let { startProgramEntry(it) } }
 
     /** Dev: drive the music session directly: "uri:<url>" or "search:<query>". */

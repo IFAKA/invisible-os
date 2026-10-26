@@ -1043,6 +1043,11 @@ class ControllerMode(
         if (intent != "none" && intent != "nothing") out.setCodeCount(out.codeCount() + 1)
     }
 
+    /** Dev (e2e): show a screen by name, waking the menu silently first. */
+    fun devShow(name: String) { if (!active) { active = true; queue = mutableListOf(); qi = 0; fromHub = false; speechOpen = false; hintPending = false; musicBack = Screen.HUB }; show(Screen.valueOf(name)) }
+    /** Dev (e2e): "screen phase" of the menu, for the test log. */
+    fun devState() = "active=$active screen=$screen"
+
     fun exit(withTone: Boolean = true) {
         if (!active) return
         stopAll(); lookupId++

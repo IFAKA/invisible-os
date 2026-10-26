@@ -150,7 +150,7 @@ class ControllerNotificationListener : NotificationListenerService() {
     /** A dialer notification: a ringing call opens the Answer / Reject list, a running one is remembered. True = handled here. */
     private fun call(sbn: StatusBarNotification): Boolean {
         val n = sbn.notification
-        if (sbn.packageName == packageName) return false
+        if (sbn.packageName == packageName && !fake(sbn)) return false
         val titles = n.actions.orEmpty().map { it.title?.toString().orEmpty() }
         when (Calls.kind(n.category, n.extras.getInt("android.callType", 0), titles.size)) {
             CallKind.NONE -> return false
@@ -166,6 +166,9 @@ class ControllerNotificationListener : NotificationListenerService() {
         }
         return true
     }
+
+    /** Debug builds only: a notification the e2e test posts from this app stands in for a call or chat message of another app. */
+    private fun fake(sbn: StatusBarNotification) = BuildConfig.DEBUG && sbn.packageName == packageName && sbn.notification.extras.getBoolean("e2e")
 
     private fun take(sbn: StatusBarNotification) {
         if (call(sbn)) return
