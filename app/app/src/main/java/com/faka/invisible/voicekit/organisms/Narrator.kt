@@ -21,6 +21,7 @@ class Narrator(private val speech: SpeechPort, private val tones: TonePort, priv
     fun findLoop(on: Boolean) = tones.findLoop(on)
 
     private val waits = LinkedHashSet<Any>()
+    init { Thread({ Earcons.pcm(Tone.WAIT) }, "wait-warm").start() }   // built off the main thread, so the first beat is on time
     /**
      * Main thread. A wait you can hear, so a slow step never sounds like a crash: silent for [Pacing.WAIT_DELAY_MS] (fast work
      * stays quiet), then the soft [Tone.WAIT] heartbeat every [Pacing.WAIT_BEAT_MS] (skipped while speech plays), once
@@ -35,15 +36,16 @@ class Narrator(private val speech: SpeechPort, private val tones: TonePort, priv
             override fun run() {
                 if (token !in waits) return
                 val t = android.os.SystemClock.uptimeMillis() - t0
-                if (t >= Pacing.WAIT_MAX_MS) { waits -= token; return }
+                if (t >= Pacing.WAIT_MAX_MS) { waits -= token; android.util.Log.d("Invisible", "WAIT gave up t=$t"); return }
                 if (waits.first() === token && !speech.speaking) {   // only the oldest wait beats
-                    if (!said && t >= Pacing.WAIT_SAY_MS) { said = true; speech.speak(Voice.STILL_WORKING, false, false, false) } else tones.beep(Tone.WAIT)
+                    if (!said && t >= Pacing.WAIT_SAY_MS) { said = true; speech.speak(Voice.STILL_WORKING, false, false, false); android.util.Log.d("Invisible", "WAIT still working t=$t") }
+                    else { tones.beep(Tone.WAIT); android.util.Log.d("Invisible", "WAIT beat t=$t") }
                 }
-                handler.postDelayed(this, Pacing.WAIT_BEAT_MS)
+                handler.postAtTime(this, t0 + Pacing.WAIT_DELAY_MS + ((t - Pacing.WAIT_DELAY_MS) / Pacing.WAIT_BEAT_MS + 1) * Pacing.WAIT_BEAT_MS)   // on the clock: a slow beep never drifts the beat
             }
         }
         handler.postDelayed(beat, Pacing.WAIT_DELAY_MS)
-        return { handler.post { waits -= token; handler.removeCallbacks(beat) } }
+        return { handler.post { if (waits.remove(token)) android.util.Log.d("Invisible", "WAIT stop t=${android.os.SystemClock.uptimeMillis() - t0}"); handler.removeCallbacks(beat) } }
     }
 
     /** Two words as one stereo sound. Both clips are made first; the sentence being spoken is never cut. */

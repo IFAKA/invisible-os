@@ -257,6 +257,7 @@ object Actions {
     }
 
     /** Dev: drive the music session directly: "uri:<url>" or "search:<query>". */
+    fun waitDev(ms: Long) = handler.post { val w = narrator.waiting(); handler.postDelayed({ w() }, ms) }
     fun ctlDev(cmd: String) = handler.post {
         val c = otherSessions().firstOrNull { it.packageName in musicApps } ?: run { Log.d("BROWSE", "no music session"); return@post }
         Log.d("BROWSE", "ctl $cmd on ${c.packageName}")

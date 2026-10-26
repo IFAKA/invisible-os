@@ -18,6 +18,7 @@ class AiTestReceiver : BroadcastReceiver() {
         if (i.hasExtra("playmusic")) { Actions.playMusicDev(); return }   // dev: what the Music item does with no song
         if (i.hasExtra("browse")) { Actions.browseMusicDev(); return }
         i.getStringExtra("ctl")?.let { Actions.ctlDev(it); return }
+        if (i.hasExtra("wait")) { Actions.waitDev(i.getIntExtra("wait", 5000).toLong()); return }   // dev: the waiting heartbeat for this many ms
         i.getStringExtra("msearch")?.let { Actions.searchDev(it); return }   // dev: type a song search without the keyboard
         i.getStringExtra("toggle")?.let { Actions.toggleDev(it); return }
         if (i.hasExtra("radio")) { Actions.radioDev(); return }
