@@ -62,6 +62,7 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
     private fun rawDown(r: RawButton, time: Long) {
         val afterClick = rawUpAt >= 0 && time - rawUpAt < Pacing.GAP_MS && rawLastLen < Pacing.HOLD_MS
         rawDownAt = time
+        Log.d(TAG, "RAW down afterClick=$afterClick prog=${r.javaClass.simpleName}")
         handler.removeCallbacks(rawExit)
         if (afterClick && r.exitOnClickHold) handler.postDelayed(rawExit, Pacing.HOLD_MS)
         r.down(time)
@@ -71,6 +72,7 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
         handler.removeCallbacks(rawExit)
         if (rawDownAt < 0) return   // the press that closed the program, or a stray release
         rawLastLen = time - rawDownAt; rawDownAt = -1; rawUpAt = time; rawUpWall = SystemClock.uptimeMillis()
+        Log.d(TAG, "RAW up len=$rawLastLen prog=${r.javaClass.simpleName}")
         r.up(time)
     }
 
@@ -80,6 +82,7 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
      * signal is exit only when a click was seen just before it. There is no release event, so a fast scroll ends by a timer.
      */
     fun assistHold() {
+        Log.d(TAG, "ASSIST signal raw=${target.raw()?.javaClass?.simpleName} rawDownAt=$rawDownAt")
         if (target.raw() != null) {   // a program: the signal without key events after a click is click then hold
             if (target.raw()?.exitOnClickHold != false && rawDownAt < 0 && rawLastLen < Pacing.HOLD_MS && SystemClock.uptimeMillis() - rawUpWall < CLICK_THEN_HOLD_MS) { Log.d(TAG, "ASSIST click_hold in program: exit"); target.exitProgram() }
             if (target.raw()?.exitOnClickHold == false && rawDownAt < 0) target.raw()?.assistHold()   // Write: the hold picks the right word
