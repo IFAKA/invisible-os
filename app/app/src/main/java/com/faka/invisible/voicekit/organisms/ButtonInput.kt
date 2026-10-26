@@ -14,8 +14,10 @@ import android.view.KeyEvent
 class ButtonInput(private val handler: Handler, private val narrator: Narrator, private val target: ButtonTarget) : ButtonPort {
     companion object {
         private const val TAG = "Invisible"
-        /** The system's long-press signal only counts when the key path has seen no key for this long (then it is the only source). */
-        private const val ASSIST_QUIET_MS = 3000L
+        /** A click this recently before the system's long-press signal means click-then-hold (the signal comes ~0.7 s after the press starts). */
+        private const val CLICK_THEN_HOLD_MS = 1300L
+        /** The assistant signal has no release: a fast scroll started by it runs this long. */
+        private const val ASSIST_FAST_MS = 2500L
         /** Only the earbud button counts. */
         fun isButton(e: KeyEvent) = e.keyCode == KeyEvent.KEYCODE_HEADSETHOOK || e.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
     }
@@ -49,12 +51,18 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
         if (isDown) detector.down(time) else detector.up(time)
     }
 
-    /** Long press launched the assistant role / hands-free: act as HOLD unless a HOLD just fired from the key path. */
+    /**
+     * The earbud's long press often reaches us only as the system's assistant signal, with no key events (the log shows hold dur=0 and no AKEY).
+     * Idle: it is a hold (wake). In the menu a plain hold is the fast-scroll / Find gesture, and a click then a hold is exit, so the
+     * signal is exit only when a click was seen just before it. There is no release event, so a fast scroll ends by a timer.
+     */
     fun assistHold() {
         if (target.raw() != null) return
-        if (SystemClock.uptimeMillis() - lastKeyAt < ASSIST_QUIET_MS) { Log.d(TAG, "ASSIST ignored, the key path is seeing this press"); return }   // a hold that woke the OS and goes on must not read as exit
         if (clickHolding || SystemClock.uptimeMillis() - lastHoldAt < 1500) { Log.d(TAG, "ASSIST ignored, hold just fired"); return }
-        fire(Gesture.HOLD, 0)
+        if (!target.menuActive) { fire(Gesture.HOLD, 0); return }
+        if (SystemClock.uptimeMillis() - lastKeyAt < CLICK_THEN_HOLD_MS) { fire(Gesture.HOLD, 0); return }
+        fire(Gesture.CLICK_HOLD, 0)
+        handler.postDelayed({ if (clickHolding) fire(Gesture.CLICK_HOLD_END, ASSIST_FAST_MS) }, ASSIST_FAST_MS)
     }
 
     private fun fire(g: Gesture, dur: Long) {
