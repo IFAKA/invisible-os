@@ -70,14 +70,15 @@ class AppTreeTest {
         println("REPORT expected items heard per open: flat=%.2f optimized=%.2f".format(AppTree.expectedHeard(fl), AppTree.expectedHeard(opt)))
         println("REPORT items heard to reach the top 5 apps (sum): flat=%.0f optimized=%.0f".format(AppTree.heardToTop(fl, 5), AppTree.heardToTop(opt, 5)))
         println("REPORT list lengths: " + lists(opt).map { (it.label.ifEmpty { "HOME" }) + "=" + it.children.size })
-        println("REPORT depth=${AppTree.depth(opt)} rawDepth=${AppTree.rawDepth(opt)} maxList=${AppTree.maxListLength(opt)}")
+        println("REPORT depth=${AppTree.depth(opt)} maxList=${AppTree.maxListLength(opt)}")
         println("REPORT tree (label (length) [weight]):\n" + dump(opt))
         assertTrue("$cOpt <= $cFlat", cOpt <= cFlat + 1e-9)
         assertTrue(lists(opt).drop(1).all { it.children.size <= AppTree.MAX_LIST }); assertTrue(opt.children.size <= AppTree.HOME_MAX)
         val groups = setOf("Messages", "Day", "Money", "Media", "Out", "Tools")
         assertEquals(groups, opt.children.map { it.label }.filter { it in groups }.toSet())   // every group is a direct entry of home
         assertTrue(opt.children.count { it.isApp } <= AppTree.PROMOTED)
-        assertFalse(opt.children.any { it.isMore })
+        assertTrue("the tags must split every place so the letter fallback is never needed: " + lists(opt).map { it.label }.filter { " to " in it }, lists(opt).none { " to " in it.label })
+        assertEquals(opt.children.size, opt.children.map { it.label }.distinct().size)
         println("REPORT top-5 vs flat: optimized=%.0f flat=%.0f".format(AppTree.heardToTop(opt, 5), AppTree.heardToTop(fl, 5)))
         assertTrue(AppTree.depth(opt) <= 4)
         assertEquals(l.map { it.pkg }.sorted(), AppTree.apps(opt).map { it.pkg }.sorted())
@@ -95,25 +96,22 @@ class AppTreeTest {
         assertEquals(dump(AppTree.build(l)), dump(AppTree.build(noisy)))
     }
 
-    @Test fun heaviestFirstInEveryListAndMoreHoldsTheTail() {
+    @Test fun heaviestFirstInEveryList() {
         val opt = AppTree.build(phone())
         for (x in lists(opt)) {
-            val w = x.children.filter { !it.isMore }.map { it.weight }
+            val w = x.children.map { it.weight }
             assertEquals(w, w.sortedDescending())
-            if (x.children.any { it.isMore }) assertTrue(x.children.last().isMore)
         }
     }
 
-    @Test fun dpMatchesHandComputedCost() {
-        // one group, 8 leaves, weights 100,50,25,12,6,3,2,1: all in one flat list at home (no categories to split them)
-        val ws = listOf(100.0, 50.0, 25.0, 12.0, 6.0, 3.0, 2.0, 1.0)
-        val l = ws.mapIndexed { i, w -> AppLeaf("a$i", "A$i", "Tools/Dev", 0, w) }
+    @Test fun anUntaggedPileIsCutByLetterNotBehindMore() {
+        // 8 apps in one place: no "More"; two sorted sub-lists by first letter
+        val l = (0 until 8).map { AppLeaf("a$it", "App${'A' + it}", "Tools/Dev", 0, (100 - it).toDouble()) }
         val t = AppTree.build(l)
-        // the best possible by brute force over the cut c in 2..5 (head c, then More with the rest as one list of at most 6)
-        val best = (2..5).minOf { c -> ws.take(c).withIndex().sumOf { (i, w) -> w * (i + 1) } + ws.drop(c).withIndex().sumOf { (i, w) -> w * (c + 1 + AppTree.LEVEL + i + 1) } }
-        val want = (best + (1 + AppTree.LEVEL) * ws.sum()) / ws.sum()   // the group is one entry of home; promoting apps to home can only be cheaper
-        assertTrue("cost ${AppTree.expectedCost(t)} vs $want", AppTree.expectedCost(t) <= want + 1e-9)
-        assertTrue(lists(t).drop(1).all { it.children.size <= 6 })
+        assertTrue(lists(t).none { it.label == "More" })
+        assertTrue(lists(t).drop(1).all { it.children.size <= AppTree.MAX_LIST })
+        assertEquals(l.map { it.pkg }.sorted(), AppTree.apps(t).map { it.pkg }.sorted())
+        assertTrue(lists(t).any { it.label.startsWith("Dev ") })
     }
 
     @Test fun aHeavyLeafIsPromotedAndALightGroupStaysDown() {

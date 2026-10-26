@@ -80,14 +80,14 @@ Tools/Phone         com.android.settings
 Tools/Phone         com.miui.securitycenter
 Tools/Phone         com.google.android.apps.adm
 Tools/Phone         com.google.android.apps.safetyhub
-Tools/Phone         com.android.thememanager
-Tools/Phone         com.orange.update
-Tools/Phone         com.mi.earphone
-Tools/Phone         com.microsoft.launcher
-Tools/Phone         com.android.vending
-Tools/Phone         com.google.android.apps.subscriptions.red
-Tools/Phone         com.miui.miservice
-Tools/Phone         com.mi.globalminusscreen
+Tools/Setup         com.android.thememanager
+Tools/Setup         com.orange.update
+Media/Audio         com.mi.earphone
+Tools/Setup         com.microsoft.launcher
+Tools/Setup         com.android.vending
+Money/Pay           com.google.android.apps.subscriptions.red
+Tools/Setup         com.miui.miservice
+Tools/Setup         com.mi.globalminusscreen
 Tools/Security      com.x8bit.bitwarden
 Tools/Security      com.azure.authenticator
 Tools/Security      com.google.android.apps.authenticator2
@@ -97,19 +97,19 @@ Tools/Web           com.mi.globalbrowser
 Tools/Web           org.chromium.webapk.a7e73b90ab8fcb825_v2
 Tools/Web           com.google.android.googlequicksearchbox
 Tools/Utilities     com.xiaomi.scanner
-Tools/Utilities     com.android.soundrecorder
+Media/Audio         com.android.soundrecorder
 Tools/Utilities     com.google.android.apps.nbu.files
 Tools/Utilities     com.mi.android.globalFileexplorer
 Tools/Utilities     com.android.providers.downloads.ui
-Tools/Utilities     com.miui.weather2
+Day/Notes           com.miui.weather2
 Tools/Dev           com.termux
 Tools/Dev           com.tailscale.ipn
 Tools/Dev           com.crosspaste.android
 Tools/Dev           com.k2fsa.sherpa.onnx.tts.engine
 Tools/Dev           app.morphe.manager
 Tools/Dev           app.revanced.android.gms
-Tools/Dev           com.themis.clientmobile
-Tools/Dev           dev.jason.com.google.android.inputmethod.latin
+Day/Work            com.themis.clientmobile
+Tools/Phone         dev.jason.com.google.android.inputmethod.latin
 """
 
     /** Package -> place. */

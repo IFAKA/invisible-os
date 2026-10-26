@@ -541,11 +541,10 @@ class ControllerMode(
     private fun withUnread(n: TreeNode, u: Map<String, Int>): TreeNode {
         val a = n.app?.let { it.copy(unread = u[it.pkg] ?: 0) }
         val kids = n.children.map { withUnread(it, u) }
-        return TreeNode(n.label, kids, a, a?.unread ?: kids.sumOf { it.unread }, n.weight, n.isMore, n.rank)
+        return TreeNode(n.label, kids, a, a?.unread ?: kids.sumOf { it.unread }, n.weight, n.rank)
     }
 
     private fun treeLabel(c: TreeNode): Phrase = when {
-        c.isMore -> Menu.MORE
         c.unread > 0 -> Phrase.content(c.label + ", " + c.unread)
         else -> Phrase.content(c.label)
     }
