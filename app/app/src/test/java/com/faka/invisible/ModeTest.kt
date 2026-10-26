@@ -12,7 +12,7 @@ import org.junit.Test
 private val OLD_HUB = LauncherSettings.DEFAULT_HUB - "alarm" - "calculator" - "write" - "compass"
 
 class ModeTest {
-    private class Rig(ranker: OptionRanker = OptionRanker.DEFAULT, gap: Long = 800) {
+    private class Rig(ranker: OptionRanker = OptionRanker.DEFAULT, gap: Long? = 800, reactionText: String = "") {
         val log = ArrayList<String>()
         var playing = false
         var msgs = listOf<Msg>()
@@ -27,6 +27,7 @@ class ModeTest {
         var replyOffersList = listOf<Task>(); val remembered = ArrayList<String>()
         var favs = listOf<String>()
         var suggested = listOf<String>()
+        var savedReactions = reactionText
         val pickTimes = ArrayList<Long>()   // time-to-pick of each list pick
         var now = 1_000_000L
         var vol = 7
@@ -98,6 +99,8 @@ class ModeTest {
             override fun setLastTimer(minutes: Int) { last = minutes }
             override fun favourites() = favs
             override fun suggest(candidates: Collection<String>, now: Long) = suggested.filter { it in candidates }
+            override fun loadReactions() = savedReactions
+            override fun saveReactions(text: String) { savedReactions = text }
             override fun codeCount() = codes
             override fun setCodeCount(n: Int) { codes = n }
             override fun choice(screen: String, code: Int, intent: String, sender: String, pickMs: Long) { log.add("choice $screen $code $intent"); if (pickMs >= 0) pickTimes.add(pickMs) }
@@ -908,6 +911,15 @@ class ModeTest {
         r.advance(1); assertEquals("tone TICK", r.log.last())
         r.advance(199); assertEquals(1, r.spoken().size)
         r.advance(1); assertEquals("say Phone", r.spoken().last())          // t=2500 = 1600 after done
+    }
+
+    @Test fun learnedFastReactionsShortenTheGapAndAClickIsSaved() {
+        val r = Rig(gap = null, reactionText = List(20) { 0 }.joinToString(",")); r.wake()   // p90 0 + 300 -> floor 700 ms instead of 1600
+        r.advance(400); assertEquals(listOf("say Timer"), r.spoken())        // speech t=400..900
+        r.advance(900); assertEquals(1, r.spoken().size)                     // t=1300: the next item is not due yet
+        r.advance(500); assertEquals("say Phone", r.spoken().last())         // t=1800: 700 ms gap (the default gap would start it at 2500)
+        r.click()
+        assertEquals(21, r.savedReactions.split(",").size)                   // the click was learned and saved
     }
 
     @Test fun defaultGapClickDuringGapBindsToTheItemJustSpoken() {

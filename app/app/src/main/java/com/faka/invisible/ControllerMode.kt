@@ -65,6 +65,8 @@ interface ModeOutput {
     fun choice(screen: String, code: Int, intent: String, sender: String, pickMs: Long = -1)   // pickMs = time from the start of the list to the press (-1 = not a list pick); choice log; code 0 = wake, else the position of the option in the list
     fun codeCount(): Int             // successful code actions so far (persisted); learning mode while < 15
     fun setCodeCount(n: Int)
+    fun loadReactions(): String = ""   // saved reaction samples (see ReactionGap.encode)
+    fun saveReactions(text: String) {}
     fun startWrite() {}   // the Write keyboard (stereo pair); its text comes back through the app
     fun startCompass() {}   // the compass program
     fun startEcho() {}   // the rhythm-copy game
@@ -131,7 +133,8 @@ class ControllerMode(
 
     /** Set from the app's settings screen; read at use, so changes apply at once. */
     var settings = LauncherSettings()
-    private val pause get() = pauseMs ?: settings.itemGapMs
+    private val reactions by lazy { ReactionGap(ReactionGap.decode(out.loadReactions())) }   // how fast the user clicks (saved across restarts)
+    private val pause get() = pauseMs ?: reactions.gap(settings.itemGapMs)   // the gap between items adapts, never above the user setting
     private val silentLoops get() = silentLoopsOverride ?: settings.silentLoops
     private val undoMs get() = undoMsOverride ?: settings.undoMs
 
@@ -178,6 +181,7 @@ class ControllerMode(
     private var awaitStart = -1
     private val history = ArrayList<Pair<Int, Long>>()   // (option index, time its speech started), oldest first
     private var scanStartedAt = 0L             // when beginScan started the list (for the time-to-pick in the choice log)
+    private val itemEnds = HashMap<Int, Long>()   // option index -> time its speech ended (for the reaction time)
     private var pickMs = -1L                   // set while a click-pick runs: ms from list start to the press
     private var code = 0                       // position of the option being run
     private var waitNext: (() -> Unit)? = null
@@ -225,6 +229,7 @@ class ControllerMode(
             Gesture.SINGLE -> when (phase) {
                 Phase.SCAN -> {   // one click chooses the option spoken last
                     val i = bind(firstPress) ?: return    // nothing spoken yet: ignore
+                    noteReaction(i, firstPress)
                     stopAll(); code = i + 1; pickMs = firstPress - scanStartedAt; list.items[i].run(); pickMs = -1
                 }
                 Phase.INTRO -> skipIntro()
@@ -242,6 +247,13 @@ class ControllerMode(
         if (k < 0) return null
         if (k > 0 && pressAt - history[k].second <= graceMs) k--
         return history[k].first
+    }
+
+    /** Learn how fast the user clicks: ms from the end of item [i] speech to the press (negative = still speaking). */
+    private fun noteReaction(i: Int, pressAt: Long) {
+        val end = itemEnds[i]
+        reactions.add(if (end == null) -1L else pressAt - end)
+        out.saveReactions(reactions.encode())
     }
 
     /** Stop speech and every scan timer. */
@@ -341,7 +353,7 @@ class ControllerMode(
     private fun beginScan() {
         stopAll()
         phase = Phase.SCAN; curIntro = null
-        history.clear()
+        history.clear(); itemEnds.clear()
         scanStartedAt = clock()
         scanner.load(buildOptions())
         if (scanner.isEmpty) { leaveSilent(); return }
@@ -356,6 +368,7 @@ class ControllerMode(
 
     private fun itemDone() {
         recordStart()
+        history.lastOrNull()?.let { itemEnds[it.first] = clock() }
         scanner.itemDone()
     }
 

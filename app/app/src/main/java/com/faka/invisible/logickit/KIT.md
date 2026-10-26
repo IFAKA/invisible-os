@@ -9,6 +9,7 @@ Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rule
 |---|---|
 | Text.kt | `String.squash()` = collapse white space and trim. `String.words()` = the words of a text. The only place that writes `Regex("\\s+")`. |
 | UniqueNames.kt | `UniqueNames.apply(leaves, reserved)` = every spoken leaf name unique (no screen: two same names cannot be told apart). A program keeps its name; an app gets its maker ("Xiaomi Calculator"), then a number. Used by `TreeLeaves.edit`. |
+| ReactionGap.kt | `ReactionGap(samples).gap(userSetting)` = the pause between scanned items, learned from the reaction times of the user (ms from the end of the picked item to the press): p90 + 300, between 700 ms and the setting; under 8 samples = the setting. `add`, `encode`/`decode` for saving. Used by `ControllerMode` (its pause). |
 | Calculator.kt | `Calculator` = state of the spoken calculator (digit, point, operate, equals, undo, `spoken()`), left to right; `%` = percent of. Used by the Calculator program. |
 | ChatLang.kt | `ChatLang.of(seen, detect)` = the language of the chat or message a reply goes to (null if too short or unknown). `needsTranslation(target)`. Used by Write for screen chats and for notification replies. |
 

@@ -134,6 +134,8 @@ object Actions {
             override fun navigation() = ControllerNotificationListener.navigation
             override fun findPhone(on: Boolean) = narrator.findLoop(on)
             override fun dndAllowed() = this@Actions.dndAllowed()
+            override fun loadReactions() = prefs().getString("reactions", "") ?: ""
+            override fun saveReactions(text: String) { prefs().edit().putString("reactions", text).apply() }
             override fun codeCount() = prefs().getInt("codeCount", 0)
             override fun setCodeCount(n: Int) { prefs().edit().putInt("codeCount", n).apply() }
             override fun lastTimer() = prefs().getInt("lastTimer", 0)
