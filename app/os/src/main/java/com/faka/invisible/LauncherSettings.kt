@@ -74,7 +74,7 @@ object SettingsStore {
             info = p.getString("s_info", null)?.split(',')?.let { LauncherSettings.cleanInfo(it) } ?: d.info,
             phone = p.getString("s_phone", null)?.split(',')?.let { LauncherSettings.cleanPhone(withStatus(p, it)) } ?: d.phone,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
-            itemGapMs = p.getLong("s_gap", d.itemGapMs).coerceIn(200, 4000),
+            itemGapMs = p.getLong("s_gap2", d.itemGapMs).coerceIn(200, 4000),
             silentLoops = p.getInt("s_loops", d.silentLoops).coerceIn(1, 5),
             undoMs = p.getLong("s_undo", d.undoMs).coerceIn(1500, 8000),
             speechRate = p.getFloat("s_rate", d.speechRate).coerceIn(0.6f, 1.8f),
@@ -201,7 +201,7 @@ object SettingsStore {
 
     fun save(p: SharedPreferences, s: LauncherSettings) {
         p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_info", s.info.joinToString(",")).putString("s_phone", s.phone.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
-            .putLong("s_gap", s.itemGapMs).putInt("s_loops", s.silentLoops).putLong("s_undo", s.undoMs)
+            .putLong("s_gap2", s.itemGapMs).putInt("s_loops", s.silentLoops).putLong("s_undo", s.undoMs)
             .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).putBoolean("s_ai", s.ai).putString("s_pinned", s.pinned.joinToString(",")).putString("s_hidden", s.hidden.joinToString(",")).putString("s_moved", s.moved.entries.joinToString(",") { it.key + "=" + it.value }).putBoolean("s_groups_saved", true).putBoolean("s_apps_saved", true).putBoolean("s_status_phone_saved", true).apply()
     }
 }
