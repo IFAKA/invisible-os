@@ -74,7 +74,7 @@ interface ModeOutput {
     fun codeCount(): Int             // successful code actions so far (persisted); learning mode while < 15
     fun setCodeCount(n: Int)
     fun background(work: () -> Unit, done: () -> Unit) { work(); done() }   // heavy work off the main thread; [done] runs on the main thread
-    fun findHintSeen(): Boolean = true   // "Find. Pick the app, or a letter." is said only once
+    fun findHintSeen(): Boolean = true   // "Find. Pick the first letter." is said only once
     fun setFindHintSeen() {}
     fun loadReactions(): String = ""   // saved reaction samples (see ReactionGap.encode)
     fun saveReactions(text: String) {}
