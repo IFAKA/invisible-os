@@ -106,6 +106,7 @@ class NeuralSpeech(
     private var trk: AudioTrack? = null
     private var trkRate = 0
     private var frames = 0L
+    private var lastWrite = 0L
     private var waited = 0L   // ms this thread slept waiting for the speaker (not synthesis time)
 
     private fun loop() {
@@ -153,23 +154,24 @@ class NeuralSpeech(
     }
 
     private fun newTrack(sr: Int): AudioTrack {
-        val min = AudioTrack.getMinBufferSize(sr, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
+        val min = AudioTrack.getMinBufferSize(sr, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
         return AudioTrack.Builder()
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-            .setAudioFormat(AudioFormat.Builder().setSampleRate(sr).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_FLOAT).build())
-            .setBufferSizeInBytes(maxOf(min, sr * 4 / 2)).setTransferMode(AudioTrack.MODE_STREAM).build()   // about 0.5 s of buffer
+            .setAudioFormat(AudioFormat.Builder().setSampleRate(sr).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())   // 16-bit like the tones: float tracks never started on this phone
+            .setBufferSizeInBytes(maxOf(min, sr)).setTransferMode(AudioTrack.MODE_STREAM).build()   // about 0.5 s of buffer
             .also { if (android.os.Build.VERSION.SDK_INT >= 31) it.setStartThresholdInFrames(sr / 50) }   // start after 20 ms: a short word (less than the buffer) used to wait for more data and was never heard
     }
 
     /** Non-blocking writes in a loop, so a cut (pause + flush from another thread) can never leave this thread stuck. */
     private fun write(u: Utt, a: FloatArray): Boolean {
         val t = trk ?: return false
+        val pcm = ShortArray(a.size) { (a[it].coerceIn(-1f, 1f) * 32767f).toInt().toShort() }
         var off = 0
-        while (off < a.size) {
+        while (off < pcm.size) {
             if (stale(u)) return false
-            val n = t.write(a, off, a.size - off, AudioTrack.WRITE_NON_BLOCKING)
+            val n = t.write(pcm, off, pcm.size - off, AudioTrack.WRITE_NON_BLOCKING)
             if (n < 0) return false
-            off += n; frames += n
+            off += n; frames += n; lastWrite = System.currentTimeMillis()
             if (n == 0) { Thread.sleep(10); waited += 10 }
         }
         return true
@@ -180,8 +182,11 @@ class NeuralSpeech(
         val t = trk ?: return
         try { t.stop() } catch (e: Exception) {}   // streaming: plays out what is queued, so a short word cannot stay unplayed
         val end = System.currentTimeMillis() + 15_000
-        while (!stale(u) && t.playbackHeadPosition < frames && System.currentTimeMillis() < end) Thread.sleep(15)
-        if (!stale(u) && t.playbackHeadPosition < frames) Log.w(TAG, "drain timed out: head=${t.playbackHeadPosition} written=$frames state=${t.playState}")
+        while (!stale(u) && t.playbackHeadPosition < frames && System.currentTimeMillis() < end) {
+            if (t.playbackHeadPosition == 0 && System.currentTimeMillis() > lastWrite + 700) break   // the head position never moves on some phones: what is queued is at most 0.5 s
+            Thread.sleep(15)
+        }
+        if (!stale(u) && t.playbackHeadPosition in 1 until frames) Log.w(TAG, "drain timed out: head=${t.playbackHeadPosition} written=$frames state=${t.playState}")
         dropTrack()
     }
 
