@@ -41,6 +41,8 @@ object TypeVoice {
     val WORDS = f("Words")
     val WORDS_WITH = f("Words with")
     /** "Words with a b c": the letters chosen so far, spoken one by one. */
-    fun spelled(prefix: String) = f(prefix.toCharArray().joinToString(" "))
-    fun wordsWith(prefix: String) = f(WORDS_WITH.text + " " + prefix.toCharArray().joinToString(" "))
+    fun spelled(prefix: String) = f(letterByLetter(prefix))
+    fun wordsWith(prefix: String) = f(WORDS_WITH.text + ": " + letterByLetter(prefix))
+    /** "A, B, C": capitals and commas make the voice say each letter alone, with a short pause (a bare "a b c" runs together and "a" is read as a word). */
+    private fun letterByLetter(prefix: String) = prefix.uppercase().toCharArray().joinToString(", ")
 }

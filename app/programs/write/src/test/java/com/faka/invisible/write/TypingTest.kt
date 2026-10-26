@@ -159,7 +159,7 @@ class TypingTest {
     @Test fun aReplayWhileSpellingSaysTheLettersSoFarFirst() {
         spellOneLetterWithNoWordsKnown(); said.clear()
         t.advance(TypeProgram.REPLAY_MS + 50)
-        assertEquals(1, said.size); assertEquals("a", said.last())
+        assertEquals(1, said.size); assertEquals("A", said.last())
     }
 
     @Test fun spelledWordsAreNotLearned() {
