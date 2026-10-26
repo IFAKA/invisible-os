@@ -23,6 +23,10 @@ class TtsSpeech(
     private val listener: SpeechListener,
 ) : SpeechPort {
     private val tag = "Invisible"
+    private companion object {
+        /** Recorded clips are OFF: a recorded voice for fixed words and the phone's voice for the rest sounded like two people. One voice for everything. */
+        const val CLIPS = false
+    }
     private var tts: TextToSpeech? = null
     private var ready = false
     private var uttSeq = 0
@@ -68,7 +72,7 @@ class TtsSpeech(
         val text = p.text; val lang = p.lang
         Log.d(tag, "SPEAK[$lang] $text ready=$ready fast=$fast")
         if (!ready) { handler.post { listener.ended() }; return }
-        if (p.isFixed && !fast && sayClip(p, queue)) return   // the recorded voice; free text (messages, tasks) always uses the live voice
+        if (CLIPS && p.isFixed && !fast && sayClip(p, queue)) return   // the recorded voice; free text (messages, tasks) always uses the live voice
         if (!queue) stopClips()
         val spKey = Spearcon.key(text, lang)
         if (fast) spearcon(spKey)?.let { sp ->

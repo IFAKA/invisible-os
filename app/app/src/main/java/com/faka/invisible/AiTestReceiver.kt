@@ -10,6 +10,7 @@ class AiTestReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         i.getStringExtra("dl")?.let { l -> Thread { MlKitTranslator.download(l); android.util.Log.d("Invisible", "translate models requested for en+$l") }.start(); return }
         if (i.hasExtra("pairtest")) { Actions.pairTest(); return }
+        i.getStringExtra("ttsbench")?.let { com.faka.invisible.voicekit.TtsBench.run(c, it.ifBlank { null }, i.getStringExtra("lang") ?: "en", i.getStringExtra("text") ?: "This is a test of the voice on this phone."); return }
         if (i.hasExtra("swap")) { Actions.setSwapEars(i.getBooleanExtra("swap", true)); return }
         if (i.hasExtra("write")) { Actions.startWriteDev(); return }
         val pr = goAsync(); val ctx = c.applicationContext
