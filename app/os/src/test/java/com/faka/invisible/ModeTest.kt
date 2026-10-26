@@ -724,9 +724,9 @@ class ModeTest {
         assertFalse(r.has("vol"))   // opening changes nothing
         r.click(Gesture.SINGLE); assertEquals(1, r.count("vol true")); assertEquals(0, r.count("vol false"))   // one click: one step louder
         r.click(Gesture.DOUBLE); assertEquals(1, r.count("vol false"))   // two clicks: one step quieter
-        r.clearLog(); r.m.onGesture(Gesture.CLICK_HOLD); r.advance(600); r.m.onGesture(Gesture.CLICK_HOLD_END, 600)
+        r.clearLog(); r.m.onGesture(Gesture.CLICK_HOLD); r.advance(1400); r.m.onGesture(Gesture.CLICK_HOLD_END, 700)   // the release does not stop it
         assertTrue(r.count("vol false") >= 3); assertFalse(r.has("vol true"))   // a hold only goes quieter
-        val n = r.count("vol false"); r.advance(2000); assertEquals(n, r.count("vol false"))   // it stops on release
+        r.click(Gesture.SINGLE); val n = r.count("vol false"); r.advance(3000); assertEquals(n, r.count("vol false")); assertFalse(r.has("vol true"))   // a press stops it, and is not a step louder
         r.click(Gesture.TRIPLE); assertEquals(ControllerMode.Screen.MUSIC, r.m.screen)
     }
 

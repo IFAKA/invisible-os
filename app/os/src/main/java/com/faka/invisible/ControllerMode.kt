@@ -207,7 +207,7 @@ class ControllerMode(
 
     /** [lastPressMs] = length of the last press; with the gesture gap it gives the time of the first press. */
     fun onGesture(g0: Gesture, lastPressMs: Long = 0) {
-        if (g0 == Gesture.CLICK_HOLD_END) { if (dialHolding) endDialHold() else endFast(); return }
+        if (g0 == Gesture.CLICK_HOLD_END) { if (dialHolding) return else endFast(); return }   // the dial: the earbud ends a hold after ~0.7 s even if you keep pressing, so the release does not stop it; a press does
         if (active && screen == Screen.VOLUME_DIAL && phase == Phase.WAIT && g0 != Gesture.HOLD) { dial(g0); return }   // click then hold (HOLD) still closes the OS
         // The detector sends a plain hold as CLICK_HOLD (fast scroll, only while options are read) and click-then-hold as HOLD (exit):
         // exit needs the harder gesture so it is never an accident. Idle: a plain hold wakes. Active outside a list: a plain hold does nothing.
@@ -778,10 +778,11 @@ class ControllerMode(
         Opt(key, Phrase.content(t.text.take(MAX_SPOKEN), t.lang.ifEmpty { null })) { pick(key); onPick(t) }
     }
 
-    // ---- the volume dial (Music > Volume): no list, the song plays on. Hold = quieter while down, 1 click = one step louder, 2 clicks = one step quieter, 3 clicks = back.
+    // ---- the volume dial (Music > Volume): no list, the song plays on. Hold = quieter, step after step until a press or the bottom, 1 click = one step louder, 2 clicks = one step quieter, 3 clicks = back.
     // Louder is only ever one step per click (never repeats), so a loud mistake costs one step and the next gesture fixes it.
     private var dialHolding = false
     private fun dial(g: Gesture) {
+        if (dialHolding && g != Gesture.CLICK_HOLD) { stopDial(); return }   // any press stops the descent (and does nothing else)
         when (g) {
             Gesture.SINGLE -> dialStep(true)
             Gesture.DOUBLE -> dialStep(false)
@@ -812,7 +813,7 @@ class ControllerMode(
     /** One of five notes: low pitch = quiet, high = loud. */
     private fun levelTone(n: Int) = Tone.valueOf("LVL" + (1 + n * 5 / (out.volumeMax() + 1)).coerceIn(1, 5))
 
-    private fun endDialHold() {
+    private fun stopDial() {
         timers.clear("dial"); dialHolding = false
         say(Voice.level(out.volumeLevel()))
     }
@@ -1030,7 +1031,7 @@ class ControllerMode(
     companion object {
         /** Pause between scanned items, from the end of one item's speech to the start of the next. Easy to change. */
         const val SKIP_MS = Pacing.SKIP_MS   // two clicks while scanning: how soon the previous option starts
-        const val DIAL_STEP_MS = 250L   // volume dial: one step quieter every this long while the button is held
+        const val DIAL_STEP_MS = 450L   // volume dial: one step quieter every this long after a hold, until a press
         const val ITEM_GAP_MS = Pacing.ITEM_GAP_MS
         const val FIND_MS = 20_000L   // "Find my phone" rings this long
         const val SPEARCON_AFTER = 30   // picks of one option, then it is scanned as a sped-up spearcon
