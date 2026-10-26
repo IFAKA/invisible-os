@@ -341,19 +341,21 @@ class ModeTest {
         r.advance(60_000); assertFalse(r.m.active)
     }
 
-    @Test fun twoClicksSkipToTheNextOptionAtOnce() {
-        val r = Rig(); r.wake(); r.advance(3100)   // Status is being spoken
+    @Test fun twoClicksGoToThePreviousOptionAtOnce() {
+        val r = Rig(); r.wake(); r.advance(3100)   // the second option is being spoken
+        val before = r.spoken(); assertTrue(before.size >= 3)
         r.clearLog(); r.skip()
         assertTrue(r.m.active); assertEquals(ControllerMode.Screen.HUB, r.m.screen)
         r.advance(150)                              // no pause: far sooner than the 800 ms gap
-        assertEquals(listOf("say Games"), r.spoken())
-        r.advance(600); r.click(); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
+        assertEquals(before[before.size - 2], r.spoken().single())   // the one before the third
     }
 
-    @Test fun skippingPastTheLastOptionStartsOver() {
-        val r = Rig(); r.wake(); r.advance(3100 + 1300)   // Games (the last) is being spoken
+    @Test fun twoClicksOnTheFirstOptionGoToTheLast() {
+        val w = Rig(); w.wake(); w.advance(60_000 / 4)
+        val order = w.spoken().distinct()   // every option, in reading order
+        val r = Rig(); r.wake();         r.advance(1100)    // the first option (Timer) is spoken
         r.clearLog(); r.skip(); r.advance(150)
-        assertEquals(listOf("say Timer"), r.spoken())
+        assertEquals(order.last(), r.spoken().last())
     }
 
     @Test fun threeClicksGoBackOneLevelAndAtTheTopLeave() {
@@ -874,7 +876,7 @@ class ModeTest {
     @Test fun learningModeSpeaksOneHintAtWakeThenOptions() {
         val r = Rig(); r.codes = 0; r.wake()
         r.advance(400)
-        assertEquals(listOf("say Click when you hear it. Two clicks: next. Three clicks: go back."), r.spoken())
+        assertEquals(listOf("say Click when you hear it. Two clicks: back one. Three clicks: go up."), r.spoken())
         r.advance(500); assertEquals("say Timer", r.spoken().last())
         r.advance(60_000); assertEquals(1, r.spoken().count { it.contains("Click when you") })
     }

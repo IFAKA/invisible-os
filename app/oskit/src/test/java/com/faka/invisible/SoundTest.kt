@@ -39,6 +39,7 @@ class SoundTest {
 
     @Test fun resultTonesDiffer() {
         val a = Earcons.pcm(Tone.PICK).toList(); val b = Earcons.pcm(Tone.AGAIN).toList(); val c = Earcons.pcm(Tone.BACK).toList()
+        assertNotEquals(Earcons.pcm(Tone.AGAIN).toList(), Earcons.pcm(Tone.STEP_BACK).toList())
         assertNotEquals(a, b); assertNotEquals(b, c); assertNotEquals(a, c)
     }
 

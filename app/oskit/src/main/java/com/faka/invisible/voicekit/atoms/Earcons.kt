@@ -35,7 +35,8 @@ object Earcons {
         Tone.MESSAGE to page, Tone.TIMER to page, Tone.MORE to page, Tone.VOLUME to page,
         Tone.PICK to run(listOf("C5", "E5"), 55, 160, .40),                 // 1 click: up
         Tone.RESTART to run(listOf("G4", "C5", "E5"), 70, 200, .32),        // rises from below: the list starts over (also 2 clicks)
-        Tone.AGAIN to run(listOf("C5", "E5"), 50, 120, .30),                // 2 clicks: a short step up = next now
+        Tone.AGAIN to run(listOf("C5", "E5"), 50, 120, .30),                // 2 clicks outside a list: a short step up
+        Tone.STEP_BACK to run(listOf("E5", "C5"), 50, 120, .30),           // 2 clicks in a list: a short step down = the previous item now
         Tone.BACK to run(listOf("G5", "E5", "C5"), 60, 160, .35),           // 3 clicks: down
         Tone.UNDO to run(listOf("C5", "E5", "G5"), 70, 160, .22),           // quiet: you can still cancel
         Tone.SENT to run(listOf("C5", "G5", "C6"), 90, 700, .45),           // up, rings out: done
@@ -54,7 +55,7 @@ object Earcons {
     private val LEVEL = mapOf(
         Tone.TAP to -26.0, Tone.TICK to -24.0,
         Tone.MESSAGE to -20.0, Tone.TIMER to -20.0, Tone.MORE to -20.0, Tone.VOLUME to -20.0,
-        Tone.PICK to -17.0, Tone.AGAIN to -18.0, Tone.BACK to -17.0, Tone.RESTART to -17.0, Tone.UNDO to -22.0,
+        Tone.PICK to -17.0, Tone.AGAIN to -18.0, Tone.STEP_BACK to -18.0, Tone.BACK to -17.0, Tone.RESTART to -17.0, Tone.UNDO to -22.0,
         Tone.DING to -22.0, Tone.ARRIVE to -20.0, Tone.ARRIVE_FAV to -17.0,
         Tone.HUB to -14.0, Tone.SENT to -13.0, Tone.CANCEL to -17.0, Tone.LEAVE to -18.0, Tone.EXIT to -18.0,
         Tone.UNKNOWN to -16.0, Tone.ALARM to -10.0, Tone.WAIT to -27.0,

@@ -78,6 +78,9 @@ class Scanner<T>(
     /** A click: the item after the current one, after [delayMs]; the silent loops count again from zero. */
     fun nextIn(delayMs: Long) { list.resetLoops(); speakItemIn(delayMs, list.nextIndex()) }
 
+    /** Two clicks: the item before the current one, after [delayMs]; before the first, the last. The silent loops count again from zero. */
+    fun prevIn(delayMs: Long) { list.resetLoops(); speakItemIn(delayMs, list.prevIndex()) }
+
     /** From the first item, after [delayMs]; the silent loops count again from zero. */
     fun restartIn(delayMs: Long) { list.resetLoops(); speakItemIn(delayMs, 0) }
 

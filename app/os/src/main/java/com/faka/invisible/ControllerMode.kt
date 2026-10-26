@@ -233,7 +233,7 @@ class ControllerMode(
             Gesture.TRIPLE -> { stopAll(); out.choice(screen.name, 3, "back", ""); back() }
             Gesture.DOUBLE -> when (phase) {
                 Phase.OUTRO -> { stopAll(); exit(true) }
-                else -> again()   // two clicks while scanning: the next option now
+                else -> again()   // two clicks while scanning: the previous option now
             }
             Gesture.SINGLE -> when (phase) {
                 Phase.SCAN -> {   // one click chooses the option spoken last
@@ -382,8 +382,8 @@ class ControllerMode(
         scanner.itemDone()
     }
 
-    /** Two clicks while scanning: the next option right now (after the last one, the first). In the other phases (two clicks): the list again from the first. */
-    /** True while the options are being read: there one click chooses and two clicks move on (the tones follow). */
+    /** Two clicks while scanning: the previous option right now (before the first one, the last). In the other phases (two clicks): the list again from the first. */
+    /** True while the options are being read: there one click chooses and two clicks go one back (the tones follow). */
     fun scanning() = active && phase == Phase.SCAN
 
     // ---- fast scroll: click, then hold ----
@@ -409,7 +409,7 @@ class ControllerMode(
                 curIntro?.msgId?.let { heard.add(it) }; intro.clear(); curIntro = null; beginScan()
             }
             Phase.WAIT -> { val n = waitNext; n?.invoke() }
-            Phase.SCAN -> { phase = Phase.SCAN; scanner.nextIn(SKIP_MS) }   // the next option now, at the user's own pace
+            Phase.SCAN -> { phase = Phase.SCAN; scanner.prevIn(SKIP_MS) }   // the previous option now, at the user's own pace
             else -> { tn(Tone.RESTART); phase = Phase.SCAN; history.clear(); scanner.restartIn(toneGapMs - tickLeadMs) }
         }
     }
@@ -981,7 +981,7 @@ class ControllerMode(
 
     companion object {
         /** Pause between scanned items, from the end of one item's speech to the start of the next. Easy to change. */
-        const val SKIP_MS = Pacing.SKIP_MS   // two clicks while scanning: how soon the next option starts
+        const val SKIP_MS = Pacing.SKIP_MS   // two clicks while scanning: how soon the previous option starts
         const val ITEM_GAP_MS = Pacing.ITEM_GAP_MS
         const val FIND_MS = 20_000L   // "Find my phone" rings this long
         const val SPEARCON_AFTER = 30   // picks of one option, then it is scanned as a sped-up spearcon

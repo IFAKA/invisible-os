@@ -16,6 +16,12 @@ class ScanListTest {
         assertTrue(s.isLast); assertEquals(0, s.nextIndex())
     }
 
+    @Test fun prevWraps() {
+        val s = l()
+        assertEquals(2, s.prevIndex()); s.moveTo(2)
+        assertEquals(1, s.prevIndex())
+    }
+
     @Test fun loopsCount() {
         val s = l()
         assertEquals(1, s.endLoop()); assertEquals(2, s.endLoop())

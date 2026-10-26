@@ -58,7 +58,7 @@ object Voice {
     // idle:    1 = play/pause, 2 = next, 3 = previous, hold = wake
     // in a list: hold = fast scroll (first words), release = that option in full; elsewhere a plain hold does nothing
     // in menu: 1 = pick the option just spoken, 2 = one back, 3 = back, 4 = leave, click then hold = exit; any click cancels a pending send
-    val HINT = f("Click when you hear it. Two clicks: next. Three clicks: go back.")
+    val HINT = f("Click when you hear it. Two clicks: back one. Three clicks: go up.")
     val FIND_HINT = f("Find. Pick the first letter.")   // said the first time only
     val GESTURE_HELP = f("In the menu: click when you hear the option. 2 = one back, 3 = back, 4 = leave. Click then hold = exit.")
     fun timerSet(minutes: Int) = f("Timer $minutes minutes")

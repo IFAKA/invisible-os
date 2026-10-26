@@ -11,7 +11,7 @@ It uses **auto-scan** (also called single-switch scanning, the method used in as
 | Gesture | Phone idle or music playing | Inside the menu |
 |---|---|---|
 | 1 click | Play / pause | Pick the option you just heard |
-| 2 clicks | Next track | Start the list again |
+| 2 clicks | Next track | Previous item in a list |
 | 3 clicks | Previous track | Go back one level |
 | Hold | Wake the menu (works on the lock screen) | Leave / exit |
 

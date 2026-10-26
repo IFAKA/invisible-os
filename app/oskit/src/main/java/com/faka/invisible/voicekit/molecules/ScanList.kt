@@ -20,6 +20,9 @@ class ScanList<T>(val items: List<T>) {
     /** The index after the current one; after the last, the first. */
     fun nextIndex() = if (index + 1 < items.size) index + 1 else 0
 
+    /** The index before the current one; before the first, the last. */
+    fun prevIndex() = if (index > 0) index - 1 else items.size - 1
+
     fun moveTo(i: Int) { index = i }
     fun resetLoops() { loops = 0 }
 
