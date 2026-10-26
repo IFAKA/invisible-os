@@ -109,7 +109,8 @@ object Actions {
             override fun openApp(pkg: String) = DeviceApps.open(app, pkg)
             override fun notifMutedCount() = ControllerNotificationListener.mutes.all().size
             override fun notifUnmuteAll() = ControllerNotificationListener.unmuteAll()
-            override fun startNotifReply(key: String, index: Int) = launchWrite { text -> ControllerNotificationListener.fireAction(key, index, text, app) }
+            override fun startNotifReply(key: String, index: Int) = launchWrite({ text -> ControllerNotificationListener.fireAction(key, index, text, app) },
+                ControllerNotificationListener.notifs.get(key)?.takeUnless { it.hidden }?.text)
             override fun status(): Status {
                 val c = Calendar.getInstance()
                 val b = app.getSystemService(BatteryManager::class.java).getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -208,8 +209,9 @@ object Actions {
     /** Dev tool (AiTestReceiver): start Write into the field that has focus, as the hub item does. */
     fun startWriteDev() { handler.post { launchWrite() } }
 
-    /** [sendTo] = Write for a notification reply: the written text goes to that action instead of the focused field. */
-    private fun launchWrite(sendTo: ((String) -> Boolean)? = null) {
+    /** [sendTo] = Write for a notification reply: the written text goes to that action instead of the focused field.
+     *  [heard] = the message being answered; the reply language comes from it, because the screen is off and shows no chat. */
+    private fun launchWrite(sendTo: ((String) -> Boolean)? = null, heard: String? = null) {
         typer?.stop()
         Thread({
             val lm = wordModel()
@@ -223,10 +225,10 @@ object Actions {
                 Log.d(TAG, "WRITE frame app=${frame.app} kind=${frame.kind} field=${frame.field} thread=${frame.thread} around=${frame.around.size} before=${frame.before.length}")
                 chatLang = null
                 Thread({   // the language of the place, from what is on the screen and in the field; unknown means nothing to translate
-                    val seen = (frame.around + frame.before).joinToString(" ")
+                    val seen = if (sendTo != null) heard.orEmpty() else (frame.around + frame.before).joinToString(" ")
                     val lang = if (seen.length >= 12) MlKitLangDetector().detect(seen) else null
                     handler.post { chatLang = lang?.takeIf { it != "und" } }
-                    if (lang != null && lang != "und" && lang != "en" && MlKitTranslator.code(lang) != null && frame.kind == FieldKind.TEXT && !MlKitTranslator.hasModel(lang)) MlKitTranslator.download(lang)
+                    if (lang != null && lang != "und" && lang != "en" && MlKitTranslator.code(lang) != null && (sendTo != null || frame.kind == FieldKind.TEXT) && !MlKitTranslator.hasModel(lang)) MlKitTranslator.download(lang)
                     Log.d(TAG, "WRITE chat language $lang")
                 }, "write-lang").start()
                 val out = object : TypeOut {
@@ -258,7 +260,7 @@ object Actions {
                     override fun written(text: String) { buckets.learn(frame, text.split(' ').filter { it.isNotEmpty() }, text) }
                     override fun translate(text: String, then: (Translation) -> Unit) {
                         val target = chatLang
-                        if (frame.kind != FieldKind.TEXT || target == null || target == "en") { then(Translation.Same); return }
+                        if ((sendTo == null && frame.kind != FieldKind.TEXT) || target == null || target == "en") { then(Translation.Same); return }
                         phraseWorker.execute {
                             val r: Translation = when {
                                 MlKitTranslator.code(target) == null -> Translation.Failed(TypeVoice.TRANSLATION_FAILED)
