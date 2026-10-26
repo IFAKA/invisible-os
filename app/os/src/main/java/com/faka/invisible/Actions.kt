@@ -106,6 +106,7 @@ object Actions {
             override fun pauseMusic() = pauseMusicNow()
             override fun resumeMusic() = resumeMusicNow()
             override fun volume(up: Boolean) = adjustVolume(up)
+            override fun volumeMax() = app.getSystemService(AudioManager::class.java).getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             override fun volumeLevel() = app.getSystemService(AudioManager::class.java).getStreamVolume(AudioManager.STREAM_MUSIC)
             override fun startTimer(minutes: Int) = startTimerNow(minutes)
             override fun setAlarm(hour: Int, minute: Int) = setAlarmNow(hour, minute)

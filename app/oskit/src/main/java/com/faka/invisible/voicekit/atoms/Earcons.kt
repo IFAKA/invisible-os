@@ -31,6 +31,8 @@ object Earcons {
     private val spec: Map<Tone, List<N>> = mapOf(
         Tone.TAP to one("C6", 20, .14, V.WOOD),
         Tone.TICK to one("G5", 25, .25, V.WOOD),
+        Tone.LVL1 to one("G4", 60, .30, V.WOOD), Tone.LVL2 to one("C5", 60, .30, V.WOOD), Tone.LVL3 to one("E5", 60, .30, V.WOOD),   // volume dial: the pitch is the level (low = quiet)
+        Tone.LVL4 to one("G5", 60, .30, V.WOOD), Tone.LVL5 to one("C6", 60, .30, V.WOOD),
         Tone.HUB to run(listOf("C5", "G5"), 100, 450, .45),                 // open: up a fifth
         Tone.MESSAGE to page, Tone.TIMER to page, Tone.MORE to page, Tone.VOLUME to page,
         Tone.PICK to run(listOf("C5", "E5"), 55, 160, .40),                 // 1 click: up
@@ -53,7 +55,7 @@ object Earcons {
 
     /** Peak level of each tone in dBFS. The speech clips peak at about -2. UI feedback is much quieter than results. */
     private val LEVEL = mapOf(
-        Tone.TAP to -26.0, Tone.TICK to -24.0,
+        Tone.TAP to -26.0, Tone.TICK to -24.0, Tone.LVL1 to -22.0, Tone.LVL2 to -22.0, Tone.LVL3 to -22.0, Tone.LVL4 to -22.0, Tone.LVL5 to -22.0,
         Tone.MESSAGE to -20.0, Tone.TIMER to -20.0, Tone.MORE to -20.0, Tone.VOLUME to -20.0,
         Tone.PICK to -17.0, Tone.AGAIN to -18.0, Tone.STEP_BACK to -18.0, Tone.BACK to -17.0, Tone.RESTART to -17.0, Tone.UNDO to -22.0,
         Tone.DING to -22.0, Tone.ARRIVE to -20.0, Tone.ARRIVE_FAV to -17.0,

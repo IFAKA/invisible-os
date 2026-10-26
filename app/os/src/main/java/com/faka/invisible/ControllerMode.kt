@@ -27,6 +27,7 @@ interface ModeOutput {
     fun resumeMusic()                // resume what pauseMusic paused (skips if user started something else)
     fun volume(up: Boolean)          // music volume step (the mode speaks the level)
     fun volumeLevel(): Int           // current media volume index, as is (0..device max)
+    fun volumeMax(): Int = 15        // the device's top index
     fun startTimer(minutes: Int)
     fun setAlarm(hour: Int, minute: Int): Boolean = false   // a wake-up alarm at this time; false = it could not be set
     fun stopAlarm()
@@ -330,7 +331,7 @@ class ControllerMode(
         curIntro = null
         if (s == Screen.VOLUME_DIAL) {   // no list: the song plays on and the button is the dial
             phase = Phase.WAIT; waitNext = null
-            if (learning()) timers.set("scan", toneGapMs) { say(Voice.DIAL_HINT) }
+            timers.set("scan", toneGapMs) { say(Voice.level(out.volumeLevel())); timers.set("scan", 900) { say(Voice.DIAL_HINT) } }   // the level, then what to do
             return
         }
         timers.set("scan", toneGapMs) { nextIntro() }
@@ -691,7 +692,7 @@ class ControllerMode(
             toggle("shuffle", "Shuffle"), toggle("repeat", "Repeat"),
             Opt("music:radio", Menu.RADIO) { pick("music:radio"); out.musicRadio(); outro(Menu.RADIO) })
         val volume = Opt("music:volume", Menu.VOLUME) { pick("music:volume"); show(Screen.VOLUME_DIAL) }
-        return ctl + volume + listOf(Opt("music:play", Menu.PLAY_SOMETHING) { pick("music:play"); show(Screen.MUSIC_PLAY) })
+        return listOf(volume) + ctl + listOf(Opt("music:play", Menu.PLAY_SOMETHING) { pick("music:play"); show(Screen.MUSIC_PLAY) })
     }
 
     private fun musicPlayOptions(): List<Opt> = listOf(
@@ -804,8 +805,12 @@ class ControllerMode(
         val before = out.volumeLevel()
         out.volume(false)
         if (out.volumeLevel() == before) { dialHolding = false; tn(Tone.CANCEL); return }   // the bottom: stop
+        tn(levelTone(out.volumeLevel()))
         timers.set("dial", DIAL_STEP_MS) { dialDown() }
     }
+
+    /** One of five notes: low pitch = quiet, high = loud. */
+    private fun levelTone(n: Int) = Tone.valueOf("LVL" + (1 + n * 5 / (out.volumeMax() + 1)).coerceIn(1, 5))
 
     private fun endDialHold() {
         timers.clear("dial"); dialHolding = false
