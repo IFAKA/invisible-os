@@ -95,7 +95,7 @@ class MainActivity : Activity() {
     private fun doStep(id: String) {
         fun ask(p: String) = requestPermissions(arrayOf(p), 1)
         when (id) {
-            "button" -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            "button" -> if (sp.getBoolean("a11y_agreed", false)) startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) else { disclosure = true; render() }
             "notif" -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             "assist" -> startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
             "post" -> ask(Manifest.permission.POST_NOTIFICATIONS)
@@ -107,7 +107,22 @@ class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) { render() }
 
+    private var disclosure = false
+
+    /** Shown before the Button access step opens Settings: says in plain words what the accessibility service does. */
+    private fun disclosureCard() {
+        k.banner(body, "Before you turn on Button access",
+            "This app uses an Android accessibility service. It reads only the key presses of your earbud button. " +
+            "It does not read what is on your screen, and it reads no messages or passwords. " +
+            "The one exception is the Write keyboard: only while you use it, the app looks at the text field you are typing in and the words around it, to help you write, and it types your text there. " +
+            "None of this leaves the phone. Nothing is sent to anyone.", Ui.accent) {
+            addView(k.bannerBtn("Agree") { sp.edit().putBoolean("a11y_agreed", true).apply(); disclosure = false; render(); startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
+            addView(k.bannerBtn("Not now") { disclosure = false; render() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
+        }
+    }
+
     private fun home() {
+        if (disclosure) { body.addView(k.text("Invisible", 30f, bold = true)); disclosureCard(); return }
         val notif = (Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: "").contains(packageName)
         val assist = (Settings.Secure.getString(contentResolver, "assistant") ?: "").contains(packageName)
         val a11y = Actions.accessibilityConnected

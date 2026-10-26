@@ -1,3 +1,3 @@
 <resources>
-    <string name="a11y_desc">Reads the earbud button (also long press) so Invisible can run actions with the screen off.</string>
+    <string name="a11y_desc">Reads only your earbud button presses so Invisible can run actions with the screen off. Only when you use the Write keyboard, it reads the text field you are typing in and puts your text there. Nothing is sent off the phone.</string>
 </resources>

@@ -34,7 +34,7 @@ class PracticeProgram : Program {
         running = true
         host.prefs.edit().putBoolean(DONE_KEY, true).apply()   // it ran once: never again by itself
         host.pauseMusic()
-        host.speak(PracticeVoice.INTRO)
+        host.speak(PracticeVoice.INTRO, true)
     }
 
     override fun stop() = finish()
@@ -60,12 +60,12 @@ class PracticeProgram : Program {
         VoiceKit.narrator.beep(Tone.PICK)
         val n = PracticeCore.next(step, g) ?: return
         step = n
-        host.speak(when (n) { PracticeStep.TWO -> PracticeVoice.TWO; PracticeStep.THREE -> PracticeVoice.THREE; else -> PracticeVoice.CLOSE })
+        host.speak(when (n) { PracticeStep.TWO -> PracticeVoice.TWO; PracticeStep.THREE -> PracticeVoice.THREE; else -> PracticeVoice.CLOSE }, true)
     }
 
     private fun repeat() {
         if (++idle > PracticeCore.MAX_IDLE) { finish(); return }
-        host.speak(when (step) { PracticeStep.ONE -> PracticeVoice.AGAIN_ONE; PracticeStep.TWO -> PracticeVoice.AGAIN_TWO; PracticeStep.THREE -> PracticeVoice.AGAIN_THREE; PracticeStep.CLOSE -> PracticeVoice.AGAIN_CLOSE })
+        host.speak(when (step) { PracticeStep.ONE -> PracticeVoice.AGAIN_ONE; PracticeStep.TWO -> PracticeVoice.AGAIN_TWO; PracticeStep.THREE -> PracticeVoice.AGAIN_THREE; PracticeStep.CLOSE -> PracticeVoice.AGAIN_CLOSE }, true)
     }
 
     private fun finish() {
@@ -80,7 +80,7 @@ class PracticeProgram : Program {
     companion object {
         const val DONE_KEY = "practice_done"
         private const val LEAVE_MS = 3000L
-        private const val IDLE_MS = 8000L
+        private const val IDLE_MS = 10000L   // quiet after a prompt before it is repeated: time to find the button and press
     }
 }
 

@@ -271,7 +271,13 @@ object Actions {
         }
     }
     /** The first-run practice (runs by itself the first time the OS is woken; the Help page replays it). */
-    fun startPractice() { handler.post { startProgramEntry(PracticeEntry.entry) } }
+    fun startPractice() {
+        handler.post {
+            startProgramEntry(PracticeEntry.entry)
+            // When the practice ends, go straight to the home menu (no second hold needed).
+            backAfterEnd = { gameEnded(); handler.postDelayed({ if (running == null && !mode.active) mode.onGesture(Gesture.HOLD, 0) }, 1500); true }
+        }
+    }
     fun startDev(name: String) = handler.post { Programs.byDevName(name)?.let { startProgramEntry(it) } }
 
     /** Dev: drive the music session directly: "uri:<url>" or "search:<query>". */
