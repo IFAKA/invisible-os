@@ -213,10 +213,10 @@ class MainActivity : Activity() {
         treeCard()
         card("Order and speed") {
             addView(k.row(k.grow(k.text("Reply options: put the ones you pick most first (automatic)", 14f, Ui.soft)),
-                Switch(this@MainActivity).apply { isChecked = s.learnOrder; setOnCheckedChangeListener { _, v -> change(s.copy(learnOrder = v)) } }),
+                k.toggle("Reply options by use", s.learnOrder) { v -> change(s.copy(learnOrder = v)) }),
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
             addView(k.row(k.grow(k.text("Speak well-known options as a fast sound (spearcon)", 14f, Ui.soft)),
-                Switch(this@MainActivity).apply { isChecked = s.spearcons; setOnCheckedChangeListener { _, v -> change(s.copy(spearcons = v)) } }),
+                k.toggle("Fast sound for known options", s.spearcons) { v -> change(s.copy(spearcons = v)) }),
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
         }
 
@@ -254,7 +254,7 @@ class MainActivity : Activity() {
     private fun aiPage() {
         card("AI on the phone", "Writes reply sentences and clean tasks from a message. It runs on the phone, no network use after the download, and it never listens.") {
             addView(k.row(k.grow(k.text("Use AI for replies and tasks", 14f, Ui.soft)),
-                Switch(this@MainActivity).apply { isChecked = s.ai; setOnCheckedChangeListener { _, v -> change(s.copy(ai = v)); if (v) ModelDownload.start(applicationContext) { EventLog.refresh() } } }),
+                k.toggle("Use AI for replies and tasks", s.ai) { v -> change(s.copy(ai = v)); if (v) ModelDownload.start(applicationContext) { EventLog.refresh() } }),
                 LinearLayout.LayoutParams(-1, -2))
             if (s.ai) {
                 val ready = ModelDownload.ready(this@MainActivity)
@@ -271,14 +271,14 @@ class MainActivity : Activity() {
         card("How to use it") {
             addView(k.text("Music playing or phone idle: click = play/pause, 2 = next, 3 = previous.\n" +
                 "Hold: wake the menu.\n" +
-                com.faka.invisible.voicekit.Voice.GESTURE_HELP.text, 14f, Ui.soft))
+                com.faka.invisible.voicekit.Voice.GESTURE_HELP.text, 16f).apply { setLineSpacing(0f, 1.25f); setPadding(0, k.dp(6), 0, 0) })
         }
 
         card("Last button presses") {
-            addView(k.text(EventLog.items.joinToString("\n").ifEmpty { "None yet. Press your button." }, 14f, Ui.soft))
+            addView(k.text(EventLog.items.joinToString("\n").ifEmpty { "None yet. Press your button." }, 15f, Ui.soft).apply { setLineSpacing(0f, 1.2f) })
         }
 
-        body.addView(k.btn("Reset settings") { change(LauncherSettings()) }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = k.dp(12) })
+        body.addView(k.btn("Reset settings") { k.confirm("Reset all settings?", "Reset") { change(LauncherSettings()) } }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = k.dp(12) })
     }
 
     /** "25 min", "1 h", "1 h 30". */

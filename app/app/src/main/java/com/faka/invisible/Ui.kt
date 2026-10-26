@@ -74,7 +74,22 @@ class Kit(private val c: Context) {
     /** The ≡ grip of a draggable row; [visible] false keeps the space but hides it. */
     fun handle(widthDp: Int, visible: Boolean = true) = TextView(c).apply {
         text = "\u2261"; textSize = 26f; setTextColor(if (visible) Ui.soft else Ui.clear); gravity = Gravity.CENTER
-        layoutParams = LinearLayout.LayoutParams(dp(widthDp), -1)
+        layoutParams = LinearLayout.LayoutParams(dp(maxOf(widthDp, 48)), -1)   // a touch target is at least 48 dp
+        if (visible) contentDescription = "Reorder"
+    }
+
+    /** An on/off switch in the app colour, 48 dp high, named for screen readers. */
+    fun toggle(label: String, on: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) = Switch(c).apply {
+        isChecked = on; isEnabled = enabled; minimumHeight = dp(48); contentDescription = label
+        val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+        thumbTintList = android.content.res.ColorStateList(states, intArrayOf(Ui.accent, Ui.edge))
+        trackTintList = android.content.res.ColorStateList(states, intArrayOf(Ui.tint, Ui.page))
+        setOnCheckedChangeListener { _, v -> onChange(v) }
+    }
+
+    /** Ask before something that cannot be undone. */
+    fun confirm(title: String, yes: String, onYes: () -> Unit) {
+        AlertDialog.Builder(c).setTitle(title).setNegativeButton("Cancel", null).setPositiveButton(yes) { _, _ -> onYes() }.show()
     }
 
     /** Grey rounded background of a list row. */
@@ -140,7 +155,9 @@ class Kit(private val c: Context) {
         orientation = LinearLayout.VERTICAL; setPadding(0, dp(6), 0, 0)
         addView(row(grow(text(label, 15f)), text(valueText, 15f, Ui.accent, true)))
         addView(SeekBar(c).apply {
-            this.max = max; progress = now
+            this.max = max; progress = now; minimumHeight = dp(48); contentDescription = "$label, $valueText"
+            progressTintList = android.content.res.ColorStateList.valueOf(Ui.accent); thumbTintList = android.content.res.ColorStateList.valueOf(Ui.accent)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Ui.edge)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(sb: SeekBar?, p: Int, user: Boolean) {}
                 override fun onStartTrackingTouch(sb: SeekBar?) {}
@@ -202,12 +219,9 @@ class Kit(private val c: Context) {
         val all = on + names.keys.filter { it !in on }
         all.forEach { k ->
             val isOn = k in on
-            val handle = TextView(c).apply {
-                text = "\u2261"; textSize = 26f; setTextColor(if (isOn) Ui.soft else Ui.clear); gravity = Gravity.CENTER
-                layoutParams = LinearLayout.LayoutParams(dp(48), rowH)
-            }
+            val handle = handle(48, isOn).apply { layoutParams = LinearLayout.LayoutParams(dp(48), rowH) }
             val r = row(handle, grow(text(names[k]!!, 16f, if (isOn) Ui.ink else Ui.soft)),
-                Switch(c).apply { isChecked = isOn; isEnabled = k !in locked; setOnCheckedChangeListener { _, v -> onOrder(if (v) on + k else on - k) } })
+                toggle(names[k]!!, isOn, k !in locked) { v -> onOrder(if (v) on + k else on - k) })
             r.tag = k; r.minimumHeight = rowH
             box.addView(r, LinearLayout.LayoutParams(-1, rowH))
             rows.add(r)
