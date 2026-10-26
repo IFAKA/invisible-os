@@ -96,6 +96,10 @@ object Actions {
             override fun timerRinging() = ringing != null
             override fun messages() = ControllerNotificationListener.store.all()
             override fun reply(key: String, text: String) = ControllerNotificationListener.sendReply(key, text, app)
+            override fun notifGroups() = ControllerNotificationListener.notifs.groups()
+            override fun notifFire(key: String, index: Int) = ControllerNotificationListener.fireAction(key, index, null, app)
+            override fun notifDismiss(key: String) = ControllerNotificationListener.dismiss(key)
+            override fun startNotifReply(key: String, index: Int) = launchWrite { text -> ControllerNotificationListener.fireAction(key, index, text, app) }
             override fun status(): Status {
                 val c = Calendar.getInstance()
                 val b = app.getSystemService(BatteryManager::class.java).getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -192,7 +196,8 @@ object Actions {
     /** Dev tool (AiTestReceiver): start Write into the field that has focus, as the hub item does. */
     fun startWriteDev() { handler.post { launchWrite() } }
 
-    private fun launchWrite() {
+    /** [sendTo] = Write for a notification reply: the written text goes to that action instead of the focused field. */
+    private fun launchWrite(sendTo: ((String) -> Boolean)? = null) {
         typer?.stop()
         Thread({
             val lm = wordModel()
@@ -256,7 +261,8 @@ object Actions {
                     override fun finished(text: String) {
                         Log.d(TAG, "WRITE result [${frame.app} ${frame.kind}]: ${if (frame.kind == FieldKind.PASSWORD) "-" else text}"); EventLog.add("write: ${frame.app} ${text.length} chars")
                         if (text.isNotEmpty()) {
-                            if (frame.hasField) { val all = if (frame.before.isBlank()) text else frame.before.trimEnd() + (if (frame.digits) "" else " ") + text; if (!(ButtonAccessibilityService.inst?.setFieldText(all) ?: false)) Log.d(TAG, "WRITE could not set the field") }
+                            if (sendTo != null) { if (!sendTo(text)) Log.d(TAG, "WRITE reply was not sent") }
+                            else if (frame.hasField) { val all = if (frame.before.isBlank()) text else frame.before.trimEnd() + (if (frame.digits) "" else " ") + text; if (!(ButtonAccessibilityService.inst?.setFieldText(all) ?: false)) Log.d(TAG, "WRITE could not set the field") }
                         }
                         handler.postDelayed({ if (text.isEmpty()) this@Actions.say(TypeVoice.EMPTY, false) else this@Actions.say(Phrase.content(text), false) }, 700)
                     }

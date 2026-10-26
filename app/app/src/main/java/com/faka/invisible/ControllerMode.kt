@@ -23,6 +23,13 @@ interface ModeOutput {
     fun timerRinging(): Boolean
     fun messages(): List<Msg>        // latest unread messages, newest first
     fun reply(key: String, text: String): Boolean   // true if the reply was sent
+    fun notifGroups(): List<NotifGroup> = emptyList()   // the mailbox: every app's notifications, grouped, muted apps left out
+    fun notifFire(key: String, index: Int): Boolean = false   // press action [index] of a notification
+    fun notifDismiss(key: String): Boolean = false
+    fun notifMute(pkg: String) {}
+    fun notifMutedCount(): Int = 0
+    fun notifUnmuteAll() {}
+    fun startNotifReply(key: String, index: Int) {}   // Write keyboard; its text goes into that action's reply box
     fun status(): Status
     fun songLang(text: String): String? = null   // "es" or "en" for the voice
     fun tasks(): List<Task> = emptyList()   // open to-do items, oldest first
@@ -99,7 +106,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, SENT }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, SENT, NOTIF_APPS, NOTIF_LIST, NOTIF_ACTIONS }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: Phrase, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: Phrase, val run: () -> Unit)
@@ -119,6 +126,8 @@ class ControllerMode(
     private var queue = mutableListOf<Msg?>()   // null = the finished timer
     private var qi = 0
     private var taskList = listOf<Task>()   // snapshot while the Tasks screen is open
+    private var notifGroup: String? = null   // the app (group) open in the Notifications screens
+    private var notifKey: String? = null     // the notification open in NOTIF_ACTIONS
     private var taskIdx = 0   // first task of the page being read
     private val TASK_PAGE = 5
     private val handled = HashSet<String>()   // wake queue: text spoken, answered or skipped (id = key + arrival time)
@@ -250,13 +259,14 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.NOTIF_APPS, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
 
     // ---- screens: earcon, then the intro (hint, message text), then the scan ----
-    private fun show(s: Screen) {
+    private fun show(s0: Screen) {
+        val s = notifGuard(s0)
         stopAll(); lookupId++
         screen = s; phase = Phase.INTRO
         if (!backNav) tn(tone(s)); backNav = false
@@ -266,6 +276,7 @@ class ControllerMode(
         if (s == Screen.MESSAGE && m != null) out.prepareAiReplies(m)
         if (s == Screen.MESSAGE && m != null && hid(m) !in heard) intro += Intro(Phrase.content("${m.sender}: ${shortText(m)}", vl(m)), hid(m))
         if (s == Screen.TIMER_DONE) intro += Intro(Voice.TIMER_DONE, null)
+        if (s == Screen.NOTIF_ACTIONS) openNotif()?.let { intro += Intro(notifRead(it), null) }
         curIntro = null
         timers.set("scan", toneGapMs) { nextIntro() }
     }
@@ -368,6 +379,7 @@ class ControllerMode(
                 for (k in settings.hub) when (k) {
                     "messages" -> if (n > 0) all["hub:messages"] = Opt("hub:messages", Menu.messages(n)) { readUnread("hub:messages") }
                     "music" -> out.nowPlaying()?.let { song -> all["hub:music"] = Opt("hub:music", Menu.MUSIC) { pick("hub:music"); outro(Phrase.content(song, out.songLang(song))) } }   // only when the music app has a song
+                    "notifications" -> notifTotal().let { nn -> if (nn > 0) all["hub:notifications"] = Opt("hub:notifications", Menu.notifications(nn)) { pick("hub:notifications"); show(Screen.NOTIF_APPS) } }
                     "tasks" -> out.tasks().let { ts -> all["hub:tasks"] = Opt("hub:tasks", Menu.tasks(ts.size)) {
                         pick("hub:tasks"); taskList = ts; taskIdx = 0
                         when {
@@ -450,8 +462,63 @@ class ControllerMode(
             } + Opt("taskreply", Menu.replyTo(m.sender)) { pick("taskreply"); addReplyTask(m) }
             Screen.COMPOSE -> if (m == null) emptyList() else composeOptions(m)
             Screen.SENT -> emptyList()
+            Screen.NOTIF_APPS -> notifAppOptions()
+            Screen.NOTIF_LIST -> notifListOptions()
+            Screen.NOTIF_ACTIONS -> notifActionOptions()
         }
     }
+
+    // ---- Notifications: apps -> that app's notifications -> one in full with its actions ----
+    private fun notifTotal() = out.notifGroups().sumOf { it.items.size }
+    private fun openGroup() = out.notifGroups().firstOrNull { it.id == notifGroup }
+    private fun openNotif() = openGroup()?.items?.firstOrNull { it.key == notifKey }
+
+    /** A screen whose app or notification is gone (dismissed, removed by the app) falls back one level. */
+    private fun notifGuard(s: Screen): Screen = when {
+        s == Screen.NOTIF_ACTIONS && openNotif() == null -> notifGuard(Screen.NOTIF_LIST)
+        s == Screen.NOTIF_LIST && openGroup() == null -> notifGuard(Screen.NOTIF_APPS)
+        s == Screen.NOTIF_APPS && notifTotal() == 0 -> Screen.HUB
+        else -> s
+    }
+
+    /** What is read for a notification: a private one gives only the app. */
+    private fun notifLine(n: Notif, max: Int): Phrase {
+        if (n.hidden) return Voice.newNotification(n.app)
+        val t = listOf(n.title, n.text).filter { it.isNotBlank() }.joinToString(". ")
+        val lang = out.songLang(t)
+        return Voice.cut(t.replace(Regex("\\s+"), " ").trim(), max, lang == "es", lang)
+    }
+    private fun notifRead(n: Notif) = notifLine(n, 500)
+
+    private fun notifAppOptions(): List<Opt> =
+        out.notifGroups().map { g -> Opt("notif:app", Menu.notifApp(g.app, g.items.size)) { pick("notif:app"); notifGroup = g.id; show(Screen.NOTIF_LIST) } } +
+        (if (out.notifMutedCount() > 0) listOf(Opt("notif:unmute", Menu.UNMUTE_ALL) {
+            pick("notif:unmute"); out.notifUnmuteAll(); say(Voice.APPS_UNMUTED); phase = Phase.WAIT; waitNext = { show(Screen.NOTIF_APPS) }
+        }) else emptyList()) +
+        Opt("notif:back", Menu.BACK) { pick("notif:back"); show(Screen.HUB) }
+
+    private fun notifListOptions(): List<Opt> = (openGroup()?.items.orEmpty()).take(MAX_NOTIFS).map { n ->
+        Opt("notif:item", notifLine(n, MAX_SPOKEN)) { pick("notif:item"); notifKey = n.key; show(Screen.NOTIF_ACTIONS) }
+    } + Opt("notif:back", Menu.BACK) { pick("notif:back"); show(Screen.NOTIF_APPS) }
+
+    private fun notifActionOptions(): List<Opt> {
+        val n = openNotif() ?: return emptyList()
+        val acts = if (n.hidden) emptyList() else n.actions.map { a ->   // a private notification offers no action labels either
+            Opt("notif:action", Phrase.content(a.label, out.songLang(a.label))) {
+                pick("notif:action")
+                if (a.needsText) { pausedByUs = false; exit(false); out.startNotifReply(n.key, a.index) }
+                else notifDone(out.notifFire(n.key, a.index))
+            }
+        }
+        return acts + listOf(
+            Opt("notif:dismiss", Menu.DISMISS) { pick("notif:dismiss"); notifDone(out.notifDismiss(n.key)) },
+            Opt("notif:mute", Menu.MUTE_APP) {
+                pick("notif:mute"); out.notifMute(n.pkg); say(Voice.APP_MUTED); phase = Phase.WAIT; waitNext = { show(Screen.NOTIF_APPS) }
+            },
+            Opt("notif:back", Menu.BACK) { pick("notif:back"); show(Screen.NOTIF_LIST) })
+    }
+
+    private fun notifDone(ok: Boolean) { say(if (ok) Voice.NOTIF_DONE else Voice.NOTIF_FAILED); phase = Phase.WAIT; waitNext = { show(Screen.NOTIF_LIST) } }
 
     /** The options one level down that can be offered straight from the hub (never Back or Done). */
     private fun deepOptions(): Map<String, Opt> {
@@ -560,6 +627,9 @@ class ControllerMode(
             Screen.MORE_MSG -> show(Screen.MESSAGE)
             Screen.COMPOSE, Screen.MSG_TASK -> show(Screen.MORE_MSG)
             Screen.VOLUME -> show(Screen.PHONE)
+            Screen.NOTIF_ACTIONS -> show(Screen.NOTIF_LIST)
+            Screen.NOTIF_LIST -> show(Screen.NOTIF_APPS)
+            Screen.NOTIF_APPS -> show(Screen.HUB)
             Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES -> show(Screen.HUB)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()
@@ -688,5 +758,6 @@ class ControllerMode(
         const val FIND_MS = 20_000L   // "Find my phone" rings this long
         const val SPEARCON_AFTER = 30   // picks of one option, then it is scanned as a sped-up spearcon
         private const val MAX_SPOKEN = 160
+        private const val MAX_NOTIFS = 20   // notifications read in one app list
     }
 }

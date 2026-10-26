@@ -64,6 +64,13 @@ object Voice {
     val NO_TASKS = f("No tasks yet")
     val ALL_DONE = f("All done")
     val TASK_ADDED = f("Task added")
+    val NO_NOTIFICATIONS = f("No notifications")
+    /** A private notification: the app only, never the content. */
+    fun newNotification(app: String) = f("$app, new notification")
+    val NOTIF_DONE = f("Done")
+    val NOTIF_FAILED = f("It did not work")
+    val APP_MUTED = f("App muted")
+    val APPS_UNMUTED = f("Apps unmuted")
     val TASK_STARTERS = listOf("Buy groceries", "Call someone", "Pay a bill", "Send an email", "Clean up")   // stored as tasks, not spoken here
     val NO_MESSAGES = f("No unread messages")
     val CANNOT = f("Cannot do it")
@@ -117,6 +124,11 @@ object Voice {
 /** Labels of the menu: what the phone says for each option. English, short. */
 object Menu {
     fun messages(unread: Int) = f("Messages, $unread unread")
+    fun notifications(n: Int) = f("Notifications, $n")
+    fun notifApp(app: String, n: Int) = f("$app, $n")
+    val DISMISS = f("Dismiss")
+    val MUTE_APP = f("Mute this app")
+    val UNMUTE_ALL = f("Unmute all apps")
     val MUSIC = f("Music")
     fun tasks(n: Int) = f(if (n == 0) "Tasks, none" else "Tasks, $n")
     val TIMER = f("Timer")

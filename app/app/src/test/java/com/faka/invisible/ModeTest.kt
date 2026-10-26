@@ -28,6 +28,7 @@ class ModeTest {
         var vol = 7
         var wired = false
         var nav: String? = null
+        var groups = listOf<NotifGroup>(); var muted = 0
         var weatherAnswer: String? = null     // null = the answer has not come yet
         var pendingWeather: ((Phrase) -> Unit)? = null
         var codes = 100          // experienced by default; learning tests set 0
@@ -56,6 +57,13 @@ class ModeTest {
             override fun stopAlarm() { log.add("stop"); speech() }
             override fun timerRinging() = ringing
             override fun messages() = msgs
+            override fun notifGroups() = groups
+            override fun notifFire(key: String, index: Int): Boolean { log.add("nfire $key $index"); return true }
+            override fun notifDismiss(key: String): Boolean { log.add("ndismiss $key"); groups = groups.map { it.copy(items = it.items.filter { n -> n.key != key }) }.filter { it.items.isNotEmpty() }; return true }
+            override fun notifMute(pkg: String) { log.add("nmute $pkg"); groups = groups.filter { it.pkg != pkg }; muted++ }
+            override fun notifMutedCount() = muted
+            override fun notifUnmuteAll() { log.add("nunmute"); muted = 0 }
+            override fun startNotifReply(key: String, index: Int) { log.add("nreply $key $index") }
             override fun reply(key: String, text: String): Boolean { log.add("reply $key $text"); return replyOk }
             override fun status() = Status(15, 5, 80, 7, 30)
             override fun dndAllowed() = dnd
@@ -701,7 +709,7 @@ class ModeTest {
 
     @Test fun noMoreInTheHubAndOrderIsFixed() {
         val a = Rig(); a.m.settings = LauncherSettings(); a.msgs = listOf(bob.copy(at = 1)); a.wake()
-        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games"), LauncherSettings.DEFAULT_HUB)
+        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "notifications", "tasks", "music", "timer", "today", "phone", "games"), LauncherSettings.DEFAULT_HUB)
         a.advance(400 + 1300 * 8); assertFalse(a.spoken().contains("say More")); assertFalse(a.spoken().contains("say Exit"))
     }
 
@@ -747,7 +755,7 @@ class ModeTest {
     }
 
     @Test fun firstLayerIsShortAndInOrder() {
-        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games"), LauncherSettings.DEFAULT_HUB)
+        assertEquals(listOf("messages", "notifications", "tasks", "music", "timer", "today", "phone", "games"), LauncherSettings.DEFAULT_HUB)
         assertEquals(listOf("timer"), LauncherSettings.cleanHub(listOf("weather", "timer", "volume")))
     }
 
@@ -966,5 +974,58 @@ class ModeTest {
         val r = scanReady()
         r.m.onGesture(H)
         assertFalse(r.m.active)
+    }
+
+    // ---------- Notifications ----------
+    private fun mail(): Rig {
+        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("notifications"))
+        val a = Notif("k1", "com.mail", "Mail", "Boss", "Call me", 5, listOf(NotifAction(0, "Archive", false), NotifAction(1, "Reply", true)))
+        val b = Notif("k2", "com.mail", "Mail", "Bank", "secret", 4, hidden = true)
+        val c = Notif("k3", "com.news", "News", "Headline", "Something happened", 3)
+        r.groups = listOf(NotifGroup("com.mail", "Mail", "com.mail", listOf(a, b)), NotifGroup("com.news", "News", "com.news", listOf(c)))
+        return r
+    }
+
+    @Test fun notificationsHubItemCountsAndOpensAppsWithCounts() {
+        val r = mail(); r.wake()
+        r.pick("Notifications, 3")
+        r.advance(2000); assertEquals("say Mail, 2", r.spoken().first())
+        r.advance(2000); assertTrue(r.spoken().contains("say News, 1"))
+    }
+
+    @Test fun notificationsHiddenWhenEmpty() {
+        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("notifications", "timer")); r.wake(); r.advance(100)
+        assertFalse(r.spoken().any { it.contains("Notifications") })
+    }
+
+    @Test fun notificationReadInFullThenActionFires() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Mail, 2")
+        r.pick("Boss. Call me"); r.advance(1500)
+        assertTrue(r.spoken().contains("say Boss. Call me"))   // read in full, then the actions
+        r.pick("Archive")
+        assertTrue(r.has("nfire k1 0"))
+    }
+
+    @Test fun privateNotificationSpeaksOnlyTheApp() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Mail, 2")
+        r.advance(5000)
+        assertTrue(r.spoken().contains("say Mail, new notification"))
+        assertFalse(r.spoken().any { it.contains("secret") || it.contains("Bank") })
+    }
+
+    @Test fun textActionGoesToWriteAndDismissRemoves() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Mail, 2"); r.pick("Boss. Call me")
+        r.pick("Reply")
+        assertTrue(r.has("nreply k1 1"))
+        val d = mail(); d.wake(); d.pick("Notifications, 3"); d.pick("Mail, 2"); d.pick("Boss. Call me"); d.pick("Dismiss")
+        assertTrue(d.has("ndismiss k1"))
+    }
+
+    @Test fun muteThisAppRemovesItFromTheList() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Mail, 2"); r.pick("Boss. Call me"); r.pick("Mute this app")
+        assertTrue(r.has("nmute com.mail"))
+        r.advance(6000)
+        assertTrue(r.spoken().contains("say News, 1"))
+        assertTrue(r.spoken().contains("say Unmute all apps"))
     }
 }

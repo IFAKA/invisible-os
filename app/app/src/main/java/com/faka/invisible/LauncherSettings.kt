@@ -20,11 +20,11 @@ data class LauncherSettings(
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "games" to "Games")
+        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "notifications" to "Notifications", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "games" to "Games")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** Every key a saved menu has ever used, in a fixed order. Only the old migration steps use it; [cleanHub] drops what is no longer an app. */
-        val LEGACY_ORDER = listOf("messages", "tasks", "playing", "music", "timer", "status", "info", "today", "phone", "games")
+        val LEGACY_ORDER = listOf("messages", "notifications", "tasks", "playing", "music", "timer", "status", "info", "today", "phone", "games")
 
         /** Old apps -> new apps, once: playing->music, info->today, write/duel->games, status->dropped (it is a Phone option now). Unknown keys are dropped. */
         fun migrateApps(keys: List<String>): List<String> = cleanHub(keys.flatMap { k ->
@@ -67,7 +67,7 @@ object SettingsStore {
     fun load(p: SharedPreferences): LauncherSettings {
         val d = LauncherSettings()
         return LauncherSettings(
-            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withApps(p, withNoMore(p, withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it)))))))))) } ?: d.hub,
+            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withNotifications(p, withApps(p, withNoMore(p, withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it))))))))))) } ?: d.hub,
             info = p.getString("s_info", null)?.split(',')?.let { LauncherSettings.cleanInfo(it) } ?: d.info,
             phone = p.getString("s_phone", null)?.split(',')?.let { LauncherSettings.cleanPhone(withStatus(p, it)) } ?: d.phone,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
@@ -115,6 +115,16 @@ object SettingsStore {
         return moved
     }
 
+    /** A saved menu from before "Notifications" existed gets it once, after "Messages" (or first if there is none). */
+    private fun withNotifications(p: SharedPreferences, keys: List<String>): List<String> {
+        if (p.getBoolean("s_notifs_saved", false)) return keys
+        val rest = keys.filter { it != "notifications" }
+        val at = rest.indexOf("messages") + 1
+        val moved = rest.take(at) + "notifications" + rest.drop(at)
+        p.edit().putBoolean("s_notifs_saved", true).putString("s_hub", moved.joinToString(",")).apply()
+        return moved
+    }
+
     /** A saved menu from before "Games" existed gets it once, just before "More". The old "duel" entry in "More" is dropped by cleanMore. */
     private fun withGames(p: SharedPreferences, keys: List<String>): List<String> {
         if (p.getBoolean("s_games_saved", false)) return keys
@@ -150,7 +160,7 @@ object SettingsStore {
         if (p.getBoolean("s_groups_saved", false)) return keys
         val more = p.getString("s_more", null)?.split(',') ?: listOf("torch", "dnd")   // torch and Do not disturb used to live in "More"
         val moved = LauncherSettings.groupHub(keys, more)
-        p.edit().putBoolean("s_groups_saved", true).putString("s_hub", moved.joinToString(",")).apply()
+        p.edit().putBoolean("s_groups_saved", true).putBoolean("s_notifs_saved", true).putString("s_hub", moved.joinToString(",")).apply()
         return moved
     }
 

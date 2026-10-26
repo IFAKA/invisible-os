@@ -67,7 +67,7 @@ class ControllerNotificationListener : NotificationListenerService() {
         /** Swipes the notification away, as the user would. */
         fun dismiss(key: String): Boolean {
             val l = live ?: return false
-            return try { l.cancelNotification(key); true } catch (e: Exception) { Log.e("Invisible", "DISMISS failed", e); false }
+            return try { l.cancelNotification(key); notifs.remove(key); true } catch (e: Exception) { Log.e("Invisible", "DISMISS failed", e); false }
         }
     }
 
