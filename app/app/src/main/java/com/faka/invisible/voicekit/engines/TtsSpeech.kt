@@ -27,6 +27,8 @@ class TtsSpeech(
         /** Recorded clips are OFF: a recorded voice for fixed words and the phone's voice for the rest sounded like two people. One voice for everything. */
         const val CLIPS = false
     }
+    /** The one neural voice (English and Spanish). The Google voice below speaks only what it cannot: other languages, or a model not downloaded yet. */
+    val neural = NeuralSpeech(app, handler, rate, listener) { p, q, slow -> googleSpeak(p, q, false, slow) }
     private var tts: TextToSpeech? = null
     private var ready = false
     private var uttSeq = 0
@@ -37,9 +39,10 @@ class TtsSpeech(
         setVoice(null); tts?.setSpeechRate(Pacing.WORD_RATE); tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS
     }, { handler.post(it) })
 
-    override val speaking get() = tts?.isSpeaking == true || spTrack != null
+    override val speaking get() = tts?.isSpeaking == true || spTrack != null || neural.speaking
 
     fun start() {
+        neural.start()
         tts = TextToSpeech(app) { s ->
             if (s == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.US; ready = true
@@ -53,7 +56,7 @@ class TtsSpeech(
         }
     }
 
-    override fun stop() { tts?.stop(); stopClips(); spTrack?.let { try { it.stop() } catch (e: Exception) {} }; spTrack = null; lastUtt = "" }
+    override fun stop() { neural.stop(); tts?.stop(); stopClips(); spTrack?.let { try { it.stop() } catch (e: Exception) {} }; spTrack = null; lastUtt = "" }
 
     /** Only the newest utterance counts: older ones were flushed. Tells the listener the speech is over. */
     private fun ended(id: String?) { if (id == lastUtt) handler.post { listener.ended() } }
@@ -69,6 +72,16 @@ class TtsSpeech(
     }
 
     override fun speak(p: Phrase, queue: Boolean, fast: Boolean, slow: Boolean) {
+        if (!fast && neural.handles(p)) {   // one voice: the neural one, whenever its model is there
+            if (!queue) { tts?.stop(); stopClips() }
+            lastUtt = ""   // Google events of older speech no longer count
+            neural.speak(p, queue, slow); return
+        }
+        googleSpeak(p, queue, fast, slow)
+    }
+
+    private fun googleSpeak(p: Phrase, queue: Boolean, fast: Boolean, slow: Boolean) {
+        if (!queue) neural.stop()
         val text = p.text; val lang = p.lang
         Log.d(tag, "SPEAK[$lang] $text ready=$ready fast=$fast")
         if (!ready) { handler.post { listener.ended() }; return }

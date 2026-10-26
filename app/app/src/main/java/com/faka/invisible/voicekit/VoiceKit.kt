@@ -15,6 +15,8 @@ object VoiceKit {
     private lateinit var app: Context
     private lateinit var handler: Handler
     private lateinit var watcher: ComponentName
+    /** Dev tools only (AiTestReceiver): the neural voice. */
+    lateinit var neural: NeuralSpeech
     val ready get() = ::buttons.isInitialized
 
     /** [rate] = normal speech rate now; [watcher] = the notification listener component (lets the kit see other media sessions). */
@@ -25,7 +27,7 @@ object VoiceKit {
         val speech = TtsSpeech(app, handler, tones, rate, listener)
         narrator = Narrator(speech, tones, handler)
         buttons = ButtonInput(handler, narrator, target)
-        speech.start()
+        speech.start(); neural = speech.neural
     }
 
     /** The earbud button from the system media session. The caller starts it and stops it. */

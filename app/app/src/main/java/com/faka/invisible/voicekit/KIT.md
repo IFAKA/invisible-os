@@ -23,6 +23,8 @@ Rules are checked two ways:
 | molecules/WordClips.kt | molecule | Spoken words kept as sound; joins two into one stereo clip. |
 | molecules/Ports.kt | molecule | `SpeechPort`, `TonePort`, `ButtonPort`, `ButtonTarget`, `RawButton`, `SpeechListener`, `Timers`. |
 | engines/TtsSpeech.kt | engine | The only TextToSpeech: voice, rate, spearcon and word files. |
+| engines/NeuralSpeech.kt | engine | The one neural voice (sherpa-onnx: Kokoro English, Piper Spanish), its model download, streaming to one AudioTrack. TtsSpeech uses it first; Google TTS is the fallback. |
+| molecules/SentenceSplit.kt | molecule | Cuts a text into sentences so the first sound starts after the first one. |
 | engines/TonePlayer.kt | engine | The only short-sound player: earcons, cues, stereo pair, find-phone loop. |
 | engines/MediaKeyIntake.kt | engine | The only media session: takes the earbud button, wins it back, keeps it alive. |
 | engines/TellAudio.kt | engine | The Duel's low-latency stereo stream and latency estimate. |
