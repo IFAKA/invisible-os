@@ -136,6 +136,8 @@ object TypeSounds {
         TypeCue.DELETE -> Earcons.render(seq(Earcons.V.LOW, 70, 160, 392.0, 262.0), true, -17.0)
         TypeCue.DONE -> Earcons.render(seq(Earcons.V.MALLET, 85, 400, 523.0, 659.0, 784.0), true, -14.0)
         TypeCue.ARMED -> Earcons.render(seq(Earcons.V.WOOD, 0, 25, 1000.0), false, -24.0)
+        TypeCue.LEAVE1 -> Earcons.render(seq(Earcons.V.MALLET, 0, 90, 392.0), false, -20.0)   // holding to leave: 1 s, then 2 s (higher); 3 s = the close sound
+        TypeCue.LEAVE2 -> Earcons.render(seq(Earcons.V.MALLET, 0, 90, 523.0), false, -18.0)
         TypeCue.MENU -> Earcons.render(seq(Earcons.V.MALLET, 60, 110, 392.0, 392.0), true, -20.0)
     }
 }

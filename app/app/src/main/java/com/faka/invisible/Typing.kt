@@ -100,7 +100,7 @@ class TypeProgram(
         show()
     }
 
-    fun stop() { if (active) { active = false; waiting = false; pending = null; menu = false; menuScan.stop(); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:replay") } }
+    fun stop() { if (active) { active = false; waiting = false; pending = null; menu = false; menuScan.stop(); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:leave1"); timers.clear("t:leave2"); timers.clear("t:replay") } }
 
     fun text(): String = if (frame.digits) written.joinToString("") else written.joinToString(" ").replaceFirstChar { it.uppercase() }
 
@@ -138,12 +138,14 @@ class TypeProgram(
         out.hush(); timers.clear("t:gap"); timers.clear("t:replay"); menuScan.stop()
         downAt = time; armed = false
         timers.set("t:hold", Pacing.HOLD_MS) { if (active && downAt >= 0) { armed = true; out.cue(TypeCue.ARMED) } }
+        timers.set("t:leave1", Pacing.LEAVE_MS / 3) { if (active && downAt >= 0) out.cue(TypeCue.LEAVE1) }
+        timers.set("t:leave2", Pacing.LEAVE_MS * 2 / 3) { if (active && downAt >= 0) out.cue(TypeCue.LEAVE2) }
         timers.set("t:leave", Pacing.LEAVE_MS) { if (active && downAt >= 0) leave(false) }
     }
 
     override fun up(time: Long) {
         if (!active || downAt < 0) return
-        timers.clear("t:hold"); timers.clear("t:leave")
+        timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:leave1"); timers.clear("t:leave2")
         val long = armed || time - downAt >= Pacing.HOLD_MS
         downAt = -1; armed = false
         if (long) { clicks = 0; if (waiting) return; if (pending != null) backToEdit() else if (menu) closeMenu() else choose(false); return }

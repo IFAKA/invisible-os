@@ -81,6 +81,15 @@ class TypingTest {
         assertEquals("hello" to "thanks", pairs.last())
     }
 
+    @Test fun holdingToLeaveTicksAtOneAndTwoSeconds() {
+        p.start(); cues.clear()
+        p.down(t.now); t.advance(1100)
+        assertTrue(cues.contains(TypeCue.LEAVE1) && !cues.contains(TypeCue.LEAVE2))
+        t.advance(1000)
+        assertTrue(cues.contains(TypeCue.LEAVE2))
+        p.up(t.now)
+    }
+
     @Test fun menuLettersItemSpellsAndThenOffersWords() {
         p.start(); said.clear(); clicks(3)
         t.advance(TypeProgram.MENU_GAP_MS * 2)
