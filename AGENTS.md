@@ -5,6 +5,7 @@ Android app: control the phone with one earbud button, screen off. The phone spe
 ## Rules
 - **No microphone. Ever.** Do not request RECORD_AUDIO, do not use SpeechRecognizer, do not add voice input or dictation. Input is only the button (click counts, hold) and, for text, the app screen or Share. Reason: the owner does not want the app to listen.
 - Menu is English; message text is read in its own language (Spanish default).
+- **The phone is shared.** `app/run.sh` checks the phone lease (`~/.claude/bin/phone take MIN WHY` / `release`) and that your tree has everything on master. Do not bypass it: a stale install removes other sessions' dev hooks.
 - Check: `cd app && ./gradlew testDebugUnitTest --offline -q`. Install on the phone: `app/run.sh`.
 
 ## Design kits (enforced by `KitRulesTest` and the build task `checkVoiceKit`)
