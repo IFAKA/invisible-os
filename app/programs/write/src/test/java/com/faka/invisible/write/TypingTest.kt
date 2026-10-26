@@ -106,13 +106,25 @@ class TypingTest {
         assertTrue(cues.contains(TypeCue.WORDS))
     }
 
-    @Test fun holdOrTwoClicksCloseTheMenuWithoutAnAction() {
+    @Test fun holdOrThreeClicksCloseTheMenuWithoutAnAction() {
         p.start(); clicks(3); val n = pairs.size
-        clicks(2)
+        clicks(3)
         assertEquals(n + 1, pairs.size); assertTrue(p.active)
         clicks(3); hold(700)
         assertEquals(n + 2, pairs.size); assertTrue(p.active)
         assertEquals("", p.text())
+    }
+
+    @Test fun twoClicksInTheMenuGoToThePreviousItem() {
+        p.start(); clicks(3); val n = pairs.size; said.clear()
+        clicks(2); t.advance(Pacing.SKIP_MS + 50)
+        assertEquals(n, pairs.size); assertEquals(listOf("Leave"), said)   // before the first item: the last
+    }
+
+    @Test fun afterTheReplaysAreUsedItSaysWhereYouAreOnce() {
+        p.start(); said.clear()
+        t.advance(TypeProgram.REPLAY_MS * 10)
+        assertEquals(listOf(TypeVoice.STILL_HERE.text), said)
     }
 
     @Test fun menuClosesByItselfAfterTwoSilentLoops() {

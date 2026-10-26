@@ -47,7 +47,7 @@ sealed class Translation {
 /**
  * Write: a one-button keyboard (PLAN-OS.md). The phone plays two likely items one after the other, the first in the left ear, the second in the right.
  * click = left, hold (0.5 s up to 3 s) = right, 2 clicks = next pair, 3 clicks = the small menu: Done, Delete, Letters (or Words).
- * The menu is read one item at a time; a click picks the item just spoken; a hold, 2 clicks or 3 clicks closes it.
+ * The menu is read one item at a time; a click picks the item just spoken; 2 clicks = the previous item; a hold or 3 clicks closes it.
  * Hold 3 s always leaves. It gets the raw button ([down]/[up]) and owns no menu. Time and timers are injected.
  */
 /** For places that offer no words (digits only). */
@@ -140,7 +140,7 @@ class TypeProgram(
         out.pair(l, r)
         out.log("pair", l, r, page, if (phraseMode) "phrases" else if (letters) "letters" else "words", prefix, written.size)
         pressedSinceShow = false
-        timers.set("t:replay", REPLAY_MS) { if (active && replays < MAX_REPLAYS) { replays++; show(true) } }
+        timers.set("t:replay", REPLAY_MS) { if (active && replays < MAX_REPLAYS) { replays++; show(true) } else if (active && replays == MAX_REPLAYS) { replays++; out.say(TypeVoice.STILL_HERE) } }   // then silence, so say where you are once
     }
 
     // ---- the raw button ----
@@ -178,7 +178,7 @@ class TypeProgram(
     private fun many(n: Int) {
         if (waiting) return
         pending?.let { t -> if (n == 1) send(t) else { out.readBack(t); out.say(TypeVoice.CONFIRM) }; return }
-        if (menu) { if (n == 1) pickMenu() else closeMenu(); return }
+        if (menu) { when (n) { 1 -> pickMenu(); 2 -> menuScan.prevIn(Pacing.SKIP_MS); else -> closeMenu() }; return }
         when (n) {
             1 -> choose(true)
             2 -> { out.log("next", page); out.cue(TypeCue.NEXT); page++; show() }

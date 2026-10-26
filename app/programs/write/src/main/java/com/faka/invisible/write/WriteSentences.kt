@@ -15,6 +15,7 @@ object TypeVoice {
     val START2 = f("Hold on the second word.")
     val START_NEXT = f("Two clicks for the next two.")
     val START3 = f("Three clicks for more.")
+    val STILL_HERE = f("Still in Write. Click left, hold right.")
     val MENU_DONE = f("Done")
     val MENU_DELETE = f("Delete")
     val MENU_LEAVE = f("Leave")
