@@ -3,7 +3,7 @@ package com.faka.invisible
 import android.text.InputType
 
 /** What the text field is for. It decides where the choices come from (Write) and what is never spoken or saved. */
-enum class FieldKind { TEXT, NUMBER, EMAIL, URL, SEARCH, PASSWORD, NAME }
+enum class FieldKind { TEXT, NUMBER, DECIMAL, EMAIL, URL, SEARCH, PASSWORD, NAME }
 
 /**
  * Everything Write knows about the place it types into, built each time a field has focus (PLAN-OS.md, "The one-button keyboard for every app").
@@ -33,7 +33,7 @@ data class Frame(
         if (hint.isNotBlank()) append("The field is called: $hint\n")
     }
 
-    val digits get() = kind == FieldKind.NUMBER
+    val digits get() = kind == FieldKind.NUMBER || kind == FieldKind.DECIMAL
 
     companion object {
         /**
@@ -57,6 +57,7 @@ object Fields {
         return when {
             isPassword -> FieldKind.PASSWORD
             cls == InputType.TYPE_CLASS_NUMBER && v == InputType.TYPE_NUMBER_VARIATION_PASSWORD -> FieldKind.PASSWORD
+            cls == InputType.TYPE_CLASS_NUMBER && (inputType and InputType.TYPE_NUMBER_FLAG_DECIMAL) != 0 -> FieldKind.DECIMAL
             cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE -> FieldKind.NUMBER
             cls == InputType.TYPE_CLASS_TEXT && (v == InputType.TYPE_TEXT_VARIATION_PASSWORD || v == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD || v == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD) -> FieldKind.PASSWORD
             cls == InputType.TYPE_CLASS_TEXT && (v == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS || v == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS) -> FieldKind.EMAIL

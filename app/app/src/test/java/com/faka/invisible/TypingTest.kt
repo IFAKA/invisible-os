@@ -169,6 +169,15 @@ class TypingTest {
         assertEquals("11", q.text())
     }
 
+    @Test fun aDecimalFieldOffersAPointAndWritesIt() {
+        val q = program(Frame(kind = FieldKind.DECIMAL)); q.start()
+        repeat(5) { repeat(2) { q.down(t.now); t.advance(80); q.up(t.now); t.advance(100) }; t.advance(600) }   // two clicks = the next pair
+        assertEquals("point" to null, pairs.last())
+        q.down(t.now); t.advance(80); q.up(t.now); t.advance(600)   // click: the point
+        q.down(t.now); t.advance(80); q.up(t.now); t.advance(600)
+        assertEquals(".1", q.text())
+    }
+
     @Test fun anEmailFieldStartsWithWhatYouUsedThere() {
         val q = program(Frame(app = "mail", kind = FieldKind.EMAIL), listOf("ana@x.com", "bea@y.com")); q.start()
         assertEquals("ana@x.com" to "bea@y.com", pairs.last())

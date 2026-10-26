@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** The home programs before Set alarm and Calculator were added; the older tests count their menu items. */
-private val OLD_HUB = LauncherSettings.DEFAULT_HUB - "alarm" - "calculator" - "write" - "compass"
+private val OLD_HUB = LauncherSettings.DEFAULT_HUB - "alarm" - "calculator" - "write" - "compass" - "sum"
 
 class ModeTest {
     private class Rig(ranker: OptionRanker = OptionRanker.DEFAULT, gap: Long? = 800, reactionText: String = "") {
@@ -52,6 +52,7 @@ class ModeTest {
             override fun stopSpeech() { log.add("stopspeech"); timers.remove("tts"); timers.remove("tts-start") }
             override fun tone(kind: Tone) { log.add("tone $kind") }
             override fun startWrite() { log.add("startWrite") }
+            override fun startSum() { log.add("startSum") }
             override fun startGame(coach: Boolean) { log.add("startGame $coach") }
             override fun startEcho() { log.add("startEcho") }
             override fun startCompass() { log.add("startCompass") }
@@ -727,7 +728,7 @@ class ModeTest {
 
     @Test fun noMoreInTheHubAndOrderIsFixed() {
         val a = Rig(); a.m.settings = LauncherSettings(hub = OLD_HUB); a.msgs = listOf(bob.copy(at = 1)); a.wake()
-        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator", "write", "compass"), LauncherSettings.DEFAULT_HUB)
+        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator", "write", "compass", "sum"), LauncherSettings.DEFAULT_HUB)
         a.advance(400 + 1300 * 8); assertFalse(a.spoken().contains("say More")); assertFalse(a.spoken().contains("say Exit"))
     }
 
@@ -773,7 +774,7 @@ class ModeTest {
     }
 
     @Test fun firstLayerIsShortAndInOrder() {
-        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator", "write", "compass"), LauncherSettings.DEFAULT_HUB)
+        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator", "write", "compass", "sum"), LauncherSettings.DEFAULT_HUB)
         assertEquals(listOf("timer"), LauncherSettings.cleanHub(listOf("weather", "timer", "volume")))
     }
 
@@ -1172,8 +1173,14 @@ class ModeTest {
         assertTrue(r.spoken().toString(), r.spoken().any { it.endsWith(" 5") })
     }
 
-    @Test fun setAlarmAsksHourThenMinuteAndSetsItAfterTheCancelWindow() {
+    @Test fun sumPricesStartsTheSumProgram() {
         val r = Rig(); r.m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "write" - "compass"); r.wake()
+        r.pick("Sum prices")
+        assertTrue(r.has("startSum"))
+    }
+
+    @Test fun setAlarmAsksHourThenMinuteAndSetsItAfterTheCancelWindow() {
+        val r = Rig(); r.m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "write" - "compass" - "sum"); r.wake()
         r.pick("Set alarm"); r.pick("7 AM"); r.pick("Thirty")
         assertFalse(r.has("alarm"))
         r.advance(8000)

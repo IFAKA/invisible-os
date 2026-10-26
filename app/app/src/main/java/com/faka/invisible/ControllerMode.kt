@@ -73,6 +73,7 @@ interface ModeOutput {
     fun loadReactions(): String = ""   // saved reaction samples (see ReactionGap.encode)
     fun saveReactions(text: String) {}
     fun startWrite() {}   // the Write keyboard (stereo pair); its text comes back through the app
+    fun startSum() {}   // the Sum prices tool: the number keyboard in a loop
     fun startCompass() {}   // the compass program
     fun startEcho() {}   // the rhythm-copy game
     fun startGame(coach: Boolean) {}   // coach = teach first (the "How to play" item)
@@ -443,6 +444,7 @@ class ControllerMode(
                     "write" -> all["hub:write"] = Opt("hub:write", Menu.WRITE) { pick("hub:write"); pausedByUs = false; exit(false); out.startWrite() }   // a program of the OS: its place comes from its tag in AppCategories
                     "compass" -> all["hub:compass"] = Opt("hub:compass", Menu.COMPASS) { pick("hub:compass"); pausedByUs = false; exit(false); out.startCompass() }
                     "calculator" -> all["hub:calculator"] = Opt("hub:calculator", Menu.CALCULATOR) { pick("hub:calculator"); calc.clear(); show(Screen.CALC) }
+                    "sum" -> all["hub:sum"] = Opt("hub:sum", Menu.SUM) { pick("hub:sum"); pausedByUs = false; exit(false); out.startSum() }
                     "games" -> all["hub:games"] = Opt("hub:games", Menu.GAMES) { pick("hub:games"); show(Screen.GAMES) }
                 }
                 suggestedKeys = emptyList()

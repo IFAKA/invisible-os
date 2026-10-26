@@ -149,6 +149,7 @@ object Actions {
             override fun startEcho() = startEchoGame()
             override fun startCompass() = startCompassProgram()
             override fun startWrite() = launchWrite()
+            override fun startSum() = launchSum()
             override fun pickCount(intent: String) = choices.intentCount(intent)
             override fun favourites() = choices.favourites()
             override fun suggest(candidates: Collection<String>, now: Long, others: Collection<String>, accept: (String, Double, Int) -> Boolean) = Suggester.top(choices.history(), candidates, now, tags = context, others = others, accept = accept)
@@ -259,6 +260,37 @@ object Actions {
 
     /** [sendTo] = Write for a notification reply: the written text goes to that action instead of the focused field.
      *  [replyTo] = the message being answered: the screen is off and shows no chat, so the suggestions and the reply language come from it. */
+    /** Sum prices: the number keyboard (digits and a point) in a loop. Each price is added; empty Done or a long hold ends and reads the total. */
+    private fun launchSum() {
+        typer?.stop()
+        val sum = PriceSum()
+        val timers = object : Timers {
+            override fun set(key: String, delayMs: Long, task: () -> Unit) { clear(key); val r = Runnable { typeTimers.remove(key); task() }; typeTimers[key] = r; handler.postDelayed(r, delayMs) }
+            override fun clear(key: String) { typeTimers.remove(key)?.let { handler.removeCallbacks(it) } }
+        }
+        val frame = Frame(kind = FieldKind.DECIMAL)
+        lateinit var round: (List<Phrase>) -> Unit
+        round = { intro ->
+            var last = false
+            val out = object : TypeOut {
+                override fun pair(left: String, right: String?) { narrator.pair(left, right) }
+                override fun hush() { narrator.hush() }
+                override fun prefetch(words: List<String>) { narrator.prefetch(words) }
+                override fun say(text: Phrase) { narrator.say(text, true) }
+                override fun cue(c: TypeCue) { narrator.cue(c) }
+                override fun finished(text: String) {
+                    if (sum.add(text)) handler.postDelayed({ this@Actions.say(TypeVoice.total(sum.spoken()), false) }, 400)
+                    else { last = true; handler.postDelayed({ this@Actions.say(if (sum.isEmpty) TypeVoice.NO_PRICES else TypeVoice.total(sum.spoken()), false) }, 400) }
+                }
+            }
+            typer = TypeProgram(NoWords, out, timers, frame) {
+                typer = null; narrator.hush()
+                if (last) gameEnded() else handler.postDelayed({ round(listOf(TypeVoice.SUM_NEXT)) }, 2200)
+            }.also { it.intro = intro; it.start() }
+        }
+        round(listOf(TypeVoice.SUM_START, TypeVoice.SUM_START2, TypeVoice.SUM_START3))
+    }
+
     private fun launchWrite(sendTo: ((String) -> Boolean)? = null, replyTo: Notif? = null) {
         typer?.stop()
         Thread({

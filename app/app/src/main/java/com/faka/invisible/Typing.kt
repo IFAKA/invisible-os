@@ -48,6 +48,9 @@ sealed class Translation {
  * The menu is read one item at a time; a click picks the item just spoken; a hold, 2 clicks or 3 clicks closes it.
  * Hold 3 s always leaves. It gets the raw button ([down]/[up]) and owns no menu. Time and timers are injected.
  */
+/** For places that offer no words (digits only). */
+object NoWords : Ranker { override fun ranked(context: List<String>) = emptyList<Pair<String, Double>>() }
+
 class TypeProgram(
     private val lm: Ranker,
     private val out: TypeOut,
@@ -56,6 +59,7 @@ class TypeProgram(
     private val onEnded: () -> Unit,
 ) : RawButton {
     companion object {
+        const val POINT = "point"   // the decimal point is offered and spoken as this word
         const val REPLAY_MS = 7000L
         const val MAX_REPLAYS = 3
         const val MENU_GAP_MS = 2000L
@@ -90,11 +94,12 @@ class TypeProgram(
     private var waiting = false   // Done was picked: the translation is being made
     private var pending: String? = null   // the translation, read back, waiting for a click to send it
     override var active = false; private set
+    var intro: List<Phrase> = listOf(TypeVoice.START, TypeVoice.START2, TypeVoice.START_NEXT, TypeVoice.START3)   // said once at the start
 
     fun start() {
         if (frame.kind == FieldKind.PASSWORD) { out.say(TypeVoice.PASSWORD); onEnded(); return }   // never spoken, never saved
         active = true
-        out.say(TypeVoice.START); out.say(TypeVoice.START2); out.say(TypeVoice.START_NEXT); out.say(TypeVoice.START3)
+        intro.forEach { out.say(it) }
         askPhrases()
         if (frame.kind != FieldKind.TEXT && phrases.isNotEmpty()) phraseMode = true   // addresses, names, searches: what you used here comes first
         show()
@@ -102,11 +107,11 @@ class TypeProgram(
 
     fun stop() { if (active) { active = false; waiting = false; pending = null; menu = false; menuScan.stop(); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:leave1"); timers.clear("t:leave2"); timers.clear("t:replay") } }
 
-    fun text(): String = if (frame.digits) written.joinToString("") else written.joinToString(" ").replaceFirstChar { it.uppercase() }
+    fun text(): String = if (frame.digits) written.joinToString("") { if (it == POINT) "." else it } else written.joinToString(" ").replaceFirstChar { it.uppercase() }
 
     // ---- what is offered ----
     private fun candidates(): List<String> {
-        if (frame.digits) return "1234567890".map { it.toString() }
+        if (frame.digits) return "1234567890".map { it.toString() } + (if (frame.kind == FieldKind.DECIMAL) listOf(POINT) else emptyList())
         val recent = written.takeLast(3).toSet()   // a word just written is not offered again at once
         val all = lm.ranked(written.takeLast(8))   // at the start of a word, a short word or a contraction is hard to hear alone: those come through letters
         return if (letters) {

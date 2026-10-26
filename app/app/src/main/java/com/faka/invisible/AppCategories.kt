@@ -74,6 +74,7 @@ Out/Health          com.maxsnr.workout
 Out/Health          digifit.android.virtuagym.pro.synergym
 Tools/System        hub:phone
 Tools/Utilities     hub:calculator
+Money/Prices        hub:sum
 Tools/Utilities     com.miui.calculator
 Day                 hub:alarm
 Tools/System        com.android.settings
