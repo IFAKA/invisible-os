@@ -42,7 +42,17 @@ object TreeLeaves {
     fun dump(c: Context): String {
         val s = SettingsStore.load(c.getSharedPreferences("invisible", Context.MODE_PRIVATE))
         fun d(n: TreeNode, ind: String): String = n.children.joinToString("") { k -> ind + k.label + (if (k.isApp) "" else " (${k.children.size})") + "\n" + d(k, "$ind  ") }
-        return d(tree(edit(all(c, s), s)), "")
+        val leaves = edit(all(c, s), s); val root = tree(leaves)
+        // one COST line per app: items heard and levels, in the tree and in Find (for medians and weighted means)
+        val plan = NameFinder.plan(leaves)
+        fun find(n: NameFinder.Node, pkg: String, heard: Int, levels: Int): Pair<Int, Int>? {
+            n.parts.forEachIndexed { i, p -> if (p.leaf?.pkg == pkg) return heard + i + 1 to levels + 1
+                p.sub?.let { sub -> find(sub, pkg, heard + i + 1, levels + 1)?.let { return it } } }
+            return null
+        }
+        val cost = AppTree.paths(root).joinToString("") { p -> val f = find(plan, p.app.pkg, 0, 0)
+            "COST\t${p.app.label}\t%.1f\t${p.heard}\t${p.levels + 1}\t${f?.first}\t${f?.second}\n".format(p.app.weight) }
+        return d(root, "") + cost
     }
 
     /** Set once at start (Actions.init): where the last levels are kept, so the next tree search starts from them. */
