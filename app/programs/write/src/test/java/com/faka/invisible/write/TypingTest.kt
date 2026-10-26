@@ -185,6 +185,19 @@ class TypingTest {
         assertEquals(listOf("hello"), recaps)
     }
 
+    @Test fun aReplayWhileSpellingSaysTheSentenceThenTheLetters() {
+        p.start(); clicks(1); clicks(3); clicks(1); clicks(1)   // Hello, menu, Letters, the first letter
+        recaps.clear(); said.clear()
+        t.advance(TypeProgram.REPLAY_MS + 50)
+        assertEquals(listOf("hello"), recaps); assertEquals(1, said.last().length)
+    }
+
+    @Test fun twoClicksSkipWithoutReadingTheSentence() {
+        p.start(); clicks(1); recaps.clear()
+        clicks(2)
+        assertTrue(recaps.isEmpty())
+    }
+
     @Test fun menuClosesByItselfAfterTwoSilentLoops() {
         p.start(); clicks(3); val n = pairs.size
         t.advance(TypeProgram.MENU_GAP_MS * 8 + 50)

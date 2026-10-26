@@ -141,8 +141,9 @@ class TypeProgram(
         if (n > 0) page %= n else page = 0
         val l = items.getOrNull(page * 2) ?: return
         val r = items.getOrNull(page * 2 + 1)
-        if (letters && prefix.isNotEmpty()) out.say(TypeVoice.spelled(prefix))
-        else if ((recap || again) && prefix.isEmpty() && written.isNotEmpty() && !frame.digits && !phraseMode) out.readBack(written.takeLast(RECAP_WORDS).joinToString(" "))   // a new word, or a long silence: where the sentence is
+        // a new word, or a long silence (replay): the sentence so far first, then the letters of the word being spelled
+        if ((recap || again) && written.isNotEmpty() && !frame.digits && !phraseMode) out.readBack(written.takeLast(RECAP_WORDS).joinToString(" "))
+        if (letters && prefix.isNotEmpty()) out.say(TypeVoice.spelled(prefix))   // every letter pair says the letters so far
         recap = false   // every letter pair, replays too: you always hear what you have so far
         out.prefetch(items.drop(page * 2 + 2).take(4) )
         out.pair(l, r)
