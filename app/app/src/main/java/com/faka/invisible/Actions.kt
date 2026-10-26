@@ -257,6 +257,7 @@ object Actions {
         val c = otherSessions().firstOrNull { it.packageName in musicApps } ?: run { Log.d("BROWSE", "no music session"); return@post }
         Log.d("BROWSE", "ctl $cmd on ${c.packageName}")
         if (cmd.startsWith("uri:")) c.transportControls.playFromUri(android.net.Uri.parse(cmd.removePrefix("uri:")), null)
+        else if (cmd.startsWith("searchx:")) { val (f, q) = cmd.removePrefix("searchx:").split("|", limit = 2); c.transportControls.playFromSearch(q, android.os.Bundle().apply { putString(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, f); if (f.endsWith("audio")) putString(android.provider.MediaStore.EXTRA_MEDIA_TITLE, q) }) }
         else c.transportControls.playFromSearch(cmd.removePrefix("search:"), null)
         handler.postDelayed({ Log.d("BROWSE", "queue: " + (c.queue ?: emptyList()).joinToString(" / ") { it.description.title.toString() }) }, 5000)
     }

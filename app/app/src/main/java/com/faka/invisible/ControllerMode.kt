@@ -134,7 +134,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_LIST, NOTIF_ACTIONS, FIND }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: Phrase, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: Phrase, val run: () -> Unit)
@@ -306,7 +306,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -428,10 +428,7 @@ class ControllerMode(
                 val n = unread().size
                 for (k in settings.hub) when (k) {
                     "messages" -> if (n > 0) all["hub:messages"] = Opt("hub:messages", Menu.messages(n)) { readUnread("hub:messages") }
-                    "music" -> if (out.nowPlaying() != null || out.hasMusicApp()) all["hub:music"] = Opt("hub:music", Menu.MUSIC) { pick("hub:music")
-                        val song = out.nowPlaying()
-                        if (song != null) outro(Phrase.content(song, out.songLang(song))) else { out.playMusic(); outro(Menu.PLAYING_MUSIC) }   // a song is loaded: read it; none: start the Liked music list
-                    }
+                    "music" -> if (out.nowPlaying() != null || out.hasMusicApp()) all["hub:music"] = Opt("hub:music", Menu.MUSIC) { pick("hub:music"); musicBack = Screen.HUB; show(Screen.MUSIC) }   // the Music page: what is playing, pause, next, play something
                     "tasks" -> out.tasks().let { ts -> all["hub:tasks"] = Opt("hub:tasks", Menu.tasks(ts.size)) {
                         pick("hub:tasks"); taskList = ts; taskIdx = 0
                         when {
@@ -536,6 +533,8 @@ class ControllerMode(
             Screen.TREE -> treeOptions(treePath.lastOrNull() ?: treeRoot ?: AppTree.build(emptyList()))
             Screen.FIND -> findOptions()
             Screen.APP_OPEN -> appOpenOptions()
+            Screen.MUSIC -> musicOptions()
+            Screen.MUSIC_PLAY -> musicPlayOptions()
             Screen.NOTIF_LIST -> notifListOptions()
             Screen.NOTIF_ACTIONS -> notifActionOptions()
         }
@@ -668,11 +667,23 @@ class ControllerMode(
 
     /** An app without notifications: open it, or go back. */
     private fun appOpenOptions(): List<Opt> {
-        val play = if (notifPkg?.let { out.isMusicApp(it) } == true) listOf(
-            Opt("app:mix", Menu.PLAY_MIX) { pick("app:mix"); out.playMusic(false); outro(Menu.PLAYING_MUSIC) },
-            Opt("app:liked", Menu.PLAY_LIKED) { pick("app:liked"); out.playMusic(true); outro(Menu.PLAYING_MUSIC) }) else emptyList()
-        return play + listOf(Opt("app:open", Menu.OPEN_APP) { pick("app:open"); openApp() }, Opt("app:back", Menu.BACK) { pick("app:back"); treeUp() })
+        val music = if (notifPkg?.let { out.isMusicApp(it) } == true) listOf(Opt("app:music", Menu.MUSIC) { pick("app:music"); musicBack = Screen.APP_OPEN; show(Screen.MUSIC) }) else emptyList()
+        return music + listOf(Opt("app:open", Menu.OPEN_APP) { pick("app:open"); openApp() }, Opt("app:back", Menu.BACK) { pick("app:back"); treeUp() })
     }
+
+    private var musicBack = Screen.HUB
+
+    /** The Music page: what is playing, play something. Pause, next and previous are the earbud's own job. */
+    private fun musicOptions(): List<Opt> {
+        val song = out.nowPlaying()
+        val ctl = if (song == null) emptyList() else listOf(Opt("music:now", Menu.WHATS_PLAYING) { pick("music:now"); outro(Phrase.content(song, out.songLang(song))) })
+        return ctl + listOf(Opt("music:play", Menu.PLAY_SOMETHING) { pick("music:play"); show(Screen.MUSIC_PLAY) }, Opt("music:back", Menu.BACK) { pick("music:back"); show(musicBack) })
+    }
+
+    private fun musicPlayOptions(): List<Opt> = listOf(
+        Opt("music:mix", Menu.PLAY_MIX) { pick("music:mix"); out.playMusic(false); outro(Menu.PLAYING_MUSIC) },
+        Opt("music:liked", Menu.PLAY_LIKED) { pick("music:liked"); out.playMusic(true); outro(Menu.PLAYING_MUSIC) },
+        Opt("music:pback", Menu.BACK) { pick("music:pback"); show(Screen.MUSIC) })
 
     private fun openApp() { val p = notifPkg ?: return; pausedByUs = false; exit(false); out.openApp(p) }
 
@@ -809,6 +820,8 @@ class ControllerMode(
             Screen.VOLUME -> show(Screen.PHONE)
             Screen.NOTIF_ACTIONS -> show(Screen.NOTIF_LIST)
             Screen.NOTIF_LIST, Screen.APP_OPEN -> treeUp()
+            Screen.MUSIC -> show(musicBack)
+            Screen.MUSIC_PLAY -> show(Screen.MUSIC)
             Screen.TREE -> { treePath.removeLastOrNull(); treeUp() }
             Screen.FIND -> { findStack.removeLastOrNull(); if (findStack.isEmpty()) show(Screen.HUB) else show(Screen.FIND) }
             Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR -> show(Screen.HUB)

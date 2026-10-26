@@ -138,6 +138,8 @@ object Menu {
     val MUTE_APP = f("Mute this app")
     val UNMUTE_ALL = f("Unmute all apps")
     val MUSIC = f("Music")
+    val WHATS_PLAYING = f("What's playing")
+    val PLAY_SOMETHING = f("Play something")
     val PLAY_MIX = f("Play my mix")
     val PLAY_LIKED = f("Play liked music")
     val PLAYING_MUSIC = f("Playing music")

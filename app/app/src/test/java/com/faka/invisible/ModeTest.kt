@@ -543,7 +543,10 @@ class ModeTest {
         val r = Rig(); r.wake(); r.advance(400 + 1300 * 5)
         assertFalse(r.spoken().contains("say Music"))
         val q = Rig(); q.song = "Blue, Ana"; q.wake(); q.pick("Music")
+        q.pick("What's playing")
         assertTrue(q.log.contains("say Blue, Ana"))
+        val n = Rig(); n.song = "Blue, Ana"; n.wake(); n.pick("Music"); n.advance(400 + 1300 * 4)
+        assertTrue(n.spoken().containsAll(listOf("say What's playing", "say Play something")))
     }
 
     @Test fun tasksAreAlwaysInTheMenu() {
