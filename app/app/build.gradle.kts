@@ -1,7 +1,14 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+// Build stamp shown at the bottom of the app: short commit, "+" when tracked files have uncommitted edits, build time.
+fun git(vararg a: String) = try { ProcessBuilder("git", *a).directory(rootDir).redirectErrorStream(true).start().inputStream.bufferedReader().readText().trim() } catch (e: Exception) { "" }
+val stamp = (git("rev-parse", "--short", "HEAD").ifEmpty { "nogit" } + (if (git("status", "--porcelain", "-uno").isNotEmpty()) "+" else "") +
+    " " + SimpleDateFormat("MMM d HH:mm").format(Date()))
 android {
     namespace = "com.faka.invisible"
     compileSdk = 36
@@ -11,8 +18,10 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "BUILD_STAMP", "\"$stamp\"")
         ndk { abiFilters += "arm64-v8a" }   // the phone is arm64; keeps sherpa-onnx + onnxruntime to one ABI
     }
+    buildFeatures { buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17"; freeCompilerArgs += "-Xskip-metadata-version-check" }   // litertlm is built with Kotlin 2.4
 }

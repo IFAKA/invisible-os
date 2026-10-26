@@ -78,6 +78,7 @@ class MainActivity : Activity() {
             Page.AI -> aiPage()
             Page.HELP -> helpPage()
         }
+        body.addView(k.text("Version ${BuildConfig.VERSION_NAME} · ${BuildConfig.BUILD_STAMP}", 12f, Ui.soft), LinearLayout.LayoutParams(-2, -2).apply { topMargin = k.dp(24) })
     }
 
     private fun home() {
