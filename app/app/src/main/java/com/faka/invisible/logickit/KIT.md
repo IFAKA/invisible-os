@@ -14,6 +14,7 @@ Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rule
 | NameFinder.kt | `NameFinder.plan(leaves)` = the lists of Find (a hold on home): leaves sorted by name, split into at most 6 neighbouring parts per list (one leaf = its name, more = a range such as "Sa to Sp"), heaviest first, split chosen for the lowest expected items heard. Slow on a phone: built off the main thread (`ModeOutput.background`). Used by `ControllerMode` (Screen.FIND). |
 | NameLang.kt | `NameLang.of(pkg, label)` = "es" or "en" for an app name (package table, then Spanish words/letters, else en); `voice()` = "es" or null. Used by `ControllerMode.treeLabel` (tree, Find, Suggested). |
 | Calculator.kt | `Calculator` = state of the spoken calculator (digit, point, operate, equals, undo, `spoken()`), left to right; `%` = percent of. Used by the Calculator program. |
+| PriceSum.kt | `PriceSum` = running total of prices in cents (`add("12.5")`, `undo()`, `spoken()`). Used by the Sum prices tool (`launchSum` in Actions). |
 | ChatLang.kt | `ChatLang.of(seen, detect)` = the language of the chat or message a reply goes to (null if too short or unknown). `needsTranslation(target)`. Used by Write for screen chats and for notification replies. |
 
 ## Elsewhere (use these, do not copy them)
