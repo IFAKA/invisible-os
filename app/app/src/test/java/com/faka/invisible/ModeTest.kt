@@ -27,6 +27,7 @@ class ModeTest {
         var replyOffersList = listOf<Task>(); val remembered = ArrayList<String>()
         var favs = listOf<String>()
         var suggested = listOf<String>()
+        val pickTimes = ArrayList<Long>()   // time-to-pick of each list pick
         var now = 1_000_000L
         var vol = 7
         var wired = false
@@ -99,7 +100,7 @@ class ModeTest {
             override fun suggest(candidates: Collection<String>, now: Long) = suggested.filter { it in candidates }
             override fun codeCount() = codes
             override fun setCodeCount(n: Int) { codes = n }
-            override fun choice(screen: String, code: Int, intent: String, sender: String) { log.add("choice $screen $code $intent") }
+            override fun choice(screen: String, code: Int, intent: String, sender: String, pickMs: Long) { log.add("choice $screen $code $intent"); if (pickMs >= 0) pickTimes.add(pickMs) }
         }, object : Timers {
             override fun set(key: String, delayMs: Long, task: () -> Unit) { timers[key] = (now + delayMs) to task }
             override fun clear(key: String) { timers.remove(key) }
@@ -891,6 +892,12 @@ class ModeTest {
         val r = Rig(); r.wake(); r.pick("Phone"); r.pick("Volume")
         val q = Rig(); q.wake(); q.advance(2300); q.click()
         assertTrue(q.log.contains("choice HUB 2 hub:phone"))
+    }
+
+    @Test fun timeToPickIsLoggedFromTheStartOfTheList() {
+        val q = Rig(); q.wake(); q.advance(2300); q.click()
+        val t = q.pickTimes.single()
+        assertTrue("time-to-pick $t", t in 1500..2800)
     }
 
     // ---------- item gap (default 1.6 s, from the end of each item's speech) ----------

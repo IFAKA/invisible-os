@@ -60,4 +60,13 @@ class SuggesterTest {
         assertEquals(setOf("unread", "wired"), back.history().single().tags)
         assertEquals(emptySet<String>(), ChoiceLog(listOf("5\tHUB\t1\tphone:torch\t")).history().single().tags)   // an old line without the column
     }
+
+    @Test fun timeToPickColumnDoesNotBreakParsing() {
+        val line = ChoiceLog().record(5L, "HUB", 2, "hub:phone", "", setOf("wired"), pickMs = 4200)
+        assertEquals("4200", line.split('\t')[6])
+        val back = ChoiceLog(listOf(line))
+        assertEquals(setOf("wired"), back.history().single().tags)
+        assertEquals(1, back.intentCount("hub:phone"))
+        assertEquals(6, ChoiceLog().record(5L, "HUB", 0, "wake").split('\t').size)   // no pick: no 7th column
+    }
 }

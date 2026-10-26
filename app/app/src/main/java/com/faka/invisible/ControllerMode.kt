@@ -62,7 +62,7 @@ interface ModeOutput {
     fun lastTimer(): Int             // minutes, 0 = none yet
     fun setLastTimer(minutes: Int)
     fun favourites(): List<String>   // most frequent senders, best first
-    fun choice(screen: String, code: Int, intent: String, sender: String)   // choice log; code 0 = wake, else the position of the option in the list
+    fun choice(screen: String, code: Int, intent: String, sender: String, pickMs: Long = -1)   // pickMs = time from the start of the list to the press (-1 = not a list pick); choice log; code 0 = wake, else the position of the option in the list
     fun codeCount(): Int             // successful code actions so far (persisted); learning mode while < 15
     fun setCodeCount(n: Int)
     fun startWrite() {}   // the Write keyboard (stereo pair); its text comes back through the app
@@ -177,6 +177,8 @@ class ControllerMode(
     private val list get() = scanner.list   // the options being read
     private var awaitStart = -1
     private val history = ArrayList<Pair<Int, Long>>()   // (option index, time its speech started), oldest first
+    private var scanStartedAt = 0L             // when beginScan started the list (for the time-to-pick in the choice log)
+    private var pickMs = -1L                   // set while a click-pick runs: ms from list start to the press
     private var code = 0                       // position of the option being run
     private var waitNext: (() -> Unit)? = null
 
@@ -223,7 +225,7 @@ class ControllerMode(
             Gesture.SINGLE -> when (phase) {
                 Phase.SCAN -> {   // one click chooses the option spoken last
                     val i = bind(firstPress) ?: return    // nothing spoken yet: ignore
-                    stopAll(); code = i + 1; list.items[i].run()
+                    stopAll(); code = i + 1; pickMs = firstPress - scanStartedAt; list.items[i].run(); pickMs = -1
                 }
                 Phase.INTRO -> skipIntro()
                 Phase.WAIT -> { val n = waitNext; stopAll(); n?.invoke() }
@@ -340,6 +342,7 @@ class ControllerMode(
         stopAll()
         phase = Phase.SCAN; curIntro = null
         history.clear()
+        scanStartedAt = clock()
         scanner.load(buildOptions())
         if (scanner.isEmpty) { leaveSilent(); return }
         scanner.speakItem(0)
@@ -816,7 +819,7 @@ class ControllerMode(
         if (suggestedKeys.isNotEmpty() && screen == Screen.HUB) out.choice(screen.name, -1, if (intent in suggestedKeys) "suggest:hit" else "suggest:miss", intent)   // into the choice log, for tools/menu_report.py
         backPicked = intent.endsWith(":back") || intent == "volume:done"
         if (backPicked) backNav = true
-        out.choice(screen.name, code, intent, sender)
+        out.choice(screen.name, code, intent, sender, pickMs)
         if (intent != "none" && intent != "nothing") out.setCodeCount(out.codeCount() + 1)
     }
 
