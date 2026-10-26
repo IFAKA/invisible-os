@@ -21,7 +21,6 @@ import android.widget.Toast
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
-import com.faka.invisible.logickit.NameFinder
 
 
 /** Setup checklist, then the settings of the launcher (the menu you hear). Plain views, rebuilt on every change. */
