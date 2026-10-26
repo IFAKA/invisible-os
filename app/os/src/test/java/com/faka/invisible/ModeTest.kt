@@ -717,6 +717,19 @@ class ModeTest {
         assertEquals(ControllerMode.Screen.VOLUME, r.m.screen)
     }
 
+    @Test fun volumeDialHoldIsQuieterClickIsOneStepLouderTripleGoesBack() {
+        val r = Rig(); r.song = "Blue, Ana"; r.wake(); r.pick("Music"); r.pick("Volume")
+        assertEquals(ControllerMode.Screen.VOLUME_DIAL, r.m.screen)
+        r.clearLog(); r.advance(2000)
+        assertFalse(r.has("vol"))   // opening changes nothing
+        r.click(Gesture.SINGLE); assertEquals(1, r.count("vol true")); assertEquals(0, r.count("vol false"))   // one click: one step louder
+        r.click(Gesture.DOUBLE); assertEquals(1, r.count("vol false"))   // two clicks: one step quieter
+        r.clearLog(); r.m.onGesture(Gesture.CLICK_HOLD); r.advance(600); r.m.onGesture(Gesture.CLICK_HOLD_END, 600)
+        assertTrue(r.count("vol false") >= 3); assertFalse(r.has("vol true"))   // a hold only goes quieter
+        val n = r.count("vol false"); r.advance(2000); assertEquals(n, r.count("vol false"))   // it stops on release
+        r.click(Gesture.TRIPLE); assertEquals(ControllerMode.Screen.MUSIC, r.m.screen)
+    }
+
     @Test fun volumeLevelIsSpokenInSpanishForASpanishMessageContext() {
         assertEquals("siete", Spoken.number(7, true)); assertEquals("seven", Spoken.number(7)); assertEquals("45", Spoken.number(45))
     }

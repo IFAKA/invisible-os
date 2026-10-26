@@ -135,7 +135,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: Phrase, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: Phrase, val run: () -> Unit)
@@ -206,7 +206,8 @@ class ControllerMode(
 
     /** [lastPressMs] = length of the last press; with the gesture gap it gives the time of the first press. */
     fun onGesture(g0: Gesture, lastPressMs: Long = 0) {
-        if (g0 == Gesture.CLICK_HOLD_END) { endFast(); return }
+        if (g0 == Gesture.CLICK_HOLD_END) { if (dialHolding) endDialHold() else endFast(); return }
+        if (active && screen == Screen.VOLUME_DIAL && phase == Phase.WAIT && g0 != Gesture.HOLD) { dial(g0); return }   // click then hold (HOLD) still closes the OS
         // The detector sends a plain hold as CLICK_HOLD (fast scroll, only while options are read) and click-then-hold as HOLD (exit):
         // exit needs the harder gesture so it is never an accident. Idle: a plain hold wakes. Active outside a list: a plain hold does nothing.
         val canFast = active && !finding && pending == null && phase == Phase.SCAN && !list.isEmpty
@@ -307,7 +308,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY -> Tone.MORE; Screen.VOLUME, Screen.VOLUME_DIAL -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -327,6 +328,11 @@ class ControllerMode(
         if (s == Screen.TIMER_DONE) intro += Intro(Voice.TIMER_DONE, null)
         if (s == Screen.NOTIF_ACTIONS) openNotif()?.let { intro += Intro(notifRead(it), null) }
         curIntro = null
+        if (s == Screen.VOLUME_DIAL) {   // no list: the song plays on and the button is the dial
+            phase = Phase.WAIT; waitNext = null
+            if (learning()) timers.set("scan", toneGapMs) { say(Voice.DIAL_HINT) }
+            return
+        }
         timers.set("scan", toneGapMs) { nextIntro() }
     }
 
@@ -533,6 +539,7 @@ class ControllerMode(
             Screen.APP_OPEN -> appOpenOptions()
             Screen.MUSIC -> musicOptions()
             Screen.MUSIC_PLAY -> musicPlayOptions()
+            Screen.VOLUME_DIAL -> emptyList()
             Screen.NOTIF_LIST -> notifListOptions()
             Screen.NOTIF_ACTIONS -> notifActionOptions()
         }
@@ -683,7 +690,8 @@ class ControllerMode(
             Opt("music:now", Menu.WHATS_PLAYING) { pick("music:now"); outro(Phrase.content(song, out.songLang(song))) },
             toggle("shuffle", "Shuffle"), toggle("repeat", "Repeat"),
             Opt("music:radio", Menu.RADIO) { pick("music:radio"); out.musicRadio(); outro(Menu.RADIO) })
-        return ctl + listOf(Opt("music:play", Menu.PLAY_SOMETHING) { pick("music:play"); show(Screen.MUSIC_PLAY) })
+        val volume = Opt("music:volume", Menu.VOLUME) { pick("music:volume"); show(Screen.VOLUME_DIAL) }
+        return ctl + volume + listOf(Opt("music:play", Menu.PLAY_SOMETHING) { pick("music:play"); show(Screen.MUSIC_PLAY) })
     }
 
     private fun musicPlayOptions(): List<Opt> = listOf(
@@ -769,6 +777,41 @@ class ControllerMode(
         Opt(key, Phrase.content(t.text.take(MAX_SPOKEN), t.lang.ifEmpty { null })) { pick(key); onPick(t) }
     }
 
+    // ---- the volume dial (Music > Volume): no list, the song plays on. Hold = quieter while down, 1 click = one step louder, 2 clicks = one step quieter, 3 clicks = back.
+    // Louder is only ever one step per click (never repeats), so a loud mistake costs one step and the next gesture fixes it.
+    private var dialHolding = false
+    private fun dial(g: Gesture) {
+        when (g) {
+            Gesture.SINGLE -> dialStep(true)
+            Gesture.DOUBLE -> dialStep(false)
+            Gesture.CLICK_HOLD -> { stopAll(); dialHolding = true; dialDown() }
+            Gesture.TRIPLE -> { stopAll(); out.choice(screen.name, 3, "back", ""); back() }
+            Gesture.QUAD -> { stopAll(); out.choice(screen.name, 4, "leave", ""); leaveSilent() }
+            else -> {}
+        }
+    }
+
+    private fun dialStep(up: Boolean) {
+        stopAll()
+        val before = out.volumeLevel()
+        out.volume(up)
+        val n = out.volumeLevel()
+        if (n == before) tn(Tone.CANCEL) else say(Voice.level(n))
+    }
+
+    private fun dialDown() {
+        if (!dialHolding) return
+        val before = out.volumeLevel()
+        out.volume(false)
+        if (out.volumeLevel() == before) { dialHolding = false; tn(Tone.CANCEL); return }   // the bottom: stop
+        timers.set("dial", DIAL_STEP_MS) { dialDown() }
+    }
+
+    private fun endDialHold() {
+        timers.clear("dial"); dialHolding = false
+        say(Voice.level(out.volumeLevel()))
+    }
+
     /** Speak only the new volume level as a word, then keep scanning the volume list. */
     private fun sayLevel() {
         val n = out.volumeLevel()
@@ -826,7 +869,7 @@ class ControllerMode(
             Screen.NOTIF_ACTIONS -> show(Screen.NOTIF_LIST)
             Screen.NOTIF_LIST, Screen.APP_OPEN -> treeUp()
             Screen.MUSIC -> show(musicBack)
-            Screen.MUSIC_PLAY -> show(Screen.MUSIC)
+            Screen.MUSIC_PLAY, Screen.VOLUME_DIAL -> show(Screen.MUSIC)
             Screen.TREE -> { treePath.removeLastOrNull(); treeUp() }
             Screen.FIND -> { findStack.removeLastOrNull(); if (findStack.isEmpty()) show(Screen.HUB) else show(Screen.FIND) }
             Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR -> show(Screen.HUB)
@@ -982,6 +1025,7 @@ class ControllerMode(
     companion object {
         /** Pause between scanned items, from the end of one item's speech to the start of the next. Easy to change. */
         const val SKIP_MS = Pacing.SKIP_MS   // two clicks while scanning: how soon the previous option starts
+        const val DIAL_STEP_MS = 250L   // volume dial: one step quieter every this long while the button is held
         const val ITEM_GAP_MS = Pacing.ITEM_GAP_MS
         const val FIND_MS = 20_000L   // "Find my phone" rings this long
         const val SPEARCON_AFTER = 30   // picks of one option, then it is scanned as a sped-up spearcon
