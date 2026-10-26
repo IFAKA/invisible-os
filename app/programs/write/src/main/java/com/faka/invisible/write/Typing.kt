@@ -68,6 +68,7 @@ class TypeProgram(
         const val MENU_LOOPS = 2
         const val WORD_PAGES = 4
         const val ALPHABET = "abcdefghijklmnopqrstuvwxyzñ"
+        const val ALPHABET_BY_USE = "eaosrnidltcumpbgvyqhfzjñxkw"   // common letters in Spanish and English
         val LETTER_RE = Regex("[a-záéíóúüñ']+")
     }
 
@@ -121,8 +122,8 @@ class TypeProgram(
         return if (letters) {
             val mass = LinkedHashMap<Char, Double>()
             for ((w, lp) in all) if (w.length > prefix.length && w.startsWith(prefix) && LETTER_RE.matches(w)) mass.merge(w[prefix.length], Math.exp(lp), Double::plus)
-            val likely = mass.entries.sortedByDescending { it.value }.map { it.key }
-            (likely + ALPHABET.filter { it !in likely }).map { it.toString() }   // the likely letters first, then every other letter A to Z: none is missing
+            // the whole alphabet is ranked: the model's chance first, a small prior for common letters breaks ties and orders letters it has no word for
+            ALPHABET.toList().sortedByDescending { (mass[it] ?: 0.0) + 1e-6 * (ALPHABET.length - ALPHABET_BY_USE.indexOf(it).let { i -> if (i < 0) ALPHABET.length else i }) }.map { it.toString() }
         } else all.asSequence().filter { it.first !in recent }.filter { it.first.startsWith(prefix) && LETTER_RE.matches(it.first) && (prefix.isNotEmpty() || !lm.skipShortFirst || (it.first.length >= 3 && '\'' !in it.first)) }.take(WORD_PAGES * 2).map { it.first }.toList()
     }
 
