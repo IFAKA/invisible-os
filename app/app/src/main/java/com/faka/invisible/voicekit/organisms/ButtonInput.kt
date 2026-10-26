@@ -63,7 +63,7 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
         val afterClick = rawUpAt >= 0 && time - rawUpAt < Pacing.GAP_MS && rawLastLen < Pacing.HOLD_MS
         rawDownAt = time
         handler.removeCallbacks(rawExit)
-        if (afterClick) handler.postDelayed(rawExit, Pacing.HOLD_MS)
+        if (afterClick && r.exitOnClickHold) handler.postDelayed(rawExit, Pacing.HOLD_MS)
         r.down(time)
     }
 
@@ -81,7 +81,7 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
      */
     fun assistHold() {
         if (target.raw() != null) {   // a program: the signal without key events after a click is click then hold
-            if (rawDownAt < 0 && rawLastLen < Pacing.HOLD_MS && SystemClock.uptimeMillis() - rawUpWall < CLICK_THEN_HOLD_MS) { Log.d(TAG, "ASSIST click_hold in program: exit"); target.exitProgram() }
+            if (target.raw()?.exitOnClickHold != false && rawDownAt < 0 && rawLastLen < Pacing.HOLD_MS && SystemClock.uptimeMillis() - rawUpWall < CLICK_THEN_HOLD_MS) { Log.d(TAG, "ASSIST click_hold in program: exit"); target.exitProgram() }
             return
         }
         if (clickHolding || SystemClock.uptimeMillis() - lastHoldAt < 1500) { Log.d(TAG, "ASSIST ignored, hold just fired"); return }

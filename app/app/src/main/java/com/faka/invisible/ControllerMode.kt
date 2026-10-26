@@ -462,8 +462,10 @@ class ControllerMode(
                 val cost = far.mapValues { it.value.second }
                 val sug = out.suggest(deep.keys + far.keys, clock(), home) { key, share, pos -> key !in cost || SuggestGate.worth(share, cost.getValue(key), pos) }
                     .mapNotNull { deep[it] ?: far[it]?.first }
-                suggestedKeys = sug.map { it.key }
-                sug + treeOptions(root) + unmuteOption()   // the home list is the tree's top; only the small Suggested slot in front adapts
+                val playing = if (out.nowPlaying() != null) all["hub:music"] else null   // something is playing: its controls are always the first entry
+                val front = if (playing == null) sug else listOf(playing) + sug.filter { it.key != playing.key }
+                suggestedKeys = front.map { it.key }
+                front + treeOptions(root) + unmuteOption()   // the home list is the tree's top; only the small Suggested slot in front adapts
             }
             Screen.TASK -> {   // "Add task" first, then this page of tasks (a click right after hearing one = done), then "More tasks"
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)

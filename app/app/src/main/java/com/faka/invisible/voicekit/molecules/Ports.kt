@@ -41,6 +41,8 @@ interface SpeechListener {
 /** A program (the Duel, Write) that gets the raw button while it runs: no clicks, only down and up times. */
 interface RawButton {
     val active: Boolean
+    /** False: click then hold is not the exit (Write uses it to pick words). */
+    val exitOnClickHold: Boolean get() = true
     fun down(time: Long)
     fun up(time: Long)
 }
