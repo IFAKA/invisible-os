@@ -1107,16 +1107,16 @@ class ModeTest {
         val r = mail(); r.findSeen = false; r.wake(); hold(r)
         assertEquals(ControllerMode.Screen.FIND, r.m.screen)
         r.advance(3000)
-        assertTrue(r.spoken().contains("say Find. Pick the first letter."))   // the first time only
+        assertTrue(r.spoken().contains("say Find. Pick the app, or a letter."))   // the first time only
         assertTrue(r.log.contains("choice HUB 7 find"))
-        r.clearLog(); r.pick("M"); r.pick("Maps")
+        r.clearLog(); r.pick("Maps")
         assertEquals(ControllerMode.Screen.APP_OPEN, r.m.screen)
-        assertTrue(r.log.any { it.endsWith("find:2") } && r.log.any { it.endsWith("app:com.google.android.apps.maps") })
+        assertTrue(r.log.any { it.endsWith("find:1") } && r.log.any { it.endsWith("app:com.google.android.apps.maps") })
     }
 
     @Test fun findHintIsSaidOnlyOnce() {
         val r = mail(); r.wake(); hold(r); r.advance(3000)
-        assertFalse(r.spoken().any { it.contains("Pick the first letter") })
+        assertFalse(r.spoken().any { it.contains("Pick the app, or a letter") })
     }
 
     @Test fun findWithManyAppsSpeaksRangesAndTripleClickGoesBack() {

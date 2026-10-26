@@ -104,10 +104,19 @@ class NameFinderTest {
     @Test fun aRangeNeverCutsInsideALetter() {
         val p = NameFinder.plan(leaves)
         for (n in lists(p)) {
-            val letters = n.parts.map { pt -> NameFinder.leavesOf(pt).map { NameFinder.key(it.label).first() }.toSet() }
+            val letters = n.parts.filter { it.sub != null || n !== p }.map { pt -> NameFinder.leavesOf(pt).map { NameFinder.key(it.label).first() }.toSet() }
             if (letters.flatten().toSet().size > 1) for (x in letters.indices) for (y in letters.indices) if (x != y)
                 assertTrue("${n.parts.map { it.label }}", (letters[x] intersect letters[y]).isEmpty())
         }
+    }
+
+    @Test fun theMostUsedAppsAreReadFirstAndNothingIsLost() {
+        val ls = leaves.mapIndexed { i, l -> if (i < 3) l.copy(weight = 60.0 - i) else l }
+        val p = NameFinder.plan(ls)
+        assertEquals(ls.take(3).map { it.pkg }, p.parts.take(3).map { it.leaf?.pkg })
+        assertEquals(ls.map { it.pkg }.sorted(), NameFinder.leavesOf(p).map { it.pkg }.sorted())
+        assertTrue(p.parts.size <= NameFinder.MAX_TOP + NameFinder.MAX_PARTS)
+        assertTrue("never worse than letters alone", findCost(p, ls[0]) <= 1.0 + 1e-9)
     }
 
     @Test fun aBigLetterIsReadWholeMostUsedFirstAndNeverHasOther() {
