@@ -587,7 +587,7 @@ class ControllerMode(
     private fun treeLabel(c: TreeNode): Phrase {
         val a = c.app
         val lang = if (a != null && !a.pkg.startsWith("hub:")) NameLang.voice(a.pkg, a.label) else null   // app names in their language; groups and OS programs stay English
-        return if (c.unread > 0) Phrase.content(c.label + ", " + c.unread, lang) else Phrase.content(c.label, lang)
+        return if (c.unread > 0 && !isMusic(c)) Phrase.content(c.label + ", " + c.unread, lang) else Phrase.content(c.label, lang)
     }
 
     /** One list of the tree: a group goes down, an OS program runs as before, an app opens its notifications. */
@@ -654,7 +654,9 @@ class ControllerMode(
         }
     }
 
-    private fun treeAppOption(c: TreeNode): Opt { val a = c.app!!; return Opt("app:${a.pkg}", treeLabel(c)) { pick("app:${a.pkg}"); notifPkg = a.pkg; show(if (c.unread > 0) Screen.NOTIF_LIST else Screen.APP_OPEN) } }
+    private fun treeAppOption(c: TreeNode): Opt { val a = c.app!!; return Opt("app:${a.pkg}", treeLabel(c)) { pick("app:${a.pkg}"); notifPkg = a.pkg; show(if (c.unread > 0 && !isMusic(c)) Screen.NOTIF_LIST else Screen.APP_OPEN) } }
+    /** A music app's only notification is its player: it never opens the notification list, it opens the Music page. */
+    private fun isMusic(c: TreeNode) = c.app?.pkg?.let { out.isMusicApp(it) } == true
 
     private fun unmuteOption(): List<Opt> = if (out.notifMutedCount() == 0) emptyList() else listOf(Opt("notif:unmute", Menu.UNMUTE_ALL) {
         pick("notif:unmute"); out.notifUnmuteAll(); say(Voice.APPS_UNMUTED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
