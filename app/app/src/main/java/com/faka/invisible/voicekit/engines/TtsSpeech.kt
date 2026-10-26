@@ -26,6 +26,8 @@ class TtsSpeech(
     private companion object {
         /** Recorded clips are OFF: a recorded voice for fixed words and the phone's voice for the rest sounded like two people. One voice for everything. */
         const val CLIPS = false
+        /** The on-phone Piper voice (NeuralSpeech) is OFF: it sounded cheap and took 10 s to load at start. The phone's own voice is used, the best installed one (see [bestVoice]). */
+        const val NEURAL = false
     }
     /** The one neural voice (English and Spanish). The Google voice below speaks only what it cannot: other languages, or a model not downloaded yet. */
     val neural = NeuralSpeech(app, handler, rate, listener) { p, q, slow -> googleSpeak(p, q, false, slow) }
@@ -42,7 +44,7 @@ class TtsSpeech(
     override val speaking get() = tts?.isSpeaking == true || spTrack != null || neural.speaking
 
     fun start() {
-        neural.start()
+        if (NEURAL) neural.start()
         tts = TextToSpeech(app) { s ->
             if (s == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.US; ready = true
@@ -69,10 +71,17 @@ class TtsSpeech(
         if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) {
             Log.d(tag, "TTS voice $lang missing, default"); t.language = Locale.getDefault()
         } else t.language = want
+        bestVoice(t, want)?.let { if (t.voice?.name != it.name) { Log.d(tag, "TTS voice ${it.name} q=${it.quality}"); t.voice = it } }
     }
 
+    /** The best voice installed for the language: highest quality, then lowest latency; never one that needs the network (it would stall). */
+    private fun bestVoice(t: TextToSpeech, want: Locale): android.speech.tts.Voice? = try {
+        t.voices.filter { it.locale.language == want.language && !it.isNetworkConnectionRequired && "notInstalled" !in it.features }
+            .sortedWith(compareByDescending<android.speech.tts.Voice> { it.quality }.thenBy { it.latency }).firstOrNull()
+    } catch (e: Exception) { null }
+
     override fun speak(p: Phrase, queue: Boolean, fast: Boolean, slow: Boolean) {
-        if (!fast && neural.handles(p)) {   // one voice: the neural one, whenever its model is there
+        if (NEURAL && !fast && neural.handles(p)) {   // one voice: the neural one, whenever its model is there
             if (!queue) { tts?.stop(); stopClips() }
             lastUtt = ""   // Google events of older speech no longer count
             neural.speak(p, queue, slow); return
