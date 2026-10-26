@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
  * ENGINE. The only place that speaks: the TTS engine, the voice language, the speech rate, and the spearcon and word-clip
  * files that the TTS engine makes. [rate] gives the normal speech rate (it grows with use).
  */
-private val LETTER_LABEL = Regex("(Other )?[A-Z0-9]( to [A-Z0-9])?")
+private val LETTER_LABEL = Regex("[A-Z0-9][a-z0-9]?( to [A-Z0-9][a-z0-9]?)?")
 
 class TtsSpeech(
     private val app: Context,
@@ -119,11 +119,11 @@ class TtsSpeech(
         tts?.speak(letters(text), if (queue) TextToSpeech.QUEUE_ADD else TextToSpeech.QUEUE_FLUSH, null, lastUtt)
     }
 
-    /** A Find letter label ("A to F", "C", "Other C"): each lone letter is marked to be spelled, so "A" is the letter "ay", not the word "a" ("uh"). Other text is unchanged. */
+    /** A Find letter label ("A to F", "C", "Wa to We"): each lone letter is marked to be spelled, so "A" is the letter "ay", not the word "a" ("uh"). Other text is unchanged. */
     private fun letters(text: String): CharSequence {
         if (!LETTER_LABEL.matches(text)) return text
         val s = android.text.SpannableString(text)
-        Regex("\\b[A-Z]\\b").findAll(text).forEach { m -> s.setSpan(android.text.style.TtsSpan.VerbatimBuilder(m.value).build(), m.range.first, m.range.last + 1, 0) }
+        Regex("\\b[A-Z0-9][a-z0-9]?\\b").findAll(text).forEach { m -> s.setSpan(android.text.style.TtsSpan.VerbatimBuilder(m.value).build(), m.range.first, m.range.last + 1, 0) }
         return s
     }
 

@@ -24,7 +24,7 @@ class NameFinderTest {
     @Test fun everyLeafIsReachableOnceAndNoListIsEmptyOrTooLong() {
         val p = NameFinder.plan(leaves)
         assertEquals(leaves.map { it.pkg }.sorted(), NameFinder.leavesOf(p).map { it.pkg }.sorted())
-        for (n in lists(p)) { assertTrue(n.parts.isNotEmpty()); assertTrue(n.parts.size <= NameFinder.MAX_PARTS) }
+        for (n in lists(p)) { assertTrue(n.parts.isNotEmpty()); assertTrue(n.parts.size <= NameFinder.LETTER_MAX) }
     }
 
     @Test fun fewLeavesAreJustListedHeaviestFirst() {
@@ -92,9 +92,9 @@ class NameFinderTest {
                 steps++
                 val part = n.parts.first { pt -> NameFinder.leavesOf(pt).any { it.pkg == target.pkg } }
                 if (part.leaf != null) { assertEquals(target.pkg, part.leaf.pkg); break }
-                val l = part.label.removePrefix("Other ")
+                val l = part.label
                 val (a, b) = if (" to " in l) l.split(" to ") else listOf(l, l)
-                assertTrue("${target.label} in ${part.label}", a.length == 1 && b.length == 1 && a[0] <= c && c <= b[0])
+                assertTrue("${target.label} in ${part.label}", a.length <= 2 && b.length <= 2 && a[0] <= c && c <= b[0])
                 n = part.sub!!
             }
             assertTrue("${target.label} in $steps steps", steps <= 5)
@@ -110,10 +110,20 @@ class NameFinderTest {
         }
     }
 
-    @Test fun aBigLetterReadsItsMostUsedAppsThenOther() {
+    @Test fun aBigLetterIsReadWholeMostUsedFirstAndNeverHasOther() {
         val p = NameFinder.plan((1..9).map { leaf("C$it", if (it == 9) 50.0 else 1.0) })
-        assertTrue(p.parts.any { it.leaf?.label == "C9" })
-        assertEquals("Other C", p.parts.last().label)
+        assertEquals(9, p.parts.size)
+        assertEquals("C9", p.parts.first().label)
+        assertTrue(p.parts.none { it.label.startsWith("Other") })
+    }
+
+    @Test fun aVeryBigLetterIsSplitByItsSecondLetterWithNamedRanges() {
+        val ls = ('a'..'h').flatMap { c2 -> (1..3).map { leaf("W$c2$it", if (c2 == 'a') 9.0 else 1.0) } }   // 24 apps
+        val p = NameFinder.plan(ls)
+        assertTrue(p.parts.size <= NameFinder.MAX_PARTS)
+        assertEquals(24, NameFinder.leavesOf(p).size)
+        for (n in lists(p)) { assertTrue(n.parts.size <= NameFinder.LETTER_MAX); assertTrue(n.parts.none { it.label.startsWith("Other") }) }
+        assertTrue(p.parts.map { it.label }.toString(), p.parts.any { it.label.matches(Regex("W[a-h]( to W[a-h])?")) })
     }
 
     @Test fun aCountAfterAProgramNameIsNotPartOfARangeName() {

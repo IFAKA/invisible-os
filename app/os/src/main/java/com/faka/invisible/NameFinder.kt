@@ -8,13 +8,14 @@ import com.faka.invisible.voicekit.Spoken
  * "Find": reach ANY app or program by its name, without knowing its group. Pure.
  * All leaves are sorted by spoken name. A Find list splits a stretch of that order into at most [MAX_PARTS] neighbouring parts:
  * a part with one leaf is that leaf (its name), a part with more is a RANGE of whole first letters ("A to C", "W"): cuts never fall
- * inside a letter, so the listener needs only first letters. One letter with more than [MAX_PARTS] apps = its most used apps, then
- * "Other C". Parts are read A to Z. Cost = sum over leaves of weight * (place in its list + [STEP] per range entered).
+ * inside a letter, so the listener needs only first letters. One letter with more than [LETTER_MAX] apps = ranges of its first TWO letters ("Wa to We"), never "Other". Parts are read A to Z. Cost = sum over leaves of weight * (place in its list + [STEP] per range entered).
  * [plan] picks the splits for the lowest cost: exact for stretches of 6 or fewer leaves, and for longer ones the best of a few
  * weight-balanced starts improved by moving one cut at a time (memoised per stretch). It is slow on a phone: build it off the main thread.
  */
 object NameFinder {
     const val MAX_PARTS = AppTree.MAX_LIST
+    /** A list of one letter's apps (or of one 2-letter start) is read whole up to this many; the phone's hold skips ahead. */
+    const val LETTER_MAX = 12
     /** Cost of going one range down: a click and a new list to hold in mind, about one item heard (the tree uses 0.5; Find went 5 deep with it). */
     const val STEP = 1.0
 
@@ -102,19 +103,47 @@ object NameFinder {
             return (0 until k).sumOf { x -> (x + 1) * ws[x] } + inner
         }
 
-        /** The list of ONE letter ([idx], A to Z): up to [MAX_PARTS] apps are read as they are; more = the most used apps,
-         *  then "Other C" with the rest. So nobody has to tell second letters apart. Returns the cost and the list. */
-        fun letter(idx: List<Int>): Pair<Double, Node> {
-            if (idx.size <= MAX_PARTS) return idx.withIndex().sumOf { (x, l) -> (x + 1) * ls[l].weight } to Node(idx.map { Part(ls[it].label, ls[it], null) })
+        /** The list of ONE letter ([idx], A to Z, same first letter). Up to [LETTER_MAX] apps are all read, the most used first (you stop it at yours).
+         *  More are split by the first TWO letters into named ranges ("Wa to We"), never "Other". Returns the cost and the list. */
+        fun letter(idx: List<Int>): Pair<Double, Node> = groups(idx.groupBy { keys[it].take(2) }.toSortedMap().values.toList())
+
+        fun flat(idx: List<Int>): Pair<Double, Node> {
             val byUse = idx.sortedWith(compareByDescending<Int> { ls[it].weight }.thenBy { it })
-            return (1 until MAX_PARTS).map { t ->   // how many most used apps before "Other": the cheapest
-                val top = byUse.take(t).sorted()
-                val rest = idx - top.toSet()
-                val (rc, rn) = letter(rest)
-                val c = top.withIndex().sumOf { (x, l) -> (x + 1) * ls[l].weight } + (t + 1 + STEP) * rest.sumOf { ls[it].weight } + rc
-                c to Node(top.map { Part(ls[it].label, ls[it], null) } + Part(Spoken.otherLetter(up(idx[0])), null, rn))
-            }.minBy { it.first }
+            return byUse.withIndex().sumOf { (x, l) -> (x + 1) * ls[l].weight } to Node(byUse.map { Part(ls[it].label, ls[it], null) })
         }
+
+        /** [gs] = apps of one letter grouped by their 2-letter start, in order. */
+        fun groups(gs: List<List<Int>>): Pair<Double, Node> {
+            val all = gs.flatten()
+            if (all.size <= LETTER_MAX || gs.size == 1) return flat(all)
+            val tot = all.sumOf { ls[it].weight }
+            var best: Pair<Double, Node>? = null
+            for (k in 2..minOf(MAX_PARTS, gs.size)) {
+                val cuts = ArrayList<Int>(); var acc = 0.0; var g = 0
+                for (x in 1 until k) {   // part x ends where the weight so far reaches x/k of the total; every part keeps at least one group
+                    val minEnd = (cuts.lastOrNull() ?: 0) + 1; val maxEnd = gs.size - (k - x)
+                    while (g < maxEnd && (g < minEnd || acc < tot * x / k)) { acc += gs[g].sumOf { ls[it].weight }; g++ }
+                    cuts += g
+                }
+                cuts += gs.size
+                var cost = 0.0; var from = 0
+                val parts = ArrayList<Part>()
+                cuts.forEachIndexed { x, to ->
+                    val part = gs.subList(from, to); val ids = part.flatten(); val w = ids.sumOf { ls[it].weight }
+                    if (ids.size == 1) { cost += (x + 1) * w; parts += Part(ls[ids[0]].label, ls[ids[0]], null) }
+                    else {
+                        val (ic, inner) = groups(part)
+                        cost += (x + 1) * w + STEP * w + ic
+                        parts += Part(Spoken.range(prefix(part.first()), prefix(part.last())), null, inner)
+                    }
+                    from = to
+                }
+                if (best == null || cost < best.first - 1e-9) best = cost to Node(parts)
+            }
+            return best!!
+        }
+
+        fun prefix(g: List<Int>) = keys[g[0]].take(2).replaceFirstChar { it.uppercase() }
 
         fun up(l: Int) = first[l].uppercase()
 
