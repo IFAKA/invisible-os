@@ -1,4 +1,4 @@
-package com.faka.invisible
+package com.faka.invisible.write
 
 import com.faka.invisible.voicekit.*
 

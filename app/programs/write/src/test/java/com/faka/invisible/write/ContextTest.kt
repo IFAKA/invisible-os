@@ -1,4 +1,4 @@
-package com.faka.invisible
+package com.faka.invisible.write
 
 import com.faka.invisible.voicekit.*
 
@@ -74,17 +74,16 @@ class ContextTest {
         assertTrue(top.toString(), top.contains("cenar") || top.contains("vienes") || top.contains("mañana"))
     }
 
-    private fun notif(hidden: Boolean = false) = Notif("k", "com.whatsapp", "WhatsApp", "Ana", "vienes mañana a casa?", 0L, hidden = hidden)
+    private fun reply(hidden: Boolean = false) = Frame.reply("com.whatsapp", "Ana", "vienes mañana a casa?", hidden)
 
     @Test fun aReplyFromANotificationKnowsTheMessageItAnswers() {
-        val f = Frame.replyTo(notif())
+        val f = reply()
         assertEquals("com.whatsapp", f.app); assertEquals("Ana", f.thread); assertEquals(listOf("vienes mañana a casa?"), f.around)
         assertTrue(f.brief().contains("vienes mañana a casa?")); assertFalse(f.hasField)
         assertEquals("t:com.whatsapp/Ana", f.keys().first())
     }
     @Test fun aPrivateNotificationGivesOnlyTheApp() {
-        val f = Frame.replyTo(notif(hidden = true))
+        val f = reply(hidden = true)
         assertEquals("com.whatsapp", f.app); assertEquals("", f.thread); assertTrue(f.around.isEmpty())
     }
-    @Test fun noNotificationIsAnEmptyFrame() = assertEquals(Frame(), Frame.replyTo(null))
 }

@@ -74,7 +74,7 @@ class KitRulesTest {
                 for (p in phrases) if (!p.isFixed) bad += "${owner.javaClass.simpleName}.${f.name}: ${p.text}"
             }
         }
-        listOf<Any>(Voice, Menu, TellVoice, TypeVoice).forEach { check(it) }
+        listOf<Any>(Voice, Menu, TellVoice).forEach { check(it) }
         assertTrue("sentences made outside Sentences.kt: $bad", bad.isEmpty())
     }
 

@@ -1,4 +1,4 @@
-package com.faka.invisible
+package com.faka.invisible.write
 
 import android.text.InputType
 
@@ -41,9 +41,8 @@ data class Frame(
          * The same fields as a chat on the screen (app = package, thread = who wrote), so what is learned in one helps the other.
          * A private notification has no kept text: only the app is known.
          */
-        fun replyTo(n: Notif?): Frame =
-            if (n == null) Frame()
-            else Frame(app = n.pkg, thread = if (n.hidden) "" else n.title, around = if (n.hidden || n.text.isBlank()) emptyList() else listOf(n.text))
+        fun reply(app: String, title: String, text: String, hidden: Boolean): Frame =
+            Frame(app = app, thread = if (hidden) "" else title, around = if (hidden || text.isBlank()) emptyList() else listOf(text))
     }
 }
 

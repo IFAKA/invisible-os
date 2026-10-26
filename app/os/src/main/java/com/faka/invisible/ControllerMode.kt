@@ -78,8 +78,6 @@ interface ModeOutput {
     fun setFindHintSeen() {}
     fun loadReactions(): String = ""   // saved reaction samples (see ReactionGap.encode)
     fun saveReactions(text: String) {}
-    fun startWrite() {}   // the Write keyboard (stereo pair); its text comes back through the app
-    fun startSum() {}   // the Sum prices tool: the number keyboard in a loop
     fun programs(): List<ProgramEntry> = emptyList()   // the programs the OS lists (its registry), in menu order
     fun startProgram(id: String) {}   // start the program with this menu id (a ProgramEntry.id); the program gets the raw button
     fun weather(done: (Phrase) -> Unit) { done(Voice.WEATHER_FAILED) }   // off the main thread inside; [done] runs on the main thread with ONE sentence
@@ -447,9 +445,7 @@ class ControllerMode(
                     "today" -> all["hub:today"] = Opt("hub:today", Menu.TODAY) { pick("hub:today"); show(Screen.TODAY) }
                     "phone" -> all["hub:phone"] = Opt("hub:phone", Menu.PHONE) { pick("hub:phone"); show(Screen.PHONE) }
                     "alarm" -> all["hub:alarm"] = Opt("hub:alarm", Menu.SET_ALARM) { pick("hub:alarm"); show(Screen.ALARM_HOUR) }
-                    "write" -> all["hub:write"] = Opt("hub:write", Menu.WRITE) { pick("hub:write"); pausedByUs = false; exit(false); out.startWrite() }   // a program of the OS: its place comes from its tag in AppCategories
                     "calculator" -> all["hub:calculator"] = Opt("hub:calculator", Menu.CALCULATOR) { pick("hub:calculator"); calc.clear(); show(Screen.CALC) }
-                    "sum" -> all["hub:sum"] = Opt("hub:sum", Menu.SUM) { pick("hub:sum"); pausedByUs = false; exit(false); out.startSum() }
                     "games" -> all["hub:games"] = Opt("hub:games", Menu.GAMES) { pick("hub:games"); show(Screen.GAMES) }
                     else -> out.programs().firstOrNull { it.id == "hub:$k" }?.let { e -> all[e.id] = Opt(e.id, e.title) { pick(e.id); pausedByUs = false; exit(false); out.startProgram(e.id) } }   // a tool program of the registry; its place in the tree comes from its tag in AppCategories
                 }

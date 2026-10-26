@@ -1,4 +1,4 @@
-package com.faka.invisible
+package com.faka.invisible.write
 
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.common.model.DownloadConditions

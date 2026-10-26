@@ -22,6 +22,9 @@ import android.util.Log
 import com.faka.invisible.oskit.Program
 import com.faka.invisible.oskit.ProgramEntry
 import com.faka.invisible.oskit.ProgramHost
+import com.faka.invisible.write.Frame
+import com.faka.invisible.write.WriteProgram
+import com.faka.invisible.write.WriteServices
 import com.faka.invisible.voicekit.*
 import java.util.Calendar
 import java.util.Locale
@@ -150,8 +153,6 @@ object Actions {
             override fun setLastTimer(minutes: Int) { prefs().edit().putInt("lastTimer", minutes).apply() }
             override fun programs() = Programs.all
             override fun startProgram(id: String) { Programs.byId(id)?.let { startProgramEntry(it) } }
-            override fun startWrite() = launchWrite()
-            override fun startSum() = launchSum()
             override fun pickCount(intent: String) = choices.intentCount(intent)
             override fun favourites() = choices.favourites()
             override fun suggest(candidates: Collection<String>, now: Long, others: Collection<String>, accept: (String, Double, Int) -> Boolean) = Suggester.top(choices.history(), candidates, now, tags = context, others = others, accept = accept)
@@ -184,9 +185,7 @@ object Actions {
     fun init(ctx: Context) {
         if (::app.isInitialized) return
         app = ctx.applicationContext
-        val bf = java.io.File(app.filesDir, "buckets.txt")
-        buckets = BucketStore(if (bf.exists()) bf.readLines() else emptyList()) { lines -> try { bf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "buckets.txt write failed", e) } }
-        Thread({ wordModel() }, "write-warm").start()
+        Programs.install(writeServices, app)
         Programs.all.forEach { it.warm() }   // some programs build their sounds in seconds on a phone: do it now, quietly
         ControllerNotificationListener.loadMutes(app)
         TreeLeaves.store = prefs()
@@ -209,22 +208,21 @@ object Actions {
     /** The program of the registry that runs now (at most one). */
     private var running: Program? = null
 
-    // ---- Write: the stereo-pair keyboard (Typing.kt). The OS gives it the raw button and plays the close sound when it ends. ----
-    private var typer: TypeProgram? = null
-    private var nextWord: Ranker? = null
-    @Volatile private var chatLang: String? = null   // the language of the place being written into; null = not known
-    @Volatile private var phraseReq = 0
-    private lateinit var buckets: BucketStore
-    private val phraseWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
-    private val typeTimers = HashMap<String, Runnable>()
+    /** What Write asks of the OS (the program never reaches into it). */
+    private val writeServices = object : WriteServices {
+        override fun focusFrame() = ButtonAccessibilityService.inst?.frame() ?: Frame()
+        override fun setFieldText(text: String) = ButtonAccessibilityService.inst?.setFieldText(text) ?: false
+        override fun aiEnabled() = mode.settings.ai && LocalAi.available(app)
+        override fun nextWords(text: String, brief: String) = LocalAi.nextWords(app, text, "en", brief)
+        override fun continuations(text: String, brief: String) = LocalAi.continuations(app, text, "en", brief)
+        override fun detectLanguage(text: String) = MlKitLangDetector().detect(text)
+    }
 
-    /** Loads the English word model once (a few seconds on the phone, so it is also started when the app starts). */
-    @Synchronized private fun wordModel(): Ranker? = nextWord ?: try {
-        val t0 = System.currentTimeMillis()
-        val m: Ranker = NextWord(app.assets.open("lm/lm.bin"), app.assets.open("lm/vocab.txt").bufferedReader().readText())   // you write in English; the chat gets the translation
-        Log.d(TAG, "WRITE model loaded in ${System.currentTimeMillis() - t0} ms")
-        m.also { nextWord = it }
-    } catch (e: Throwable) { Log.e(TAG, "word model failed", e); null }
+    /** Write into a place that is not the focused field: [sendTo] gets the text (a notification reply, a music search). */
+    private fun launchWrite(sendTo: (String) -> Boolean, replyTo: Notif?) {
+        val frame = if (replyTo == null) Frame() else Frame.reply(replyTo.pkg, replyTo.title, replyTo.text, replyTo.hidden)
+        startProgram(WriteProgram(writeServices, sendTo, frame))
+    }
 
     /** Dev tool (AiTestReceiver): start Write into the field that has focus, as the hub item does. */
     /** Dev: connect to the music app's browser service and log its tree two levels deep. */
@@ -260,7 +258,7 @@ object Actions {
             if (i % 2 == 0) handler.postAtTime({ VoiceKit.buttons.key("dev", false, 0, down, end) }, end)
         }
     }
-    fun startDev(name: String) = handler.post { when (name) { "write" -> launchWrite(); else -> Programs.byDevName(name)?.let { startProgramEntry(it) } } }
+    fun startDev(name: String) = handler.post { Programs.byDevName(name)?.let { startProgramEntry(it) } }
 
     /** Dev: drive the music session directly: "uri:<url>" or "search:<query>". */
     fun waitDev(ms: Long) = handler.post { val w = narrator.waiting(); handler.postDelayed({ w() }, ms) }
@@ -278,128 +276,16 @@ object Actions {
     fun searchDev(q: String) { handler.post { searchAndPlay(q) } }
 
     fun playMusicDev() { handler.post { playQuickPicks() } }
-    fun startWriteDev() { handler.post { launchWrite() } }
-
-    /** [sendTo] = Write for a notification reply: the written text goes to that action instead of the focused field.
-     *  [replyTo] = the message being answered: the screen is off and shows no chat, so the suggestions and the reply language come from it. */
-    /** Sum prices: the number keyboard (digits and a point) in a loop. Each price is added; empty Done or a long hold ends and reads the total. */
-    private fun launchSum() {
-        typer?.stop()
-        val sum = PriceSum()
-        val timers = object : Timers {
-            override fun set(key: String, delayMs: Long, task: () -> Unit) { clear(key); val r = Runnable { typeTimers.remove(key); task() }; typeTimers[key] = r; handler.postDelayed(r, delayMs) }
-            override fun clear(key: String) { typeTimers.remove(key)?.let { handler.removeCallbacks(it) } }
-        }
-        val frame = Frame(kind = FieldKind.DECIMAL)
-        lateinit var round: (List<Phrase>) -> Unit
-        round = { intro ->
-            var last = false
-            val out = object : TypeOut {
-                override fun pair(left: String, right: String?) { narrator.pair(left, right) }
-                override fun hush() { narrator.hush() }
-                override fun prefetch(words: List<String>) { narrator.prefetch(words) }
-                override fun say(text: Phrase) { narrator.say(text, true) }
-                override fun log(event: String, vararg fields: Any?) {
-                        try { java.io.File(app.filesDir, "write_usage.tsv").appendText((listOf(System.currentTimeMillis(), event) + fields.map { it.toString().replace('\t', ' ').replace('\n', ' ') }).joinToString("\t") + "\n") } catch (e: Throwable) { Log.e(TAG, "usage log failed", e) }
-                    }
-                    override fun cue(c: TypeCue) { Log.d(TAG, "WRITE cue $c"); narrator.cue(c) }
-                override fun finished(text: String) {
-                    if (sum.add(text)) handler.postDelayed({ this@Actions.say(TypeVoice.total(sum.spoken()), false) }, 400)
-                    else { last = true; handler.postDelayed({ this@Actions.say(if (sum.isEmpty) TypeVoice.NO_PRICES else TypeVoice.total(sum.spoken()), false) }, 400) }
-                }
-            }
-            typer = TypeProgram(NoWords, out, timers, frame) {
-                typer = null; narrator.hush()
-                if (last) gameEnded() else handler.postDelayed({ round(listOf(TypeVoice.SUM_NEXT)) }, 2200)
-            }.also { it.intro = intro; it.start() }
-        }
-        round(listOf(TypeVoice.SUM_START, TypeVoice.SUM_START2, TypeVoice.SUM_START3))
-    }
-
-    private fun launchWrite(sendTo: ((String) -> Boolean)? = null, replyTo: Notif? = null) {
-        typer?.stop()
-        val w = narrator.waiting()
-        Thread({
-            val lm = wordModel()
-            handler.post {
-                w()
-                if (lm == null) { say(TypeVoice.NO_MODEL, false); gameEnded(); return@post }
-                                val timers = object : Timers {
-                    override fun set(key: String, delayMs: Long, task: () -> Unit) { clear(key); val r = Runnable { typeTimers.remove(key); task() }; typeTimers[key] = r; handler.postDelayed(r, delayMs) }
-                    override fun clear(key: String) { typeTimers.remove(key)?.let { handler.removeCallbacks(it) } }
-                }
-                val frame = if (sendTo != null) Frame.replyTo(replyTo) else ButtonAccessibilityService.inst?.frame() ?: Frame()   // the place that has focus: app, kind of field, what is on the screen
-                Log.d(TAG, "WRITE frame app=${frame.app} kind=${frame.kind} field=${frame.field} thread=${frame.thread} around=${frame.around.size} before=${frame.before.length}")
-                chatLang = null
-                Thread({   // the language of the place, from what is on the screen and in the field; unknown means nothing to translate
-                    val seen = (frame.around + frame.before).joinToString(" ")
-                    val lang = ChatLang.of(seen) { MlKitLangDetector().detect(it) }
-                    handler.post { chatLang = lang }
-                    if (lang != null && ChatLang.needsTranslation(lang) && MlKitTranslator.code(lang) != null && frame.kind == FieldKind.TEXT && !MlKitTranslator.hasModel(lang)) MlKitTranslator.download(lang)
-                    Log.d(TAG, "WRITE chat language $lang")
-                }, "write-lang").start()
-                val out = object : TypeOut {
-                    override fun suggestions() = buckets.suggestions(frame)
-                    override fun nextWords(text: String, then: (List<String>) -> Unit) {
-                        if (!mode.settings.ai || !LocalAi.available(app)) return
-                        phraseWorker.execute {
-                            val r = try { LocalAi.nextWords(app, text, "en", frame.brief()) } catch (e: Throwable) { Log.e(TAG, "next words failed", e); emptyList() }
-                            handler.post { then(r) }
-                        }
-                    }
-                    override fun pair(left: String, right: String?) {
-                        Log.d(TAG, "WRITE pair $left | $right")
-                        narrator.pair(left, right)
-                    }
-                    override fun hush() { narrator.hush() }
-                    override fun prefetch(words: List<String>) { narrator.prefetch(words) }
-                    override fun say(text: Phrase) { narrator.say(text, true) }
-                    override fun cue(c: TypeCue) { narrator.cue(c) }
-                    override fun phrases(text: String, then: (List<String>) -> Unit) {
-                        if (!mode.settings.ai || !LocalAi.available(app)) return
-                        val my = ++phraseReq; val frameNow = frame
-                        phraseWorker.execute {   // one at a time; a request for an older text is dropped before it starts
-                            if (my != phraseReq) return@execute
-                            val r = try { LocalAi.continuations(app, text, "en", frameNow.brief()) } catch (e: Throwable) { Log.e(TAG, "endings failed", e); emptyList() }
-                            if (r.isNotEmpty()) handler.post { then(r) }
-                        }
-                    }
-                    override fun written(text: String) { buckets.learn(frame, text.split(' ').filter { it.isNotEmpty() }, text) }
-                    override fun translate(text: String, then: (Translation) -> Unit) {
-                        val target = chatLang
-                        if (frame.kind != FieldKind.TEXT || target == null || !ChatLang.needsTranslation(target)) { then(Translation.Same); return }
-                        phraseWorker.execute {
-                            val r: Translation = when {
-                                MlKitTranslator.code(target) == null -> Translation.Failed(TypeVoice.TRANSLATION_FAILED)
-                                !MlKitTranslator.hasModel(target) || !MlKitTranslator.hasModel("en") -> { MlKitTranslator.download(target); Translation.Failed(TypeVoice.TRANSLATION_MISSING) }
-                                else -> MlKitTranslator.translate(text, target)?.let { Translation.Done(it) } ?: Translation.Failed(TypeVoice.TRANSLATION_FAILED)
-                            }
-                            Log.d(TAG, "WRITE translate to $target: ${r::class.simpleName}")
-                            handler.post { then(r) }
-                        }
-                    }
-                    override fun readBack(text: String) { this@Actions.say(Phrase.content(text, chatLang), false) }
-                    override fun finished(text: String) {
-                        Log.d(TAG, "WRITE result [${frame.app} ${frame.kind}]: ${if (frame.kind == FieldKind.PASSWORD) "-" else text}"); EventLog.add("write: ${frame.app} ${text.length} chars")
-                        if (text.isNotEmpty()) {
-                            if (sendTo != null) { if (!sendTo(text)) Log.d(TAG, "WRITE reply was not sent") }
-                            else if (frame.hasField) { val all = if (frame.before.isBlank()) text else frame.before.trimEnd() + (if (frame.digits) "" else " ") + text; if (!(ButtonAccessibilityService.inst?.setFieldText(all) ?: false)) Log.d(TAG, "WRITE could not set the field") }
-                        }
-                        handler.postDelayed({ if (text.isEmpty()) this@Actions.say(TypeVoice.EMPTY, false) else this@Actions.say(Phrase.content(text), false) }, 700)
-                    }
-                }
-                typer = TypeProgram(BucketRanker(lm, buckets, frame), out, timers, frame) { typer = null; narrator.hush(); gameEnded() }.also { it.start() }
-            }
-        }, "write-load").start()
-    }
+    fun startWriteDev() { startDev("write") }
 
     /** The OS rule for every game: when a game gives the phone back, the OS says goodbye with its own close sound. A game never plays it. */
     private fun gameEnded() { handler.post { narrator.beep(Tone.EXIT) } }
 
     /** Starts a program of the registry. The host is what it may ask of the OS; when it ends, the OS plays the close sound. */
-    private fun startProgramEntry(e: ProgramEntry) {
+    private fun startProgramEntry(e: ProgramEntry) = startProgram(e.create())
+
+    private fun startProgram(p: Program) {
         running?.stop()
-        val p = e.create()
         running = p
         p.start(object : ProgramHost {
             override val context get() = app
@@ -428,7 +314,7 @@ object Actions {
 
     /** What the button feeds: the programs that own the raw button, the menu, and the menu's own tones. */
     private val buttonTarget = object : ButtonTarget {
-        override fun raw(): RawButton? = running?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
+        override fun raw(): RawButton? = running?.takeIf { it.active }   // the running program owns the raw button
         override val menuActive get() = mode.active
         override fun exitProgram() {   // each stop() ends with the program's onEnded, which plays the OS close sound. Write is not here: its holds pick words; it leaves from its menu
             running?.takeIf { it.active && it.exitOnClickHold }?.let { it.stop(); return }

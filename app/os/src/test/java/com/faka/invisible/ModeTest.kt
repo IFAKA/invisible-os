@@ -52,9 +52,7 @@ class ModeTest {
             }
             override fun stopSpeech() { log.add("stopspeech"); timers.remove("tts"); timers.remove("tts-start") }
             override fun tone(kind: Tone) { log.add("tone $kind") }
-            override fun startWrite() { log.add("startWrite") }
-            override fun startSum() { log.add("startSum") }
-            override fun programs() = listOf("games:duel" to "Duel", "games:echo" to "Echo", "games:guard" to "Guard", "games:howto" to "How to play", "hub:compass" to "Compass").map { (id, title) -> ProgramEntry(id, Phrase.content(title)) { error("not started in this test") } }
+            override fun programs() = listOf("games:duel" to "Duel", "games:echo" to "Echo", "games:guard" to "Guard", "games:howto" to "How to play", "hub:compass" to "Compass", "hub:write" to "Write", "hub:sum" to "Sum prices").map { (id, title) -> ProgramEntry(id, Phrase.content(title)) { error("not started in this test") } }
             override fun startProgram(id: String) { log.add(when (id) { "games:duel" -> "startGame false"; "games:howto" -> "startGame true"; else -> "start" + id.substringAfter(':').replaceFirstChar { it.uppercase() } }) }
             override fun runAction(name: String) { log.add("run $name"); speech() }
             override fun forward(what: Forward) { log.add("fwd $what") }

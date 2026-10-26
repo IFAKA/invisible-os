@@ -31,6 +31,7 @@ dependencies {
     implementation(project(":programs:guard"))
     implementation(project(":programs:duel"))
     implementation(project(":programs:compass"))
+    implementation(project(":programs:write"))
     implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.google.mlkit:translate:17.0.3")
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.1")

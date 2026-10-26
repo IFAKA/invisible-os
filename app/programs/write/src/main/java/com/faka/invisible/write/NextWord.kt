@@ -1,4 +1,4 @@
-package com.faka.invisible
+package com.faka.invisible.write
 
 import java.io.InputStream
 import java.nio.ByteBuffer
