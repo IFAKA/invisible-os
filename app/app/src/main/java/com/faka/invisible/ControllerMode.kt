@@ -29,6 +29,7 @@ interface ModeOutput {
     fun notifFire(key: String, index: Int): Boolean = false   // press action [index] of a notification
     fun notifDismiss(key: String): Boolean = false
     fun notifMute(pkg: String) {}
+    fun notifAppHint(pkg: String): Int = -1   // ApplicationInfo.category of the app, -1 = unknown (a hint for its group)
     fun notifMutedCount(): Int = 0
     fun notifUnmuteAll() {}
     fun startNotifReply(key: String, index: Int) {}   // Write keyboard; its text goes into that action's reply box
@@ -108,7 +109,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, SENT, NOTIF_APPS, NOTIF_LIST, NOTIF_ACTIONS }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, SENT, TREE, NOTIF_LIST, NOTIF_ACTIONS }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: Phrase, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: Phrase, val run: () -> Unit)
@@ -128,7 +129,10 @@ class ControllerMode(
     private var queue = mutableListOf<Msg?>()   // null = the finished timer
     private var qi = 0
     private var taskList = listOf<Task>()   // snapshot while the Tasks screen is open
-    private var notifGroup: String? = null   // the app (group) open in the Notifications screens
+    private var notifPkg: String? = null     // the app open in the notification screens
+    private var treeRoot: TreeNode? = null   // the group tree, built when the home list is built (fixed while the user walks it)
+    private val treePath = ArrayList<TreeNode>()   // the groups walked down from home; the last one is the list shown in TREE
+    private var hubOpts: Map<String, Opt> = emptyMap()   // the built-in programs of the OS, as options (leaves of the tree)
     private var notifKey: String? = null     // the notification open in NOTIF_ACTIONS
     private var taskIdx = 0   // first task of the page being read
     private val TASK_PAGE = 5
@@ -260,7 +264,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.NOTIF_APPS, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.TREE, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -380,7 +384,6 @@ class ControllerMode(
                 for (k in settings.hub) when (k) {
                     "messages" -> if (n > 0) all["hub:messages"] = Opt("hub:messages", Menu.messages(n)) { readUnread("hub:messages") }
                     "music" -> out.nowPlaying()?.let { song -> all["hub:music"] = Opt("hub:music", Menu.MUSIC) { pick("hub:music"); outro(Phrase.content(song, out.songLang(song))) } }   // only when the music app has a song
-                    "notifications" -> notifTotal().let { nn -> if (nn > 0) all["hub:notifications"] = Opt("hub:notifications", Menu.notifications(nn)) { pick("hub:notifications"); show(Screen.NOTIF_APPS) } }
                     "tasks" -> out.tasks().let { ts -> all["hub:tasks"] = Opt("hub:tasks", Menu.tasks(ts.size)) {
                         pick("hub:tasks"); taskList = ts; taskIdx = 0
                         when {
@@ -398,7 +401,9 @@ class ControllerMode(
                 val deep = deepOptions()
                 val sug = out.suggest(deep.keys, clock()).mapNotNull { deep[it] }
                 suggestedKeys = sug.map { it.key }
-                sug + all.values.toList()   // the menu order is the user's own; only the small Suggested slot in front adapts
+                hubOpts = all
+                val root = AppTree.build(treeLeaves(all)); treeRoot = root; treePath.clear()
+                sug + treeOptions(root) + unmuteOption()   // the home list is the tree's top; only the small Suggested slot in front adapts
             }
             Screen.TASK -> {   // "Add task" first, then this page of tasks (a click right after hearing one = done), then "More tasks"
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)
@@ -463,24 +468,54 @@ class ControllerMode(
             } + Opt("taskreply", Menu.replyTo(m.sender)) { pick("taskreply"); addReplyTask(m) }
             Screen.COMPOSE -> if (m == null) emptyList() else composeOptions(m)
             Screen.SENT -> emptyList()
-            Screen.NOTIF_APPS -> notifAppOptions()
+            Screen.TREE -> treeOptions(treePath.lastOrNull() ?: treeRoot ?: AppTree.build(emptyList()))
             Screen.NOTIF_LIST -> notifListOptions()
             Screen.NOTIF_ACTIONS -> notifActionOptions()
         }
     }
 
-    // ---- Notifications: apps -> that app's notifications -> one in full with its actions ----
-    private fun notifTotal() = out.notifGroups().sumOf { it.items.size }
-    private fun openGroup() = out.notifGroups().firstOrNull { it.id == notifGroup }
-    private fun openNotif() = openGroup()?.items?.firstOrNull { it.key == notifKey }
+    // ---- The tree: home -> group -> (subgroup) -> app -> its notifications -> one in full with its actions ----
+    private fun openItems() = out.notifGroups().filter { it.pkg == notifPkg }.flatMap { it.items }.sortedByDescending { it.at }
+    private fun openNotif() = openItems().firstOrNull { it.key == notifKey }
 
-    /** A screen whose app or notification is gone (dismissed, removed by the app) falls back one level. */
+    /** A screen whose app or notification is gone (dismissed, removed by the app) falls back one level (an empty app: home, which is rebuilt). */
     private fun notifGuard(s: Screen): Screen = when {
         s == Screen.NOTIF_ACTIONS && openNotif() == null -> notifGuard(Screen.NOTIF_LIST)
-        s == Screen.NOTIF_LIST && openGroup() == null -> notifGuard(Screen.NOTIF_APPS)
-        s == Screen.NOTIF_APPS && notifTotal() == 0 -> Screen.HUB
+        s == Screen.NOTIF_LIST && openItems().isEmpty() -> Screen.HUB
         else -> s
     }
+
+    /** The list one level above the app: the group it was picked in, or home. */
+    private fun treeUp() = show(if (treePath.isEmpty()) Screen.HUB else Screen.TREE)
+
+    /** The leaves of the tree: the OS programs that are switched on, and every app that has notifications. Weight = 1 + times picked. */
+    private fun treeLeaves(builtins: Map<String, Opt>): List<AppLeaf> {
+        val programs = builtins.map { (k, o) -> AppLeaf(k, o.label.text, AppCategories.categoryOf(k), if (k == "hub:messages") unread().size else 0, 1.0 + out.pickCount(k), native = true, rank = settings.hub.indexOf(k.removePrefix("hub:"))) }
+        val apps = out.notifGroups().groupBy { it.pkg }.map { (pkg, gs) ->
+            AppLeaf(pkg, gs.first().app, AppCategories.categoryOf(pkg, out.notifAppHint(pkg)), gs.sumOf { it.items.size }, 1.0 + out.pickCount("app:$pkg"), rank = APP_RANK)
+        }
+        return programs + apps
+    }
+
+    private fun treeLabel(c: TreeNode): Phrase = when {
+        c.isMore -> Menu.MORE
+        c.unread > 0 -> Phrase.content(c.label + ", " + c.unread)
+        else -> Phrase.content(c.label)
+    }
+
+    /** One list of the tree: a group goes down, an OS program runs as before, an app opens its notifications. */
+    private fun treeOptions(n: TreeNode): List<Opt> = n.children.map { c ->
+        val a = c.app
+        when {
+            a != null && a.pkg in hubOpts -> hubOpts.getValue(a.pkg)
+            a != null -> Opt("tree:app", treeLabel(c)) { pick("app:${a.pkg}"); notifPkg = a.pkg; show(Screen.NOTIF_LIST) }
+            else -> Opt("tree:group", treeLabel(c)) { pick("group:${c.label}"); treePath.add(c); show(Screen.TREE) }
+        }
+    }
+
+    private fun unmuteOption(): List<Opt> = if (out.notifMutedCount() == 0) emptyList() else listOf(Opt("notif:unmute", Menu.UNMUTE_ALL) {
+        pick("notif:unmute"); out.notifUnmuteAll(); say(Voice.APPS_UNMUTED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
+    })
 
     /** What is read for a notification: a private one gives only the app. */
     private fun notifLine(n: Notif, max: Int, full: Boolean): Phrase {
@@ -491,16 +526,9 @@ class ControllerMode(
     }
     private fun notifRead(n: Notif) = notifLine(n, 500, true)
 
-    private fun notifAppOptions(): List<Opt> =
-        out.notifGroups().map { g -> Opt("notif:app", Menu.notifApp(g.app, g.items.size)) { pick("notif:app"); notifGroup = g.id; show(Screen.NOTIF_LIST) } } +
-        (if (out.notifMutedCount() > 0) listOf(Opt("notif:unmute", Menu.UNMUTE_ALL) {
-            pick("notif:unmute"); out.notifUnmuteAll(); say(Voice.APPS_UNMUTED); phase = Phase.WAIT; waitNext = { show(Screen.NOTIF_APPS) }
-        }) else emptyList()) +
-        Opt("notif:back", Menu.BACK) { pick("notif:back"); show(Screen.HUB) }
-
-    private fun notifListOptions(): List<Opt> = (openGroup()?.items.orEmpty()).take(MAX_NOTIFS).map { n ->
+    private fun notifListOptions(): List<Opt> = openItems().take(MAX_NOTIFS).map { n ->
         Opt("notif:item", notifLine(n, MAX_SPOKEN, false)) { pick("notif:item"); notifKey = n.key; show(Screen.NOTIF_ACTIONS) }
-    } + Opt("notif:back", Menu.BACK) { pick("notif:back"); show(Screen.NOTIF_APPS) }
+    } + Opt("notif:back", Menu.BACK) { pick("notif:back"); treeUp() }
 
     private fun notifActionOptions(): List<Opt> {
         val n = openNotif() ?: return emptyList()
@@ -514,7 +542,7 @@ class ControllerMode(
         return acts + listOf(
             Opt("notif:dismiss", Menu.DISMISS) { pick("notif:dismiss"); notifDone(out.notifDismiss(n.key)) },
             Opt("notif:mute", Menu.MUTE_APP) {
-                pick("notif:mute"); out.notifMute(n.pkg); say(Voice.APP_MUTED); phase = Phase.WAIT; waitNext = { show(Screen.NOTIF_APPS) }
+                pick("notif:mute"); out.notifMute(n.pkg); say(Voice.APP_MUTED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
             },
             Opt("notif:back", Menu.BACK) { pick("notif:back"); show(Screen.NOTIF_LIST) })
     }
@@ -629,8 +657,8 @@ class ControllerMode(
             Screen.COMPOSE, Screen.MSG_TASK -> show(Screen.MORE_MSG)
             Screen.VOLUME -> show(Screen.PHONE)
             Screen.NOTIF_ACTIONS -> show(Screen.NOTIF_LIST)
-            Screen.NOTIF_LIST -> show(Screen.NOTIF_APPS)
-            Screen.NOTIF_APPS -> show(Screen.HUB)
+            Screen.NOTIF_LIST -> treeUp()
+            Screen.TREE -> { treePath.removeLastOrNull(); treeUp() }
             Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES -> show(Screen.HUB)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()
@@ -759,6 +787,7 @@ class ControllerMode(
         const val FIND_MS = 20_000L   // "Find my phone" rings this long
         const val SPEARCON_AFTER = 30   // picks of one option, then it is scanned as a sped-up spearcon
         private const val MAX_SPOKEN = 160
+        private const val APP_RANK = 1000   // notification apps come after the OS programs when used equally
         private const val MAX_NOTIFS = 20   // notifications read in one app list
     }
 }

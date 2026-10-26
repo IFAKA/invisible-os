@@ -124,8 +124,6 @@ object Voice {
 /** Labels of the menu: what the phone says for each option. English, short. */
 object Menu {
     fun messages(unread: Int) = f("Messages, $unread unread")
-    fun notifications(n: Int) = f("Notifications, $n")
-    fun notifApp(app: String, n: Int) = f("$app, $n")
     val DISMISS = f("Dismiss")
     val MUTE_APP = f("Mute this app")
     val UNMUTE_ALL = f("Unmute all apps")
