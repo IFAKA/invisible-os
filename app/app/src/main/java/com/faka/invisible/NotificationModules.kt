@@ -19,6 +19,9 @@ interface NotificationModule {
     /** The action that takes typed text (the reply), if this app has one. */
     fun replyAction(n: Notif): NotifAction? = n.reply
 
+    /** True for a channel of this app that is only noise: it is not kept in the mailbox. */
+    fun skips(channel: String): Boolean = false
+
     fun onConnected(ctx: android.content.Context) {}
     fun onPosted(sbn: StatusBarNotification, loaded: Boolean) {}
     fun onRemoved(sbn: StatusBarNotification) {}

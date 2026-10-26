@@ -9,7 +9,7 @@ data class NotifAction(val index: Int, val label: String, val needsText: Boolean
  */
 data class Notif(
     val key: String, val pkg: String, val app: String, val title: String, val text: String,
-    val at: Long, val actions: List<NotifAction> = emptyList(), val hidden: Boolean = false,
+    val at: Long, val actions: List<NotifAction> = emptyList(), val hidden: Boolean = false, val channel: String = "",
 ) {
     /** The action that wants typed text, if any. */
     val reply: NotifAction? get() = actions.firstOrNull { it.needsText }

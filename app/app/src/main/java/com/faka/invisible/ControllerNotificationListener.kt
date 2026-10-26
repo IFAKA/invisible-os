@@ -17,7 +17,7 @@ class ControllerNotificationListener : NotificationListenerService() {
     companion object {
         /** The native modules, one line each; every other app is read by the generic module. */
         private val chat = ChatAppsModule()
-        val modules = NotificationModules(listOf(chat))
+        val modules = NotificationModules(listOf(TeamsModule(chat), chat))
         val store get() = chat.store
         /** The mailbox: every app's notifications (not ongoing, not group summaries), see [NotificationStore]. */
         val notifs = NotificationStore(muted = { mutes.isMuted(it) })
@@ -104,6 +104,7 @@ class ControllerNotificationListener : NotificationListenerService() {
     private fun keep(sbn: StatusBarNotification) {
         val n = sbn.notification
         if (sbn.packageName == packageName || n.flags and (Notification.FLAG_GROUP_SUMMARY or Notification.FLAG_ONGOING_EVENT) != 0) return
+        if (modules.forPackage(sbn.packageName).skips(n.channelId.orEmpty())) return
         val x = n.extras
         val title = x.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
         val text = (x.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: x.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
@@ -113,7 +114,7 @@ class ControllerNotificationListener : NotificationListenerService() {
             a.title?.toString()?.takeIf { it.isNotBlank() }?.let { NotifAction(i, it, !a.remoteInputs.isNullOrEmpty()) }
         }
         synchronized(Companion) { if (n.actions != null) notifActions[sbn.key] = n.actions else notifActions.remove(sbn.key) }
-        notifs.upsert(Notif(sbn.key, sbn.packageName, appLabel(sbn.packageName), if (hidden) "" else title, if (hidden) "" else text, sbn.postTime, actions, hidden))
+        notifs.upsert(Notif(sbn.key, sbn.packageName, appLabel(sbn.packageName), if (hidden) "" else title, if (hidden) "" else text, sbn.postTime, actions, hidden, n.channelId.orEmpty()))
     }
 
     private fun appLabel(pkg: String): String = try {
