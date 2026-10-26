@@ -62,7 +62,7 @@ class MainActivity : Activity() {
     private fun slider(label: String, valueText: String, max: Int, now: Int, apply: (Int) -> LauncherSettings) = k.slider(label, valueText, max, now) { change(apply(it)) }
 
     // ---- screens: Home shows one thing to do and a few doors; each door opens one small page ----
-    private enum class Page(val title: String) { HOME("Invisible"), TASKS("Tasks"), MENU("Your menu"), VOICE("Voice and speed"), AI("AI on the phone"), HELP("Help") }
+    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), VOICE("Voice and speed"), AI("AI on the phone"), HELP("Help") }
     private var page = Page.HOME
 
     private fun open(p: Page) { page = p; render(); (body.parent as? ScrollView)?.scrollTo(0, 0) }
@@ -125,7 +125,7 @@ class MainActivity : Activity() {
     }
 
     private fun home() {
-        if (disclosure) { body.addView(k.text("Invisible", 30f, bold = true)); disclosureCard(); return }
+        if (disclosure) { body.addView(k.text("Invisible OS", 30f, bold = true)); disclosureCard(); return }
         val notif = (Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: "").contains(packageName)
         val assist = (Settings.Secure.getString(contentResolver, "assistant") ?: "").contains(packageName)
         val a11y = Actions.accessibilityConnected
@@ -135,7 +135,7 @@ class MainActivity : Activity() {
             granted(Manifest.permission.ACCESS_COARSE_LOCATION), usageOn(), android.os.Build.VERSION.SDK_INT, sp.getStringSet("setup_skipped", emptySet()) ?: emptySet(),
             contacts = granted(Manifest.permission.READ_CONTACTS), calls = granted(Manifest.permission.CALL_PHONE) && granted(Manifest.permission.ANSWER_PHONE_CALLS), sms = granted(Manifest.permission.SEND_SMS)))
         val next = Setup.current(steps)
-        body.addView(k.text("Invisible", 30f, bold = true))
+        body.addView(k.text("Invisible OS", 30f, bold = true))
         if (next >= 0) {
             val t = steps[next]
             val head = Setup.label(next, steps.size) + ": " + t.title + if (t.optional) " (optional)" else ""
