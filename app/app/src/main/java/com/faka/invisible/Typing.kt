@@ -74,7 +74,13 @@ class TypeProgram(
     private var downAt = -1L
     private var armed = false
     private var menu = false
-    private var menuList = ScanList<Phrase>(emptyList())   // the small menu, read one item at a time
+    /** The small menu, read one item at a time by the kit's Scanner: one pause per item, no OS ceremony. */
+    private val menuScan: Scanner<Phrase> = Scanner(timers, { it }, object : ScanOut {
+        override fun say(index: Int, label: Phrase, spearcon: Boolean) { out.say(label); menuScan.itemDone() }
+        override fun sayFast(word: Phrase) {}
+        override fun tone(t: Tone) {}
+        override fun leave() { closeMenu() }
+    }, ScanCadence(pauseMs = { MENU_GAP_MS }, loops = { MENU_LOOPS }, ceremony = false), scanKey = "t:menu")
     private var phrases: List<String> = emptyList()   // ways to finish the text, from the big model, when ready
     private var phraseMode = false
     private var phraseGen = 0
@@ -94,7 +100,7 @@ class TypeProgram(
         show()
     }
 
-    fun stop() { if (active) { active = false; waiting = false; pending = null; menu = false; timers.clear("t:menu"); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:replay") } }
+    fun stop() { if (active) { active = false; waiting = false; pending = null; menu = false; menuScan.stop(); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:replay") } }
 
     fun text(): String = if (frame.digits) written.joinToString("") else written.joinToString(" ").replaceFirstChar { it.uppercase() }
 
@@ -129,7 +135,7 @@ class TypeProgram(
     override fun down(time: Long) {
         if (!active) return
         touched = true; pressedSinceShow = true
-        out.hush(); timers.clear("t:gap"); timers.clear("t:replay"); timers.clear("t:menu")
+        out.hush(); timers.clear("t:gap"); timers.clear("t:replay"); menuScan.stop()
         downAt = time; armed = false
         timers.set("t:hold", Pacing.HOLD_MS) { if (active && downAt >= 0) { armed = true; out.cue(TypeCue.ARMED) } }
         timers.set("t:leave", Pacing.LEAVE_MS) { if (active && downAt >= 0) leave(false) }
@@ -193,23 +199,13 @@ class TypeProgram(
         if (candidates().take(2) != items.drop(page * 2).take(2)) show()
     }
 
-    private fun openMenu() { menu = true; menuList = ScanList(menuLabels()); timers.clear("t:replay"); out.cue(TypeCue.MENU); speakMenu() }
+    private fun openMenu() { menu = true; menuScan.load(menuLabels()); timers.clear("t:replay"); out.cue(TypeCue.MENU); menuScan.speakItem(0) }
 
-    private fun speakMenu() {
-        out.say(menuList.current)
-        timers.set("t:menu", MENU_GAP_MS) {
-            if (!active || !menu) return@set
-            if (!menuList.isLast) { menuList.moveTo(menuList.index + 1); speakMenu() }
-            else if (menuList.endLoop() >= MENU_LOOPS) closeMenu()
-            else { menuList.moveTo(0); speakMenu() }
-        }
-    }
-
-    private fun closeMenu() { menu = false; timers.clear("t:menu"); out.cue(TypeCue.NEXT); show() }
+    private fun closeMenu() { menu = false; menuScan.stop(); out.cue(TypeCue.NEXT); show() }
 
     private fun pickMenu() {
-        val label = menuList.current
-        menu = false; timers.clear("t:menu")
+        val label = menuScan.list.current
+        menu = false; menuScan.stop()
         when (label) {
             TypeVoice.MENU_DONE -> leave(true)
             TypeVoice.MENU_DELETE -> { out.cue(TypeCue.DELETE); if (prefix.isNotEmpty()) prefix = "" else if (written.isNotEmpty()) { written.removeAt(written.size - 1); askPhrases() }; letters = false; phraseMode = false; page = 0; show() }

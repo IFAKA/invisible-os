@@ -132,7 +132,16 @@ class ControllerMode(
 
     private val intro = ArrayDeque<Intro>()
     private var curIntro: Intro? = null
-    private var list = ScanList<Opt>(emptyList())   // the options being read
+    private val scanOut = object : ScanOut {
+        override fun say(index: Int, label: Phrase, spearcon: Boolean) { awaitStart = index; say(label, spearcon) }
+        override fun sayFast(word: Phrase) { speechOpen = true; out.speak(word, false, false) }
+        override fun tone(t: Tone) { tn(t) }
+        override fun leave() { leaveSilent() }
+    }
+    private val scanner = Scanner<Opt>(timers, { it.label }, scanOut,
+        ScanCadence(pauseMs = { pause }, loops = { silentLoops }, tickLeadMs = tickLeadMs, restartLeadMs = restartLeadMs),
+        spearcon = { settings.spearcons && out.pickCount(it.key) >= SPEARCON_AFTER })
+    private val list get() = scanner.list   // the options being read
     private var awaitStart = -1
     private val history = ArrayList<Pair<Int, Long>>()   // (option index, time its speech started), oldest first
     private var code = 0                       // position of the option being run
@@ -201,7 +210,7 @@ class ControllerMode(
 
     /** Stop speech and every scan timer. */
     private fun stopAll() {
-        timers.clear("scan"); timers.clear("tick"); timers.clear("dog"); timers.clear("fast")
+        scanner.stop(); timers.clear("dog")
         if (speechOpen) out.stopSpeech()
         speechOpen = false; awaitStart = -1
     }
@@ -295,15 +304,9 @@ class ControllerMode(
         stopAll()
         phase = Phase.SCAN; curIntro = null
         history.clear()
-        list = ScanList(buildOptions())
-        if (list.isEmpty) { leaveSilent(); return }
-        speakItem(0)
-    }
-
-    private fun speakItem(i: Int) {
-        list.moveTo(i); awaitStart = i
-        val o = list.items[i]
-        say(o.label, settings.spearcons && out.pickCount(o.key) >= SPEARCON_AFTER)
+        scanner.load(buildOptions())
+        if (scanner.isEmpty) { leaveSilent(); return }
+        scanner.speakItem(0)
     }
 
     private fun recordStart() {
@@ -314,17 +317,7 @@ class ControllerMode(
 
     private fun itemDone() {
         recordStart()
-        if (!list.isLast) {
-            timers.set("tick", maxOf(0L, pause - tickLeadMs)) { tn(Tone.TICK) }
-            timers.set("scan", pause) { speakItem(list.index + 1) }
-        } else timers.set("scan", pause) {
-            tn(Tone.DING)   // falls: the list ended
-            if (list.endLoop() >= silentLoops) timers.set("scan", pause) { leaveSilent() }
-            else {
-                timers.set("tick", maxOf(0L, pause - restartLeadMs)) { tn(Tone.RESTART) }   // rises: it starts over
-                timers.set("scan", pause) { speakItem(0) }
-            }
-        }
+        scanner.itemDone()
     }
 
     /** One click while scanning: the next option right now (after the last one, the first). In the other phases (two clicks): the list again from the first. */
@@ -332,31 +325,18 @@ class ControllerMode(
     fun scanning() = active && phase == Phase.SCAN
 
     // ---- fast scroll: click, then hold ----
-    private var fast = false
-
     private fun startFast() {
-        stopAll(); fast = true
+        stopAll()
         out.choice(screen.name, 8, "fast", "")
-        fastTick()
-    }
-
-    /** One fast step: a tick (the rising sound at the wrap), then only the first word of the option. */
-    private fun fastTick() {
-        if (!fast) return
-        val s = list.fastStep { it.label.text }
-        tn(if (s.wrapped) Tone.RESTART else Tone.TICK)
-        speechOpen = true
-        out.speak(Phrase.content(s.text, list.current.label.lang), false, false)
-        timers.set("fast", Pacing.FAST_MS) { fastTick() }
+        scanner.startFast()
     }
 
     /** Released: stop on the option reached, speak it in full, and the normal scan goes on from there. */
     private fun endFast() {
-        if (!fast) return
-        fast = false
+        if (!scanner.endFast()) return
         stopAll()
-        list.resetLoops(); history.clear()
-        timers.set("scan", SKIP_MS) { speakItem(list.index) }
+        history.clear()
+        scanner.resumeIn(SKIP_MS)
     }
 
     private fun again() {
@@ -367,8 +347,8 @@ class ControllerMode(
                 curIntro?.msgId?.let { heard.add(it) }; intro.clear(); curIntro = null; beginScan()
             }
             Phase.WAIT -> { val n = waitNext; n?.invoke() }
-            Phase.SCAN -> { phase = Phase.SCAN; list.resetLoops(); val j = list.nextIndex(); timers.set("scan", SKIP_MS) { speakItem(j) } }   // the next option now, at the user's own pace
-            else -> { tn(Tone.RESTART); phase = Phase.SCAN; history.clear(); list.resetLoops(); timers.set("scan", toneGapMs - tickLeadMs) { speakItem(0) } }
+            Phase.SCAN -> { phase = Phase.SCAN; scanner.nextIn(SKIP_MS) }   // the next option now, at the user's own pace
+            else -> { tn(Tone.RESTART); phase = Phase.SCAN; history.clear(); scanner.restartIn(toneGapMs - tickLeadMs) }
         }
     }
 
@@ -686,7 +666,7 @@ class ControllerMode(
     /** The platform finished speaking (or the watchdog fired). */
     fun onSpeechDone() {
         if (!speechOpen) return
-        if (fast) { speechOpen = false; return }   // a first word during fast scroll: nothing follows it
+        if (scanner.fasting) { speechOpen = false; return }   // a first word during fast scroll: nothing follows it
         speechOpen = false
         timers.clear("dog")
         val p = pending
