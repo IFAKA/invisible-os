@@ -8,7 +8,7 @@ import com.faka.invisible.voicekit.Spoken
  * "Find": reach ANY app or program by its name, without knowing its group. Pure.
  * All leaves are sorted by spoken name. A Find list splits a stretch of that order into at most [MAX_PARTS] neighbouring parts:
  * a part with one leaf is that leaf (its name), a part with more is a RANGE named by the shortest starts that tell it from its neighbours
- * ("W", "Sa to Sp"). Parts are read heaviest first. Cost = sum over leaves of weight * (place in its list + [AppTree.LEVEL] per range entered).
+ * ("W", "Sa to Sp"). Parts are read A to Z. Cost = sum over leaves of weight * (place in its list + [AppTree.LEVEL] per range entered).
  * [plan] picks the splits for the lowest cost: exact for stretches of 6 or fewer leaves, and for longer ones the best of a few
  * weight-balanced starts improved by moving one cut at a time (memoised per stretch). It is slow on a phone: build it off the main thread.
  */
@@ -89,8 +89,7 @@ object NameFinder {
             val ws = DoubleArray(k) { w(b[it], b[it + 1]) }
             var inner = 0.0
             for (x in 0 until k) if (b[x + 1] - b[x] > 1) inner += AppTree.LEVEL * ws[x] + solve(b[x], b[x + 1])
-            val order = (0 until k).sortedWith(compareBy({ -ws[it] }, { it }))
-            return order.withIndex().sumOf { (r, x) -> (r + 1) * ws[x] } + inner
+            return (0 until k).sumOf { x -> (x + 1) * ws[x] } + inner   // A to Z order
         }
 
         /** A name without a count after it ("Messages, 4 unread", "Tasks, 4"): a count changes, the range must not. */
@@ -99,8 +98,7 @@ object NameFinder {
         fun build(i: Int, j: Int): Node {
             val b = cuts[i][j]!!
             val k = b.size - 1
-            val order = (0 until k).sortedWith(compareBy({ -w(b[it], b[it + 1]) }, { it }))
-            return Node(order.map { x ->
+            return Node((0 until k).map { x ->
                 val a = b[x]; val e = b[x + 1]
                 if (e - a == 1) Part(ls[a].label, ls[a], null) else { solve(a, e); Part(Spoken.range(plain(ls[a].label), plain(ls[e - 1].label)), null, build(a, e)) }
             })

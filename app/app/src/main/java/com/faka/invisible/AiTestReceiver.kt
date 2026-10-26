@@ -9,6 +9,7 @@ import android.util.Log
 class AiTestReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         i.getStringExtra("dl")?.let { l -> Thread { MlKitTranslator.download(l); android.util.Log.d("Invisible", "translate models requested for en+$l") }.start(); return }
+        i.getStringExtra("sayes")?.let { com.faka.invisible.voicekit.VoiceKit.narrator.say(com.faka.invisible.voicekit.Phrase.content(it, "es"), false, false, false); return }   // dev: speak a text with the Spanish voice
         if (i.hasExtra("pairtest")) { Actions.pairTest(); return }
         i.getStringExtra("neural")?.let { com.faka.invisible.voicekit.VoiceKit.neural.bench(it, i.getStringExtra("text") ?: "This is a test of the voice on this phone.", i.getIntExtra("rounds", 2), "neural_$it.wav", i.getFloatExtra("speed", 0f)); return }
         i.getStringExtra("ttsbench")?.let { com.faka.invisible.voicekit.TtsBench.run(c, it.ifBlank { null }, i.getStringExtra("lang") ?: "en", i.getStringExtra("text") ?: "This is a test of the voice on this phone."); return }
