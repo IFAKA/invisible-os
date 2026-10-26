@@ -25,6 +25,10 @@ interface Program : RawButton {
 interface ProgramHost {
     val context: Context
     val handler: Handler
+    /** Runs [r] on the main thread after [delayMs]. Prefer this to `handler.postDelayed`: a test host (FakeProgramHost) can then move time by hand. */
+    fun later(r: Runnable, delayMs: Long) { handler.postDelayed(r, delayMs) }
+    /** Cancels a [later] that has not run yet. */
+    fun cancel(r: Runnable) { handler.removeCallbacks(r) }
     /** The app's saved settings; a program uses its own key names (for example `echo_best`). */
     val prefs: SharedPreferences
     /** Starts the OS wait sound (a soft heartbeat while sounds are built); call the result when ready. */

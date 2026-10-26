@@ -1,0 +1,3 @@
+# Extra "allow" lines for the Kit rules (format: allow<TAB>file name<TAB>rule id<TAB>why).
+# Your fixed sentences live in one file, CounterSentences.kt. Only that file may call Phrase.fixed.
+allow	CounterSentences.kt	phrase-make	Counter's own fixed sentences (program-owned)
