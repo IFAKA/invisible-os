@@ -738,14 +738,14 @@ class ModeTest {
 
     @Test fun phoneGroupListsItemsInOrderAndDndOnlyWithAccess() {
         val a = Rig(); a.wake(); a.pick("Phone"); a.advance(400 + 1300 * 5 + 100)
-        assertEquals(listOf("say Status", "say Volume", "say Torch", "say Do not disturb", "say ${Voice.FIND_PHONE}", "say Back"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
+        assertEquals(listOf("say Status", "say Volume", "say Torch", "say Do not disturb", "say ${Voice.FIND_PHONE}"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
         val b = Rig(); b.dnd = false; b.wake(); b.pick("Phone"); b.advance(400 + 1300 * 4 + 100)
-        assertEquals(listOf("say Status", "say Volume", "say Torch", "say ${Voice.FIND_PHONE}", "say Back"), b.spoken())
+        assertEquals(listOf("say Status", "say Volume", "say Torch", "say ${Voice.FIND_PHONE}"), b.spoken())
     }
 
     @Test fun phoneGroupHidesFindWhenWired() {
         val r = Rig(); r.wired = true; r.wake(); r.pick("Phone"); r.advance(400 + 1300 * 4 + 100)
-        assertEquals(listOf("say Status", "say Volume", "say Torch", "say Do not disturb", "say Back"), r.spoken())
+        assertEquals(listOf("say Status", "say Volume", "say Torch", "say Do not disturb"), r.spoken())
     }
 
     @Test fun infoAndPhoneFollowTheSettings() {
@@ -753,16 +753,16 @@ class ModeTest {
         assertEquals(listOf("find", "volume"), LauncherSettings.cleanPhone(listOf("find", "x", "volume", "find")))
         assertEquals(emptyList<String>(), LauncherSettings.cleanInfo(listOf("")))
         val r = Rig().withInfo(); r.m.settings = r.m.settings.copy(info = listOf("turn", "weather")); r.wake(); r.pick("Today"); r.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Next turn", "say Weather", "say Back"), r.spoken())
+        assertEquals(listOf("say Next turn", "say Weather", "say Next turn"), r.spoken())
         val p = Rig(); p.m.settings = p.m.settings.copy(phone = listOf("torch", "volume")); p.wake(); p.pick("Phone"); p.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Torch", "say Volume", "say Back"), p.spoken())
+        assertEquals(listOf("say Torch", "say Volume", "say Torch"), p.spoken())
     }
 
-    @Test fun infoGroupListsItemsInOrderAndBackReturnsToTheHub() {
+    @Test fun infoGroupListsItemsInOrderAndTripleClickReturnsToTheHub() {
         val r = Rig().withInfo(); r.wake(); r.pick("Today"); r.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Weather", "say Next event", "say Next turn", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.TODAY, r.m.screen)
-        r.pick("Back"); assertEquals(ControllerMode.Screen.HUB, r.m.screen)
-        val p = Rig(); p.wake(); p.pick("Phone"); p.pick("Back"); assertEquals(ControllerMode.Screen.HUB, p.m.screen)
+        assertEquals(listOf("say Weather", "say Next event", "say Next turn"), r.spoken()); assertEquals(ControllerMode.Screen.TODAY, r.m.screen)
+        r.click(Gesture.TRIPLE); assertEquals(ControllerMode.Screen.HUB, r.m.screen)
+        val p = Rig(); p.wake(); p.pick("Phone"); p.click(Gesture.TRIPLE); assertEquals(ControllerMode.Screen.HUB, p.m.screen)
     }
 
     @Test fun picksInsideGroupsAreLoggedWithTheirKey() {
@@ -799,7 +799,7 @@ class ModeTest {
 
     @Test fun gamesListsDuelEchoHowToPlayAndBack() {
         val r = Rig(); r.wake(); r.pick("Games"); r.advance(400 + 1300 * 4 + 100)
-        assertEquals(listOf("say Duel", "say Echo", "say Guard", "say How to play", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
+        assertEquals(listOf("say Duel", "say Echo", "say Guard", "say How to play"), r.spoken()); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
     }
 
     @Test fun pickingDuelLeavesTheMenuForTheGame() {

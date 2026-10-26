@@ -495,7 +495,7 @@ class ControllerMode(
                 "calendar" -> Opt("info:calendar", Menu.NEXT_EVENT) { pick("info:calendar"); lookup(out::nextEvent) }
                 "turn" -> Opt("info:turn", Menu.NEXT_TURN) { pick("info:turn"); outro(out.navigation()?.let { Phrase.content(it) } ?: Voice.NO_NAVIGATION) }
                 else -> null
-            } } + Opt("today:back", Menu.BACK) { pick("today:back"); show(Screen.HUB) }
+            } }
             Screen.PHONE -> settings.phone.mapNotNull { k -> when (k) {
                 "status" -> Opt("phone:status", Menu.STATUS) { pick("phone:status"); outro(Voice.status(out.status(), unread().size)) }
                 "volume" -> Opt("phone:volume", Menu.VOLUME) { pick("phone:volume"); show(Screen.VOLUME) }
@@ -503,18 +503,15 @@ class ControllerMode(
                 "dnd" -> if (out.dndAllowed()) Opt("phone:dnd", Menu.DND) { pick("phone:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null
                 "find" -> if (!out.wiredConnected()) Opt("phone:find", Voice.FIND_PHONE) { pick("phone:find"); find() } else null
                 else -> null
-            } } + Opt("phone:back", Menu.BACK) { pick("phone:back"); show(Screen.HUB) }
+            } }
             Screen.GAMES -> listOf(   // every game lives here; a new game is one more line
                 Opt("games:duel", Menu.DUEL) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame(false) },   // music stays paused for the game, which resumes it
                 Opt("games:echo", Menu.ECHO) { pick("games:echo"); pausedByUs = false; exit(false); out.startEcho() },
                 Opt("games:guard", Menu.GUARD) { pick("games:guard"); pausedByUs = false; exit(false); out.startGuard() },
-                Opt("games:howto", Menu.HOW_TO_PLAY) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) },
-                Opt("games:back", Menu.BACK) { pick("games:back"); show(Screen.HUB) })
+                Opt("games:howto", Menu.HOW_TO_PLAY) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) })
             Screen.CALC -> calcOptions()
-            Screen.ALARM_HOUR -> ALARM_HOURS.map { h -> Opt("alarm:h$h", Menu.hour(h)) { pick("alarm:h$h"); alarmHour = h; show(Screen.ALARM_MIN) } } +
-                Opt("alarm:back", Menu.BACK) { pick("alarm:back"); show(Screen.HUB) }
-            Screen.ALARM_MIN -> ALARM_MINUTES.map { m -> Opt("alarm:m$m", Menu.minute(m)) { pick("alarm:m$m"); setAlarmPending(alarmHour, m) } } +
-                Opt("alarm:back", Menu.BACK) { pick("alarm:back"); show(Screen.ALARM_HOUR) }
+            Screen.ALARM_HOUR -> ALARM_HOURS.map { h -> Opt("alarm:h$h", Menu.hour(h)) { pick("alarm:h$h"); alarmHour = h; show(Screen.ALARM_MIN) } }
+            Screen.ALARM_MIN -> ALARM_MINUTES.map { m -> Opt("alarm:m$m", Menu.minute(m)) { pick("alarm:m$m"); setAlarmPending(alarmHour, m) } }
             Screen.TIMER_DONE -> listOf(
                 Opt("timer:stop", Menu.STOP) { pick("timer:stop"); out.stopAlarm(); afterSpeech { advance() } },
                 Opt("timer:plus5", Menu.FIVE_MORE) { pick("timer:plus5"); out.stopAlarm(); queue.removeAt(qi); startTimerPending(5) },
@@ -674,7 +671,7 @@ class ControllerMode(
     /** An app without notifications: open it, or go back. */
     private fun appOpenOptions(): List<Opt> {
         val music = if (notifPkg?.let { out.isMusicApp(it) } == true) listOf(Opt("app:music", Menu.MUSIC) { pick("app:music"); musicBack = Screen.APP_OPEN; show(Screen.MUSIC) }) else emptyList()
-        return music + listOf(Opt("app:open", Menu.OPEN_APP) { pick("app:open"); openApp() }, Opt("app:back", Menu.BACK) { pick("app:back"); treeUp() })
+        return music + listOf(Opt("app:open", Menu.OPEN_APP) { pick("app:open"); openApp() })
     }
 
     private var musicBack = Screen.HUB
@@ -689,20 +686,19 @@ class ControllerMode(
             Opt("music:now", Menu.WHATS_PLAYING) { pick("music:now"); outro(Phrase.content(song, out.songLang(song))) },
             toggle("shuffle", "Shuffle"), toggle("repeat", "Repeat"),
             Opt("music:radio", Menu.RADIO) { pick("music:radio"); out.musicRadio(); outro(Menu.RADIO) })
-        return ctl + listOf(Opt("music:play", Menu.PLAY_SOMETHING) { pick("music:play"); show(Screen.MUSIC_PLAY) }, Opt("music:back", Menu.BACK) { pick("music:back"); show(musicBack) })
+        return ctl + listOf(Opt("music:play", Menu.PLAY_SOMETHING) { pick("music:play"); show(Screen.MUSIC_PLAY) })
     }
 
     private fun musicPlayOptions(): List<Opt> = listOf(
         Opt("music:mix", Menu.PLAY_MIX) { pick("music:mix"); out.playMusic(false); outro(Menu.PLAYING_MUSIC) },
         Opt("music:liked", Menu.PLAY_LIKED) { pick("music:liked"); out.playMusic(true); outro(Menu.PLAYING_MUSIC) },
-        Opt("music:search", Menu.SEARCH_SONG) { pick("music:search"); pausedByUs = false; exit(false); out.searchMusic() },
-        Opt("music:pback", Menu.BACK) { pick("music:pback"); show(Screen.MUSIC) })
+        Opt("music:search", Menu.SEARCH_SONG) { pick("music:search"); pausedByUs = false; exit(false); out.searchMusic() })
 
     private fun openApp() { val p = notifPkg ?: return; pausedByUs = false; exit(false); out.openApp(p) }
 
     private fun notifListOptions(): List<Opt> = openItems().take(MAX_NOTIFS).map { n ->
         Opt("notif:item", notifLine(n, MAX_SPOKEN, false)) { pick("notif:item"); notifKey = n.key; show(Screen.NOTIF_ACTIONS) }
-    } + Opt("notif:back", Menu.BACK) { pick("notif:back"); treeUp() }
+    }
 
     private fun notifActionOptions(): List<Opt> {
         val n = openNotif() ?: return emptyList()
@@ -718,8 +714,7 @@ class ControllerMode(
             Opt("notif:mute", Menu.MUTE_APP) {
                 pick("notif:mute"); out.notifMute(n.pkg); say(Voice.APP_MUTED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
             },
-            Opt("notif:open", Menu.OPEN_APP) { pick("notif:open"); openApp() },
-            Opt("notif:back", Menu.BACK) { pick("notif:back"); show(Screen.NOTIF_LIST) })
+            Opt("notif:open", Menu.OPEN_APP) { pick("notif:open"); openApp() })
     }
 
     private fun notifDone(ok: Boolean) { say(if (ok) Voice.NOTIF_DONE else Voice.NOTIF_FAILED); phase = Phase.WAIT; waitNext = { show(Screen.NOTIF_LIST) } }
@@ -870,7 +865,7 @@ class ControllerMode(
         val point = then("point", Menu.POINT) { calc.point() }
         val ops = "+-*/%".map { o -> then("op$o", Menu.op(o)) { calc.operate(o) } }
         val equals = Opt("calc:equals", Menu.EQUALS) { pick("calc:equals"); calc.equals(); calcSay() }
-        val tail = listOf(then("undo", Menu.UNDO) { calc.undo() }, then("clear", Menu.CLEAR) { calc.clear() }, Opt("calc:back", Menu.BACK) { pick("calc:back"); show(Screen.HUB) })
+        val tail = listOf(then("undo", Menu.UNDO) { calc.undo() }, then("clear", Menu.CLEAR) { calc.clear() })
         return when {
             calc.typing -> listOfNotNull(equals.takeIf { calc.canEquals }) + (if (calc.canOperate) ops else emptyList()) + digits + point + tail
             calc.canOperate && !calc.typing && calc.isResult() -> ops + digits + point + tail
