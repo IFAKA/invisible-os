@@ -59,7 +59,8 @@ interface ModeOutput {
     fun aiReplies(m: Msg): List<Task> = emptyList()   // the cached sentences, empty if not ready
     fun nowPlaying(): String? = null   // "Title, Artist" of the music app, null if none
     fun hasMusicApp(): Boolean = false  // a music app is installed, so Music can start it with no song loaded
-    fun playMusic() {}                 // open the music app and press Play all on its home (Quick picks); if that fails, start Liked music
+    fun isMusicApp(pkg: String): Boolean = false   // YT Music (also the patched one): its page gets Play options
+    fun playMusic(liked: Boolean = false) {}                 // open the music app and press Play all on its home (Quick picks); if that fails, start Liked music
     fun dndAllowed(): Boolean
     fun lastTimer(): Int             // minutes, 0 = none yet
     fun setLastTimer(minutes: Int)
@@ -666,7 +667,12 @@ class ControllerMode(
     private fun notifRead(n: Notif) = notifLine(n, 500, true)
 
     /** An app without notifications: open it, or go back. */
-    private fun appOpenOptions(): List<Opt> = listOf(Opt("app:open", Menu.OPEN_APP) { pick("app:open"); openApp() }, Opt("app:back", Menu.BACK) { pick("app:back"); treeUp() })
+    private fun appOpenOptions(): List<Opt> {
+        val play = if (notifPkg?.let { out.isMusicApp(it) } == true) listOf(
+            Opt("app:mix", Menu.PLAY_MIX) { pick("app:mix"); out.playMusic(false); outro(Menu.PLAYING_MUSIC) },
+            Opt("app:liked", Menu.PLAY_LIKED) { pick("app:liked"); out.playMusic(true); outro(Menu.PLAYING_MUSIC) }) else emptyList()
+        return play + listOf(Opt("app:open", Menu.OPEN_APP) { pick("app:open"); openApp() }, Opt("app:back", Menu.BACK) { pick("app:back"); treeUp() })
+    }
 
     private fun openApp() { val p = notifPkg ?: return; pausedByUs = false; exit(false); out.openApp(p) }
 

@@ -96,7 +96,8 @@ object Actions {
                 }
             }
             override fun hasMusicApp() = musicApps.any { app.packageManager.getLaunchIntentForPackage(it) != null }
-            override fun playMusic() = playQuickPicks()
+            override fun isMusicApp(pkg: String) = pkg in musicApps
+            override fun playMusic(liked: Boolean) = playQuickPicks(liked)
             override fun songLang(text: String) = ControllerNotificationListener.voiceFor(text)
             override fun pauseMusic() = pauseMusicNow()
             override fun resumeMusic() = resumeMusicNow()
@@ -567,11 +568,12 @@ object Actions {
             .filter { it.packageName != app.packageName }
     } catch (e: SecurityException) { emptyList() }
 
+    private const val LIKED_LINK = "https://music.youtube.com/watch?list=LM"
     private val musicApps = listOf("app.morphe.android.apps.youtube.music", "com.google.android.apps.youtube.music")
 
     /** Start music with no screen: if the music app has a session, ask it to play something (its own mix of your taste); else open it by link and ask once it has a session. */
-    private fun playQuickPicks() {
-        fun ask(c: android.media.session.MediaController) = c.transportControls.playFromSearch("", null)
+    private fun playQuickPicks(liked: Boolean = false) {
+        fun ask(c: android.media.session.MediaController) = if (liked) c.transportControls.playFromUri(android.net.Uri.parse(LIKED_LINK), null) else c.transportControls.playFromSearch("", null)
         otherSessions().firstOrNull { it.packageName in musicApps }?.let { ask(it); return }
         val pkg = musicApps.firstOrNull { app.packageManager.getLaunchIntentForPackage(it) != null } ?: run { Log.d(TAG, "MODE no music app"); return }
         // no session: a media-play key (like the earbud) makes the system start the app's playback service, which the memory manager keeps alive; the link only opens an activity, which it kills with the screen off
@@ -592,7 +594,7 @@ object Actions {
 
     private fun playLiked(pkg: String) {
         try {
-            app.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://music.youtube.com/watch?list=LM")).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            app.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(LIKED_LINK)).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Throwable) { Log.e(TAG, "play liked failed", e) }
     }
 
