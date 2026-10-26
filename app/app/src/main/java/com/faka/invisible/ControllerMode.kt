@@ -571,9 +571,10 @@ class ControllerMode(
         return TreeNode(n.label, kids, a, a?.unread ?: kids.sumOf { it.unread }, n.weight, n.rank)
     }
 
-    private fun treeLabel(c: TreeNode): Phrase = when {
-        c.unread > 0 -> Phrase.content(c.label + ", " + c.unread)
-        else -> Phrase.content(c.label)
+    private fun treeLabel(c: TreeNode): Phrase {
+        val a = c.app
+        val lang = if (a != null && !a.pkg.startsWith("hub:")) NameLang.voice(a.pkg, a.label) else null   // app names in their language; groups and OS programs stay English
+        return if (c.unread > 0) Phrase.content(c.label + ", " + c.unread, lang) else Phrase.content(c.label, lang)
     }
 
     /** One list of the tree: a group goes down, an OS program runs as before, an app opens its notifications. */

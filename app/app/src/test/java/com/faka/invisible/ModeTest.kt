@@ -1028,6 +1028,14 @@ class ModeTest {
         return r
     }
 
+    @Test fun aSpanishAppNameIsSpokenInSpanishAndAnEnglishOneIsNot() {
+        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("today"))
+        r.installed = listOf(InstalledApp("com.x.pago", "Mercado Pago"), InstalledApp("com.google.android.apps.maps", "Maps"))
+        r.wake(); r.advance(6000)
+        assertTrue(r.spoken().toString(), r.spoken().contains("say[es] Mercado Pago"))
+        assertTrue(r.spoken().toString(), r.spoken().contains("say Maps"))
+    }
+
     /** Many apps with no notifications, so home must hold groups. */
     private fun many(): Rig {
         val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("today"))
@@ -1078,7 +1086,7 @@ class ModeTest {
 
     @Test fun suggestedSlotOffersAnAppFromBelowHomeAndPickingItLogsTheTreeIntent() {
         val r = many(); r.suggested = listOf("app:com.brubank")
-        r.wake(); r.advance(450 + 700); assertEquals("say brubank", r.spoken().first())   // in front of home, though it lives in a group
+        r.wake(); r.advance(450 + 700); assertEquals("say[es] brubank", r.spoken().first())   // in front of home, though it lives in a group
         r.advance(400); r.click()
         assertTrue(r.log.contains("choice HUB -1 suggest:hit"))
         assertTrue(r.log.any { it.endsWith("app:com.brubank") })
