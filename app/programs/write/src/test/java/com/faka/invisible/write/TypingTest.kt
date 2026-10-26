@@ -170,10 +170,22 @@ class TypingTest {
         assertEquals(n + 1, pairs.size); assertTrue(p.active)
     }
 
-    @Test fun fourOrFiveClicksDoNothingButReplay() {
+    @Test fun fourClicksGoOnePairBack() {
+        p.start(); clicks(2); val second = pairs.last()
+        clicks(2); clicks(4)
+        assertEquals(second, pairs.last())
+    }
+
+    @Test fun fourClicksOnTheFirstPairGoToTheLast() {
+        p.start(); val first = pairs.last()
+        clicks(4)
+        assertTrue(pairs.last() != first)
+    }
+
+    @Test fun fiveClicksReplayThePair() {
         p.start(); clicks(1); val n = pairs.size
-        clicks(4); clicks(5)
-        assertTrue(p.active); assertEquals("Hello", p.text()); assertEquals(n + 2, pairs.size)
+        clicks(5)
+        assertEquals(n + 1, pairs.size); assertEquals("Hello", p.text())
     }
 
     @Test fun theMenuLeaveItemLeavesWithNothing() {

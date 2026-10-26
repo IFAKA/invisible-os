@@ -46,7 +46,7 @@ sealed class Translation {
 
 /**
  * Write: a one-button keyboard (PLAN-OS.md). The phone plays two likely items one after the other, the first in the left ear, the second in the right.
- * click = left, hold (0.5 s up to 3 s) = right, 2 clicks = next pair, 3 clicks = the small menu: Done, Delete, Letters (or Words).
+ * click = left, hold (0.5 s up to 3 s) = right, 2 clicks = next pair, 4 clicks = the pair before, 3 clicks = the small menu: Done, Delete, Letters (or Words).
  * The menu is read one item at a time; a click picks the item just spoken; 2 clicks = the previous item; a hold or 3 clicks closes it.
  * Hold 3 s always leaves. It gets the raw button ([down]/[up]) and owns no menu. Time and timers are injected.
  */
@@ -187,7 +187,8 @@ class TypeProgram(
             1 -> choose(true)
             2 -> { out.log("next", page); out.cue(TypeCue.NEXT); page++; show() }
             3 -> { out.log("menu"); openMenu() }
-            else -> show(true)   // 4 or more clicks mean nothing: play the pair again
+            4 -> { val n = (items.size + 1) / 2; out.log("back", page); out.cue(TypeCue.NEXT); page = if (page > 0) page - 1 else maxOf(n - 1, 0); show() }   // one pair back (before the first: the last)
+            else -> show(true)   // 5 or more clicks mean nothing: play the pair again
         }
     }
 
