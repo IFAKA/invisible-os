@@ -5,3 +5,6 @@ local.properties
 *.apk
 .DS_Store
 __pycache__/
+keystore.properties
+*.jks
+dist/

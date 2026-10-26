@@ -11,7 +11,7 @@
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <queries><intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent></queries>   <!-- lets the app list the launchable apps -->
     <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>   <!-- lets the app see and use any installed speech engine -->
-    <application android:label="Invisible" android:theme="@android:style/Theme.Material.NoActionBar">
+    <application android:label="Invisible OS" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:theme="@android:style/Theme.Material.NoActionBar">
         <activity android:name=".MainActivity" android:exported="true" android:showWhenLocked="true" android:turnScreenOn="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -35,7 +35,7 @@
             </intent-filter>
         </activity>
         <service android:name=".ControllerNotificationListener" android:exported="true"
-            android:label="Invisible"
+            android:label="Invisible OS"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
         </service>
@@ -44,7 +44,7 @@
         <service android:name=".ButtonService" android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
         <service android:name=".ButtonAccessibilityService" android:exported="true"
-            android:label="Invisible"
+            android:label="Invisible OS"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config" />
