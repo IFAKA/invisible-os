@@ -6,7 +6,8 @@ import com.faka.invisible.voicekit.Pacing
  * How long the phone waits after an item before the next one, learned from how fast the user really clicks.
  * A sample = ms from the END of the picked item's speech to the press (negative if pressed during the speech; a press in the grace
  * window of the next item counts as the gap plus its offset into that item). Keeps the last [Pacing.REACTION_KEEP] samples.
- * gap = p90(samples) + margin, kept between the floor and the user's setting; too few samples = the user's setting. Pure.
+ * gap = p90(samples) + margin, never shorter than the user's setting (the slider is the shortest pause) and never over the max;
+ * too few samples = the user's setting. A slow user gets more time; a fast user lowers the slider. Pure.
  */
 class ReactionGap(initial: List<Long> = emptyList(), private val keep: Int = Pacing.REACTION_KEEP) {
     private val samples = ArrayList<Long>()
@@ -19,12 +20,12 @@ class ReactionGap(initial: List<Long> = emptyList(), private val keep: Int = Pac
         while (samples.size > keep) samples.removeAt(0)
     }
 
-    /** The pause to use now. Never longer than the user's [setting], never shorter than the floor (unless the setting is). */
+    /** The pause to use now. Never shorter than the user's [setting]; longer if the user needs it, up to the max (or the setting, if higher). */
     fun gap(setting: Long): Long {
         if (samples.size < Pacing.REACTION_MIN_SAMPLES) return setting
         val s = samples.sorted()
         val p90 = s[(Math.ceil(0.9 * s.size).toInt() - 1).coerceIn(0, s.size - 1)]
-        return (p90 + Pacing.REACTION_MARGIN_MS).coerceIn(minOf(Pacing.REACTION_FLOOR_MS, setting), setting)
+        return (p90 + Pacing.REACTION_MARGIN_MS).coerceIn(setting, maxOf(setting, Pacing.REACTION_MAX_MS))
     }
 
     /** For saving in the preferences: comma separated. */

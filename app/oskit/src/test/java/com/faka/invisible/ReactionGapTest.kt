@@ -9,15 +9,15 @@ class ReactionGapTest {
         assertEquals(1600L, ReactionGap(List(7) { 100L }).gap(1600))
     }
 
-    @Test fun fastUserGetsP90PlusMargin() {
-        val g = ReactionGap(List(10) { 400L + it * 10 })   // p90 = 490
-        assertEquals(680L, g.gap(1600))
+    @Test fun slowUserGetsP90PlusMargin() {
+        val g = ReactionGap(List(10) { 1400L + it * 10 })   // p90 = 1480
+        assertEquals(1680L, g.gap(1000))
     }
 
-    @Test fun neverBelowTheFloorNeverAboveTheSetting() {
-        assertEquals(300L, ReactionGap(List(20) { -500L }).gap(1600))
-        assertEquals(1600L, ReactionGap(List(20) { 5000L }).gap(1600))
-        assertEquals(600L, ReactionGap(List(20) { 5000L }).gap(600))   // a setting under the floor wins
+    @Test fun neverBelowTheSettingNeverAboveTheMax() {
+        assertEquals(1600L, ReactionGap(List(20) { -500L }).gap(1600))   // a fast user lowers the slider
+        assertEquals(3000L, ReactionGap(List(20) { 5000L }).gap(1600))
+        assertEquals(3500L, ReactionGap(List(20) { 5000L }).gap(3500))   // a setting over the max wins
     }
 
     @Test fun keepsOnlyTheLast40() {
@@ -25,7 +25,8 @@ class ReactionGapTest {
         repeat(40) { g.add(5000) }
         repeat(40) { g.add(100) }
         assertEquals(40, g.size)
-        assertEquals(300L, g.gap(1600))
+        assertEquals(1600L, g.gap(1600))
+        assertEquals(400L, g.gap(400))
     }
 
     @Test fun savesAndLoads() {

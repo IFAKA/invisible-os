@@ -144,7 +144,7 @@ class ControllerMode(
     /** Set from the app's settings screen; read at use, so changes apply at once. */
     var settings = LauncherSettings()
     private val reactions by lazy { ReactionGap(ReactionGap.decode(out.loadReactions())) }   // how fast the user clicks (saved across restarts)
-    private val pause get() = pauseMs ?: reactions.gap(settings.itemGapMs)   // the gap between items adapts, never above the user setting
+    private val pause get() = pauseMs ?: reactions.gap(settings.itemGapMs)   // the gap between items adapts: never under the user setting, longer for a slow user
     private val silentLoops get() = silentLoopsOverride ?: settings.silentLoops
     private val undoMs get() = undoMsOverride ?: settings.undoMs
 
