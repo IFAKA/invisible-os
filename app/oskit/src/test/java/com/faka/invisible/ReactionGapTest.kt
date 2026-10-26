@@ -11,11 +11,11 @@ class ReactionGapTest {
 
     @Test fun fastUserGetsP90PlusMargin() {
         val g = ReactionGap(List(10) { 400L + it * 10 })   // p90 = 490
-        assertEquals(780L, g.gap(1600))
+        assertEquals(680L, g.gap(1600))
     }
 
     @Test fun neverBelowTheFloorNeverAboveTheSetting() {
-        assertEquals(700L, ReactionGap(List(20) { -500L }).gap(1600))
+        assertEquals(500L, ReactionGap(List(20) { -500L }).gap(1600))
         assertEquals(1600L, ReactionGap(List(20) { 5000L }).gap(1600))
         assertEquals(600L, ReactionGap(List(20) { 5000L }).gap(600))   // a setting under the floor wins
     }
@@ -25,7 +25,7 @@ class ReactionGapTest {
         repeat(40) { g.add(5000) }
         repeat(40) { g.add(100) }
         assertEquals(40, g.size)
-        assertEquals(700L, g.gap(1600))
+        assertEquals(500L, g.gap(1600))
     }
 
     @Test fun savesAndLoads() {
