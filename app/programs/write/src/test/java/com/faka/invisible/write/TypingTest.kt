@@ -43,6 +43,7 @@ class TypingTest {
         override fun cue(c: TypeCue) { cues.add(c) }
         override fun written(text: String) { learnedText.add(text) }
         override fun readBack(text: String) { recaps.add(text) }
+        override fun silence() { silenced++ }
         override fun finished(text: String) { result = text }
         override fun phrases(text: String, then: (List<String>) -> Unit) { asked.add(text); if (endings.isNotEmpty()) then(endings) }
     }, t, onEnded = {})
@@ -50,6 +51,7 @@ class TypingTest {
     private val said = ArrayList<String>()
     private val learnedText = ArrayList<String>()
     private val recaps = ArrayList<String>()
+    private var silenced = 0
     private val asked = ArrayList<String>()
     private var endings: List<String> = emptyList()
     private fun click() { p.down(t.now); t.advance(80); p.up(t.now); t.advance(120) }
@@ -196,6 +198,18 @@ class TypingTest {
         p.start(); clicks(1); recaps.clear()
         clicks(2)
         assertTrue(recaps.isEmpty())
+    }
+
+    @Test fun aPressCutsTheSentenceBeingSpoken() {
+        p.start(); clicks(1); silenced = 0
+        p.down(t.now)
+        assertEquals(1, silenced)
+    }
+
+    @Test fun theSentenceSoFarIsNotCut() {
+        p.start(); clicks(1); clicks(1); clicks(1); recaps.clear()
+        t.advance(TypeProgram.REPLAY_MS + 50)
+        assertEquals(3, recaps.single().split(' ').size)
     }
 
     @Test fun menuClosesByItselfAfterTwoSilentLoops() {

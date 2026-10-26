@@ -33,6 +33,8 @@ interface TypeOut {
     fun translate(text: String, then: (Translation) -> Unit) { then(Translation.Same) }
     /** Say the translation aloud in its own language so the player can check it before it is sent. */
     fun readBack(text: String) {}
+    /** A press cuts a sentence that is being spoken (the sentence so far can be long). */
+    fun silence() {}
     /** The English text the player wrote (what the models learn from), even when the translation is what is sent. */
     fun written(text: String) {}
 }
@@ -66,7 +68,6 @@ class TypeProgram(
         const val MAX_REPLAYS = 3
         const val MENU_GAP_MS = 2000L
         const val MENU_LOOPS = 2
-        const val RECAP_WORDS = 5
         const val WORD_PAGES = 4
         const val ALPHABET = "abcdefghijklmnopqrstuvwxyzñ"
         const val ALPHABET_BY_USE = "eaosrnidltcumpbgvyqhfzjñxkw"   // common letters in Spanish and English
@@ -142,7 +143,7 @@ class TypeProgram(
         val l = items.getOrNull(page * 2) ?: return
         val r = items.getOrNull(page * 2 + 1)
         // a new word, or a long silence (replay): the sentence so far first, then the letters of the word being spelled
-        if ((recap || again) && written.isNotEmpty() && !frame.digits && !phraseMode) out.readBack(written.takeLast(RECAP_WORDS).joinToString(" "))
+        if ((recap || again) && written.isNotEmpty() && !frame.digits && !phraseMode) out.readBack(written.joinToString(" "))
         if (letters && prefix.isNotEmpty()) out.say(TypeVoice.spelled(prefix))   // every letter pair says the letters so far
         recap = false   // every letter pair, replays too: you always hear what you have so far
         out.prefetch(items.drop(page * 2 + 2).take(4) )
@@ -156,7 +157,7 @@ class TypeProgram(
     override fun down(time: Long) {
         if (!active) return
         touched = true; pressedSinceShow = true
-        out.hush(); timers.clear("t:gap"); timers.clear("t:replay"); menuScan.stop()
+        out.silence(); out.hush(); timers.clear("t:gap"); timers.clear("t:replay"); menuScan.stop()
         downAt = time; armed = false
         // The hold acts when it reaches HOLD_MS, while the button is still down: the pick sound is the feedback, and holding on does nothing more.
         timers.set("t:hold", Pacing.HOLD_MS) { if (active && downAt >= 0) { armed = true; clicks = 0; holdAction() } }
