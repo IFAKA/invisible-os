@@ -1,15 +1,15 @@
 package com.faka.invisible.guard
 
-import com.faka.invisible.echo.EchoSynth
-import com.faka.invisible.echo.EchoSynth.then
-import com.faka.invisible.echo.EchoSynth.tone
+import com.faka.invisible.voicekit.Synth
+import com.faka.invisible.voicekit.Synth.then
+import com.faka.invisible.voicekit.Synth.tone
 import java.util.Random
 import kotlin.math.PI
 import kotlin.math.sin
 
 /** The sounds of GUARD, built once (pure maths, cheap: all under half a second). One sound always means one thing. */
 object GuardSynth {
-    const val SR = EchoSynth.SR
+    const val SR = Synth.SR
 
     private fun mix(vararg parts: Pair<FloatArray, Int>): FloatArray {
         val n = parts.maxOf { SR * it.second / 1000 + it.first.size }

@@ -1,37 +1,25 @@
 package com.faka.invisible.echo
 
-import android.content.SharedPreferences
-import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
-import com.faka.invisible.voicekit.EchoVoice
+import com.faka.invisible.oskit.Program
+import com.faka.invisible.oskit.ProgramEntry
+import com.faka.invisible.oskit.ProgramHost
 import com.faka.invisible.voicekit.Phrase
 import com.faka.invisible.voicekit.RawButton
+import com.faka.invisible.voicekit.FrameMixer
 import com.faka.invisible.voicekit.GameAudio
 import com.faka.invisible.voicekit.Timers
 
-/** What ECHO needs from the app (speech, the user's music, the log). */
-interface EchoHost {
-    /** Starts the OS wait sound (a soft heartbeat while the sounds are built); call the result when ready. */
-    fun waiting(): () -> Unit
-    fun speak(text: Phrase)
-    fun stopSpeech()
-    fun pauseMusic()
-    fun resumeMusic()
-    fun log(line: String)
-}
-
 /** Android side of ECHO: the low-latency audio engine, the mixer lock, the timers, the saved best score. No audio input of any kind. */
-class EchoAndroid(
-    private val prefs: SharedPreferences,
-    private val handler: Handler,
-    private val host: EchoHost,
-    private val onEnded: () -> Unit,
-) : RawButton {
+class EchoAndroid : Program {
+    private lateinit var host: ProgramHost
+    private val handler get() = host.handler
+    private val prefs get() = host.prefs
     private val sr = EchoSynth.SR
     private val block = sr * 5 / 1000
     private val lock = Any()
-    private val mixer = EchoMixer()
+    private val mixer = FrameMixer()
     private val keyed = HashMap<String, Runnable>()
     @Volatile private var running = false
     @Volatile private var latency = 0.0
@@ -63,8 +51,9 @@ class EchoAndroid(
     }
 
     /** Main thread. Builds the sounds in the background (the phone is slow at it), then opens the audio and starts. */
-    fun start() {
+    override fun start(host: ProgramHost) {
         if (running) return
+        this.host = host
         running = true
         gen++
         val g = gen
@@ -87,9 +76,9 @@ class EchoAndroid(
 
     override fun down(time: Long) { game?.down(time) }
     override fun up(time: Long) { game?.up(time) }
-    fun speechDone() { game?.onSpeechDone() }
+    override fun speechDone() { game?.onSpeechDone() }
 
-    fun stop() {
+    override fun stop() {
         if (!running) return
         game?.stop()
         shutdown()
@@ -102,6 +91,11 @@ class EchoAndroid(
         game = null
         audio.join()
         host.resumeMusic()
-        onEnded()
+        host.ended()
     }
+}
+
+/** What the OS registry lists for Echo. */
+object EchoProgram {
+    val entry = ProgramEntry("games:echo", EchoVoice.TITLE) { EchoAndroid() }
 }

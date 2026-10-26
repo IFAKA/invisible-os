@@ -1,6 +1,5 @@
 package com.faka.invisible.echo
 
-import com.faka.invisible.voicekit.EchoVoice
 import com.faka.invisible.voicekit.Phrase
 import com.faka.invisible.voicekit.Timers
 import java.util.Random

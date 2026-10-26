@@ -1,6 +1,7 @@
 package com.faka.invisible
 
 import com.faka.invisible.logickit.*
+import com.faka.invisible.oskit.ProgramEntry
 
 import com.faka.invisible.voicekit.*
 
@@ -80,7 +81,8 @@ interface ModeOutput {
     fun startWrite() {}   // the Write keyboard (stereo pair); its text comes back through the app
     fun startSum() {}   // the Sum prices tool: the number keyboard in a loop
     fun startCompass() {}   // the compass program
-    fun startEcho() {}   // the rhythm-copy game
+    fun programs(): List<ProgramEntry> = emptyList()   // the programs the OS lists (its registry), in menu order
+    fun startProgram(id: String) {}   // start the program with this menu id (a ProgramEntry.id); the program gets the raw button
     fun startGuard() {}   // the gate-guard beat game
     fun startGame(coach: Boolean) {}   // coach = teach first (the "How to play" item)
     fun weather(done: (Phrase) -> Unit) { done(Voice.WEATHER_FAILED) }   // off the main thread inside; [done] runs on the main thread with ONE sentence
@@ -423,6 +425,10 @@ class ControllerMode(
         timers.set("dog", waitCapMs) { onSpeechDone() }
     }
 
+    /** The menu lines of the registered programs whose id starts with [prefix]. Picking one starts it; the music stays paused for it, and it resumes the music. */
+    private fun programOpts(prefix: String): Array<Opt> = out.programs().filter { it.id.startsWith(prefix) }
+        .map { e -> Opt(e.id, e.title) { pick(e.id); pausedByUs = false; exit(false); out.startProgram(e.id) } }.toTypedArray()
+
     // ---- options per screen ----
     private fun buildOptions(): List<Opt> {
         val m = cur
@@ -508,7 +514,7 @@ class ControllerMode(
             } }
             Screen.GAMES -> listOf(   // every game lives here; a new game is one more line
                 Opt("games:duel", Menu.DUEL) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame(false) },   // music stays paused for the game, which resumes it
-                Opt("games:echo", Menu.ECHO) { pick("games:echo"); pausedByUs = false; exit(false); out.startEcho() },
+                *programOpts("games:"),
                 Opt("games:guard", Menu.GUARD) { pick("games:guard"); pausedByUs = false; exit(false); out.startGuard() },
                 Opt("games:howto", Menu.HOW_TO_PLAY) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) })
             Screen.CALC -> calcOptions()

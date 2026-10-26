@@ -21,8 +21,9 @@ import android.os.SystemClock
 import android.util.Log
 import com.faka.invisible.compass.CompassAndroid
 import com.faka.invisible.compass.CompassHost
-import com.faka.invisible.echo.EchoAndroid
-import com.faka.invisible.echo.EchoHost
+import com.faka.invisible.oskit.Program
+import com.faka.invisible.oskit.ProgramEntry
+import com.faka.invisible.oskit.ProgramHost
 import com.faka.invisible.guard.GuardAndroid
 import com.faka.invisible.guard.GuardHost
 import com.faka.invisible.tell.TellAndroid
@@ -154,7 +155,8 @@ object Actions {
             override fun lastTimer() = prefs().getInt("lastTimer", 0)
             override fun setLastTimer(minutes: Int) { prefs().edit().putInt("lastTimer", minutes).apply() }
             override fun startGame(coach: Boolean) = startDuel(coach)
-            override fun startEcho() = startEchoGame()
+            override fun programs() = Programs.all
+            override fun startProgram(id: String) { Programs.byId(id)?.let { startProgramEntry(it) } }
             override fun startGuard() = startGuardGame()
             override fun startCompass() = startCompassProgram()
             override fun startWrite() = launchWrite()
@@ -208,13 +210,14 @@ object Actions {
         taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList(), onAdd = { taskMemory.record(it.text, it.lang) }) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
         VoiceKit.init(app, handler, { speechRate() }, object : SpeechListener {
             override fun started() { mode.onSpeechStarted() }
-            override fun ended() { mode.onSpeechDone(); duel?.takeIf { it.active }?.speechDone(); echo?.takeIf { it.active }?.speechDone(); guard?.takeIf { it.active }?.speechDone() }
+            override fun ended() { mode.onSpeechDone(); duel?.takeIf { it.active }?.speechDone(); running?.takeIf { it.active }?.speechDone(); guard?.takeIf { it.active }?.speechDone() }
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
     }
 
     private var duel: TellAndroid? = null
-    private var echo: EchoAndroid? = null
+    /** The program of the registry that runs now (at most one). */
+    private var running: Program? = null
     private var guard: GuardAndroid? = null
     private var compass: CompassAndroid? = null
 
@@ -269,7 +272,7 @@ object Actions {
             if (i % 2 == 0) handler.postAtTime({ VoiceKit.buttons.key("dev", false, 0, down, end) }, end)
         }
     }
-    fun startDev(name: String) = handler.post { when (name) { "echo" -> startEchoGame(); "guard" -> startGuardGame(); "duel" -> startDuel(false); "compass" -> startCompassProgram(); "write" -> launchWrite() } }
+    fun startDev(name: String) = handler.post { when (name) { "guard" -> startGuardGame(); "duel" -> startDuel(false); "compass" -> startCompassProgram(); "write" -> launchWrite(); else -> Programs.byDevName(name)?.let { startProgramEntry(it) } } }
 
     /** Dev: drive the music session directly: "uri:<url>" or "search:<query>". */
     fun waitDev(ms: Long) = handler.post { val w = narrator.waiting(); handler.postDelayed({ w() }, ms) }
@@ -415,16 +418,24 @@ object Actions {
         }, onEnded = { compass = null; gameEnded() }).also { it.start() }
     }
 
-    private fun startEchoGame() {
-        echo?.stop()
-        echo = EchoAndroid(prefs(), handler, object : EchoHost {
+    /** Starts a program of the registry. The host is what it may ask of the OS; when it ends, the OS plays the close sound. */
+    private fun startProgramEntry(e: ProgramEntry) {
+        running?.stop()
+        val p = e.create()
+        running = p
+        p.start(object : ProgramHost {
+            override val context get() = app
+            override val handler get() = this@Actions.handler
+            override val prefs get() = prefs()
             override fun waiting() = narrator.waiting()
-            override fun speak(text: Phrase) = say(text, false, slow = false)
+            override fun speak(text: Phrase, slow: Boolean) = say(text, false, slow = slow)
             override fun stopSpeech() = narrator.stopSpeech()
             override fun pauseMusic() { pauseMusicNow() }
             override fun resumeMusic() = resumeMusicNow()
             override fun log(line: String) { Log.d(TAG, line); EventLog.add(line) }
-        }, onEnded = { echo = null; gameEnded() }).also { it.start() }
+            override fun outputDevice() = outputDeviceKey()
+            override fun ended() { if (running === p) running = null; gameEnded() }
+        })
     }
 
     private fun startGuardGame() {
@@ -464,11 +475,11 @@ object Actions {
 
     /** What the button feeds: the programs that own the raw button, the menu, and the menu's own tones. */
     private val buttonTarget = object : ButtonTarget {
-        override fun raw(): RawButton? = duel?.takeIf { it.active } ?: echo?.takeIf { it.active } ?: guard?.takeIf { it.active } ?: compass?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
+        override fun raw(): RawButton? = duel?.takeIf { it.active } ?: running?.takeIf { it.active } ?: guard?.takeIf { it.active } ?: compass?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
         override val menuActive get() = mode.active
         override fun exitProgram() {   // each stop() ends with the program's onEnded, which plays the OS close sound. Write is not here: its holds pick words; it leaves from its menu
             duel?.takeIf { it.active }?.let { it.stop(); return }
-            echo?.takeIf { it.active }?.let { it.stop(); return }
+            running?.takeIf { it.active && it.exitOnClickHold }?.let { it.stop(); return }
             guard?.takeIf { it.active }?.let { it.stop(); return }
             compass?.takeIf { it.active }?.let { it.stop(); return }
         }

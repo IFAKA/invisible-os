@@ -1,5 +1,6 @@
 package com.faka.invisible
 
+import com.faka.invisible.oskit.ProgramEntry
 import com.faka.invisible.voicekit.*
 
 import org.junit.Assert.assertEquals
@@ -54,7 +55,8 @@ class ModeTest {
             override fun startWrite() { log.add("startWrite") }
             override fun startSum() { log.add("startSum") }
             override fun startGame(coach: Boolean) { log.add("startGame $coach") }
-            override fun startEcho() { log.add("startEcho") }
+            override fun programs() = listOf(ProgramEntry("games:echo", Phrase.content("Echo")) { error("not started in this test") })
+            override fun startProgram(id: String) { log.add(if (id == "games:echo") "startEcho" else "startProgram $id") }
             override fun startGuard() { log.add("startGuard") }
             override fun startCompass() { log.add("startCompass") }
             override fun runAction(name: String) { log.add("run $name"); speech() }

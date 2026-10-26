@@ -1,11 +1,11 @@
-package com.faka.invisible.echo
+package com.faka.invisible.voicekit
 
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
 /** Sample-accurate scheduler: a sound starts at an exact frame, so the beat never drifts. Callers share one lock with the audio thread. */
-class EchoMixer {
+class FrameMixer {
     private class Voice(val src: FloatArray, val start: Long, val l: Float, val r: Float)
 
     private val voices = ArrayList<Voice>()

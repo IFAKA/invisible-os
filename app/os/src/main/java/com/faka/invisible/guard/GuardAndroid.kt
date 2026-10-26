@@ -4,7 +4,7 @@ import android.content.SharedPreferences
 import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
-import com.faka.invisible.echo.EchoMixer
+import com.faka.invisible.voicekit.FrameMixer
 import com.faka.invisible.voicekit.GuardVoice
 import com.faka.invisible.voicekit.Phrase
 import com.faka.invisible.voicekit.RawButton
@@ -34,7 +34,7 @@ class GuardAndroid(
     private val sr = GuardSynth.SR
     private val block = sr * 5 / 1000
     private val lock = Any()
-    private val mixer = EchoMixer()
+    private val mixer = FrameMixer()
     private val keyed = HashMap<String, Runnable>()
     @Volatile private var running = false
     @Volatile private var latency = 0.0

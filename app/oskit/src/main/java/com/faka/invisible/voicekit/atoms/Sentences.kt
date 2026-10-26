@@ -182,7 +182,6 @@ object Menu {
     fun hour(h24: Int) = f("${(h24 % 12).let { if (it == 0) 12 else it }} ${if (h24 < 12) "AM" else "PM"}")
     fun minute(m: Int) = f(if (m == 0) "Sharp" else Spoken.number(m).replaceFirstChar { it.uppercase() })
     val DUEL = f("Duel")
-    val ECHO = f("Echo")
     val GUARD = f("Guard")
     val WRITE = f("Write")
     val COMPASS = f("Compass")
@@ -200,23 +199,6 @@ object Menu {
     fun replyYes(final: Boolean) = f(if (final) "Reply okay" else "Reply yes")
     /** "Reply to Ana" (the name is content). */
     fun replyTo(sender: String) = f("Reply to $sender")
-}
-
-/**
- * Spoken sentences of the Duel coach. Plain English, at most 7 words per sentence, one idea each.
- * Pacing (how long a person needs to take a sentence in) is in Pacing.kt.
- */
-object EchoVoice {
-    val INTRO = f("Echo. Listen, then copy.")
-    val LEAVE = f("Hold three seconds to leave.")
-    val AGAIN = f("Again.")
-    val LIFE_BACK = f("Life back.")
-    private val WORDS = listOf("No", "One", "Two", "Three", "Four", "Five")
-    fun lives(n: Int) = f(if (n == 1) "Last life." else "${WORDS[n.coerceIn(0, 5)]} lives.")
-    val LOADING = f("One moment.")
-    fun level(n: Int) = f("Level $n.")
-    fun over(score: Int, best: Int) = f(if (score >= best && score > 0) "Game over. New best, $score." else "Game over. Score $score. Best $best.")
-    val ALL: List<Phrase> = listOf(INTRO, LEAVE, AGAIN, LOADING, LIFE_BACK) + (1..5).map { lives(it) }
 }
 
 /** Guard: a gate guard who strikes on the fourth step. Plain English, at most 7 words per sentence, one idea each. */

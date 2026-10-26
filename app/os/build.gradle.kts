@@ -27,6 +27,7 @@ android {
 }
 dependencies {
     implementation(project(":oskit"))
+    implementation(project(":programs:echo"))
     implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.google.mlkit:translate:17.0.3")
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.1")
