@@ -40,5 +40,6 @@ object TypeVoice {
     val WORDS_WITH = f("Words with")
     /** "Words with a b c": the letters chosen so far, spoken one by one. */
     fun spelling(prefix: String) = f("No word yet. " + prefix.toCharArray().joinToString(" "))
+    fun spelled(prefix: String) = f(prefix.toCharArray().joinToString(" "))
     fun wordsWith(prefix: String) = f(WORDS_WITH.text + " " + prefix.toCharArray().joinToString(" "))
 }

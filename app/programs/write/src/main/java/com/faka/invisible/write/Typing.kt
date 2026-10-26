@@ -245,13 +245,14 @@ class TypeProgram(
         }
     }
 
+    /** In letters mode a pick adds a letter and stays on letters until the menu says Words. */
     private fun choose(left: Boolean) {
         val item = items.getOrNull(page * 2 + if (left) 0 else 1)
         if (item == null) { out.cue(TypeCue.NEXT); show(true); return }
         out.cue(if (left) TypeCue.PICK_LEFT else TypeCue.PICK_RIGHT)
         out.log("pick", if (left) "L" else "R", item, page, if (phraseMode) "phrases" else if (letters) "letters" else "words", prefix)
         if (phraseMode) { written.addAll(item.split(' ').filter { it.isNotEmpty() }); phraseMode = false; prefix = ""; askPhrases() }
-        else if (letters) { prefix += item; letters = false; if (candidates().isNotEmpty()) out.say(TypeVoice.wordsWith(prefix)) } else { lm.picked(written.takeLast(8), item); written.add(item); prefix = ""; askPhrases() }
+        else if (letters) { prefix += item; out.say(TypeVoice.spelled(prefix)) } else { lm.picked(written.takeLast(8), item); written.add(item); prefix = ""; askPhrases() }
         page = 0
         show()
     }

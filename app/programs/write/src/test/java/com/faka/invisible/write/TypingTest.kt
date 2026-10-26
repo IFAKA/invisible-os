@@ -131,9 +131,10 @@ class TypingTest {
 
     private fun spellOneLetterWithNoWordsKnown() { empty = true; p.start(); clicks(3); clicks(1); said.clear(); clicks(1) }   // menu, Letters, the first letter
 
-    @Test fun lettersNoWordStartsWithAreKeptAndSpelledNotWrittenAsAWord() {
+    @Test fun afterALetterTheLettersStayAndTheLetterIsSpelled() {
         spellOneLetterWithNoWordsKnown()
-        assertTrue(said.last().startsWith("No word yet. "))
+        assertEquals(1, said.last().length)             // the letters so far, spelled
+        assertEquals(1, pairs.last().first.length)      // and the next pair is letters again
         assertEquals("", p.text())
     }
 
