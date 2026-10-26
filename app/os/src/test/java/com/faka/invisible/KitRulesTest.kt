@@ -2,6 +2,10 @@ package com.faka.invisible
 
 import com.faka.invisible.voicekit.*
 import com.faka.invisible.tell.TellVoice
+import com.faka.invisible.echo.EchoVoice
+import com.faka.invisible.guard.GuardVoice
+import com.faka.invisible.compass.CompassVoice
+import com.faka.invisible.write.TypeVoice
 import com.faka.invisible.tell.costliestMistake
 
 import java.io.File
@@ -13,10 +17,13 @@ import org.junit.Test
  * The Voice Kit rules are in voicekit-rules.tsv; the Gradle task checkVoiceKit applies the same file before every build.
  */
 class KitRulesTest {
-    private val appDir = listOf(File("."), File("app")).first { File(it, "voicekit-rules.tsv").isFile }
-    private val root = File(appDir, "src/main/java/com/faka/invisible")
-    private val all = root.walkTopDown().filter { it.extension == "kt" }.toList()
+    /** The Gradle root (app/): the tests run in app/os; the rules file lives at the root. */
+    private val appDir = listOf(File("."), File(".."), File("app")).first { File(it, "voicekit-rules.tsv").isFile }.canonicalFile
+    // Every module's main sources: oskit, os, adapters and each folder of programs/.
+    private val modules = listOf("oskit", "os", "adapters") + (File(appDir, "programs").listFiles { f -> f.isDirectory }?.map { "programs/${it.name}" } ?: emptyList())
+    private val all = modules.flatMap { File(appDir, "$it/src/main/java").walkTopDown().filter { f -> f.extension == "kt" }.toList() }
     private val outside = all.filter { !it.path.contains("/voicekit/") }
+    private fun moduleOf(f: File) = f.relativeTo(appDir).invariantSeparatorsPath.substringBefore("/src/")
 
     private fun offenders(files: List<File>, bad: Regex) =
         files.flatMap { f -> f.readLines().withIndex().filter { bad.containsMatchIn(it.value) }.map { "${f.name}:${it.index + 1}" } }
@@ -74,7 +81,7 @@ class KitRulesTest {
                 for (p in phrases) if (!p.isFixed) bad += "${owner.javaClass.simpleName}.${f.name}: ${p.text}"
             }
         }
-        listOf<Any>(Voice, Menu, TellVoice).forEach { check(it) }
+        listOf<Any>(Voice, Menu, TellVoice, EchoVoice, GuardVoice, CompassVoice, TypeVoice).forEach { check(it) }
         assertTrue("sentences made outside Sentences.kt: $bad", bad.isEmpty())
     }
 
@@ -86,5 +93,36 @@ class KitRulesTest {
         assertTrue(TellVoice.narrationL1(r).isFixed)
         assertTrue(TellVoice.narrationL2(r).isFixed)
         assertTrue(costliestMistake(emptyList()).isFixed)
+    }
+
+    // ---- Module borders: a program or an adapter depends on :oskit only. ----
+    private val outsideKit get() = modules.filter { it.startsWith("programs/") || it == "adapters" }
+
+    @Test fun programsAndAdaptersDependOnlyOnOskit() {
+        val bad = outsideKit.flatMap { m ->
+            File(appDir, "$m/build.gradle.kts").readLines().withIndex().flatMap { (i, l) ->
+                Regex("""project\("(:[^"]+)"\)""").findAll(l).map { it.groupValues[1] }.filter { it != ":oskit" }.map { "$m/build.gradle.kts:${i + 1} depends on $it" }.toList()
+            }
+        }
+        assertTrue("A program or an adapter may depend only on :oskit: $bad", bad.isEmpty())
+    }
+
+    @Test fun programsAndAdaptersUseNothingOfTheOsOrEachOther() {
+        val owners = HashMap<String, MutableSet<String>>()
+        all.forEach { f -> f.useLines { ls -> ls.firstOrNull { it.startsWith("package ") }?.removePrefix("package ")?.trim()?.let { owners.getOrPut(it) { HashSet() } += moduleOf(f) } } }
+        val pkgRe = Regex("""com\.faka\.invisible(\.[a-z][A-Za-z0-9_]*)*""")
+        val bad = ArrayList<String>()
+        for (f in all.filter { moduleOf(it) in outsideKit }) {
+            val me = moduleOf(f)
+            f.readLines().withIndex().forEach { (i, raw) ->
+                val t = raw.trim()
+                if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*") || t.startsWith("package ")) return@forEach
+                pkgRe.findAll(raw).forEach { m ->
+                    val o = owners[m.value] ?: return@forEach
+                    if (me !in o && "oskit" !in o) bad += "${f.name}:${i + 1} uses ${m.value} from ${o.joinToString()}"
+                }
+            }
+        }
+        assertTrue("A program or an adapter may use only :oskit (ask the OS through the Program host): $bad", bad.isEmpty())
     }
 }

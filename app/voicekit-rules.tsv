@@ -1,4 +1,4 @@
-# Voice Kit rules. One rule per line: id <TAB> regex <TAB> why. Checked on every .kt file under src/main/java OUTSIDE voicekit/.
+# Voice Kit rules. One rule per line: id <TAB> regex <TAB> why. Checked on every .kt file under src/main/java of EVERY module (oskit, os, programs/*, adapters) except voicekit/.
 # Read by the Gradle task checkVoiceKit (runs before every build) and by KitRulesTest. Comment lines in the code are skipped.
 # "allow" lines: allow <TAB> file-name <TAB> rule id <TAB> why. Keep this list tiny.
 tts	TextToSpeech|android\.speech\.tts	Speaking is the kit's: use VoiceKit.narrator.say(Phrase)
@@ -14,3 +14,7 @@ logic-squash	Regex\("\\\\s\+"\)	Collapsing or splitting white space is logickit/
 allow	Text.kt	logic-squash	the one definition
 allow	TellSentences.kt	phrase-make	the Duel's own fixed sentences (program-owned, like Sentences.kt for the OS)
 allow	TellMistake.kt	phrase-make	the Duel's mistake sentence
+allow	EchoSentences.kt	phrase-make	Echo's own fixed sentences (program-owned)
+allow	GuardSentences.kt	phrase-make	Guard's own fixed sentences (program-owned)
+allow	CompassSentences.kt	phrase-make	the Compass's own fixed sentences (program-owned)
+allow	WriteSentences.kt	phrase-make	Write and Sum's own fixed sentences (program-owned)
