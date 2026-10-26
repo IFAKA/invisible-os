@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.practice.PracticeEntry
+import com.faka.invisible.practice.PracticeProgram
 import com.faka.invisible.oskit.*
 
 import com.faka.invisible.logickit.*
@@ -268,6 +270,8 @@ object Actions {
             if (i % 2 == 0) handler.postAtTime({ VoiceKit.buttons.key("dev", false, 0, down, end) }, end)
         }
     }
+    /** The first-run practice (runs by itself the first time the OS is woken; the Help page replays it). */
+    fun startPractice() { handler.post { startProgramEntry(PracticeEntry.entry) } }
     fun startDev(name: String) = handler.post { Programs.byDevName(name)?.let { startProgramEntry(it) } }
 
     /** Dev: drive the music session directly: "uri:<url>" or "search:<query>". */
@@ -331,6 +335,8 @@ object Actions {
         }
         override fun gesture(g: Gesture, durationMs: Long) {
             EventLog.add("${g.name.lowercase()}  ${durationMs}ms")
+            EventLog.pressed(g)
+            if ((g == Gesture.HOLD || g == Gesture.CLICK_HOLD) && !mode.active && running == null && !prefs().getBoolean(PracticeProgram.DONE_KEY, false)) { startPractice(); return }   // the first wake: the practice comes first, once
             val inMode = mode.active && mode.screen != ControllerMode.Screen.SENT   // a click that cancels a send has its own tone
             val before = mode.tonesPlayed
             val scan = inMode && mode.scanning()   // while options are read: 1 click = choose (pick tone), 2 clicks = previous item (step-down tone)

@@ -35,7 +35,6 @@ class MainActivity : Activity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
-        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.READ_CALENDAR), 1)   // location: Weather; calendar: Next event
         Actions.init(applicationContext)
         s = Actions.mode.settings
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(k.dp(16), k.dp(40), k.dp(16), k.dp(32)) }
@@ -85,28 +84,54 @@ class MainActivity : Activity() {
         body.addView(k.text("Version ${BuildConfig.VERSION_NAME} · ${BuildConfig.BUILD_STAMP}", 12f, Ui.soft), LinearLayout.LayoutParams(-2, -2).apply { topMargin = k.dp(24) })
     }
 
+    private val sp get() = getSharedPreferences("invisible", MODE_PRIVATE)
+    private fun granted(p: String) = checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    private fun usageOn(): Boolean {
+        val ops = getSystemService(android.app.AppOpsManager::class.java)
+        return ops.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName) == android.app.AppOpsManager.MODE_ALLOWED
+    }
+
+    /** What a step's button does: open the Settings page, or ask for the runtime permission. */
+    private fun doStep(id: String) {
+        fun ask(p: String) = requestPermissions(arrayOf(p), 1)
+        when (id) {
+            "button" -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            "notif" -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            "assist" -> startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
+            "post" -> ask(Manifest.permission.POST_NOTIFICATIONS)
+            "calendar" -> ask(Manifest.permission.READ_CALENDAR)
+            "location" -> ask(Manifest.permission.ACCESS_COARSE_LOCATION)
+            "usage" -> startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) { render() }
+
     private fun home() {
         val notif = (Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: "").contains(packageName)
         val assist = (Settings.Secure.getString(contentResolver, "assistant") ?: "").contains(packageName)
         val a11y = Actions.accessibilityConnected
-        // one step at a time: the first missing permission is the only thing asked
-        val steps = listOf(
-            Triple("Button access", "So the app can hear your earbud button.", a11y) to Settings.ACTION_ACCESSIBILITY_SETTINGS,
-            Triple("Notification access", "So it can read your new messages to you.", notif) to Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS,
-            Triple("Assistant", "So a long press works on the lock screen.", assist) to Settings.ACTION_VOICE_INPUT_SETTINGS)
-        val next = steps.indexOfFirst { !it.first.third }
+        if (a11y && EventLog.lastGesture != null) sp.edit().putBoolean("button_tested", true).apply()
+        val tested = a11y && sp.getBoolean("button_tested", false)
+        val steps = Setup.steps(SetupState(a11y, tested, notif, assist, granted(Manifest.permission.POST_NOTIFICATIONS), granted(Manifest.permission.READ_CALENDAR),
+            granted(Manifest.permission.ACCESS_COARSE_LOCATION), usageOn(), android.os.Build.VERSION.SDK_INT, sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()))
+        val next = Setup.current(steps)
         body.addView(k.text("Invisible", 30f, bold = true))
         if (next >= 0) {
-            val (t, open) = steps[next]
-            k.banner(body, "Step ${next + 1} of ${steps.size}: ${t.first}", t.second + " Turn it on once. Then come back.", Ui.accent) {
-                addView(k.bannerBtn("Turn on") { startActivity(Intent(open)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
+            val t = steps[next]
+            val head = Setup.label(next, steps.size) + ": " + t.title + if (t.optional) " (optional)" else ""
+            val line = if (t.id == "test") (if (a11y) "Press your earbud button once. This screen will say when it hears you." else t.reason) else t.reason + " Turn it on once. Then come back."
+            k.banner(body, head, line, Ui.accent) {
+                if (t.id != "test") addView(k.bannerBtn(if (t.id in setOf("post", "calendar", "location")) "Allow" else "Turn on") { doStep(t.id) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
+                if (t.optional) addView(k.bannerBtn("Skip") { sp.edit().putStringSet("setup_skipped", (sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + t.id).apply(); render() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
             }
+            body.addView(k.text(steps.withIndex().joinToString("\n") { (i, st) -> "${i + 1}. ${st.title}  " + if (st.done) "- done" else if (st.skipped) "- skipped" else if (i == next) "- now" else "" }, 14f, Ui.soft).apply { setPadding(0, k.dp(8), 0, k.dp(8)); setLineSpacing(0f, 1.2f) })
         } else if (!EventLog.running) {
             k.banner(body, "Stopped", "The app is not listening to the button.", Ui.bad) {
                 addView(k.bannerBtn("Start") { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
             }
         } else {
-            k.banner(body, "Ready", "Turn the screen off. Hold your earbud button to hear the menu.", Ui.good)
+            k.banner(body, "All set", "Turn the screen off. Hold your earbud button to hear the menu.", Ui.good)
         }
         val n = Actions.tasks().size
         k.navRow(body, "Tasks", if (n == 0) "None yet. Add one." else "$n to do") { open(Page.TASKS) }
@@ -114,10 +139,6 @@ class MainActivity : Activity() {
         k.navRow(body, "Voice and speed", "Voice ${"%.1f".format(s.speechRate)}x, pause ${"%.1f".format(s.itemGapMs / 1000f)} s") { open(Page.VOICE) }
         k.navRow(body, "AI on the phone", if (!s.ai) "Off" else if (ModelDownload.ready(this)) "On, ready" else "On, model not downloaded") { open(Page.AI) }
         k.navRow(body, "Help", "Button gestures and your last presses") { open(Page.HELP) }
-        if (next >= 0) {
-            val left = steps.drop(next + 1).filter { !it.first.third }
-            if (left.isNotEmpty()) body.addView(k.text("After this: " + left.joinToString(", ") { it.first.first }, 14f, Ui.soft).apply { setPadding(0, k.dp(12), 0, 0) })
-        }
         if (next < 0 && EventLog.running) body.addView(k.btn("Stop listening") { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = k.dp(16) })
     }
 
@@ -338,6 +359,10 @@ class MainActivity : Activity() {
             addView(k.text("Music playing or phone idle: click = play/pause, 2 = next, 3 = previous.\n" +
                 "Hold: wake the menu.\n" +
                 com.faka.invisible.voicekit.Voice.GESTURE_HELP.text, 16f).apply { setLineSpacing(0f, 1.25f); setPadding(0, k.dp(6), 0, 0) })
+        }
+
+        card("Practice", "A one-minute lesson you hear: click, two clicks, three clicks, close.") {
+            addView(k.btn("Replay the practice") { Actions.startPractice() })
         }
 
         card("Last button presses") {

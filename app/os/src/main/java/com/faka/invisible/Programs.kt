@@ -2,6 +2,7 @@ package com.faka.invisible
 
 import com.faka.invisible.echo.EchoProgram
 import com.faka.invisible.compass.CompassProgram
+import com.faka.invisible.practice.PracticeEntry
 import com.faka.invisible.tell.DuelProgram
 import com.faka.invisible.guard.GuardProgram
 import com.faka.invisible.adapters.ChatAppsModule
@@ -28,6 +29,7 @@ object Programs {
         GuardProgram.entry,
         DuelProgram.howTo,
         CompassProgram.entry,
+        PracticeEntry.entry,
         WriteEntries.write(services!!) { appContext!! },
         WriteEntries.sum,
     ) }

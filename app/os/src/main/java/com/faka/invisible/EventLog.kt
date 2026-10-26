@@ -13,6 +13,10 @@ object EventLog {
     /** Redraw the app screen now (a task changed by the voice menu). */
     fun refresh() { main.post { onChange?.invoke() } }
 
+    /** The setup screen's "Test your button": called for every gesture that reaches the OS (from any thread). */
+    @Volatile var lastGesture: String? = null
+    fun pressed(g: com.faka.invisible.voicekit.Gesture) { lastGesture = g.name; refresh() }
+
     fun add(text: String) {
         main.post {
             items.add(0, text)
