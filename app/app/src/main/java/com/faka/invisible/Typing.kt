@@ -125,7 +125,7 @@ class TypeProgram(
         if (!again) replays = 0
         items = if (phraseMode) phrases else candidates()
         if (phraseMode && items.isEmpty()) phraseMode = false
-        if (items.isEmpty()) { if (letters) { letters = false; page = 0; items = candidates() } else { prefix = ""; items = candidates() } }
+        if (items.isEmpty()) { if (letters) { letters = false; page = 0; items = candidates() } else { if (prefix.isNotEmpty()) { written.add(prefix); askPhrases() }; prefix = ""; items = candidates() } }
         val n = (items.size + 1) / 2
         if (n > 0) page %= n else page = 0
         val l = items.getOrNull(page * 2) ?: return
@@ -232,6 +232,7 @@ class TypeProgram(
     }
 
     private fun leave(done: Boolean) {
+        if (done && prefix.isNotEmpty()) { written.add(prefix); prefix = "" }   // letters spelled but not yet a word: keep them
         val t = if (done) text() else ""
         if (t.isEmpty()) { send(""); return }
         waiting = true; timers.clear("t:replay")
