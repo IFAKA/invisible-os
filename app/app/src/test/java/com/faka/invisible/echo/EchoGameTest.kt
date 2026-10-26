@@ -66,6 +66,7 @@ class EchoGameTest {
         val env = session { e, _ -> repeat(10) { e.advance(20000) } }
         assertEquals(3, env.logs.count { it.startsWith("echo bar") && "cleared=false" in it })
         assertTrue(env.spoken.any { it.startsWith("Game over") })
+        assertEquals(listOf("Two lives.", "Last life."), env.spoken.filter { it.endsWith("lives.") || it == "Last life." })
         assertTrue(env.left)
     }
 

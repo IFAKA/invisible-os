@@ -116,14 +116,21 @@ class EchoGame(
         val r = bar?.finish() ?: return
         phase = Phase.RESULT
         val before = run.level
+        val heartsBefore = run.hearts
         run.record(r)
         val sound = if (r.perfect) EchoSynth.flawless else if (r.cleared) EchoSynth.cleared else EchoSynth.failed
         out.play(sound, 0, 0.0, 0.5)
         out.log("echo bar level=$before cleared=${r.cleared} perfect=${r.perfect} extras=${r.extras} missed=${r.hits.count { it.grade == null }} hearts=${run.hearts} score=${run.score}")
         if (run.over) { timers.set("over", 900) { gameOver() }; return }
-        if (!r.cleared) timers.set("say", 700) { out.speak(EchoVoice.AGAIN) }
-        else if (run.level % 5 == 0) timers.set("say", 700) { out.speak(EchoVoice.level(run.level)) }
-        timers.set("next", if (r.cleared && run.level % 5 != 0) 1000 else 2200) { round() }
+        // no screen: say the lives whenever they change, and the level every 5th
+        val line = when {
+            !r.cleared -> EchoVoice.lives(run.hearts)
+            run.hearts > heartsBefore -> EchoVoice.LIFE_BACK
+            run.level % 5 == 0 -> EchoVoice.level(run.level)
+            else -> null
+        }
+        if (line != null) timers.set("say", 700) { out.speak(line) }
+        timers.set("next", if (line == null) 1000 else 2400) { round() }
     }
 
     private fun gameOver() {
