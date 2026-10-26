@@ -79,30 +79,42 @@ class NameFinderTest {
         for (l in all.sortedByDescending { treeCost.getValue(it.pkg) }.take(5))
             println("REPORT %-22s tree=%.1f find=%.1f".format(l.label, treeCost.getValue(l.pkg), findCost(plan, l)))
         println("REPORT home list of Find: " + plan.parts.map { it.label })
-        assertTrue("Find within 1 item of the tree", sumF / w <= sumT / w + 1.0)
+        assertTrue("Find within 2 items of the tree", sumF / w <= sumT / w + 2.0)   // letters only (no second letters to compare) cost about 1 item more, each item is shorter
     }
 
-    @Test fun aRangeIsSpokenWithTheFullFirstAndLastNameAndAnyAppIsFoundByFollowingRanges() {
+    @Test fun aRangeIsSpokenAsFirstLettersAndAnyAppIsFoundByFirstLettersOnly() {
         val p = NameFinder.plan(leaves)
-        val names = leaves.map { it.label }.toSet()
-        for (n in lists(p)) for (part in n.parts) if (part.sub != null) {
-            val (a, b) = part.label.split(" to ")
-            assertTrue("$a is a full name", a in names); assertTrue("$b is a full name", b in names)
-        }
-        // a person who knows only the name: at each list take the range whose sorted span holds it; ends at the app
-        fun key(x: String) = NameFinder.key(x)
+        fun first(x: String) = NameFinder.key(x).first().uppercaseChar()
+        // a person who knows only the FIRST letter of the name: take the range whose letters hold it, or "Other X"; ends at the app
         for (target in leaves) {
+            val c = first(target.label)
             var n = p; var steps = 0
             while (true) {
                 steps++
                 val part = n.parts.first { pt -> NameFinder.leavesOf(pt).any { it.pkg == target.pkg } }
                 if (part.leaf != null) { assertEquals(target.pkg, part.leaf.pkg); break }
-                val (a, b) = part.label.split(" to ")
-                assertTrue("${target.label} between $a and $b", key(a) <= key(target.label) && key(target.label) <= key(b))
+                val l = part.label.removePrefix("Other ")
+                val (a, b) = if (" to " in l) l.split(" to ") else listOf(l, l)
+                assertTrue("${target.label} in ${part.label}", a.length == 1 && b.length == 1 && a[0] <= c && c <= b[0])
                 n = part.sub!!
             }
-            assertTrue("${target.label} in $steps steps", steps <= 4)
+            assertTrue("${target.label} in $steps steps", steps <= 5)
         }
+    }
+
+    @Test fun aRangeNeverCutsInsideALetter() {
+        val p = NameFinder.plan(leaves)
+        for (n in lists(p)) {
+            val letters = n.parts.map { pt -> NameFinder.leavesOf(pt).map { NameFinder.key(it.label).first() }.toSet() }
+            if (letters.flatten().toSet().size > 1) for (x in letters.indices) for (y in letters.indices) if (x != y)
+                assertTrue("${n.parts.map { it.label }}", (letters[x] intersect letters[y]).isEmpty())
+        }
+    }
+
+    @Test fun aBigLetterReadsItsMostUsedAppsThenOther() {
+        val p = NameFinder.plan((1..9).map { leaf("C$it", if (it == 9) 50.0 else 1.0) })
+        assertTrue(p.parts.any { it.leaf?.label == "C9" })
+        assertEquals("Other C", p.parts.last().label)
     }
 
     @Test fun aCountAfterAProgramNameIsNotPartOfARangeName() {
