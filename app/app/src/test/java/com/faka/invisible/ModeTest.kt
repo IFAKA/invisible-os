@@ -27,6 +27,7 @@ class ModeTest {
         var replyOffersList = listOf<Task>(); val remembered = ArrayList<String>()
         var favs = listOf<String>()
         var suggested = listOf<String>()
+        var findSeen = true
         var savedReactions = reactionText
         val pickTimes = ArrayList<Long>()   // time-to-pick of each list pick
         var now = 1_000_000L
@@ -99,6 +100,8 @@ class ModeTest {
             override fun setLastTimer(minutes: Int) { last = minutes }
             override fun favourites() = favs
             override fun suggest(candidates: Collection<String>, now: Long, others: Collection<String>, accept: (String, Double, Int) -> Boolean) = suggested.filter { it in candidates }
+            override fun findHintSeen() = findSeen
+            override fun setFindHintSeen() { findSeen = true }
             override fun loadReactions() = savedReactions
             override fun saveReactions(text: String) { savedReactions = text }
             override fun codeCount() = codes
@@ -942,7 +945,7 @@ class ModeTest {
 
     // ---------- click then hold: fast scroll ----------
     private fun scanReady(): Rig {
-        val r = Rig(); r.wake()
+        val r = Rig(); r.wake(); r.pick("Phone")   // a hold on home is Find; fast scroll is for the other lists
         r.advance(3000)   // tone, then the first options are being read
         assertTrue(r.m.scanning())
         return r
@@ -1080,6 +1083,38 @@ class ModeTest {
         assertTrue(r.log.contains("choice HUB -1 suggest:hit"))
         assertTrue(r.log.any { it.endsWith("app:com.brubank") })
         assertEquals(ControllerMode.Screen.APP_OPEN, r.m.screen)
+    }
+
+    // ---------- Find: a hold on home ----------
+    private fun hold(r: Rig) { r.advance(450 + 300); r.m.onGesture(Gesture.CLICK_HOLD, 0) }
+
+    @Test fun holdOnHomeStartsFindAndPickingALeafDoesWhatTheTreeDoes() {
+        val r = mail(); r.findSeen = false; r.wake(); hold(r)
+        assertEquals(ControllerMode.Screen.FIND, r.m.screen)
+        r.advance(3000)
+        assertTrue(r.spoken().contains("say Find. Pick the first letter."))   // the first time only
+        assertTrue(r.log.contains("choice HUB 7 find"))
+        r.pick("Maps")
+        assertEquals(ControllerMode.Screen.APP_OPEN, r.m.screen)
+        assertTrue(r.log.any { it.endsWith("find:1") } && r.log.any { it.endsWith("app:com.google.android.apps.maps") })
+    }
+
+    @Test fun findHintIsSaidOnlyOnce() {
+        val r = mail(); r.wake(); hold(r); r.advance(3000)
+        assertFalse(r.spoken().any { it.contains("Pick the first letter") })
+    }
+
+    @Test fun findWithManyAppsSpeaksLettersAndTripleClickGoesBack() {
+        val r = many(); r.wake(); hold(r); r.advance(2500)
+        assertTrue(r.spoken().any { it.matches(Regex("say [A-Z]")) })
+        r.m.onGesture(Gesture.TRIPLE); r.advance(300)
+        assertEquals(ControllerMode.Screen.HUB, r.m.screen)
+    }
+
+    @Test fun holdInAnotherListKeepsFastScroll() {
+        val r = Rig(); r.wake(); r.pick("Phone"); r.advance(1500)
+        r.m.onGesture(Gesture.CLICK_HOLD, 0)
+        assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
     }
 
     @Test fun walkTreeToAnAppAndBackWithTripleClick() {

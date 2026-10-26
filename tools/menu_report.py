@@ -35,9 +35,16 @@ def report_pick_times(rows):
     for screen, xs in sorted(by.items()) + [("ALL", [t for _, t in ts])]:
         print(f"  {screen:<12} n={len(xs):<4} median {statistics.median(xs):.1f} s   p90 {p90(xs):.1f} s")
 
+def report_find(rows):
+    """Find (a hold on home): how often it starts ("find"), how often it ends in a pick ("find:<steps>") and with how many steps."""
+    started = sum(r[3] == "find" for r in rows)
+    ends = [int(r[3].split(":")[1]) for r in rows if r[3].startswith("find:") and r[3].split(":")[1].isdigit()]
+    print(f"Find: started {started}, ended in a pick {len(ends)}" + (f", median steps {statistics.median(ends):.0f}" if ends else ""))
+
 def main():
     rows = [l.split("\t") for l in lines() if l.count("\t") >= 4]
     report_pick_times(rows)
+    report_find(rows)
     first_suggest = next((int(r[0]) for r in rows if r[3].startswith("suggest:")), None)
     hits = sum(r[3] == "suggest:hit" for r in rows); miss = sum(r[3] == "suggest:miss" for r in rows)
     wake = None; before, after = [], []

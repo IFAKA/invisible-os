@@ -65,6 +65,8 @@ interface ModeOutput {
     fun choice(screen: String, code: Int, intent: String, sender: String, pickMs: Long = -1)   // pickMs = time from the start of the list to the press (-1 = not a list pick); choice log; code 0 = wake, else the position of the option in the list
     fun codeCount(): Int             // successful code actions so far (persisted); learning mode while < 15
     fun setCodeCount(n: Int)
+    fun findHintSeen(): Boolean = true   // "Find. Pick the first letter." is said only once
+    fun setFindHintSeen() {}
     fun loadReactions(): String = ""   // saved reaction samples (see ReactionGap.encode)
     fun saveReactions(text: String) {}
     fun startWrite() {}   // the Write keyboard (stereo pair); its text comes back through the app
@@ -126,7 +128,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_LIST, NOTIF_ACTIONS }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_LIST, NOTIF_ACTIONS, FIND }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: Phrase, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: Phrase, val run: () -> Unit)
@@ -218,7 +220,7 @@ class ControllerMode(
         }
         when (g) {
             Gesture.HOLD -> { stopAll(); out.choice(screen.name, 9, "exit", ""); exit(true) }
-            Gesture.CLICK_HOLD -> if (canFast) startFast()
+            Gesture.CLICK_HOLD -> if (canFast) { if (screen == Screen.HUB) startFind() else startFast() }   // on home a hold is Find (fast scroll over a few items is little use)
             Gesture.CLICK_HOLD_END -> {}
             Gesture.QUAD -> { stopAll(); out.choice(screen.name, 4, "leave", ""); leaveSilent() }
             Gesture.TRIPLE -> { stopAll(); out.choice(screen.name, 3, "back", ""); back() }
@@ -298,7 +300,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -314,6 +316,7 @@ class ControllerMode(
         val m = cur
         if (s == Screen.MESSAGE && m != null) out.prepareAiReplies(m)
         if (s == Screen.MESSAGE && m != null && hid(m) !in heard) intro += Intro(Phrase.content("${m.sender}: ${shortText(m)}", vl(m)), hid(m))
+        if (s == Screen.FIND && findStack.size == 1 && !out.findHintSeen()) { out.setFindHintSeen(); intro += Intro(Voice.FIND_HINT, null, hint = true) }
         if (s == Screen.TIMER_DONE) intro += Intro(Voice.TIMER_DONE, null)
         if (s == Screen.NOTIF_ACTIONS) openNotif()?.let { intro += Intro(notifRead(it), null) }
         curIntro = null
@@ -439,7 +442,8 @@ class ControllerMode(
                 suggestedKeys = emptyList()
                 out.setContext(buildSet { if (n > 0) add("unread"); if (out.nowPlaying() != null) add("playing"); if (out.navigation() != null) add("navigating"); if (out.wiredConnected()) add("wired") })
                 hubOpts = all
-                val root = cachedTree(treeLeaves(all)); treeRoot = root; treePath.clear()
+                homeLeaves = treeLeaves(all)
+                val root = cachedTree(homeLeaves); treeRoot = root; treePath.clear()
                 val deep = deepOptions()
                 val far = suggestableLeaves(root)   // apps and programs that are not direct entries of home: offered too, when worth it
                 val home = root.children.map { c -> c.app?.let { leafKey(it.pkg) } ?: "group:${c.label}" }
@@ -518,6 +522,7 @@ class ControllerMode(
             Screen.COMPOSE -> if (m == null) emptyList() else composeOptions(m)
             Screen.SENT -> emptyList()
             Screen.TREE -> treeOptions(treePath.lastOrNull() ?: treeRoot ?: AppTree.build(emptyList()))
+            Screen.FIND -> findOptions()
             Screen.APP_OPEN -> appOpenOptions()
             Screen.NOTIF_LIST -> notifListOptions()
             Screen.NOTIF_ACTIONS -> notifActionOptions()
@@ -588,10 +593,39 @@ class ControllerMode(
         for (p in AppTree.paths(root)) {
             if (p.levels == 0) continue
             val a = p.app; val key = leafKey(a.pkg)
-            val opt = hubOpts[a.pkg] ?: treeAppOption(TreeNode(a.label, app = a, unread = a.unread))
+            val opt = leafOption(a)
             out[key] = opt to SuggestGate.treeCost(p.heard, p.levels)
         }
         return out
+    }
+
+    /** What picking a leaf does: an OS program runs as before, an app opens its notifications or itself. The same from the tree, the Suggested slot and Find. */
+    private fun leafOption(a: AppLeaf): Opt = hubOpts[a.pkg] ?: treeAppOption(TreeNode(a.label, app = a, unread = a.unread))
+
+    // ---- Find: reach any app or program by the letters of its name (a hold on home). The steps come from NameFinder, computed from the leaves of the home build. ----
+    private var homeLeaves: List<AppLeaf> = emptyList()
+    private val findStack = ArrayList<String>()   // the prefix of every step shown, the last one is on screen
+
+    private fun startFind() {
+        stopAll()
+        out.choice(screen.name, 7, "find", "")   // for tools/menu_report.py: how often Find is used
+        findStack.clear(); findStack.add("")
+        show(Screen.FIND)
+    }
+
+    private fun findOptions(): List<Opt> {
+        val step = NameFinder.next(homeLeaves, findStack.lastOrNull() ?: "")
+        if (findStack.isNotEmpty()) findStack[findStack.size - 1] = step.prefix   // forced letters are already in it
+        return step.choices.map { c ->
+            when (c) {
+                is NameFinder.Choice.Letter -> Opt("find:letter", Phrase.content(c.letter.uppercase())) {
+                    pick("find:step", c.letter.toString()); findStack.add(step.prefix + c.letter); show(Screen.FIND)
+                }
+                is NameFinder.Choice.Leaf -> leafOption(c.leaf).let { o ->
+                    Opt(o.key, o.label) { out.choice(screen.name, code, "find:${findStack.size}", "", -1); o.run() }   // then exactly what the tree does (same pick intent)
+                }
+            }
+        }
     }
 
     private fun treeAppOption(c: TreeNode): Opt { val a = c.app!!; return Opt("app:${a.pkg}", treeLabel(c)) { pick("app:${a.pkg}"); notifPkg = a.pkg; show(if (c.unread > 0) Screen.NOTIF_LIST else Screen.APP_OPEN) } }
@@ -748,6 +782,7 @@ class ControllerMode(
             Screen.NOTIF_ACTIONS -> show(Screen.NOTIF_LIST)
             Screen.NOTIF_LIST, Screen.APP_OPEN -> treeUp()
             Screen.TREE -> { treePath.removeLastOrNull(); treeUp() }
+            Screen.FIND -> { findStack.removeLastOrNull(); if (findStack.isEmpty()) show(Screen.HUB) else show(Screen.FIND) }
             Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR -> show(Screen.HUB)
             Screen.ALARM_MIN -> show(Screen.ALARM_HOUR)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
