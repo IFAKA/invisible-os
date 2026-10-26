@@ -49,14 +49,16 @@ class WordClips(private val dir: File, private val synth: (text: String, file: F
     }
 
     /** Interleaved stereo and its sample rate: the first word in the left ear, a gap, then the second word in the right ear. Same voice for both. Null if the first clip is missing. */
-    fun stereo(left: String, right: String?, gapMs: Int): Pair<ShortArray, Int>? {
+    /** The first word goes to the left channel, the second to the right. [swap]: for earbuds that play the channels the other way round. */
+    fun stereo(left: String, right: String?, gapMs: Int, swap: Boolean = false): Pair<ShortArray, Int>? {
         val l = mem[key(left)] ?: return null
         val r = right?.let { mem[key(it)] }?.samples
         val gap = l.rate * gapMs / 1000
         val frames = l.samples.size + (if (r != null) gap + r.size else 0)
         val out = ShortArray(frames * 2)
-        for (i in l.samples.indices) out[2 * i] = l.samples[i]
-        if (r != null) for (i in r.indices) out[2 * (l.samples.size + gap + i) + 1] = r[i]
+        val a = if (swap) 1 else 0
+        for (i in l.samples.indices) out[2 * i + a] = l.samples[i]
+        if (r != null) for (i in r.indices) out[2 * (l.samples.size + gap + i) + 1 - a] = r[i]
         return out to l.rate
     }
 }

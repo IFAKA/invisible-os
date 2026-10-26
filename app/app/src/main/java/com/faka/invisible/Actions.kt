@@ -155,6 +155,8 @@ object Actions {
         ranker = CountRanker { choices.intentCount(it) },   // HOOK: replace with a language-model ranker later
     )
 
+    fun setSwapEars(on: Boolean) { prefs().edit().putBoolean("swap_ears", on).apply() }
+
     fun saveSettings(s: LauncherSettings) { mode.settings = s; SettingsStore.save(prefs(), s) }
 
     private fun prefs() = app.getSharedPreferences("invisible", Context.MODE_PRIVATE)
@@ -207,7 +209,7 @@ object Actions {
     private fun playPair(left: String, right: String?, me: Int) {
         if (me != pairSeq) return
         if (tts?.isSpeaking == true) { handler.postDelayed({ playPair(left, right, me) }, 300); return }   // the sentence first
-        val (pcm, rate) = clips?.stereo(left, right, TypeVoice.PAIR_GAP_MS) ?: run { say(left, false); return }
+        val (pcm, rate) = clips?.stereo(left, right, TypeVoice.PAIR_GAP_MS, prefs().getBoolean("swap_ears", true))   // these earbuds play the first word on the right: swapped by default ?: run { say(left, false); return }
         pairTrack = try {
             val t = AudioTrack.Builder()
                 .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
