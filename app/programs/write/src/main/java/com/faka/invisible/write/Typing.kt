@@ -67,6 +67,7 @@ class TypeProgram(
         const val MENU_GAP_MS = 2000L
         const val MENU_LOOPS = 2
         const val WORD_PAGES = 4
+        const val ALPHABET = "abcdefghijklmnopqrstuvwxyzñ"
         val LETTER_RE = Regex("[a-záéíóúüñ']+")
     }
 
@@ -120,7 +121,8 @@ class TypeProgram(
         return if (letters) {
             val mass = LinkedHashMap<Char, Double>()
             for ((w, lp) in all) if (w.length > prefix.length && w.startsWith(prefix) && LETTER_RE.matches(w)) mass.merge(w[prefix.length], Math.exp(lp), Double::plus)
-            mass.entries.sortedByDescending { it.value }.map { it.key.toString() }
+            val likely = mass.entries.sortedByDescending { it.value }.map { it.key }
+            (likely + ALPHABET.filter { it !in likely }).map { it.toString() }   // the likely letters first, then every other letter A to Z: none is missing
         } else all.asSequence().filter { it.first !in recent }.filter { it.first.startsWith(prefix) && LETTER_RE.matches(it.first) && (prefix.isNotEmpty() || !lm.skipShortFirst || (it.first.length >= 3 && '\'' !in it.first)) }.take(WORD_PAGES * 2).map { it.first }.toList()
     }
 
