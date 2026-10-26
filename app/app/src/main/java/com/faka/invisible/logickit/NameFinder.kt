@@ -9,12 +9,14 @@ import com.faka.invisible.voicekit.Spoken
  * All leaves are sorted by spoken name. A Find list splits a stretch of that order into at most [MAX_PARTS] neighbouring parts:
  * a part with one leaf is that leaf (its name), a part with more is a RANGE of whole first letters ("A to C", "W"): cuts never fall
  * inside a letter, so the listener needs only first letters. One letter with more than [MAX_PARTS] apps = its most used apps, then
- * "Other C". Parts are read A to Z. Cost = sum over leaves of weight * (place in its list + [AppTree.LEVEL] per range entered).
+ * "Other C". Parts are read A to Z. Cost = sum over leaves of weight * (place in its list + [STEP] per range entered).
  * [plan] picks the splits for the lowest cost: exact for stretches of 6 or fewer leaves, and for longer ones the best of a few
  * weight-balanced starts improved by moving one cut at a time (memoised per stretch). It is slow on a phone: build it off the main thread.
  */
 object NameFinder {
     const val MAX_PARTS = AppTree.MAX_LIST
+    /** Cost of going one range down: a click and a new list to hold in mind, about one item heard (the tree uses 0.5; Find went 5 deep with it). */
+    const val STEP = 1.0
 
     /** One entry of a Find list: a leaf ([leaf]), or a range ([sub] = the list inside it). [label] is what is spoken for a range. */
     class Part(val label: String, val leaf: AppLeaf?, val sub: Node?)
@@ -62,7 +64,7 @@ object NameFinder {
                     b += j; if (b.size > 2) offer(b.toIntArray())
                 }
             } else {
-                for (k in listOf(MAX_PARTS, 3).distinct()) {
+                for (k in (MAX_PARTS downTo 3).filter { it <= m }) {
                     var b = start(pts, k); var c = eval(b.map { pts[it] }.toIntArray())
                     repeat(4) {
                         var moved = false
@@ -96,7 +98,7 @@ object NameFinder {
             val k = b.size - 1
             val ws = DoubleArray(k) { w(b[it], b[it + 1]) }
             var inner = 0.0
-            for (x in 0 until k) if (b[x + 1] - b[x] > 1) inner += AppTree.LEVEL * ws[x] + solve(b[x], b[x + 1])
+            for (x in 0 until k) if (b[x + 1] - b[x] > 1) inner += STEP * ws[x] + solve(b[x], b[x + 1])
             return (0 until k).sumOf { x -> (x + 1) * ws[x] } + inner
         }
 
@@ -109,7 +111,7 @@ object NameFinder {
                 val top = byUse.take(t).sorted()
                 val rest = idx - top.toSet()
                 val (rc, rn) = letter(rest)
-                val c = top.withIndex().sumOf { (x, l) -> (x + 1) * ls[l].weight } + (t + 1 + AppTree.LEVEL) * rest.sumOf { ls[it].weight } + rc
+                val c = top.withIndex().sumOf { (x, l) -> (x + 1) * ls[l].weight } + (t + 1 + STEP) * rest.sumOf { ls[it].weight } + rc
                 c to Node(top.map { Part(ls[it].label, ls[it], null) } + Part(Spoken.otherLetter(up(idx[0])), null, rn))
             }.minBy { it.first }
         }
