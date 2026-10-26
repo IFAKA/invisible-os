@@ -21,3 +21,29 @@ dependencies {
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.1")
     testImplementation("junit:junit:4.13.2")
 }
+
+// ---- Voice Kit gate: nothing that speaks, plays a sound, reads the button or reads a list may live outside voicekit/. ----
+// The rules are in voicekit-rules.tsv (also read by KitRulesTest). The build stops and lists file:line for every break.
+val checkVoiceKit by tasks.registering {
+    group = "verification"
+    description = "Fails if code outside voicekit/ speaks, plays sound, reads the button or keeps its own list"
+    val rulesFile = layout.projectDirectory.file("voicekit-rules.tsv")
+    val sources = fileTree("src/main/java") { include("**/*.kt"); exclude("**/voicekit/**") }
+    inputs.file(rulesFile); inputs.files(sources)
+    doLast {
+        val lines = rulesFile.asFile.readLines().filter { it.isNotBlank() && !it.startsWith("#") }.map { it.split('\t') }
+        val rules = lines.filter { it[0] != "allow" }.map { Triple(it[0], Regex(it[1]), it[2]) }
+        val allowed = lines.filter { it[0] == "allow" }.map { it[1] to it[2] }.toSet()
+        val bad = ArrayList<String>()
+        sources.forEach { f ->
+            f.readLines().forEachIndexed { i, raw ->
+                val t = raw.trim()
+                if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return@forEachIndexed
+                val code = raw.substringBefore(" // ")
+                for ((id, re, why) in rules) if (re.containsMatchIn(code) && (f.name to id) !in allowed) bad += "${f.relativeTo(projectDir)}:${i + 1}  [$id] $why"
+            }
+        }
+        if (bad.isNotEmpty()) throw GradleException("Voice Kit rules broken (move it into voicekit/ or use the kit):\n" + bad.joinToString("\n"))
+    }
+}
+tasks.matching { it.name == "preBuild" || it.name == "check" }.configureEach { dependsOn(checkVoiceKit) }

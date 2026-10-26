@@ -1,0 +1,12 @@
+# Voice Kit rules. One rule per line: id <TAB> regex <TAB> why. Checked on every .kt file under src/main/java OUTSIDE voicekit/.
+# Read by the Gradle task checkVoiceKit (runs before every build) and by KitRulesTest. Comment lines in the code are skipped.
+# "allow" lines: allow <TAB> file-name <TAB> rule id <TAB> why. Keep this list tiny.
+tts	TextToSpeech|android\.speech\.tts	Speaking is the kit's: use VoiceKit.narrator.say(Phrase)
+audio-play	\b(AudioTrack|SoundPool|MediaPlayer|ToneGenerator)\b	Playing sound is the kit's: use VoiceKit.narrator.beep or cue
+audio-focus	AudioFocus|playSoundEffect|loadSoundEffects	Audio focus and stream playing are the kit's
+button-intake	MediaSession\(|MediaSession\.Callback|onMediaButtonEvent|KEYCODE_HEADSETHOOK|KEYCODE_MEDIA_PLAY_PAUSE	The button comes in only through the kit (VoiceKit.mediaKeys, VoiceKit.buttons)
+phrase-make	\bPhrase\(|Phrase\.fixed	Fixed sentences are made only inside the kit (Sentences.kt)
+phrase-literal	Phrase\.content\(\s*"[^"$]*"\s*[,)]	A plain text in Phrase.content is a fixed sentence in disguise: add it to Sentences.kt
+say-literal	\b(say|speak)\(\s*"	Spoken sentences come from Sentences.kt, not from a string
+second-list	\b(scanIdx|menuIdx|menuSteps|itemIdx|listIdx)\b|\bvar\s+loops\b|\bScanList\s*[<(]	Every list is a kit Scanner
+hand-timing	(?<!Pacing\.)\b(HOLD_MS|GAP_MS)\b	Button timing comes from Pacing

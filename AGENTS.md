@@ -7,13 +7,17 @@ Android app: control the phone with one earbud button, screen off. The phone spe
 - Menu is English; message text is read in its own language (Spanish default).
 - Check: `cd app && ./gradlew testDebugUnitTest --offline -q`. Install on the phone: `app/run.sh`.
 
-## Design kits (enforced by `KitRulesTest`)
-- Screens use only the **UI Kit** (`Ui.kt`: `Ui` colors/radii and `Kit` parts) and the **Audio Kit** (`Voice.kt`: every fixed spoken sentence, the button rules). Sounds live in `Earcons.kt`.
-- No `Color.*`, raw `TextView`/`Button`/`GradientDrawable`, or `say("...")`/`speak("...")` outside the kits. If a part is missing, add it to the kit first, then use it.
+## Design kits (enforced by `KitRulesTest` and the build task `checkVoiceKit`)
+- Screens use only the **UI Kit** (`Ui.kt`: `Ui` colors/radii and `Kit` parts) and the **Voice Kit** (`voicekit/`, see `voicekit/KIT.md`).
+- Voice Kit = everything that speaks, plays a sound, reads the button or reads a list. It has atoms, molecules, engines, organisms and one door, `VoiceKit`.
+- Every spoken line is a `Phrase`. Fixed sentences live only in `voicekit/atoms/Sentences.kt`. Text from users or the world is `Phrase.content(...)`.
+- Outside the kit you must not: use TextToSpeech, AudioTrack, SoundPool, MediaPlayer, ToneGenerator, audio focus, MediaSession; make `Phrase(`/`Phrase.fixed`; pass a string to `say`/`speak`; keep your own list index or loop count; write HOLD_MS/GAP_MS by hand. The build fails with file:line. The rules are in `app/voicekit-rules.tsv`.
+- No `Color.*`, raw `TextView`/`Button`/`GradientDrawable` outside `Ui.kt`. If a part is missing, add it to the kit first, then use it.
+- Lists: use the kit `Scanner`. Sounds: `Earcons.kt` in the kit. Check the kit with `cd app && ./gradlew checkVoiceKit --offline -q`.
 
 ## The OS and its programs (how every new game or tool is built)
 The app is a small OS with no screen. Android is the building; this app is a shop inside it that you walk through with your ears.
-- **The OS owns:** the one button (clicks and holds), the home menu (`ControllerMode`, `LauncherSettings.HUB_ITEMS`), speech, the screen tones (`Earcons.kt`), the close sound, and the Games section (`Screen.GAMES`).
+- **The OS owns:** the one button (clicks and holds), the home menu (`ControllerMode`, `LauncherSettings.HUB_ITEMS`), speech, the screen tones (`voicekit/atoms/Earcons.kt`), the close sound, and the Games section (`Screen.GAMES`).
 - **A program** (the Duel in `tell/` is the first) owns only its own rules and sounds. It gets the raw button while it runs. It never plays an OS sound and never touches the menu.
 - **To add a game:** one line in the Games list in `ControllerMode`, a `ModeOutput` start method (default no-op), one entry in `Actions` that gives it the raw button, and a callback `onEnded`. When the program ends, `Actions.gameEnded()` plays the OS close sound. Do not copy that into the program.
 - **Fast scroll:** click then hold (2nd press held) steps through a list fast, first word + tick; release speaks that item in full. It is only active while a list is read (`ScanList`); everywhere else it acts as a plain hold (exit). Every list must be a `ScanList` (enforced by `KitRulesTest`).
