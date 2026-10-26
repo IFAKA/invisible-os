@@ -169,6 +169,7 @@ object Menu {
     val DUEL = f("Duel")
     val ECHO = f("Echo")
     val WRITE = f("Write")
+    val COMPASS = f("Compass")
     val HOW_TO_PLAY = f("How to play")
     val STOP = f("Stop")
     val FIVE_MORE = f("Five more minutes")
@@ -200,6 +201,17 @@ object EchoVoice {
     fun level(n: Int) = f("Level $n.")
     fun over(score: Int, best: Int) = f(if (score >= best && score > 0) "Game over. New best, $score." else "Game over. Score $score. Best $best.")
     val ALL: List<Phrase> = listOf(INTRO, LEAVE, AGAIN, LOADING, LIFE_BACK) + (1..5).map { lives(it) }
+}
+
+object CompassVoice {
+    val INTRO = f("Compass. Click: heading. Two clicks: find north.")
+    val LEAVE = f("Hold three seconds to leave.")
+    val FINDING = f("Finding north.")
+    val STOPPED = f("Stopped.")
+    val WAIT = f("One moment.")
+    val NO_SENSOR = f("This phone has no compass.")
+    val UNSURE = f("Not sure. Move the phone in a figure eight.")
+    fun heading(name: String, degrees: Int) = f("$name, $degrees degrees.")
 }
 
 object TellVoice {

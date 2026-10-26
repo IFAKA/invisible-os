@@ -18,6 +18,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import com.faka.invisible.compass.CompassAndroid
+import com.faka.invisible.compass.CompassHost
 import com.faka.invisible.echo.EchoAndroid
 import com.faka.invisible.echo.EchoHost
 import com.faka.invisible.tell.TellAndroid
@@ -138,6 +140,7 @@ object Actions {
             override fun setLastTimer(minutes: Int) { prefs().edit().putInt("lastTimer", minutes).apply() }
             override fun startGame(coach: Boolean) = startDuel(coach)
             override fun startEcho() = startEchoGame()
+            override fun startCompass() = startCompassProgram()
             override fun startWrite() = launchWrite()
             override fun pickCount(intent: String) = choices.intentCount(intent)
             override fun favourites() = choices.favourites()
@@ -195,6 +198,7 @@ object Actions {
 
     private var duel: TellAndroid? = null
     private var echo: EchoAndroid? = null
+    private var compass: CompassAndroid? = null
 
     // ---- Write: the stereo-pair keyboard (Typing.kt). The OS gives it the raw button and plays the close sound when it ends. ----
     private var typer: TypeProgram? = null
@@ -296,6 +300,16 @@ object Actions {
     /** The OS rule for every game: when a game gives the phone back, the OS says goodbye with its own close sound. A game never plays it. */
     private fun gameEnded() { handler.post { narrator.beep(Tone.EXIT) } }
 
+    private fun startCompassProgram() {
+        compass?.stop()
+        compass = CompassAndroid(app, handler, object : CompassHost {
+            override fun speak(text: Phrase) = say(text, false, slow = false)
+            override fun stopSpeech() = narrator.stopSpeech()
+            override fun pauseMusic() { pauseMusicNow() }
+            override fun resumeMusic() = resumeMusicNow()
+        }, onEnded = { compass = null; gameEnded() }).also { it.start() }
+    }
+
     private fun startEchoGame() {
         echo?.stop()
         echo = EchoAndroid(prefs(), handler, object : EchoHost {
@@ -320,7 +334,7 @@ object Actions {
 
     /** What the button feeds: the programs that own the raw button, the menu, and the menu's own tones. */
     private val buttonTarget = object : ButtonTarget {
-        override fun raw(): RawButton? = duel?.takeIf { it.active } ?: echo?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
+        override fun raw(): RawButton? = duel?.takeIf { it.active } ?: echo?.takeIf { it.active } ?: compass?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
         override val menuActive get() = mode.active
         override fun gesture(g: Gesture, durationMs: Long) {
             EventLog.add("${g.name.lowercase()}  ${durationMs}ms")

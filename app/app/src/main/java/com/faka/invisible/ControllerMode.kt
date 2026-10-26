@@ -66,6 +66,7 @@ interface ModeOutput {
     fun codeCount(): Int             // successful code actions so far (persisted); learning mode while < 15
     fun setCodeCount(n: Int)
     fun startWrite() {}   // the Write keyboard (stereo pair); its text comes back through the app
+    fun startCompass() {}   // the compass program
     fun startEcho() {}   // the rhythm-copy game
     fun startGame(coach: Boolean) {}   // coach = teach first (the "How to play" item)
     fun weather(done: (Phrase) -> Unit) { done(Voice.WEATHER_FAILED) }   // off the main thread inside; [done] runs on the main thread with ONE sentence
@@ -470,6 +471,7 @@ class ControllerMode(
                 Opt("games:echo", Menu.ECHO) { pick("games:echo"); pausedByUs = false; exit(false); out.startEcho() },
                 Opt("games:write", Menu.WRITE) { pick("games:write"); pausedByUs = false; exit(false); out.startWrite() },   // a program of the OS, not a game; reachable here until it has its own place
                 Opt("games:howto", Menu.HOW_TO_PLAY) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) },
+                Opt("games:compass", Menu.COMPASS) { pick("games:compass"); pausedByUs = false; exit(false); out.startCompass() },   // a program of the OS, placed here with Write
                 Opt("games:back", Menu.BACK) { pick("games:back"); show(Screen.HUB) })
             Screen.CALC -> calcOptions()
             Screen.ALARM_HOUR -> ALARM_HOURS.map { h -> Opt("alarm:h$h", Menu.hour(h)) { pick("alarm:h$h"); alarmHour = h; show(Screen.ALARM_MIN) } } +
