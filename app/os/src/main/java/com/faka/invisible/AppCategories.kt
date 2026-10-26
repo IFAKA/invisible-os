@@ -16,7 +16,14 @@ Talk/Chat           com.whatsapp
 Talk/Chat           com.microsoft.teams
 Talk/Chat           com.tencent.mm
 Talk/Chat           com.discord
-Talk/Chat           com.google.android.apps.messaging
+Talk/Chat           org.telegram.messenger
+Talk/Chat           org.thoughtcrime.securesms
+Talk/Chat           com.facebook.orca
+Talk/Chat           com.Slack
+Talk/Text           com.samsung.android.messaging
+Talk/Text           com.android.mms
+Talk/Social         com.instagram.android
+Talk/Text           com.google.android.apps.messaging
 Talk/Mail           com.google.android.gm
 Talk/Call           com.google.android.dialer
 Talk/Call           com.google.android.apps.tachyon

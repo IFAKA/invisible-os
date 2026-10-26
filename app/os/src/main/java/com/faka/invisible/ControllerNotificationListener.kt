@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.faka.invisible.adapters.ChatAppsModule
 import com.faka.invisible.logickit.*
 import com.faka.invisible.oskit.*
 
@@ -138,6 +139,15 @@ class ControllerNotificationListener : NotificationListenerService() {
         }
         keep(sbn)
         if (mutes.isMuted(sbn.packageName)) return   // muted: kept in the mailbox but hidden from every read; the module neither counts nor announces it
-        modules.forPackage(sbn.packageName).onPosted(sbn, loaded)
+        val m = modules.forPackage(sbn.packageName)
+        if (m === GenericModule) {
+            // Generic rule: any conversation notification with a reply box feeds the Messages layer (never a private one).
+            val n = sbn.notification
+            val x = n.extras
+            val empty = x.getCharSequence(Notification.EXTRA_TITLE).isNullOrBlank() && x.getCharSequence(Notification.EXTRA_TEXT).isNullOrBlank()
+            val locked = getSystemService(KeyguardManager::class.java)?.isDeviceLocked ?: true
+            val priv = NotifPrivacy.mustHide(sbn.packageName, n.visibility, locked, empty)
+            if (ChatAppsModule.joinsByCategory(n.category, n.actions.orEmpty().any { !it.remoteInputs.isNullOrEmpty() }, priv)) chat.onPosted(sbn, loaded)
+        } else m.onPosted(sbn, loaded)
     }
 }

@@ -16,7 +16,22 @@ import android.util.Log
  * message per conversation, announces new ones, votes one language per person, and replies (Claude has no reply action, so it is read-only).
  */
 class ChatAppsModule : NotificationModule {
-    companion object { val APPS = setOf("com.whatsapp", "com.microsoft.teams", "com.tencent.mm", "com.anthropic.claude") }
+    companion object {
+        /** Known chat and mail apps; any other app joins by [joinsByCategory]. */
+        val APPS = setOf(
+            "com.whatsapp", "com.whatsapp.w4b", "com.microsoft.teams", "com.tencent.mm", "com.anthropic.claude",
+            "com.google.android.apps.messaging", "com.samsung.android.messaging", "com.android.mms", "com.android.messaging",
+            "org.telegram.messenger", "org.telegram.messenger.web", "org.thoughtcrime.securesms", "com.google.android.gm",
+            "com.instagram.android", "com.facebook.orca", "com.Slack", "com.discord",
+        )
+
+        /**
+         * The generic rule for any other app: a conversation notification (message category) that offers a reply box.
+         * An app whose notification is private (bank, password, secret) never joins.
+         */
+        fun joinsByCategory(category: String?, hasReplyAction: Boolean, private: Boolean) =
+            !private && hasReplyAction && category == Notification.CATEGORY_MESSAGE
+    }
 
     val store = MessageStore()
     @Volatile private var host: NotificationHost? = null
