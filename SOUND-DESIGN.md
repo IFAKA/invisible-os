@@ -110,4 +110,4 @@ Rules used (Nielsen's response times: under 1 s no sign is needed; screen reader
 - **Then a heartbeat:** `wait`, C5 twice (150 ms apart, the second softer), LOW bar, -27 dBFS, every 1.4 s. Same note twice: no rise, no fall, so it means neither yes nor no, only "still going". Skipped while speech plays.
 - **At 10 s** the phone says "Still working." once. **At 60 s** the beat stops even if no one stopped it.
 - One door: `Narrator.waiting()` returns stop. Several waits at once give one heartbeat. Numbers in `Pacing` (`WAIT_*`).
-- Used by: weather, next event, Write (word model load), Echo, Guard, Duel (sound build), music search, music cold start.
+- Used by: weather, next event, Write (word model load), Echo, Guard, Duel (sound build), music search, radio from this song, music cold start.

@@ -629,7 +629,8 @@ object Actions {
     private fun radioNow() {
                 val md = otherSessions().firstOrNull { it.packageName in musicApps }?.metadata ?: return
                 val q = listOf(md.getString(android.media.MediaMetadata.METADATA_KEY_TITLE), md.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST)).filter { !it.isNullOrBlank() }.joinToString(" ")
-                Thread({ val hit = lookupSong(q); handler.post { if (hit == null) { say(Menu.NO_SONG, false); return@post }; playQuickPicks(false, "https://music.youtube.com/watch?v=${hit.videoId}&list=RDAMVM${hit.videoId}") } }, "music-radio").start()
+                val w = narrator.waiting()
+                Thread({ val hit = lookupSong(q); handler.post { w(); if (hit == null) { say(Menu.NO_SONG, false); return@post }; playQuickPicks(false, "https://music.youtube.com/watch?v=${hit.videoId}&list=RDAMVM${hit.videoId}") } }, "music-radio").start()
             }
 
     private fun lookupSong(query: String): com.faka.invisible.logickit.MusicSearch.Hit? = try {
