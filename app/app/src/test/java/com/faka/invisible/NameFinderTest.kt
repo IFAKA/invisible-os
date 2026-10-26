@@ -104,4 +104,9 @@ class NameFinderTest {
             assertTrue("${target.label} in $steps steps", steps <= 4)
         }
     }
+
+    @Test fun aCountAfterAProgramNameIsNotPartOfARangeName() {
+        val ls = leaves + leaf("Messages, 4 unread", 30.0) + leaf("Tasks, 4", 30.0)
+        for (n in lists(NameFinder.plan(ls))) for (p in n.parts) if (p.sub != null) assertTrue(p.label, !Regex(",\\s*\\d").containsMatchIn(p.label))
+    }
 }
