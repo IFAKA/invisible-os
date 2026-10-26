@@ -298,8 +298,8 @@ class MainActivity : Activity() {
 
     private fun voicePage() {
         card("Speed", "Find what feels right. You can change it any time.") {
-            addView(slider("Pause between options", "%.1f s".format(s.itemGapMs / 1000f), 38, ((s.itemGapMs - 200) / 100).toInt()) {
-                s.copy(itemGapMs = 200L + it * 100) })
+            addView(slider("Pause between options", "%.1f s".format(s.itemGapMs / 1000f), 39, ((s.itemGapMs - 100) / 100).toInt()) {
+                s.copy(itemGapMs = 100L + it * 100) })
             addView(slider("Voice speed", "%.1f x".format(s.speechRate), 12, ((s.speechRate - 0.6f) * 10).toInt()) {
                 s.copy(speechRate = 0.6f + it / 10f) })
             addView(slider("Time to cancel a send", "%.1f s".format(s.undoMs / 1000f), 13, ((s.undoMs - 1500) / 500).toInt()) {

@@ -74,7 +74,7 @@ object SettingsStore {
             info = p.getString("s_info", null)?.split(',')?.let { LauncherSettings.cleanInfo(it) } ?: d.info,
             phone = p.getString("s_phone", null)?.split(',')?.let { LauncherSettings.cleanPhone(withStatus(p, it)) } ?: d.phone,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
-            itemGapMs = p.getLong("s_gap2", d.itemGapMs).coerceIn(200, 4000),
+            itemGapMs = p.getLong("s_gap2", d.itemGapMs).coerceIn(100, 4000),
             silentLoops = p.getInt("s_loops", d.silentLoops).coerceIn(1, 5),
             undoMs = p.getLong("s_undo", d.undoMs).coerceIn(1500, 8000),
             speechRate = p.getFloat("s_rate", d.speechRate).coerceIn(0.6f, 1.8f),
