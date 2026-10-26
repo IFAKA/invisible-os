@@ -44,6 +44,7 @@ class MainActivity : Activity() {
         intent.getStringExtra("page")?.let { n -> Page.values().firstOrNull { it.name.equals(n, true) }?.let { page = it } }   // for screenshots: adb ... --es page menu --es open /Tools
         intent.getStringExtra("open")?.let { openGroups = it.split(',').toSet() }
         render()
+        warmTree()   // the Menu page opens at once
     }
 
     override fun onResume() {
@@ -155,8 +156,11 @@ class MainActivity : Activity() {
 
     /** The spoken tree, drawn from the same builder the voice uses ([TreeLeaves], [AppTree]). Pin, hide and move are saved in the settings the voice reads. */
     private fun treeCard() {
-        val all = TreeLeaves.all(this, s)
-        val root = AppTree.build(TreeLeaves.edit(all, s))
+        // The phone queries (installed apps, 30 days of usage) and the tree search are slow: they run once, off the main thread, and are reused.
+        val all = treeAll; val built = treeBuilt
+        if (built == null || all == null) { warmTree(); card("What you hear") { addView(k.text("Loading your apps\u2026", 16f, Ui.soft)) }; return }
+        if (built.first != treeKey()) warmTree()   // an edit was made: the old tree stays on screen until the new one is ready
+        val root = built.second
         card("What you hear", "The tree the voice walks, in its order. Tap a group to open it. Tap an app to pin, move or hide it.") {
             fun toggle(set: Set<String>, k: String) = if (k in set) set - k else set + k
             fun actions(a: AppLeaf) {
@@ -176,21 +180,21 @@ class MainActivity : Activity() {
             fun leafCount(n: TreeNode): Int = if (n.app != null) 1 else n.children.sumOf { leafCount(it) }
             fun node(n: TreeNode, depth: Int, path: String) {
                 val a = n.app
-                val pad = k.dp(16 * depth)
+                val pad = k.dp(12 * depth)
                 if (a == null) {
                     if (n.label.isEmpty()) return
                     val key = "$path/${n.label}"
                     val open = key in openGroups
-                    val head = k.row(k.grow(k.text(n.label, 17f, bold = true)), k.text("${leafCount(n)}  " + if (open) "\u25B4" else "\u25BE", 15f, Ui.soft))
-                    head.minimumHeight = k.dp(52); head.setPadding(pad, 0, k.dp(4), 0)
-                    head.setOnClickListener { openGroups = if (open) openGroups - key else openGroups + key; render() }
+                    val head = k.row(k.grow(k.text(n.label, 16f, bold = true)), k.text("${leafCount(n)}  " + if (open) "\u25B4" else "\u25BE", 15f, Ui.soft))
+                    head.minimumHeight = k.dp(48); head.setPadding(pad, 0, k.dp(4), 0)
+                    head.setOnClickListener { openGroups = if (open) openGroups - key else if (depth == 0) setOf(key) else openGroups + key; render() }
                     addView(head)
                     if (open) n.children.forEach { node(it, depth + 1, key) }
                     return
                 }
                 val tag = listOfNotNull(if (a.pkg in s.pinned) "pinned" else null, if (a.pkg in s.moved) "moved" else null).joinToString(", ")
                 val row = k.row(k.grow(k.text(a.label, 16f).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }), k.text(tag, 13f, Ui.soft))
-                row.minimumHeight = k.dp(52); row.setPadding(pad, 0, k.dp(4), 0)
+                row.minimumHeight = k.dp(48); row.setPadding(pad, 0, k.dp(4), 0)
                 row.setOnClickListener { actions(a) }
                 addView(row)
             }
@@ -208,6 +212,25 @@ class MainActivity : Activity() {
     }
 
     private var openGroups: Set<String> = emptySet()
+    @Volatile private var treeAll: List<AppLeaf>? = null
+    @Volatile private var treeBuilt: Pair<List<Any>, TreeNode>? = null
+    private val treeBusy = java.util.concurrent.atomic.AtomicBoolean(false)
+    private fun treeKey(): List<Any> = listOf(s.pinned, s.hidden, s.moved)
+
+    private fun warmTree() {
+        if (!treeBusy.compareAndSet(false, true)) return
+        val snap = s; val key = listOf<Any>(snap.pinned, snap.hidden, snap.moved)
+        Thread {
+            try {
+                val t0 = System.currentTimeMillis()
+                val all = treeAll ?: TreeLeaves.all(this, snap).also { treeAll = it }
+                val t1 = System.currentTimeMillis()
+                treeBuilt = key to TreeLeaves.tree(TreeLeaves.edit(all, snap))
+                android.util.Log.d("TREETIME", "leaves ${t1 - t0} ms (${all.size}), tree ${System.currentTimeMillis() - t1} ms")
+            } finally { treeBusy.set(false) }
+            runOnUiThread { if (page == Page.MENU && !isDestroyed) render() }
+        }.start()
+    }
 
     private fun menuPage() {
         treeCard()

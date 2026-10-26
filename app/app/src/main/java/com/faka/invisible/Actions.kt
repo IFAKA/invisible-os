@@ -169,6 +169,7 @@ object Actions {
         Thread({ wordModel() }, "write-warm").start()
         com.faka.invisible.tell.TellSynth.warmAsync()   // the Duel's sounds take seconds to build on a phone: do it now, quietly
         ControllerNotificationListener.loadMutes(app)
+        TreeLeaves.store = prefs()
         mode.settings = SettingsStore.load(prefs())
         val f = java.io.File(app.filesDir, "choices.log")
         choices = ChoiceLog(if (f.exists()) f.readLines() else emptyList()) { line -> try { f.appendText(line + "\n") } catch (e: Exception) { Log.e(TAG, "choices.log write failed", e) } }

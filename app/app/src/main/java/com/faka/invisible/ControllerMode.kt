@@ -516,7 +516,7 @@ class ControllerMode(
         val key = leaves.map { listOf(it.pkg, it.label, it.category, it.weight) }
         val old = treeCache
         if (key == treeKey && old != null) return withUnread(old, leaves.associate { it.pkg to it.unread })
-        return AppTree.build(leaves).also { treeKey = key; treeCache = it }
+        return TreeLeaves.tree(leaves).also { treeKey = key; treeCache = it }
     }
 
     private fun withUnread(n: TreeNode, u: Map<String, Int>): TreeNode {

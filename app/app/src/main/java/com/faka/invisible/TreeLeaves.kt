@@ -29,8 +29,24 @@ object TreeLeaves {
     fun all(c: Context, s: LauncherSettings): List<AppLeaf> {
         val programs = LauncherSettings.HUB_ITEMS.keys.map { k -> val key = "hub:$k"
             AppLeaf(key, programLabel(key), AppCategories.categoryOf(key), 0, AppWeights.weight(key, 0, 0, Actions.choices.intentCount(key)), native = true, rank = s.hub.indexOf(k)) }
-        return programs + apps(DeviceApps.installed(c), DeviceApps.use(c), { ControllerNotificationListener.mutes.isMuted(it) }, emptyMap()) { Actions.choices.intentCount(it) }
+        val use = java.util.concurrent.CompletableFuture.supplyAsync { DeviceApps.use(c) }   // the slow usage query runs while the app list loads
+        return programs + apps(DeviceApps.installed(c), use.get(), { ControllerNotificationListener.mutes.isMuted(it) }, emptyMap()) { Actions.choices.intentCount(it) }
     }
 
     const val APP_RANK = 1000
+
+    /** Set once at start (Actions.init): where the last levels are kept, so the next tree search starts from them. */
+    @Volatile var store: android.content.SharedPreferences? = null
+
+    /** The spoken tree for these leaves: the voice and the settings screen both come here. */
+    fun tree(leaves: List<AppLeaf>): TreeNode {
+        val p = store
+        val warm = p?.getString("tree_levels", null)?.split(',')?.filter { '=' in it }?.associate { it.substringBefore('=') to (it.substringAfter('=').toIntOrNull() ?: -1) }
+        // Same apps, same places, same pins, same week: the earlier levels still hold, only the order inside each list is recomputed (cheap).
+        val sig = leaves.sortedBy { it.pkg }.joinToString("|") { "${it.pkg}:${it.category}:${it.weight >= PIN_BOOST}" }.hashCode().toString() + "/" + System.currentTimeMillis() / (7 * 86_400_000L)
+        if (warm != null && p?.getString("tree_sig", null) == sig) AppTree.fromLevels(leaves, warm)?.let { return it }
+        val (root, levels) = AppTree.built(leaves, warm)
+        p?.edit()?.putString("tree_levels", levels.entries.joinToString(",") { it.key + "=" + it.value })?.putString("tree_sig", sig)?.apply()
+        return root
+    }
 }

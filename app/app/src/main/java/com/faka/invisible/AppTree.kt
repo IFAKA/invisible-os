@@ -47,11 +47,28 @@ object AppTree {
 
     private val ORDER = compareByDescending<Entry> { it.node.weight }.thenBy { it.node.rank }.thenBy { it.node.label }.thenBy { it.node.app?.pkg ?: "" }
 
-    fun build(leaves: List<AppLeaf>): TreeNode {
+    fun build(leaves: List<AppLeaf>): TreeNode = built(leaves, null).first
+
+    /**
+     * The tree and the level of every leaf. [warm] = the levels of an earlier build: when they still fit, the search starts there and needs 0 to 2 steps
+     * instead of about 30 (the phone is about 40 times slower than the laptop). The result is a local optimum of the same cost either way.
+     */
+    fun built(leaves: List<AppLeaf>, warm: Map<String, Int>?): Pair<TreeNode, Map<String, Int>> {
         val ls = leaves.sortedBy { it.pkg }
-        if (ls.isEmpty()) return TreeNode("")
-        val starts = listOf(ls.associate { it.pkg to maxLevel(it) }, ls.associate { it.pkg to minOf(1, maxLevel(it)) })
-        return starts.map { climb(ls, layout(ls, it)) }.minBy { it.cost }.root
+        if (ls.isEmpty()) return TreeNode("") to emptyMap()
+        val memo = HashMap<List<Any>, List<Entry>>()   // one group's list for one level assignment; a move changes one group, the others are reused
+        val fits = warm != null && ls.all { l -> warm[l.pkg]?.let { it in 0..maxLevel(l) } == true }
+        val warmLayout = if (fits) layout(ls, warm!!, memo).takeIf { it.cost < Double.MAX_VALUE } else null
+        val best = if (warmLayout != null) climb(ls, warmLayout, memo)
+        else listOf(ls.associate { it.pkg to maxLevel(it) }, ls.associate { it.pkg to minOf(1, maxLevel(it)) }).map { climb(ls, layout(ls, it, memo), memo) }.minBy { it.cost }
+        return best.root to best.levels
+    }
+
+    /** The tree for levels found earlier: one layout, no search. Null when the levels no longer fit these leaves. */
+    fun fromLevels(leaves: List<AppLeaf>, levels: Map<String, Int>): TreeNode? {
+        val ls = leaves.sortedBy { it.pkg }
+        if (ls.isEmpty() || !ls.all { l -> levels[l.pkg]?.let { it in 0..maxLevel(l) } == true }) return null
+        return layout(ls, levels, HashMap()).takeIf { it.cost < Double.MAX_VALUE }?.root
     }
 
     private fun maxLevel(l: AppLeaf) = if (AppCategories.sub(l.category) != null) 2 else 1
@@ -62,9 +79,11 @@ object AppTree {
         TreeNode(label, kids, unread = kids.sumOf { it.unread }, weight = weight, isMore = more)
 
     // ---- the layout of one level assignment (0 = home, 1 = group list, 2 = sub-group list) ----
-    private fun layout(ls: List<AppLeaf>, lv: Map<String, Int>): Layout {
+    private fun layout(ls: List<AppLeaf>, lv: Map<String, Int>, memo: MutableMap<List<Any>, List<Entry>>): Layout {
         val home = ls.filter { lv.getValue(it.pkg) == 0 }.map(::leafEntry) +
-            ls.filter { lv.getValue(it.pkg) > 0 }.groupBy { AppCategories.main(it.category) }.mapNotNull { (g, l) -> listEntry(g, groupEntries(l, lv)) }
+            ls.filter { lv.getValue(it.pkg) > 0 }.groupBy { AppCategories.main(it.category) }.flatMap { (g, l) ->
+                memo.getOrPut(listOf<Any>(g) + l.map { it.pkg to lv.getValue(it.pkg) }) { listOfNotNull(listEntry(g, groupEntries(l, lv))) }
+            }
         if (home.size > HOME_MAX || ls.count { lv.getValue(it.pkg) == 0 } > PROMOTED) return Layout(Double.MAX_VALUE, node("", emptyList()), lv)
         val (cost, kids) = arrange(home, HOME_MAX)
         return Layout(cost, node("", kids), lv)
@@ -102,10 +121,10 @@ object AppTree {
     }
 
     // ---- local search over the levels ----
-    private fun climb(ls: List<AppLeaf>, start: Layout): Layout {
+    private fun climb(ls: List<AppLeaf>, start: Layout, memo: MutableMap<List<Any>, List<Entry>>): Layout {
         var cur = start
         while (true) {
-            val next = moves(ls, cur.levels).map { layout(ls, it) }.minByOrNull { it.cost }
+            val next = moves(ls, cur.levels).map { layout(ls, it, memo) }.minByOrNull { it.cost }
             if (next == null || next.cost >= cur.cost - EPS) return cur
             cur = next
         }
