@@ -189,7 +189,7 @@ class TellMixerTest {
     }
 
     // ---- audition files ----
-    private val dir get() = File("../../sound/tell")
+    private val dir get() = File("../../../sound/tell")
 
     @Test fun writesAuditionWavs() {
         dir.mkdirs()
