@@ -9,7 +9,9 @@ import android.view.KeyEvent
 /**
  * ORGANISM. The one button. Takes every key from the engines (media session or accessibility), drops duplicates, hands the
  * raw button to a running program, answers each press with a tap tone, and turns presses into gestures for the menu.
- * Hold 3 s to leave is handled by the programs themselves; this class never lets a hold get lost.
+ * Hold 3 s to leave is handled by the programs themselves. Click then hold closes the OS everywhere: in the menu it is the
+ * HOLD gesture, and while a program owns the raw button this class watches for it and calls [ButtonTarget.exitProgram].
+ * This class never lets a hold get lost.
  */
 class ButtonInput(private val handler: Handler, private val narrator: Narrator, private val target: ButtonTarget) : ButtonPort {
     companion object {
@@ -35,6 +37,11 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
     private var clickHolding = false   // a click-then-hold is down (fast scroll): the system's long press must not also fire
     private var lastKeyAt = 0L          // the last key event the key path saw (down or up)
     private var gestureTimer: Runnable? = null
+    private var rawDownAt = -1L                // a press is down in a program (key time)
+    private var rawUpAt = -1L                  // when the last press in a program ended
+    private var rawLastLen = Long.MAX_VALUE    // how long that press was: only a click counts before the hold
+    private var rawUpWall = 0L                 // rawUpAt on the uptime clock, for the assistant signal (it has no key times)
+    private val rawExit = Runnable { if (rawDownAt >= 0) { rawDownAt = -1; Log.d(TAG, "GESTURE click_hold in program: exit"); target.exitProgram() } }
     private val detector = GestureDetector(
         schedule = { delay, task -> val r = Runnable(task); gestureTimer = r; handler.postDelayed(r, delay) },
         cancel = { gestureTimer?.let { handler.removeCallbacks(it) }; gestureTimer = null },
@@ -46,9 +53,25 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
         if (repeat > 0) return
         lastKeyAt = SystemClock.uptimeMillis()
         if (!deduper.accept(source, isDown, downTime)) { Log.d(TAG, "DEDUPE dropped $source down=$downTime"); return }
-        target.raw()?.let { r -> if (isDown) r.down(downTime) else r.up(time); return }   // a program owns the raw button
+        target.raw()?.let { r -> if (isDown) rawDown(r, time) else rawUp(r, time); return }   // a program owns the raw button
         if (isDown && target.menuActive) narrator.beep(Tone.TAP)   // blind: every press is answered at once
         if (isDown) detector.down(time) else detector.up(time)
+    }
+
+    /** A press in a program. If a click ended less than [Pacing.GAP_MS] ago and this press reaches [Pacing.HOLD_MS], it is click then hold: exit. */
+    private fun rawDown(r: RawButton, time: Long) {
+        val afterClick = rawUpAt >= 0 && time - rawUpAt < Pacing.GAP_MS && rawLastLen < Pacing.HOLD_MS
+        rawDownAt = time
+        handler.removeCallbacks(rawExit)
+        if (afterClick) handler.postDelayed(rawExit, Pacing.HOLD_MS)
+        r.down(time)
+    }
+
+    private fun rawUp(r: RawButton, time: Long) {
+        handler.removeCallbacks(rawExit)
+        if (rawDownAt < 0) return   // the press that closed the program, or a stray release
+        rawLastLen = time - rawDownAt; rawDownAt = -1; rawUpAt = time; rawUpWall = SystemClock.uptimeMillis()
+        r.up(time)
     }
 
     /**
@@ -57,7 +80,10 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
      * signal is exit only when a click was seen just before it. There is no release event, so a fast scroll ends by a timer.
      */
     fun assistHold() {
-        if (target.raw() != null) return
+        if (target.raw() != null) {   // a program: the signal without key events after a click is click then hold
+            if (rawDownAt < 0 && rawLastLen < Pacing.HOLD_MS && SystemClock.uptimeMillis() - rawUpWall < CLICK_THEN_HOLD_MS) { Log.d(TAG, "ASSIST click_hold in program: exit"); target.exitProgram() }
+            return
+        }
         if (clickHolding || SystemClock.uptimeMillis() - lastHoldAt < 1500) { Log.d(TAG, "ASSIST ignored, hold just fired"); return }
         if (!target.menuActive) { fire(Gesture.HOLD, 0); return }
         if (SystemClock.uptimeMillis() - lastKeyAt < CLICK_THEN_HOLD_MS) { fire(Gesture.HOLD, 0); return }

@@ -53,4 +53,6 @@ interface ButtonTarget {
     val menuActive: Boolean
     /** A finished gesture. The menu acts on it and plays its own tones. */
     fun gesture(g: Gesture, durationMs: Long)
+    /** Click then hold while a program owns the button: stop it and close the OS (the OS close sound plays once). */
+    fun exitProgram()
 }

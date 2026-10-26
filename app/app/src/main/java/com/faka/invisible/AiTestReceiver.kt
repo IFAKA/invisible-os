@@ -18,6 +18,8 @@ class AiTestReceiver : BroadcastReceiver() {
         if (i.hasExtra("playmusic")) { Actions.playMusicDev(); return }   // dev: what the Music item does with no song
         if (i.hasExtra("browse")) { Actions.browseMusicDev(); return }
         i.getStringExtra("gesture")?.let { Actions.gestureDev(it); return }   // dev: a button gesture by name
+        i.getStringExtra("press")?.let { Actions.pressDev(it); return }   // dev: raw presses "down,up,down,..." in ms, through the real button path
+        i.getStringExtra("start")?.let { Actions.startDev(it); return }   // dev: start a program: echo, guard, duel, compass, write
         i.getStringExtra("ctl")?.let { Actions.ctlDev(it); return }
         if (i.hasExtra("wait")) { Actions.waitDev(i.getIntExtra("wait", 5000).toLong()); return }   // dev: the waiting heartbeat for this many ms
         i.getStringExtra("msearch")?.let { Actions.searchDev(it); return }   // dev: type a song search without the keyboard

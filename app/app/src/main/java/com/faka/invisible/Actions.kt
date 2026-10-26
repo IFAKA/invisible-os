@@ -258,6 +258,18 @@ object Actions {
 
     /** Dev: press the button without the earbud (adb cannot inject key events on this phone): SINGLE, DOUBLE, TRIPLE, HOLD, CLICK_HOLD... */
     fun gestureDev(name: String) = handler.post { buttonTarget.gesture(Gesture.valueOf(name.uppercase()), 0) }
+    /** Dev: "120,150,900" = press 120 ms, wait 150 ms, press 900 ms; fed to the real button input (programs, holds, gestures). */
+    fun pressDev(ms: String) = handler.post {
+        var t = android.os.SystemClock.uptimeMillis(); var down = -1L
+        ms.split(",").map { it.trim().toLong() }.forEachIndexed { i, d ->
+            val at = t
+            if (i % 2 == 0) handler.postAtTime({ down = at; VoiceKit.buttons.key("dev", true, 0, at, at) }, at)
+            t += d
+            val end = t
+            if (i % 2 == 0) handler.postAtTime({ VoiceKit.buttons.key("dev", false, 0, down, end) }, end)
+        }
+    }
+    fun startDev(name: String) = handler.post { when (name) { "echo" -> startEchoGame(); "guard" -> startGuardGame(); "duel" -> startDuel(false); "compass" -> startCompassProgram(); "write" -> launchWrite() } }
 
     /** Dev: drive the music session directly: "uri:<url>" or "search:<query>". */
     fun waitDev(ms: Long) = handler.post { val w = narrator.waiting(); handler.postDelayed({ w() }, ms) }
@@ -451,6 +463,13 @@ object Actions {
     private val buttonTarget = object : ButtonTarget {
         override fun raw(): RawButton? = duel?.takeIf { it.active } ?: echo?.takeIf { it.active } ?: guard?.takeIf { it.active } ?: compass?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
         override val menuActive get() = mode.active
+        override fun exitProgram() {   // each stop() ends with the program's onEnded, which plays the OS close sound; Write's stop() does not
+            duel?.takeIf { it.active }?.let { it.stop(); return }
+            echo?.takeIf { it.active }?.let { it.stop(); return }
+            guard?.takeIf { it.active }?.let { it.stop(); return }
+            compass?.takeIf { it.active }?.let { it.stop(); return }
+            typer?.takeIf { it.active }?.let { it.stop(); typer = null; narrator.hush(); gameEnded() }
+        }
         override fun gesture(g: Gesture, durationMs: Long) {
             EventLog.add("${g.name.lowercase()}  ${durationMs}ms")
             val inMode = mode.active && mode.screen != ControllerMode.Screen.SENT   // a click that cancels a send has its own tone

@@ -215,7 +215,7 @@ class ControllerMode(
         val canFast = active && !finding && pending == null && phase == Phase.SCAN && !list.isEmpty
         val g = if (g0 == Gesture.CLICK_HOLD && !active) Gesture.HOLD else g0
         val firstPress = clock() - gapMs - lastPressMs
-        if (active && finding) { endFind(); return }   // ANY click or hold stops the ringing
+        if (active && finding) { endFind(); if (g != Gesture.HOLD) return }   // ANY click or hold stops the ringing; click then hold also closes
         if (pending != null && g != Gesture.HOLD) { cancelPending(); return }   // ANY click cancels
         if (!active) {
             when (g) {
