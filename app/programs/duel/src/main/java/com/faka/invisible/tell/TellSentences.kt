@@ -9,6 +9,9 @@ import com.faka.invisible.voicekit.Phrase
 private fun f(text: String) = Phrase.fixed(text)
 
 object TellVoice {
+    /** The menu labels. */
+    val TITLE = f("Duel")
+    val HOW_TO_PLAY = f("How to play")
     // ---- markers inside a step's lines: a sound instead of a sentence ----
     val CLICK1 = f("<click1>")
     val CLICK2 = f("<click2>")

@@ -42,6 +42,7 @@ interface ProgramHost {
 
 /**
  * One line of the OS menu that starts a program. [id] is the menu id, `games:<name>` (in the Games list) or `hub:<name>`
- * (a tool of the home hub, placed by its tag in AppCategories). [title] is what the phone says. [create] makes a fresh program.
+ * (a tool of the home hub, placed by its tag in AppCategories). [title] is what the phone says. [warm] runs once when the OS
+ * starts, off the main thread's critical path, for programs whose sounds take seconds to build on a phone. [create] makes a fresh program.
  */
-class ProgramEntry(val id: String, val title: Phrase, val create: () -> Program)
+class ProgramEntry(val id: String, val title: Phrase, val warm: () -> Unit = {}, val create: () -> Program)

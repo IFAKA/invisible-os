@@ -83,7 +83,6 @@ interface ModeOutput {
     fun startCompass() {}   // the compass program
     fun programs(): List<ProgramEntry> = emptyList()   // the programs the OS lists (its registry), in menu order
     fun startProgram(id: String) {}   // start the program with this menu id (a ProgramEntry.id); the program gets the raw button
-    fun startGame(coach: Boolean) {}   // coach = teach first (the "How to play" item)
     fun weather(done: (Phrase) -> Unit) { done(Voice.WEATHER_FAILED) }   // off the main thread inside; [done] runs on the main thread with ONE sentence
     fun nextEvent(done: (Phrase) -> Unit) { done(Voice.CALENDAR_FAILED) }   // same: the next calendar event sentence
     fun wiredConnected(): Boolean = false   // a wired headset or USB audio is plugged in: then "Find my phone" is not offered
@@ -511,10 +510,7 @@ class ControllerMode(
                 "find" -> if (!out.wiredConnected()) Opt("phone:find", Voice.FIND_PHONE) { pick("phone:find"); find() } else null
                 else -> null
             } }
-            Screen.GAMES -> listOf(   // every game lives here; a new game is one more line
-                Opt("games:duel", Menu.DUEL) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame(false) },   // music stays paused for the game, which resumes it
-                *programOpts("games:"),
-                Opt("games:howto", Menu.HOW_TO_PLAY) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) })
+            Screen.GAMES -> programOpts("games:").toList()   // every game lives here, in the order of the registry (Programs.kt); a new game is one more line there
             Screen.CALC -> calcOptions()
             Screen.ALARM_HOUR -> ALARM_HOURS.map { h -> Opt("alarm:h$h", Menu.hour(h)) { pick("alarm:h$h"); alarmHour = h; show(Screen.ALARM_MIN) } }
             Screen.ALARM_MIN -> ALARM_MINUTES.map { m -> Opt("alarm:m$m", Menu.minute(m)) { pick("alarm:m$m"); setAlarmPending(alarmHour, m) } }

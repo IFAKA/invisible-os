@@ -1,37 +1,23 @@
 package com.faka.invisible.tell
 
-import android.content.SharedPreferences
-import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
+import com.faka.invisible.oskit.Program
+import com.faka.invisible.oskit.ProgramEntry
+import com.faka.invisible.oskit.ProgramHost
 import com.faka.invisible.voicekit.Phrase
-import com.faka.invisible.voicekit.RawButton
 import com.faka.invisible.voicekit.GameAudio
 import com.faka.invisible.voicekit.Timers
-
-/** What the duel needs from the app (speech, the user's music, the log). */
-interface TellHost {
-    /** Starts the OS wait sound (a soft heartbeat while the sounds are built); call the result when ready. */
-    fun waiting(): () -> Unit
-    fun speak(text: Phrase, slow: Boolean = false)
-    fun stopSpeech()
-    fun pauseMusic()
-    fun resumeMusic()
-    fun log(line: String)
-}
 
 /**
  * Android side of TELL: owns the mixer, a GameAudio engine (low-latency stereo, 44.1 kHz, float, 5 ms blocks),
  * the latency estimate, the solver thread and the saved rung. Game calls come on the main thread ([handler]); the mixer is
  * guarded by one lock shared with the audio thread. No audio input of any kind.
  */
-class TellAndroid(
-    private val prefs: SharedPreferences,
-    private val handler: Handler,
-    private val host: TellHost,
-    private val onEnded: () -> Unit,
-    private val coach: Boolean = false,
-) : RawButton {
+class TellAndroid(private val coach: Boolean = false) : Program {
+    private lateinit var host: ProgramHost
+    private val handler get() = host.handler
+    private val prefs get() = host.prefs
     private val sr = 44100
     private val block = sr * 5 / 1000   // 220 frames
     private val lock = Any()
@@ -79,8 +65,9 @@ class TellAndroid(
     }
 
     /** Main thread. Loads the sounds in the background, then starts the audio, the solver and the first match. */
-    fun start() {
+    override fun start(host: ProgramHost) {
         if (running) return
+        this.host = host
         running = true
         gen++
         val g = gen
@@ -96,7 +83,7 @@ class TellAndroid(
     }
 
     private fun begin(m: TellMixer?) {
-        if (m == null || !audio.open()) { host.speak(TellVoice.COULD_NOT_START); running = false; onEnded(); return }
+        if (m == null || !audio.open()) { host.speak(TellVoice.COULD_NOT_START); running = false; host.ended(); return }
         mixer = m
         audio.start()
         solverThread = Thread({ try { solver.solve() } catch (e: Throwable) { Log.e("TELL", "solve failed", e) } }, "tell-solver")
@@ -108,10 +95,10 @@ class TellAndroid(
     override fun down(time: Long) { game?.down(time) }
     override fun up(time: Long) { game?.up(time) }
     /** The speech engine finished the last sentence. */
-    fun speechDone() { game?.onSpeechDone() }
+    override fun speechDone() { game?.onSpeechDone() }
 
     /** Main thread. The app stops the duel from outside (also safe to call twice). */
-    fun stop() {
+    override fun stop() {
         if (!running) return
         game?.stop()          // calls out.leave(), which shuts down after the tail
         shutdown()
@@ -123,6 +110,12 @@ class TellAndroid(
         for (k in keyed.keys.toList()) timers.clear(k)
         game = null
         audio.join()
-        onEnded()
+        host.ended()
     }
+}
+
+/** What the OS registry lists for the Duel: the match, and "How to play" (the same program, teaching first). */
+object DuelProgram {
+    val play = ProgramEntry("games:duel", TellVoice.TITLE, warm = { TellSynth.warmAsync() }) { TellAndroid(coach = false) }
+    val howTo = ProgramEntry("games:howto", TellVoice.HOW_TO_PLAY) { TellAndroid(coach = true) }
 }

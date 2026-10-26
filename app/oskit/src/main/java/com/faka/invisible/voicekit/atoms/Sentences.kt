@@ -181,10 +181,8 @@ object Menu {
     /** "7 AM", "12 PM", "12 AM". */
     fun hour(h24: Int) = f("${(h24 % 12).let { if (it == 0) 12 else it }} ${if (h24 < 12) "AM" else "PM"}")
     fun minute(m: Int) = f(if (m == 0) "Sharp" else Spoken.number(m).replaceFirstChar { it.uppercase() })
-    val DUEL = f("Duel")
     val WRITE = f("Write")
     val COMPASS = f("Compass")
-    val HOW_TO_PLAY = f("How to play")
     val STOP = f("Stop")
     val FIVE_MORE = f("Five more minutes")
     val IGNORE = f("Ignore")

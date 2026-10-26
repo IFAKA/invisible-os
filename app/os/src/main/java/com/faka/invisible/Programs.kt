@@ -1,6 +1,7 @@
 package com.faka.invisible
 
 import com.faka.invisible.echo.EchoProgram
+import com.faka.invisible.tell.DuelProgram
 import com.faka.invisible.guard.GuardProgram
 import com.faka.invisible.oskit.ProgramEntry
 
@@ -11,8 +12,10 @@ import com.faka.invisible.oskit.ProgramEntry
  */
 object Programs {
     val all: List<ProgramEntry> = listOf(
+        DuelProgram.play,
         EchoProgram.entry,
         GuardProgram.entry,
+        DuelProgram.howTo,
     )
     fun byId(id: String): ProgramEntry? = all.firstOrNull { it.id == id }
     /** Dev hook name (`--es start echo`) to entry: the part of the id after the colon. */

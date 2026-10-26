@@ -54,9 +54,8 @@ class ModeTest {
             override fun tone(kind: Tone) { log.add("tone $kind") }
             override fun startWrite() { log.add("startWrite") }
             override fun startSum() { log.add("startSum") }
-            override fun startGame(coach: Boolean) { log.add("startGame $coach") }
-            override fun programs() = listOf("echo" to "Echo", "guard" to "Guard").map { (id, title) -> ProgramEntry("games:$id", Phrase.content(title)) { error("not started in this test") } }
-            override fun startProgram(id: String) { log.add("start" + id.substringAfter(':').replaceFirstChar { it.uppercase() }) }
+            override fun programs() = listOf("duel" to "Duel", "echo" to "Echo", "guard" to "Guard", "howto" to "How to play").map { (id, title) -> ProgramEntry("games:$id", Phrase.content(title)) { error("not started in this test") } }
+            override fun startProgram(id: String) { log.add(when (id) { "games:duel" -> "startGame false"; "games:howto" -> "startGame true"; else -> "start" + id.substringAfter(':').replaceFirstChar { it.uppercase() } }) }
             override fun startCompass() { log.add("startCompass") }
             override fun runAction(name: String) { log.add("run $name"); speech() }
             override fun forward(what: Forward) { log.add("fwd $what") }

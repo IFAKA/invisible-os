@@ -24,9 +24,7 @@ import com.faka.invisible.compass.CompassHost
 import com.faka.invisible.oskit.Program
 import com.faka.invisible.oskit.ProgramEntry
 import com.faka.invisible.oskit.ProgramHost
-import com.faka.invisible.tell.TellAndroid
 import com.faka.invisible.voicekit.*
-import com.faka.invisible.tell.TellHost
 import java.util.Calendar
 import java.util.Locale
 
@@ -152,7 +150,6 @@ object Actions {
             override fun setCodeCount(n: Int) { prefs().edit().putInt("codeCount", n).apply() }
             override fun lastTimer() = prefs().getInt("lastTimer", 0)
             override fun setLastTimer(minutes: Int) { prefs().edit().putInt("lastTimer", minutes).apply() }
-            override fun startGame(coach: Boolean) = startDuel(coach)
             override fun programs() = Programs.all
             override fun startProgram(id: String) { Programs.byId(id)?.let { startProgramEntry(it) } }
             override fun startCompass() = startCompassProgram()
@@ -193,7 +190,7 @@ object Actions {
         val bf = java.io.File(app.filesDir, "buckets.txt")
         buckets = BucketStore(if (bf.exists()) bf.readLines() else emptyList()) { lines -> try { bf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "buckets.txt write failed", e) } }
         Thread({ wordModel() }, "write-warm").start()
-        com.faka.invisible.tell.TellSynth.warmAsync()   // the Duel's sounds take seconds to build on a phone: do it now, quietly
+        Programs.all.forEach { it.warm() }   // some programs build their sounds in seconds on a phone: do it now, quietly
         ControllerNotificationListener.loadMutes(app)
         TreeLeaves.store = prefs()
         mode.settings = SettingsStore.load(prefs())
@@ -207,12 +204,11 @@ object Actions {
         taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList(), onAdd = { taskMemory.record(it.text, it.lang) }) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
         VoiceKit.init(app, handler, { speechRate() }, object : SpeechListener {
             override fun started() { mode.onSpeechStarted() }
-            override fun ended() { mode.onSpeechDone(); duel?.takeIf { it.active }?.speechDone(); running?.takeIf { it.active }?.speechDone() }
+            override fun ended() { mode.onSpeechDone(); running?.takeIf { it.active }?.speechDone() }
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
     }
 
-    private var duel: TellAndroid? = null
     /** The program of the registry that runs now (at most one). */
     private var running: Program? = null
     private var compass: CompassAndroid? = null
@@ -268,7 +264,7 @@ object Actions {
             if (i % 2 == 0) handler.postAtTime({ VoiceKit.buttons.key("dev", false, 0, down, end) }, end)
         }
     }
-    fun startDev(name: String) = handler.post { when (name) { "duel" -> startDuel(false); "compass" -> startCompassProgram(); "write" -> launchWrite(); else -> Programs.byDevName(name)?.let { startProgramEntry(it) } } }
+    fun startDev(name: String) = handler.post { when (name) { "compass" -> startCompassProgram(); "write" -> launchWrite(); else -> Programs.byDevName(name)?.let { startProgramEntry(it) } } }
 
     /** Dev: drive the music session directly: "uri:<url>" or "search:<query>". */
     fun waitDev(ms: Long) = handler.post { val w = narrator.waiting(); handler.postDelayed({ w() }, ms) }
@@ -444,24 +440,11 @@ object Actions {
         return if (d == null) "speaker" else "${d.type}:${d.productName}"
     }
 
-    private fun startDuel(coach: Boolean) {
-        duel?.stop()
-        duel = TellAndroid(prefs(), handler, object : TellHost {
-            override fun waiting() = narrator.waiting()
-            override fun speak(text: Phrase, slow: Boolean) = say(text, false, slow = slow)
-            override fun stopSpeech() = narrator.stopSpeech()
-            override fun pauseMusic() { pauseMusicNow() }
-            override fun resumeMusic() = resumeMusicNow()
-            override fun log(line: String) { Log.d(TAG, line); EventLog.add(line) }
-        }, onEnded = { duel = null; gameEnded() }, coach = coach).also { it.start() }
-    }
-
     /** What the button feeds: the programs that own the raw button, the menu, and the menu's own tones. */
     private val buttonTarget = object : ButtonTarget {
-        override fun raw(): RawButton? = duel?.takeIf { it.active } ?: running?.takeIf { it.active } ?: compass?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
+        override fun raw(): RawButton? = running?.takeIf { it.active } ?: compass?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
         override val menuActive get() = mode.active
         override fun exitProgram() {   // each stop() ends with the program's onEnded, which plays the OS close sound. Write is not here: its holds pick words; it leaves from its menu
-            duel?.takeIf { it.active }?.let { it.stop(); return }
             running?.takeIf { it.active && it.exitOnClickHold }?.let { it.stop(); return }
             compass?.takeIf { it.active }?.let { it.stop(); return }
         }
