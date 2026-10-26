@@ -65,7 +65,7 @@ private class WriteOut(val host: ProgramHost) : TypeOut {
     override fun hush() { VoiceKit.narrator.hush() }
     override fun prefetch(words: List<String>) { VoiceKit.narrator.prefetch(words) }
     override fun say(text: Phrase) { VoiceKit.narrator.say(text, true) }
-    override fun cue(c: TypeCue) { VoiceKit.narrator.cue(c) }
+    override fun cue(c: TypeCue) { Log.d(TAG, "WRITE cue $c"); VoiceKit.narrator.cue(c) }
     override fun finished(text: String) {}
     override fun log(event: String, vararg fields: Any?) {
         try { File(host.context.filesDir, "write_usage.tsv").appendText((listOf(System.currentTimeMillis(), event) + fields.map { it.toString().replace('\t', ' ').replace('\n', ' ') }).joinToString("\t") + "\n") } catch (e: Throwable) { Log.e(TAG, "usage log failed", e) }
