@@ -93,7 +93,7 @@ object Actions {
                 }
             }
             override fun hasMusicApp() = musicApps.any { app.packageManager.getLaunchIntentForPackage(it) != null }
-            override fun playLikedMusic() = playLiked()
+            override fun playMusic() = playQuickPicks()
             override fun songLang(text: String) = ControllerNotificationListener.voiceFor(text)
             override fun pauseMusic() = pauseMusicNow()
             override fun resumeMusic() = resumeMusicNow()
@@ -225,6 +225,36 @@ object Actions {
     } catch (e: Throwable) { Log.e(TAG, "word model failed", e); null }
 
     /** Dev tool (AiTestReceiver): start Write into the field that has focus, as the hub item does. */
+    /** Dev: connect to the music app's browser service and log its tree two levels deep. */
+    fun browseMusicDev() = handler.post {
+        val pkg = musicApps.first { app.packageManager.getLaunchIntentForPackage(it) != null }
+        lateinit var b: android.media.browse.MediaBrowser
+        fun dump(id: String, depth: Int) {
+            if (depth > 2) return
+            b.subscribe(id, object : android.media.browse.MediaBrowser.SubscriptionCallback() {
+                override fun onChildrenLoaded(parentId: String, kids: MutableList<android.media.browse.MediaBrowser.MediaItem>) {
+                    for (k in kids) { Log.d("BROWSE", "$depth $parentId > ${k.mediaId} | ${k.description.title} | browsable=${k.isBrowsable} playable=${k.isPlayable}"); if (k.isBrowsable) dump(k.mediaId!!, depth + 1) }
+                }
+                override fun onError(parentId: String) { Log.d("BROWSE", "error $parentId") }
+            })
+        }
+        b = android.media.browse.MediaBrowser(app, android.content.ComponentName(pkg, "com.google.android.apps.youtube.music.mediabrowser.MusicBrowserService"), object : android.media.browse.MediaBrowser.ConnectionCallback() {
+            override fun onConnected() { Log.d("BROWSE", "connected root=${b.root}"); dump(b.root, 0) }
+            override fun onConnectionFailed() { Log.d("BROWSE", "connection failed") }
+        }, null)
+        b.connect()
+    }
+
+    /** Dev: drive the music session directly: "uri:<url>" or "search:<query>". */
+    fun ctlDev(cmd: String) = handler.post {
+        val c = otherSessions().firstOrNull { it.packageName in musicApps } ?: run { Log.d("BROWSE", "no music session"); return@post }
+        Log.d("BROWSE", "ctl $cmd on ${c.packageName}")
+        if (cmd.startsWith("uri:")) c.transportControls.playFromUri(android.net.Uri.parse(cmd.removePrefix("uri:")), null)
+        else c.transportControls.playFromSearch(cmd.removePrefix("search:"), null)
+        handler.postDelayed({ Log.d("BROWSE", "queue: " + (c.queue ?: emptyList()).joinToString(" / ") { it.description.title.toString() }) }, 5000)
+    }
+
+    fun playMusicDev() { handler.post { playQuickPicks() } }
     fun startWriteDev() { handler.post { launchWrite() } }
 
     /** [sendTo] = Write for a notification reply: the written text goes to that action instead of the focused field.
@@ -480,8 +510,25 @@ object Actions {
 
     private val musicApps = listOf("app.morphe.android.apps.youtube.music", "com.google.android.apps.youtube.music")
 
-    private fun playLiked() {
+    /** Start music with no screen: if the music app has a session, ask it to play something (its own mix of your taste); else open it by link and ask once it has a session. */
+    private fun playQuickPicks() {
+        fun ask(c: android.media.session.MediaController) = c.transportControls.playFromSearch("", null)
+        otherSessions().firstOrNull { it.packageName in musicApps }?.let { ask(it); return }
         val pkg = musicApps.firstOrNull { app.packageManager.getLaunchIntentForPackage(it) != null } ?: run { Log.d(TAG, "MODE no music app"); return }
+        Log.d(TAG, "MODE music: no session, open the app by link, then ask it to play")   // the link opens it with the screen off but does not always play; the session then does
+        playLiked(pkg)
+        var tries = 0
+        val poll = object : Runnable {
+            override fun run() {
+                val c = otherSessions().firstOrNull { it.packageName in musicApps }
+                if (c != null) { Log.d(TAG, "MODE music: session found, play"); ask(c); return }
+                if (++tries < 30) handler.postDelayed(this, 500)
+            }
+        }
+        handler.postDelayed(poll, 2000)
+    }
+
+    private fun playLiked(pkg: String) {
         try {
             app.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://music.youtube.com/watch?list=LM")).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Throwable) { Log.e(TAG, "play liked failed", e) }
