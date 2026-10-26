@@ -96,6 +96,9 @@ object Actions {
                 }
             }
             override fun hasMusicApp() = musicApps.any { app.packageManager.getLaunchIntentForPackage(it) != null }
+            override fun musicToggles() = otherSessions().firstOrNull { it.packageName in musicApps }?.playbackState?.customActions?.map { it.name.toString() } ?: emptyList()
+            override fun musicToggle(kind: String, then: (String) -> Unit) = toggleNow(kind, then)
+            override fun musicRadio() = radioNow()
             override fun searchMusic() = launchWrite({ q -> searchAndPlay(q); true }, null)
             override fun isMusicApp(pkg: String) = pkg in musicApps
             override fun playMusic(liked: Boolean) = playQuickPicks(liked)
@@ -263,6 +266,8 @@ object Actions {
         handler.postDelayed({ Log.d("BROWSE", "queue: " + (c.queue ?: emptyList()).joinToString(" / ") { it.description.title.toString() }) }, 5000)
     }
 
+    fun toggleDev(kind: String) = handler.post { toggleNow(kind) { Log.d("BROWSE", "toggle -> $it") } }
+    fun radioDev() = handler.post { radioNow() }
     fun searchDev(q: String) { handler.post { searchAndPlay(q) } }
 
     fun playMusicDev() { handler.post { playQuickPicks() } }
@@ -602,17 +607,40 @@ object Actions {
         handler.postDelayed(poll, 1000)
     }
 
+    private fun toggleNow(kind: String, then: (String) -> Unit) {
+                val c = otherSessions().firstOrNull { it.packageName in musicApps } ?: return
+                val word = if (kind == "shuffle") "Shuffle" else "Repeat"
+                val id = c.playbackState?.customActions?.firstOrNull { it.name.startsWith(word) }?.action ?: return
+                c.transportControls.sendCustomAction(id, null)
+                val before = c.playbackState?.customActions?.firstOrNull { it.name.startsWith(word) }?.name?.toString()
+        var tries = 0
+        val wait = object : Runnable {   // the app renames the switch a moment after the press: wait for the new name (3 s at most)
+            override fun run() {
+                val now = c.playbackState?.customActions?.firstOrNull { it.name.startsWith(word) }?.name?.toString() ?: ""
+                if (now != before || ++tries >= 10) then(now) else handler.postDelayed(this, 300)
+            }
+        }
+        handler.postDelayed(wait, 300)
+            }
+    private fun radioNow() {
+                val md = otherSessions().firstOrNull { it.packageName in musicApps }?.metadata ?: return
+                val q = listOf(md.getString(android.media.MediaMetadata.METADATA_KEY_TITLE), md.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST)).filter { !it.isNullOrBlank() }.joinToString(" ")
+                Thread({ val hit = lookupSong(q); handler.post { if (hit == null) { say(Menu.NO_SONG, false); return@post }; playQuickPicks(false, "https://music.youtube.com/watch?v=${hit.videoId}&list=RDAMVM${hit.videoId}") } }, "music-radio").start()
+            }
+
+    private fun lookupSong(query: String): com.faka.invisible.logickit.MusicSearch.Hit? = try {
+        val c = java.net.URL(com.faka.invisible.logickit.MusicSearch.URL).openConnection() as java.net.HttpURLConnection
+        c.requestMethod = "POST"; c.connectTimeout = 8000; c.readTimeout = 8000; c.doOutput = true
+        c.setRequestProperty("Content-Type", "application/json"); c.setRequestProperty("Origin", "https://music.youtube.com")
+        c.outputStream.use { it.write(com.faka.invisible.logickit.MusicSearch.body(query).toByteArray()) }
+        com.faka.invisible.logickit.MusicSearch.first(c.inputStream.bufferedReader().use { it.readText() })
+    } catch (e: Throwable) { Log.e(TAG, "music search failed", e); null }
+
     /** Look the typed text up on the web (off the main thread), say which song was found, play it. */
     private fun searchAndPlay(query: String) {
         val w = narrator.waiting()
         Thread({
-            val hit = try {
-                val c = java.net.URL(com.faka.invisible.logickit.MusicSearch.URL).openConnection() as java.net.HttpURLConnection
-                c.requestMethod = "POST"; c.connectTimeout = 8000; c.readTimeout = 8000; c.doOutput = true
-                c.setRequestProperty("Content-Type", "application/json"); c.setRequestProperty("Origin", "https://music.youtube.com")
-                c.outputStream.use { it.write(com.faka.invisible.logickit.MusicSearch.body(query).toByteArray()) }
-                com.faka.invisible.logickit.MusicSearch.first(c.inputStream.bufferedReader().use { it.readText() })
-            } catch (e: Throwable) { Log.e(TAG, "music search failed", e); null }
+            val hit = lookupSong(query)
             handler.post {
                 w()
                 if (hit == null) { say(Menu.NO_SONG, false); gameEnded(); return@post }

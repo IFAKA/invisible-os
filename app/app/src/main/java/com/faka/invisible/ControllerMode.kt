@@ -59,6 +59,9 @@ interface ModeOutput {
     fun aiReplies(m: Msg): List<Task> = emptyList()   // the cached sentences, empty if not ready
     fun nowPlaying(): String? = null   // "Title, Artist" of the music app, null if none
     fun hasMusicApp(): Boolean = false  // a music app is installed, so Music can start it with no song loaded
+    fun musicToggles(): List<String> = emptyList()  // the music app's switches now, e.g. "Shuffle off", "Repeat off"
+    fun musicToggle(kind: String, then: (String) -> Unit) {}   // press "shuffle" or "repeat"; then() gets the switch's new name
+    fun musicRadio() {}                            // start a radio from the song that plays now
     fun searchMusic() {}                           // the Write keyboard; the text is looked up on the web, said back and played in the music app
     fun isMusicApp(pkg: String): Boolean = false   // YT Music (also the patched one): its page gets Play options
     fun playMusic(liked: Boolean = false) {}                 // open the music app and press Play all on its home (Quick picks); if that fails, start Liked music
@@ -674,10 +677,16 @@ class ControllerMode(
 
     private var musicBack = Screen.HUB
 
-    /** The Music page: what is playing, play something. Pause, next and previous are the earbud's own job. */
+    /** The Music page: what is playing, shuffle, repeat, radio from this song, play something (6 at most). Pause, next and previous are the earbud's own job. */
     private fun musicOptions(): List<Opt> {
         val song = out.nowPlaying()
-        val ctl = if (song == null) emptyList() else listOf(Opt("music:now", Menu.WHATS_PLAYING) { pick("music:now"); outro(Phrase.content(song, out.songLang(song))) })
+        val sw = out.musicToggles()
+        fun toggle(kind: String, word: String) = sw.firstOrNull { it.startsWith(word) }?.let { name ->
+            Opt("music:$kind", Phrase.content(name, "en")) { pick("music:$kind"); out.musicToggle(kind) { now -> outro(Phrase.content(now, "en")) } } }
+        val ctl = if (song == null) emptyList() else listOfNotNull(
+            Opt("music:now", Menu.WHATS_PLAYING) { pick("music:now"); outro(Phrase.content(song, out.songLang(song))) },
+            toggle("shuffle", "Shuffle"), toggle("repeat", "Repeat"),
+            Opt("music:radio", Menu.RADIO) { pick("music:radio"); out.musicRadio(); outro(Menu.RADIO) })
         return ctl + listOf(Opt("music:play", Menu.PLAY_SOMETHING) { pick("music:play"); show(Screen.MUSIC_PLAY) }, Opt("music:back", Menu.BACK) { pick("music:back"); show(musicBack) })
     }
 

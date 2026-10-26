@@ -141,6 +141,7 @@ object Menu {
     val MUSIC = f("Music")
     val WHATS_PLAYING = f("What's playing")
     val PLAY_SOMETHING = f("Play something")
+    val RADIO = f("Radio from this song")
     val SEARCH_SONG = f("Search a song")
     val NO_SONG = f("No song found")
     val PLAY_MIX = f("Play my mix")

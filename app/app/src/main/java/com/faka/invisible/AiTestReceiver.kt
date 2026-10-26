@@ -19,6 +19,8 @@ class AiTestReceiver : BroadcastReceiver() {
         if (i.hasExtra("browse")) { Actions.browseMusicDev(); return }
         i.getStringExtra("ctl")?.let { Actions.ctlDev(it); return }
         i.getStringExtra("msearch")?.let { Actions.searchDev(it); return }   // dev: type a song search without the keyboard
+        i.getStringExtra("toggle")?.let { Actions.toggleDev(it); return }
+        if (i.hasExtra("radio")) { Actions.radioDev(); return }
         if (i.hasExtra("write")) { Actions.startWriteDev(); return }
         val pr = goAsync(); val ctx = c.applicationContext
         Thread {
