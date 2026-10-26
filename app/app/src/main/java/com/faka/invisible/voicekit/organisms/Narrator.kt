@@ -23,6 +23,7 @@ class Narrator(private val speech: SpeechPort, private val tones: TonePort, priv
     /** Two words as one stereo sound. Both clips are made first; the sentence being spoken is never cut. */
     fun pair(left: String, right: String?) {
         hush(); val me = pairSeq
+        android.util.Log.d("Invisible", "PAIR ask $left | $right")
         var pending = if (right == null) 1 else 2
         val one = { if (--pending == 0) playPair(left, right, me) }
         speech.words.ensure(left, one); right?.let { speech.words.ensure(it, one) }
@@ -35,6 +36,7 @@ class Narrator(private val speech: SpeechPort, private val tones: TonePort, priv
     fun prefetch(words: List<String>) { words.forEach { speech.words.ensure(it) {} } }
 
     private fun playPair(left: String, right: String?, me: Int) {
+        android.util.Log.d("Invisible", "PAIR play $left | $right me=$me seq=$pairSeq speaking=${speech.speaking}")
         if (me != pairSeq) return
         if (speech.speaking) { handler.postDelayed({ playPair(left, right, me) }, 300); return }   // the sentence first
         val (pcm, rate) = speech.words.stereo(left, right, Pacing.PAIR_GAP_MS, swapEars()) ?: run { say(Phrase.content(left)); return }
