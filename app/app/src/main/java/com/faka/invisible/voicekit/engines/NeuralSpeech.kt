@@ -158,6 +158,7 @@ class NeuralSpeech(
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
             .setAudioFormat(AudioFormat.Builder().setSampleRate(sr).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_FLOAT).build())
             .setBufferSizeInBytes(maxOf(min, sr * 4 / 2)).setTransferMode(AudioTrack.MODE_STREAM).build()   // about 0.5 s of buffer
+            .also { if (android.os.Build.VERSION.SDK_INT >= 31) it.setStartThresholdInFrames(sr / 50) }   // start after 20 ms: a short word (less than the buffer) used to wait for more data and was never heard
     }
 
     /** Non-blocking writes in a loop, so a cut (pause + flush from another thread) can never leave this thread stuck. */
@@ -177,6 +178,7 @@ class NeuralSpeech(
     /** Wait until the last sample was played, then free the track. */
     private fun drain(u: Utt) {
         val t = trk ?: return
+        try { t.stop() } catch (e: Exception) {}   // streaming: plays out what is queued, so a short word cannot stay unplayed
         val end = System.currentTimeMillis() + 15_000
         while (!stale(u) && t.playbackHeadPosition < frames && System.currentTimeMillis() < end) Thread.sleep(15)
         if (!stale(u) && t.playbackHeadPosition < frames) Log.w(TAG, "drain timed out: head=${t.playbackHeadPosition} written=$frames state=${t.playState}")
