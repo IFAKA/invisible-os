@@ -629,9 +629,13 @@ class ControllerMode(
         show(Screen.FIND)
     }
 
+    /** A range is read in Spanish when one of its end names is a Spanish app name (Camera to Mercado Pago). */
+    private fun rangeLang(label: String): String? =
+        if (homeLeaves.any { !it.pkg.startsWith("hub:") && NameLang.voice(it.pkg, it.label) != null && label.contains(it.label.substringBefore(",")) }) "es" else null
+
     private fun findOptions(): List<Opt> = (findStack.lastOrNull()?.parts ?: emptyList()).map { p ->
         val sub = p.sub
-        if (sub != null) Opt("find:range", Phrase.content(p.label)) { pick("find:step", p.label); findStack.add(sub); show(Screen.FIND) }
+        if (sub != null) Opt("find:range", Phrase.content(p.label, rangeLang(p.label))) { pick("find:step", p.label); findStack.add(sub); show(Screen.FIND) }
         else leafOption(p.leaf!!).let { o ->
             Opt(o.key, o.label) { out.choice(screen.name, code, "find:${findStack.size}", "", -1); o.run() }   // then exactly what the tree does (same pick intent)
         }
