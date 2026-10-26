@@ -58,6 +58,8 @@ interface ModeOutput {
     fun aiTasks(m: Msg): List<Task> = emptyList()     // clean to-do items the message asks for (cached, empty if none or not ready)
     fun aiReplies(m: Msg): List<Task> = emptyList()   // the cached sentences, empty if not ready
     fun nowPlaying(): String? = null   // "Title, Artist" of the music app, null if none
+    fun hasMusicApp(): Boolean = false  // a music app is installed, so Music can start it with no song loaded
+    fun playLikedMusic() {}            // open the music app on the Liked music list and start it (the Play All of that list)
     fun dndAllowed(): Boolean
     fun lastTimer(): Int             // minutes, 0 = none yet
     fun setLastTimer(minutes: Int)
@@ -423,7 +425,10 @@ class ControllerMode(
                 val n = unread().size
                 for (k in settings.hub) when (k) {
                     "messages" -> if (n > 0) all["hub:messages"] = Opt("hub:messages", Menu.messages(n)) { readUnread("hub:messages") }
-                    "music" -> out.nowPlaying()?.let { song -> all["hub:music"] = Opt("hub:music", Menu.MUSIC) { pick("hub:music"); outro(Phrase.content(song, out.songLang(song))) } }   // only when the music app has a song
+                    "music" -> if (out.nowPlaying() != null || out.hasMusicApp()) all["hub:music"] = Opt("hub:music", Menu.MUSIC) { pick("hub:music")
+                        val song = out.nowPlaying()
+                        if (song != null) outro(Phrase.content(song, out.songLang(song))) else { out.playLikedMusic(); outro(Menu.PLAYING_MUSIC) }   // a song is loaded: read it; none: start the Liked music list
+                    }
                     "tasks" -> out.tasks().let { ts -> all["hub:tasks"] = Opt("hub:tasks", Menu.tasks(ts.size)) {
                         pick("hub:tasks"); taskList = ts; taskIdx = 0
                         when {

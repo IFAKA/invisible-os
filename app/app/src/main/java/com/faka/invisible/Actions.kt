@@ -92,6 +92,8 @@ object Actions {
                     if (title.isNullOrBlank()) null else if (artist.isNullOrBlank()) title else "$title, $artist"
                 }
             }
+            override fun hasMusicApp() = musicApps.any { app.packageManager.getLaunchIntentForPackage(it) != null }
+            override fun playLikedMusic() = playLiked()
             override fun songLang(text: String) = ControllerNotificationListener.voiceFor(text)
             override fun pauseMusic() = pauseMusicNow()
             override fun resumeMusic() = resumeMusicNow()
@@ -475,6 +477,15 @@ object Actions {
             .getActiveSessions(ComponentName(app, ControllerNotificationListener::class.java))
             .filter { it.packageName != app.packageName }
     } catch (e: SecurityException) { emptyList() }
+
+    private val musicApps = listOf("app.morphe.android.apps.youtube.music", "com.google.android.apps.youtube.music")
+
+    private fun playLiked() {
+        val pkg = musicApps.firstOrNull { app.packageManager.getLaunchIntentForPackage(it) != null } ?: run { Log.d(TAG, "MODE no music app"); return }
+        try {
+            app.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://music.youtube.com/watch?list=LM")).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: Throwable) { Log.e(TAG, "play liked failed", e) }
+    }
 
     private fun pauseMusicNow(): Boolean {
         val c = otherSessions().firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }

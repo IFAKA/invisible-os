@@ -138,6 +138,7 @@ object Menu {
     val MUTE_APP = f("Mute this app")
     val UNMUTE_ALL = f("Unmute all apps")
     val MUSIC = f("Music")
+    val PLAYING_MUSIC = f("Playing your liked music")
     fun tasks(n: Int) = f(if (n == 0) "Tasks, none" else "Tasks, $n")
     val TIMER = f("Timer")
     val TODAY = f("Today")
