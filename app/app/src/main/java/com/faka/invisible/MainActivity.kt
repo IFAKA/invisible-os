@@ -21,6 +21,8 @@ import android.widget.Toast
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
+import com.faka.invisible.logickit.NameFinder
+import com.faka.invisible.logickit.TreeSearch
 
 /** Setup checklist, then the settings of the launcher (the menu you hear). Plain views, rebuilt on every change. */
 class MainActivity : Activity() {
@@ -162,6 +164,7 @@ class MainActivity : Activity() {
         if (built.first != treeKey()) warmTree()   // an edit was made: the old tree stays on screen until the new one is ready
         val root = built.second
         card("What you hear", "The tree the voice walks, in its order. Tap a group to open it. Tap an app to pin, move or hide it.") {
+            addView(treeSearchBox(root), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = k.dp(8) })
             fun toggle(set: Set<String>, k: String) = if (k in set) set - k else set + k
             fun actions(a: AppLeaf) {
                 val pinned = a.pkg in s.pinned
@@ -212,6 +215,43 @@ class MainActivity : Activity() {
     }
 
     private var openGroups: Set<String> = emptySet()
+    @Volatile private var treeFind: NameFinder.Node? = null   // the Find lists, built after the tree (slow on a phone)
+    private var treeQuery = ""
+    private val searchHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var searchRun: Runnable? = null
+    private var searchShow: (() -> Unit)? = null
+
+    /** A name box with the places of the matches below it. The list is redrawn in place (not [render]) so the keyboard stays; it waits 300 ms after the last key. */
+    private fun treeSearchBox(root: TreeNode): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        val box = k.input("Search an app or option, e.g. volume").apply {
+            minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_CLASS_TEXT; setText(treeQuery)
+        }
+        val out = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
+        fun show() {
+            out.removeAllViews()
+            if (treeQuery.isBlank()) return
+            val hits = TreeSearch.search(root, treeFind, treeQuery)
+            if (hits.isEmpty()) { out.addView(k.text("Nothing found", 14f, Ui.soft)); return }
+            hits.forEach { h ->
+                out.addView(k.text(h.app.label, 16f, bold = true), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
+                out.addView(k.text("Click: " + h.tree, 14f, Ui.soft))
+                out.addView(k.text("Hold on home: " + (h.find ?: "working it out\u2026"), 14f, Ui.soft))
+            }
+        }
+        box.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(e: android.text.Editable?) {
+                treeQuery = e?.toString().orEmpty()
+                searchRun?.let { searchHandler.removeCallbacks(it) }
+                searchRun = Runnable { show() }.also { searchHandler.postDelayed(it, 300) }
+            }
+        })
+        addView(box); addView(out)
+        searchShow = ::show
+        show()
+    }
     @Volatile private var treeAll: List<AppLeaf>? = null
     @Volatile private var treeBuilt: Pair<List<Any>, TreeNode>? = null
     private val treeBusy = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -225,10 +265,14 @@ class MainActivity : Activity() {
                 val t0 = System.currentTimeMillis()
                 val all = treeAll ?: TreeLeaves.all(this, snap).also { treeAll = it }
                 val t1 = System.currentTimeMillis()
-                treeBuilt = key to TreeLeaves.tree(TreeLeaves.edit(all, snap))
+                val edited = TreeLeaves.edit(all, snap)
+                treeBuilt = key to TreeLeaves.tree(edited)
                 android.util.Log.d("TREETIME", "leaves ${t1 - t0} ms (${all.size}), tree ${System.currentTimeMillis() - t1} ms")
             } finally { treeBusy.set(false) }
             runOnUiThread { if (page == Page.MENU && !isDestroyed) render() }
+            // Find's plan is slower than the tree: the box shows the tree path first and the Find path when this is done
+            try { treeFind = NameFinder.plan(TreeLeaves.edit(treeAll ?: return@Thread, snap)) } catch (e: Throwable) { android.util.Log.e("TREETIME", "find plan", e); return@Thread }
+            runOnUiThread { if (page == Page.MENU && !isDestroyed) searchShow?.invoke() }
         }.start()
     }
 
