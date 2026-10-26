@@ -1,6 +1,6 @@
 # Invisible OS: control your Android phone with one earbud button, screen off
 
-**Invisible OS** is an open-source Android app. It turns the single button on any wired or Bluetooth earbud or headset into a hands-free, eyes-free controller. Reply to WhatsApp messages, set a timer, change volume and hear your status, all with the screen off and the phone in your pocket.
+**Invisible OS** is a small operating system for your ears, built as an open-source Android app: a menu, apps, games and a keyboard you use with no screen. It turns the single button on any wired or Bluetooth earbud or headset into a hands-free, eyes-free controller. Reply to WhatsApp messages, set a timer, change volume and hear your status, all with the screen off and the phone in your pocket.
 
 It uses **auto-scan** (also called single-switch scanning, the method used in assistive technology): the phone speaks the options one by one, and you click when you hear the one you want. One button is enough. No microphone, no voice recognition, no cloud.
 
