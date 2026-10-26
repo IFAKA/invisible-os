@@ -692,7 +692,8 @@ class ControllerMode(
             toggle("shuffle", "Shuffle"), toggle("repeat", "Repeat"),
             Opt("music:radio", Menu.RADIO) { pick("music:radio"); out.musicRadio(); outro(Menu.RADIO) })
         val volume = Opt("music:volume", Menu.VOLUME) { pick("music:volume"); show(Screen.VOLUME_DIAL) }
-        return listOf(volume) + ctl + listOf(Opt("music:play", Menu.PLAY_SOMETHING) { pick("music:play"); show(Screen.MUSIC_PLAY) })
+        val play = Opt("music:play", Menu.PLAY_SOMETHING) { pick("music:play"); show(Screen.MUSIC_PLAY) }
+        return if (song == null) listOf(play, volume) else listOf(volume) + ctl + play   // nothing playing: you want music first; playing: you hear it and want the volume first
     }
 
     private fun musicPlayOptions(): List<Opt> = listOf(
