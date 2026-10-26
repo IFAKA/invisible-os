@@ -35,6 +35,13 @@ object TreeLeaves {
 
     const val APP_RANK = 1000
 
+    /** Dev tool (`am broadcast ... --ez tree true`, logcat tag TREEDUMP): the home tree exactly as the voice walks it, built from this phone's apps and settings. */
+    fun dump(c: Context): String {
+        val s = SettingsStore.load(c.getSharedPreferences("invisible", Context.MODE_PRIVATE))
+        fun d(n: TreeNode, ind: String): String = n.children.joinToString("") { k -> ind + k.label + (if (k.isApp) "" else " (${k.children.size})") + "\n" + d(k, "$ind  ") }
+        return d(tree(edit(all(c, s), s)), "")
+    }
+
     /** Set once at start (Actions.init): where the last levels are kept, so the next tree search starts from them. */
     @Volatile var store: android.content.SharedPreferences? = null
 

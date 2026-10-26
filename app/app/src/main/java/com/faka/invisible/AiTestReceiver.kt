@@ -13,6 +13,7 @@ class AiTestReceiver : BroadcastReceiver() {
         i.getStringExtra("neural")?.let { com.faka.invisible.voicekit.VoiceKit.neural.bench(it, i.getStringExtra("text") ?: "This is a test of the voice on this phone.", i.getIntExtra("rounds", 2), "neural_$it.wav", i.getFloatExtra("speed", 0f)); return }
         i.getStringExtra("ttsbench")?.let { com.faka.invisible.voicekit.TtsBench.run(c, it.ifBlank { null }, i.getStringExtra("lang") ?: "en", i.getStringExtra("text") ?: "This is a test of the voice on this phone."); return }
         if (i.hasExtra("swap")) { Actions.setSwapEars(i.getBooleanExtra("swap", true)); return }
+        if (i.hasExtra("tree")) { val ctx0 = c.applicationContext; Thread { Log.d("TREEDUMP", "\n" + TreeLeaves.dump(ctx0)) }.start(); return }
         if (i.hasExtra("write")) { Actions.startWriteDev(); return }
         val pr = goAsync(); val ctx = c.applicationContext
         Thread {
