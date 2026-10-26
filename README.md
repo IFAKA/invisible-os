@@ -56,6 +56,7 @@ On some phones (Xiaomi / HyperOS and others) also allow the app to run in the ba
 
 - [UX-DESIGN.md](UX-DESIGN.md): goals, research on single-switch scanning, gesture cost model, design decisions.
 - [SOUND-DESIGN.md](SOUND-DESIGN.md): earcon rules and the full sound set (listen in `sound/wav/`).
+- [sdk/GUIDE.md](sdk/GUIDE.md): make your own program for the OS (starter project, tests, kit check, how to hand it in).
 - [GAME-TELL.md](GAME-TELL.md): the Duel audio game.
 - [NEW-MESSAGE-IDEA.md](NEW-MESSAGE-IDEA.md): researched idea for starting a new chat with the screen off (not built).
 

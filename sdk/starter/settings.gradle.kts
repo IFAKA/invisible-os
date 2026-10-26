@@ -6,8 +6,8 @@ pluginManagement {
 dependencyResolutionManagement {
     repositories {
         // Where the published :oskit lives. Inside our repo this is app/build/sdk-repo (made by `cd app && ./gradlew :oskit:publishAllPublicationsToSdkRepoRepository`).
-        // Outside, give your own folder with -PsdkRepo=PATH, or publish to mavenLocal.
-        val sdkRepo = providers.gradleProperty("sdkRepo").orNull ?: "../../app/build/sdk-repo"
+        // In the SDK zip we send, it is the folder sdk-repo next to this one. Or give your own folder with -PsdkRepo=PATH, or use mavenLocal.
+        val sdkRepo = providers.gradleProperty("sdkRepo").orNull ?: if (file("../sdk-repo").exists()) "../sdk-repo" else "../../app/build/sdk-repo"
         maven { url = uri(file(sdkRepo)) }
         mavenLocal()
         google(); mavenCentral()
