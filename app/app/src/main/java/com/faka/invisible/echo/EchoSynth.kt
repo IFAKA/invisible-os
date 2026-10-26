@@ -8,7 +8,7 @@ import kotlin.math.sin
 object EchoSynth {
     const val SR = 44100
 
-    private fun tone(freq: Double, ms: Int, decayMs: Double, overtone: Double = 0.0, attackMs: Double = 1.0): FloatArray {
+    internal fun tone(freq: Double, ms: Int, decayMs: Double, overtone: Double = 0.0, attackMs: Double = 1.0): FloatArray {
         val n = SR * ms / 1000
         return FloatArray(n) { i ->
             val t = i.toDouble() / SR
@@ -16,7 +16,7 @@ object EchoSynth {
             ((sin(2 * PI * freq * t) + overtone * sin(2 * PI * freq * 2.76 * t)) * env / (1 + overtone)).toFloat()
         }
     }
-    private fun then(a: FloatArray, b: FloatArray, gapMs: Int): FloatArray {
+    internal fun then(a: FloatArray, b: FloatArray, gapMs: Int): FloatArray {
         val off = SR * gapMs / 1000
         val out = FloatArray(maxOf(a.size, off + b.size))
         a.copyInto(out); for (i in b.indices) out[off + i] += b[i]

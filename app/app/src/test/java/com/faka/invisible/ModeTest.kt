@@ -55,6 +55,7 @@ class ModeTest {
             override fun startSum() { log.add("startSum") }
             override fun startGame(coach: Boolean) { log.add("startGame $coach") }
             override fun startEcho() { log.add("startEcho") }
+            override fun startGuard() { log.add("startGuard") }
             override fun startCompass() { log.add("startCompass") }
             override fun runAction(name: String) { log.add("run $name"); speech() }
             override fun forward(what: Forward) { log.add("fwd $what") }
@@ -794,8 +795,8 @@ class ModeTest {
     }
 
     @Test fun gamesListsDuelEchoHowToPlayAndBack() {
-        val r = Rig(); r.wake(); r.pick("Games"); r.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Duel", "say Echo", "say How to play", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
+        val r = Rig(); r.wake(); r.pick("Games"); r.advance(400 + 1300 * 4 + 100)
+        assertEquals(listOf("say Duel", "say Echo", "say Guard", "say How to play", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
     }
 
     @Test fun pickingDuelLeavesTheMenuForTheGame() {
@@ -811,6 +812,7 @@ class ModeTest {
     @Test fun gamesLogsItsIntentsAndWriteStarts() {
         val r = Rig(); r.wake(); r.pick("Games"); r.pick("Duel"); assertTrue(r.log.any { it.endsWith("games:duel") }); assertTrue(r.has("startGame false"))
         val e = Rig(); e.wake(); e.pick("Games"); e.pick("Echo"); assertTrue(e.has("startEcho"))
+        val gd = Rig(); gd.wake(); gd.pick("Games"); gd.pick("Guard"); assertTrue(gd.has("startGuard"))
         val h = Rig(); h.wake(); h.pick("Games"); h.pick("How to play"); assertTrue(h.log.any { it.endsWith("games:howto") }); assertTrue(h.has("startGame true"))
         val w = Rig(); w.m.settings = LauncherSettings(hub = listOf("write")); w.wake(); w.pick("Write")
         assertFalse(w.m.active); assertTrue(w.has("startWrite")); assertTrue(w.log.any { it.endsWith("hub:write") })

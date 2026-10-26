@@ -10,6 +10,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -22,6 +23,8 @@ import com.faka.invisible.compass.CompassAndroid
 import com.faka.invisible.compass.CompassHost
 import com.faka.invisible.echo.EchoAndroid
 import com.faka.invisible.echo.EchoHost
+import com.faka.invisible.guard.GuardAndroid
+import com.faka.invisible.guard.GuardHost
 import com.faka.invisible.tell.TellAndroid
 import com.faka.invisible.voicekit.*
 import com.faka.invisible.tell.TellHost
@@ -147,6 +150,7 @@ object Actions {
             override fun setLastTimer(minutes: Int) { prefs().edit().putInt("lastTimer", minutes).apply() }
             override fun startGame(coach: Boolean) = startDuel(coach)
             override fun startEcho() = startEchoGame()
+            override fun startGuard() = startGuardGame()
             override fun startCompass() = startCompassProgram()
             override fun startWrite() = launchWrite()
             override fun startSum() = launchSum()
@@ -199,13 +203,14 @@ object Actions {
         taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList(), onAdd = { taskMemory.record(it.text, it.lang) }) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
         VoiceKit.init(app, handler, { speechRate() }, object : SpeechListener {
             override fun started() { mode.onSpeechStarted() }
-            override fun ended() { mode.onSpeechDone(); duel?.takeIf { it.active }?.speechDone(); echo?.takeIf { it.active }?.speechDone() }
+            override fun ended() { mode.onSpeechDone(); duel?.takeIf { it.active }?.speechDone(); echo?.takeIf { it.active }?.speechDone(); guard?.takeIf { it.active }?.speechDone() }
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
     }
 
     private var duel: TellAndroid? = null
     private var echo: EchoAndroid? = null
+    private var guard: GuardAndroid? = null
     private var compass: CompassAndroid? = null
 
     // ---- Write: the stereo-pair keyboard (Typing.kt). The OS gives it the raw button and plays the close sound when it ends. ----
@@ -390,6 +395,28 @@ object Actions {
         }, onEnded = { echo = null; gameEnded() }).also { it.start() }
     }
 
+    private fun startGuardGame() {
+        guard?.stop()
+        guard = GuardAndroid(prefs(), handler, object : GuardHost {
+            override fun speak(text: Phrase) = say(text, false, slow = false)
+            override fun stopSpeech() = narrator.stopSpeech()
+            override fun pauseMusic() { pauseMusicNow() }
+            override fun resumeMusic() = resumeMusicNow()
+            override fun log(line: String) { Log.d(TAG, line); EventLog.add(line) }
+            override fun outputDevice() = outputDeviceKey()
+        }, onEnded = { guard = null; gameEnded() }).also { it.start() }
+    }
+
+    /** Which sound output is in use (earbuds, wired, phone speaker): the click delay is saved per output. */
+    private fun outputDeviceKey(): String {
+        val am = app.getSystemService(AudioManager::class.java)
+        val outs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        val wanted = listOf(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLE_HEADSET, AudioDeviceInfo.TYPE_BLE_BROADCAST,
+            AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES)
+        val d = wanted.firstNotNullOfOrNull { t -> outs.firstOrNull { it.type == t } }
+        return if (d == null) "speaker" else "${d.type}:${d.productName}"
+    }
+
     private fun startDuel(coach: Boolean) {
         duel?.stop()
         duel = TellAndroid(prefs(), handler, object : TellHost {
@@ -403,7 +430,7 @@ object Actions {
 
     /** What the button feeds: the programs that own the raw button, the menu, and the menu's own tones. */
     private val buttonTarget = object : ButtonTarget {
-        override fun raw(): RawButton? = duel?.takeIf { it.active } ?: echo?.takeIf { it.active } ?: compass?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
+        override fun raw(): RawButton? = duel?.takeIf { it.active } ?: echo?.takeIf { it.active } ?: guard?.takeIf { it.active } ?: compass?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
         override val menuActive get() = mode.active
         override fun gesture(g: Gesture, durationMs: Long) {
             EventLog.add("${g.name.lowercase()}  ${durationMs}ms")

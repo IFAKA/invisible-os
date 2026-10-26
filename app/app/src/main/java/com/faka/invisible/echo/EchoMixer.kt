@@ -14,6 +14,8 @@ class EchoMixer {
     /** Frames already handed to the audio output. */
     fun nowFrame(): Long = frames
     fun active(): Int = voices.size
+    /** Drop every sound not yet played (a program skips ahead). */
+    fun clear() { voices.clear() }
 
     /** @param pan -1 hard left, 0 centre, 1 hard right. @param atFrame absolute (from [nowFrame]); in the past = now. */
     fun play(src: FloatArray, atFrame: Long, pan: Double = 0.0, gain: Double = 0.5) {
