@@ -96,6 +96,7 @@ object Actions {
                 }
             }
             override fun hasMusicApp() = musicApps.any { app.packageManager.getLaunchIntentForPackage(it) != null }
+            override fun searchMusic() = launchWrite({ q -> searchAndPlay(q); true }, null)
             override fun isMusicApp(pkg: String) = pkg in musicApps
             override fun playMusic(liked: Boolean) = playQuickPicks(liked)
             override fun songLang(text: String) = ControllerNotificationListener.voiceFor(text)
@@ -261,6 +262,8 @@ object Actions {
         else c.transportControls.playFromSearch(cmd.removePrefix("search:"), null)
         handler.postDelayed({ Log.d("BROWSE", "queue: " + (c.queue ?: emptyList()).joinToString(" / ") { it.description.title.toString() }) }, 5000)
     }
+
+    fun searchDev(q: String) { handler.post { searchAndPlay(q) } }
 
     fun playMusicDev() { handler.post { playQuickPicks() } }
     fun startWriteDev() { handler.post { launchWrite() } }
@@ -573,8 +576,8 @@ object Actions {
     private val musicApps = listOf("app.morphe.android.apps.youtube.music", "com.google.android.apps.youtube.music")
 
     /** Start music with no screen: if the music app has a session, ask it to play something (its own mix of your taste); else open it by link and ask once it has a session. */
-    private fun playQuickPicks(liked: Boolean = false) {
-        fun ask(c: android.media.session.MediaController) = if (liked) c.transportControls.playFromUri(android.net.Uri.parse(LIKED_LINK), null) else c.transportControls.playFromSearch("", null)
+    private fun playQuickPicks(liked: Boolean = false, link: String? = null) {
+        fun ask(c: android.media.session.MediaController) = (link ?: if (liked) LIKED_LINK else null)?.let { c.transportControls.playFromUri(android.net.Uri.parse(it), null) } ?: c.transportControls.playFromSearch("", null)
         otherSessions().firstOrNull { it.packageName in musicApps }?.let { ask(it); return }
         val pkg = musicApps.firstOrNull { app.packageManager.getLaunchIntentForPackage(it) != null } ?: run { Log.d(TAG, "MODE no music app"); return }
         // no session: a media-play key (like the earbud) makes the system start the app's playback service, which the memory manager keeps alive; the link only opens an activity, which it kills with the screen off
@@ -586,16 +589,35 @@ object Actions {
             override fun run() {
                 val c = otherSessions().firstOrNull { it.packageName in musicApps }
                 if (c != null) { Log.d(TAG, "MODE music: session found, play"); ask(c); return }
-                if (++tries == 12) { Log.d(TAG, "MODE music: no session after key, open by link"); playLiked(pkg) }
-                if (tries < 40) handler.postDelayed(this, 500)
+                if (++tries in listOf(12, 44, 76)) { Log.d(TAG, "MODE music: no session, open by link ($tries)"); playLiked(pkg, link ?: LIKED_LINK) }   // the first open sometimes leaves the session asleep: try again
+                if (tries < 110) handler.postDelayed(this, 500)
             }
         }
         handler.postDelayed(poll, 1000)
     }
 
-    private fun playLiked(pkg: String) {
+    /** Look the typed text up on the web (off the main thread), say which song was found, play it. */
+    private fun searchAndPlay(query: String) {
+        Thread({
+            val hit = try {
+                val c = java.net.URL(com.faka.invisible.logickit.MusicSearch.URL).openConnection() as java.net.HttpURLConnection
+                c.requestMethod = "POST"; c.connectTimeout = 8000; c.readTimeout = 8000; c.doOutput = true
+                c.setRequestProperty("Content-Type", "application/json"); c.setRequestProperty("Origin", "https://music.youtube.com")
+                c.outputStream.use { it.write(com.faka.invisible.logickit.MusicSearch.body(query).toByteArray()) }
+                com.faka.invisible.logickit.MusicSearch.first(c.inputStream.bufferedReader().use { it.readText() })
+            } catch (e: Throwable) { Log.e(TAG, "music search failed", e); null }
+            handler.post {
+                if (hit == null) { say(Menu.NO_SONG, false); gameEnded(); return@post }
+                Log.d(TAG, "MODE music search '$query' -> ${hit.title} / ${hit.artist}")
+                say(Phrase.content(listOf(hit.title, hit.artist).filter { it.isNotBlank() }.joinToString(", "), ControllerNotificationListener.voiceFor(hit.title + " " + hit.artist)), false)
+                playQuickPicks(false, "https://music.youtube.com/watch?v=${hit.videoId}")
+            }
+        }, "music-search").start()
+    }
+
+    private fun playLiked(pkg: String, link: String) {
         try {
-            app.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(LIKED_LINK)).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            app.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Throwable) { Log.e(TAG, "play liked failed", e) }
     }
 

@@ -59,6 +59,7 @@ interface ModeOutput {
     fun aiReplies(m: Msg): List<Task> = emptyList()   // the cached sentences, empty if not ready
     fun nowPlaying(): String? = null   // "Title, Artist" of the music app, null if none
     fun hasMusicApp(): Boolean = false  // a music app is installed, so Music can start it with no song loaded
+    fun searchMusic() {}                           // the Write keyboard; the text is looked up on the web, said back and played in the music app
     fun isMusicApp(pkg: String): Boolean = false   // YT Music (also the patched one): its page gets Play options
     fun playMusic(liked: Boolean = false) {}                 // open the music app and press Play all on its home (Quick picks); if that fails, start Liked music
     fun dndAllowed(): Boolean
@@ -683,6 +684,7 @@ class ControllerMode(
     private fun musicPlayOptions(): List<Opt> = listOf(
         Opt("music:mix", Menu.PLAY_MIX) { pick("music:mix"); out.playMusic(false); outro(Menu.PLAYING_MUSIC) },
         Opt("music:liked", Menu.PLAY_LIKED) { pick("music:liked"); out.playMusic(true); outro(Menu.PLAYING_MUSIC) },
+        Opt("music:search", Menu.SEARCH_SONG) { pick("music:search"); pausedByUs = false; exit(false); out.searchMusic() },
         Opt("music:pback", Menu.BACK) { pick("music:pback"); show(Screen.MUSIC) })
 
     private fun openApp() { val p = notifPkg ?: return; pausedByUs = false; exit(false); out.openApp(p) }
