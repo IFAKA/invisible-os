@@ -47,6 +47,7 @@ class ModeTest {
             override fun tone(kind: Tone) { log.add("tone $kind") }
             override fun startWrite() { log.add("startWrite") }
             override fun startGame(coach: Boolean) { log.add("startGame $coach") }
+            override fun startEcho() { log.add("startEcho") }
             override fun runAction(name: String) { log.add("run $name"); speech() }
             override fun forward(what: Forward) { log.add("fwd $what") }
             override fun log(line: String) {}
@@ -781,7 +782,7 @@ class ModeTest {
 
     @Test fun gamesListsDuelWriteHowToPlayAndBack() {
         val r = Rig(); r.wake(); r.pick("Games"); r.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Duel", "say Write", "say How to play", "say Back"), r.spoken()); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
+        assertEquals(listOf("say Duel", "say Echo", "say Write", "say How to play"), r.spoken()); assertEquals(ControllerMode.Screen.GAMES, r.m.screen)
     }
 
     @Test fun pickingDuelLeavesTheMenuForTheGame() {
@@ -796,6 +797,7 @@ class ModeTest {
 
     @Test fun gamesLogsItsIntentsAndWriteStarts() {
         val r = Rig(); r.wake(); r.pick("Games"); r.pick("Duel"); assertTrue(r.log.any { it.endsWith("games:duel") }); assertTrue(r.has("startGame false"))
+        val e = Rig(); e.wake(); e.pick("Games"); e.pick("Echo"); assertTrue(e.has("startEcho"))
         val h = Rig(); h.wake(); h.pick("Games"); h.pick("How to play"); assertTrue(h.log.any { it.endsWith("games:howto") }); assertTrue(h.has("startGame true"))
         val w = Rig(); w.wake(); w.pick("Games"); w.pick("Write")
         assertFalse(w.m.active); assertTrue(w.has("startWrite")); assertTrue(w.log.any { it.endsWith("games:write") })

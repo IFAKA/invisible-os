@@ -148,6 +148,7 @@ object Menu {
     val TORCH = f("Torch")
     val DND = f("Do not disturb")
     val DUEL = f("Duel")
+    val ECHO = f("Echo")
     val WRITE = f("Write")
     val HOW_TO_PLAY = f("How to play")
     val STOP = f("Stop")
@@ -169,6 +170,16 @@ object Menu {
  * Spoken sentences of the Duel coach. Plain English, at most 7 words per sentence, one idea each.
  * Pacing (how long a person needs to take a sentence in) is in Pacing.kt.
  */
+object EchoVoice {
+    val INTRO = f("Echo. Listen, then copy.")
+    val LEAVE = f("Hold three seconds to leave.")
+    val AGAIN = f("Again.")
+    val LOADING = f("One moment.")
+    fun level(n: Int) = f("Level $n.")
+    fun over(score: Int, best: Int) = f(if (score >= best && score > 0) "Game over. New best, $score." else "Game over. Score $score. Best $best.")
+    val ALL: List<Phrase> = listOf(INTRO, LEAVE, AGAIN, LOADING)
+}
+
 object TellVoice {
     // ---- markers inside a step's lines: a sound instead of a sentence ----
     val CLICK1 = f("<click1>")

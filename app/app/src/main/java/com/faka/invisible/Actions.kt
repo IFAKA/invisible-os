@@ -18,6 +18,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import com.faka.invisible.echo.EchoAndroid
+import com.faka.invisible.echo.EchoHost
 import com.faka.invisible.tell.TellAndroid
 import com.faka.invisible.voicekit.*
 import com.faka.invisible.tell.TellHost
@@ -134,6 +136,7 @@ object Actions {
             override fun lastTimer() = prefs().getInt("lastTimer", 0)
             override fun setLastTimer(minutes: Int) { prefs().edit().putInt("lastTimer", minutes).apply() }
             override fun startGame(coach: Boolean) = startDuel(coach)
+            override fun startEcho() = startEchoGame()
             override fun startWrite() = launchWrite()
             override fun pickCount(intent: String) = choices.intentCount(intent)
             override fun favourites() = choices.favourites()
@@ -184,12 +187,13 @@ object Actions {
         taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList(), onAdd = { taskMemory.record(it.text, it.lang) }) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
         VoiceKit.init(app, handler, { speechRate() }, object : SpeechListener {
             override fun started() { mode.onSpeechStarted() }
-            override fun ended() { mode.onSpeechDone(); duel?.takeIf { it.active }?.speechDone() }
+            override fun ended() { mode.onSpeechDone(); duel?.takeIf { it.active }?.speechDone(); echo?.takeIf { it.active }?.speechDone() }
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
     }
 
     private var duel: TellAndroid? = null
+    private var echo: EchoAndroid? = null
 
     // ---- Write: the stereo-pair keyboard (Typing.kt). The OS gives it the raw button and plays the close sound when it ends. ----
     private var typer: TypeProgram? = null
@@ -291,6 +295,17 @@ object Actions {
     /** The OS rule for every game: when a game gives the phone back, the OS says goodbye with its own close sound. A game never plays it. */
     private fun gameEnded() { handler.post { narrator.beep(Tone.EXIT) } }
 
+    private fun startEchoGame() {
+        echo?.stop()
+        echo = EchoAndroid(prefs(), handler, object : EchoHost {
+            override fun speak(text: Phrase) = say(text, false, slow = false)
+            override fun stopSpeech() = narrator.stopSpeech()
+            override fun pauseMusic() { pauseMusicNow() }
+            override fun resumeMusic() = resumeMusicNow()
+            override fun log(line: String) { Log.d(TAG, line); EventLog.add(line) }
+        }, onEnded = { echo = null; gameEnded() }).also { it.start() }
+    }
+
     private fun startDuel(coach: Boolean) {
         duel?.stop()
         duel = TellAndroid(prefs(), handler, object : TellHost {
@@ -304,7 +319,7 @@ object Actions {
 
     /** What the button feeds: the programs that own the raw button, the menu, and the menu's own tones. */
     private val buttonTarget = object : ButtonTarget {
-        override fun raw(): RawButton? = duel?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
+        override fun raw(): RawButton? = duel?.takeIf { it.active } ?: echo?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
         override val menuActive get() = mode.active
         override fun gesture(g: Gesture, durationMs: Long) {
             EventLog.add("${g.name.lowercase()}  ${durationMs}ms")

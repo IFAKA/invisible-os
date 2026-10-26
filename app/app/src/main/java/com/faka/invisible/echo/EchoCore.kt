@@ -77,26 +77,40 @@ class EchoJudge {
     /** Median signed error of recent clicks; subtracted from every click. */
     val biasMs: Double get() = if (deltas.isEmpty()) 0.0 else deltas.sorted().let { it[it.size / 2] } * min(1.0, deltas.size / 3.0)
 
-    /** @param clicks click times in ms from bar start, in order. */
-    fun judge(level: EchoLevel, pattern: List<Int>, clicks: List<Double>): BarResult {
-        val bias = biasMs
-        val want = pattern.map { it * level.slotMs }
-        val used = BooleanArray(want.size)
-        val delta = arrayOfNulls<Double>(want.size)
-        var extras = 0
-        val seen = ArrayList<Double>()
-        for (raw in clicks) {
-            val c = raw - bias
+    /** One bar being played: grades each click as it comes (so the sound can answer at once), then sums up. */
+    inner class Bar(private val level: EchoLevel, private val pattern: List<Int>) {
+        private val bias = biasMs
+        private val want = pattern.map { it * level.slotMs }
+        private val used = BooleanArray(want.size)
+        private val delta = arrayOfNulls<Double>(want.size)
+        private val seen = ArrayList<Double>()
+        var extras = 0; private set
+
+        /** @param ms click time from bar start. Returns the grade, or null for a click that matches nothing. */
+        fun click(ms: Double): Grade? {
+            val c = ms - bias
             var best = -1
             for (i in want.indices) if (!used[i] && abs(c - want[i]) <= level.goodMs && (best < 0 || abs(c - want[i]) < abs(c - want[best]))) best = i
-            if (best < 0) extras++ else { used[best] = true; delta[best] = c - want[best]; seen.add(raw - want[best]) }
+            if (best < 0) { extras++; return null }
+            used[best] = true; delta[best] = c - want[best]; seen.add(ms - want[best])
+            return if (abs(c - want[best]) <= level.perfectMs) Grade.PERFECT else Grade.GOOD
         }
-        for (d in seen) { deltas.addLast(d); if (deltas.size > MEMORY) deltas.removeFirst() }
-        val hits = want.indices.map { i ->
-            val d = delta[i]
-            Hit(pattern[i], when { d == null -> null; abs(d) <= level.perfectMs -> Grade.PERFECT; else -> Grade.GOOD }, d)
+
+        fun finish(): BarResult {
+            for (d in seen) { deltas.addLast(d); if (deltas.size > MEMORY) deltas.removeFirst() }
+            val hits = want.indices.map { i ->
+                val d = delta[i]
+                Hit(pattern[i], when { d == null -> null; abs(d) <= level.perfectMs -> Grade.PERFECT; else -> Grade.GOOD }, d)
+            }
+            return BarResult(hits, extras)
         }
-        return BarResult(hits, extras)
+    }
+
+    /** @param clicks click times in ms from bar start, in order. */
+    fun judge(level: EchoLevel, pattern: List<Int>, clicks: List<Double>): BarResult {
+        val bar = Bar(level, pattern)
+        for (c in clicks) bar.click(c)
+        return bar.finish()
     }
 }
 

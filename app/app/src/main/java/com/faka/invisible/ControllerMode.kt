@@ -65,6 +65,7 @@ interface ModeOutput {
     fun codeCount(): Int             // successful code actions so far (persisted); learning mode while < 15
     fun setCodeCount(n: Int)
     fun startWrite() {}   // the Write keyboard (stereo pair); its text comes back through the app
+    fun startEcho() {}   // the rhythm-copy game
     fun startGame(coach: Boolean) {}   // coach = teach first (the "How to play" item)
     fun weather(done: (Phrase) -> Unit) { done(Voice.WEATHER_FAILED) }   // off the main thread inside; [done] runs on the main thread with ONE sentence
     fun nextEvent(done: (Phrase) -> Unit) { done(Voice.CALENDAR_FAILED) }   // same: the next calendar event sentence
@@ -460,6 +461,7 @@ class ControllerMode(
             } } + Opt("phone:back", Menu.BACK) { pick("phone:back"); show(Screen.HUB) }
             Screen.GAMES -> listOf(   // every game lives here; a new game is one more line
                 Opt("games:duel", Menu.DUEL) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame(false) },   // music stays paused for the game, which resumes it
+                Opt("games:echo", Menu.ECHO) { pick("games:echo"); pausedByUs = false; exit(false); out.startEcho() },
                 Opt("games:write", Menu.WRITE) { pick("games:write"); pausedByUs = false; exit(false); out.startWrite() },   // a program of the OS, not a game; reachable here until it has its own place
                 Opt("games:howto", Menu.HOW_TO_PLAY) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) },
                 Opt("games:back", Menu.BACK) { pick("games:back"); show(Screen.HUB) })
