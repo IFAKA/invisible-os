@@ -19,7 +19,8 @@ interface SpeechPort {
 /** What can be played. The only implementation that touches Android is `TonePlayer` (engines). */
 interface TonePort {
     fun beep(k: Tone, vol: Float = 1f)
-    fun cue(c: TypeCue)
+    /** A short sound a program built itself (with [Earcons.sequence]), played at the standard level. */
+    fun playPcm(pcm: ShortArray)
     /** Two spoken words as one stereo sound: left ear then right ear. */
     fun playStereo(pcm: ShortArray, rate: Int)
     fun stopStereo()

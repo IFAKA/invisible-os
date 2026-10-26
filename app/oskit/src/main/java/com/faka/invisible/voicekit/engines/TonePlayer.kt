@@ -30,7 +30,7 @@ class TonePlayer(private val app: Context, private val handler: Handler) : ToneP
     /** Earcons: see SOUND-DESIGN.md. */
     override fun beep(k: Tone, vol: Float) { play(Earcons.pcm(k), vol = vol) }
 
-    override fun cue(c: TypeCue) { play(TypeSounds.pcm(c)) }
+    override fun playPcm(pcm: ShortArray) { play(pcm) }
 
     override fun playStereo(pcm: ShortArray, rate: Int) {
         stopStereo()

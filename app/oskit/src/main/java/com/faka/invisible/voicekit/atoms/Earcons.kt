@@ -95,6 +95,17 @@ object Earcons {
         return DoubleArray(x.size) { x[it] + z[it] }
     }
 
+    /** The sound material a program may use for its own short sounds (same family as the OS earcons). */
+    enum class Timbre(internal val v: V) { MALLET(V.MALLET), LOW(V.LOW), WOOD(V.WOOD) }
+
+    /**
+     * A short sound for a program: notes of [hz] one after the other, [stepMs] apart, each [ms] long. [reverb] adds a small room;
+     * [peakDb] is the loudest point (for example -17.0). Slow on a phone: build it once, off the main thread, and reuse it
+     * with `Narrator.play`.
+     */
+    fun sequence(timbre: Timbre, stepMs: Int, ms: Int, vararg hz: Double, reverb: Boolean, peakDb: Double): ShortArray =
+        render(hz.mapIndexed { i, f -> N(timbre.v, f, i * stepMs, ms, .4) }, reverb, peakDb)
+
     internal fun render(notes: List<N>, reverb: Boolean, peakDb: Double): ShortArray {
         val tail = if (reverb) 300 else 8
         val total = (notes.maxOf { it.startMs + it.ms } + tail) * SR / 1000
@@ -121,24 +132,5 @@ object Earcons {
         val peak = buf.maxOf { kotlin.math.abs(it) }.coerceAtLeast(1e-9)
         val k = Math.pow(10.0, peakDb / 20) / peak
         return ShortArray(total) { (buf[it] * k * 32767).toInt().coerceIn(-32767, 32767).toShort() }
-    }
-}
-
-/** Sounds of the Write program (its own: the OS tones are not used inside a program). Same material as [Earcons]; pitch says which side. */
-object TypeSounds {
-    private fun seq(v: Earcons.V, stepMs: Int, ms: Int, vararg hz: Double) = hz.mapIndexed { i, f -> Earcons.N(v, f, i * stepMs, ms, .4) }
-
-    fun pcm(c: TypeCue): ShortArray = when (c) {
-        TypeCue.PICK_LEFT -> Earcons.render(seq(Earcons.V.MALLET, 0, 120, 880.0), true, -17.0)
-        TypeCue.PICK_RIGHT -> Earcons.render(seq(Earcons.V.MALLET, 0, 120, 660.0), true, -17.0)
-        TypeCue.NEXT -> Earcons.render(seq(Earcons.V.WOOD, 0, 25, 440.0), false, -24.0)
-        TypeCue.LETTERS -> Earcons.render(seq(Earcons.V.MALLET, 70, 130, 330.0, 494.0), true, -20.0)   // up
-        TypeCue.WORDS -> Earcons.render(seq(Earcons.V.MALLET, 70, 130, 494.0, 330.0), true, -20.0)     // down
-        TypeCue.DELETE -> Earcons.render(seq(Earcons.V.LOW, 70, 160, 392.0, 262.0), true, -17.0)
-        TypeCue.DONE -> Earcons.render(seq(Earcons.V.MALLET, 85, 400, 523.0, 659.0, 784.0), true, -14.0)
-        TypeCue.ARMED -> Earcons.render(seq(Earcons.V.MALLET, 0, 100, 330.0), false, -18.0)   // 0.5 s: the press is now a hold; then 1 s, 2 s rising; 3 s = the close sound
-        TypeCue.LEAVE1 -> Earcons.render(seq(Earcons.V.MALLET, 0, 100, 392.0), false, -18.0)
-        TypeCue.LEAVE2 -> Earcons.render(seq(Earcons.V.MALLET, 0, 100, 494.0), false, -18.0)
-        TypeCue.MENU -> Earcons.render(seq(Earcons.V.MALLET, 60, 110, 392.0, 392.0), true, -20.0)
     }
 }

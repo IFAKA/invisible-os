@@ -17,7 +17,8 @@ class Narrator(private val speech: SpeechPort, private val tones: TonePort, priv
     val speaking get() = speech.speaking
 
     fun beep(k: Tone, vol: Float = 1f) = tones.beep(k, vol)
-    fun cue(c: TypeCue) = tones.cue(c)
+    /** Plays a short sound a program built with [Earcons.sequence]. Build it off the main thread once, then reuse it. */
+    fun play(pcm: ShortArray) = tones.playPcm(pcm)
     fun findLoop(on: Boolean) = tones.findLoop(on)
 
     private val waits = LinkedHashSet<Any>()

@@ -15,8 +15,8 @@ Rules are checked two ways:
 | atoms/Sentences.kt | atom | Every fixed sentence: `Voice`, `Menu`, `EchoVoice`, `GuardVoice`, `CompassVoice`, `TypeVoice`, plus `Spoken` number words. |
 | atoms/Pacing.kt | atom | All timing numbers (hold, gap, leave, pauses, speech rates) and pause formulas. |
 | atoms/Gesture.kt | atom | `Gesture` and `GestureRules` (click counts, hold, click-then-hold). |
-| atoms/Tone.kt | atom | Names of the OS tones (`Tone`) and typing cues (`TypeCue`). |
-| atoms/Earcons.kt | atom | The tone sounds as sample data (`Earcons`, `TypeSounds`). |
+| atoms/Tone.kt | atom | Names of the OS tones (`Tone`). |
+| atoms/Earcons.kt | atom | The tone sounds as sample data (`Earcons`; `Earcons.sequence` builds a program's own short sound). |
 | molecules/ScanList.kt | molecule | Items, current index, wrap and loop count. No timers, no speech. |
 | molecules/GestureDetector.kt | molecule | Presses to gestures with injected timers; `Deduper` drops duplicate key paths. |
 | molecules/Spearcon.kt | molecule | Sped-up spoken word: file reading and compression. |
@@ -25,10 +25,10 @@ Rules are checked two ways:
 | engines/TtsSpeech.kt | engine | The only TextToSpeech: voice, rate, spearcon and word files. |
 | engines/NeuralSpeech.kt | engine | The one neural voice (sherpa-onnx: Kokoro English, Piper Spanish), its model download, streaming to one AudioTrack. TtsSpeech uses it first; Google TTS is the fallback. |
 | molecules/SentenceSplit.kt | molecule | Cuts a text into sentences so the first sound starts after the first one. |
-| engines/TonePlayer.kt | engine | The only short-sound player: earcons, cues, stereo pair, find-phone loop. |
+| engines/TonePlayer.kt | engine | The only short-sound player: earcons, program sounds, stereo pair, find-phone loop. |
 | engines/MediaKeyIntake.kt | engine | The only media session: takes the earbud button, wins it back, keeps it alive. |
 | engines/GameAudio.kt | engine | A game's low-latency stereo stream (used by all game programs) and latency estimate. |
-| organisms/Narrator.kt | organism | Say, beep, cue, stereo word pair, `waiting()` (the heartbeat for slow work). What screens call to be heard. |
+| organisms/Narrator.kt | organism | Say, beep, play (a program's own sound), stereo word pair, `waiting()` (the heartbeat for slow work). What screens call to be heard. |
 | organisms/ButtonInput.kt | organism | The one button: dedupe, raw button for programs, tap tone, gestures. |
 | organisms/Scanner.kt | organism | The spoken list: pauses, ticks, loops then leave, fast scroll. Used by the menu and the Write menu. |
 | VoiceKit.kt | facade | `init` once from the OS; `narrator`, `buttons`, `mediaKeys()`. |
