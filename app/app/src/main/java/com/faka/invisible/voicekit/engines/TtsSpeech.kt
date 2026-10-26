@@ -15,6 +15,8 @@ import java.util.concurrent.ConcurrentHashMap
  * ENGINE. The only place that speaks: the TTS engine, the voice language, the speech rate, and the spearcon and word-clip
  * files that the TTS engine makes. [rate] gives the normal speech rate (it grows with use).
  */
+private val LETTER_LABEL = Regex("(Other )?[A-Z0-9]( to [A-Z0-9])?")
+
 class TtsSpeech(
     private val app: Context,
     private val handler: Handler,
@@ -114,7 +116,15 @@ class TtsSpeech(
         tts?.setSpeechRate(if (slow) Pacing.COACH_RATE else rate())   // the Duel coach talks slowly; every other call sets its own rate again
         lastUtt = "inv${++uttSeq}"
         if (fast) { val k = spKey; val l = lang; handler.postDelayed({ makeSpearcon(k, text, l) }, 4000) }   // after the word, not during it
-        tts?.speak(text, if (queue) TextToSpeech.QUEUE_ADD else TextToSpeech.QUEUE_FLUSH, null, lastUtt)
+        tts?.speak(letters(text), if (queue) TextToSpeech.QUEUE_ADD else TextToSpeech.QUEUE_FLUSH, null, lastUtt)
+    }
+
+    /** A Find letter label ("A to F", "C", "Other C"): each lone letter is marked to be spelled, so "A" is the letter "ay", not the word "a" ("uh"). Other text is unchanged. */
+    private fun letters(text: String): CharSequence {
+        if (!LETTER_LABEL.matches(text)) return text
+        val s = android.text.SpannableString(text)
+        Regex("\\b[A-Z]\\b").findAll(text).forEach { m -> s.setSpan(android.text.style.TtsSpan.VerbatimBuilder(m.value).build(), m.range.first, m.range.last + 1, 0) }
+        return s
     }
 
     // ---- the recorded voice (ClipBank): clips of one text play one after the other; a new non-queued phrase replaces them ----
