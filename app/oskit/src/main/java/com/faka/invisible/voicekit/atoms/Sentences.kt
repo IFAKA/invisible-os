@@ -182,7 +182,6 @@ object Menu {
     fun hour(h24: Int) = f("${(h24 % 12).let { if (it == 0) 12 else it }} ${if (h24 < 12) "AM" else "PM"}")
     fun minute(m: Int) = f(if (m == 0) "Sharp" else Spoken.number(m).replaceFirstChar { it.uppercase() })
     val WRITE = f("Write")
-    val COMPASS = f("Compass")
     val STOP = f("Stop")
     val FIVE_MORE = f("Five more minutes")
     val IGNORE = f("Ignore")
@@ -196,17 +195,6 @@ object Menu {
     fun replyYes(final: Boolean) = f(if (final) "Reply okay" else "Reply yes")
     /** "Reply to Ana" (the name is content). */
     fun replyTo(sender: String) = f("Reply to $sender")
-}
-
-object CompassVoice {
-    val INTRO = f("Compass. Click: heading. Two clicks: find north.")
-    val LEAVE = f("Hold three seconds to leave.")
-    val FINDING = f("Finding north.")
-    val STOPPED = f("Stopped.")
-    val WAIT = f("One moment.")
-    val NO_SENSOR = f("This phone has no compass.")
-    val UNSURE = f("Not sure. Move the phone in a figure eight.")
-    fun heading(name: String, degrees: Int) = f("$name, $degrees degrees.")
 }
 
 /** Fixed sentences of the Write program (the stereo-pair keyboard, PLAN-OS.md). At most 7 words each. */

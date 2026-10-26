@@ -1,6 +1,7 @@
 package com.faka.invisible
 
 import com.faka.invisible.echo.EchoProgram
+import com.faka.invisible.compass.CompassProgram
 import com.faka.invisible.tell.DuelProgram
 import com.faka.invisible.guard.GuardProgram
 import com.faka.invisible.oskit.ProgramEntry
@@ -16,6 +17,7 @@ object Programs {
         EchoProgram.entry,
         GuardProgram.entry,
         DuelProgram.howTo,
+        CompassProgram.entry,
     )
     fun byId(id: String): ProgramEntry? = all.firstOrNull { it.id == id }
     /** Dev hook name (`--es start echo`) to entry: the part of the id after the colon. */

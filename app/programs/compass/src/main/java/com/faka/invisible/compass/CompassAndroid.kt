@@ -5,11 +5,10 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.os.Handler
-import com.faka.invisible.voicekit.CompassVoice
+import com.faka.invisible.oskit.Program
+import com.faka.invisible.oskit.ProgramEntry
+import com.faka.invisible.oskit.ProgramHost
 import com.faka.invisible.voicekit.Pacing
-import com.faka.invisible.voicekit.Phrase
-import com.faka.invisible.voicekit.RawButton
 import com.faka.invisible.voicekit.GameAudio
 import kotlin.math.PI
 import kotlin.math.abs
@@ -17,22 +16,16 @@ import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-/** What the compass needs from the app (speech, the user's music). */
-interface CompassHost {
-    fun speak(text: Phrase)
-    fun stopSpeech()
-    fun pauseMusic()
-    fun resumeMusic()
-}
-
 /**
  * Compass program. One click: say the heading. Two clicks: find north (a guide tone: it rises as you turn toward north,
  * sits on the side you must turn to, and holds one high note when you face north). Hold 3 s: leave. Only the motion sensors; no microphone.
  * The phone flat or upright (in a pocket) is detected from gravity; upright, the back of the phone is the direction.
  */
-class CompassAndroid(private val context: Context, private val handler: Handler, private val host: CompassHost, private val onEnded: () -> Unit) : RawButton {
+class CompassAndroid : Program {
+    private lateinit var host: ProgramHost
+    private val handler get() = host.handler
     private val sr = 44100
-    private val sensors = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private val sensors by lazy { host.context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
     @Volatile private var running = false
     @Volatile private var heading = 0.0
     @Volatile private var haveHeading = false
@@ -62,10 +55,11 @@ class CompassAndroid(private val context: Context, private val handler: Handler,
         override fun onAccuracyChanged(s: Sensor?, accuracy: Int) { unsure = accuracy <= SensorManager.SENSOR_STATUS_ACCURACY_LOW }
     }
 
-    fun start() {
+    override fun start(host: ProgramHost) {
         if (running) return
+        this.host = host
         val s = sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-        if (s == null) { host.speak(CompassVoice.NO_SENSOR); onEnded(); return }
+        if (s == null) { host.speak(CompassVoice.NO_SENSOR); host.ended(); return }
         running = true
         host.pauseMusic()
         sensors.registerListener(listener, s, SensorManager.SENSOR_DELAY_GAME, handler)
@@ -74,7 +68,7 @@ class CompassAndroid(private val context: Context, private val handler: Handler,
         host.speak(CompassVoice.LEAVE)
     }
 
-    fun stop() = shutdown()
+    override fun stop() = shutdown()
 
     override fun down(time: Long) { downAt = time; handler.removeCallbacks(resolve); handler.postDelayed(leave, LEAVE_MS) }
 
@@ -116,8 +110,13 @@ class CompassAndroid(private val context: Context, private val handler: Handler,
         host.stopSpeech()
         audio.join()
         host.resumeMusic()
-        onEnded()
+        host.ended()
     }
 
     private companion object { const val LEAVE_MS = 3000L; const val GAIN = 0.18 }
+}
+
+/** What the OS registry lists for the Compass (a tool of the home hub). */
+object CompassProgram {
+    val entry = ProgramEntry("hub:compass", CompassVoice.TITLE) { CompassAndroid() }
 }

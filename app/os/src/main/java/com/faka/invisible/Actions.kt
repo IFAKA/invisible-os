@@ -19,8 +19,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
-import com.faka.invisible.compass.CompassAndroid
-import com.faka.invisible.compass.CompassHost
 import com.faka.invisible.oskit.Program
 import com.faka.invisible.oskit.ProgramEntry
 import com.faka.invisible.oskit.ProgramHost
@@ -152,7 +150,6 @@ object Actions {
             override fun setLastTimer(minutes: Int) { prefs().edit().putInt("lastTimer", minutes).apply() }
             override fun programs() = Programs.all
             override fun startProgram(id: String) { Programs.byId(id)?.let { startProgramEntry(it) } }
-            override fun startCompass() = startCompassProgram()
             override fun startWrite() = launchWrite()
             override fun startSum() = launchSum()
             override fun pickCount(intent: String) = choices.intentCount(intent)
@@ -211,7 +208,6 @@ object Actions {
 
     /** The program of the registry that runs now (at most one). */
     private var running: Program? = null
-    private var compass: CompassAndroid? = null
 
     // ---- Write: the stereo-pair keyboard (Typing.kt). The OS gives it the raw button and plays the close sound when it ends. ----
     private var typer: TypeProgram? = null
@@ -264,7 +260,7 @@ object Actions {
             if (i % 2 == 0) handler.postAtTime({ VoiceKit.buttons.key("dev", false, 0, down, end) }, end)
         }
     }
-    fun startDev(name: String) = handler.post { when (name) { "compass" -> startCompassProgram(); "write" -> launchWrite(); else -> Programs.byDevName(name)?.let { startProgramEntry(it) } } }
+    fun startDev(name: String) = handler.post { when (name) { "write" -> launchWrite(); else -> Programs.byDevName(name)?.let { startProgramEntry(it) } } }
 
     /** Dev: drive the music session directly: "uri:<url>" or "search:<query>". */
     fun waitDev(ms: Long) = handler.post { val w = narrator.waiting(); handler.postDelayed({ w() }, ms) }
@@ -400,16 +396,6 @@ object Actions {
     /** The OS rule for every game: when a game gives the phone back, the OS says goodbye with its own close sound. A game never plays it. */
     private fun gameEnded() { handler.post { narrator.beep(Tone.EXIT) } }
 
-    private fun startCompassProgram() {
-        compass?.stop()
-        compass = CompassAndroid(app, handler, object : CompassHost {
-            override fun speak(text: Phrase) = say(text, false, slow = false)
-            override fun stopSpeech() = narrator.stopSpeech()
-            override fun pauseMusic() { pauseMusicNow() }
-            override fun resumeMusic() = resumeMusicNow()
-        }, onEnded = { compass = null; gameEnded() }).also { it.start() }
-    }
-
     /** Starts a program of the registry. The host is what it may ask of the OS; when it ends, the OS plays the close sound. */
     private fun startProgramEntry(e: ProgramEntry) {
         running?.stop()
@@ -442,11 +428,10 @@ object Actions {
 
     /** What the button feeds: the programs that own the raw button, the menu, and the menu's own tones. */
     private val buttonTarget = object : ButtonTarget {
-        override fun raw(): RawButton? = running?.takeIf { it.active } ?: compass?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
+        override fun raw(): RawButton? = running?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
         override val menuActive get() = mode.active
         override fun exitProgram() {   // each stop() ends with the program's onEnded, which plays the OS close sound. Write is not here: its holds pick words; it leaves from its menu
             running?.takeIf { it.active && it.exitOnClickHold }?.let { it.stop(); return }
-            compass?.takeIf { it.active }?.let { it.stop(); return }
         }
         override fun gesture(g: Gesture, durationMs: Long) {
             EventLog.add("${g.name.lowercase()}  ${durationMs}ms")
