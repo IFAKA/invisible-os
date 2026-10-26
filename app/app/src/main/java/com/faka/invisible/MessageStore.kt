@@ -17,6 +17,7 @@ class MessageStore(private val max: Int = 20) {
     }
 
     @Synchronized fun remove(key: String) { list.removeAll { it.key == key } }
+    @Synchronized fun removeWhere(pred: (Msg) -> Boolean) { list.removeAll(pred) }
     @Synchronized fun clear() = list.clear()
     @Synchronized fun all(): List<Msg> = list.toList()
 }

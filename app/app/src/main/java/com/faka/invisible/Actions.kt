@@ -96,7 +96,9 @@ object Actions {
             override fun timerRinging() = ringing != null
             override fun messages() = ControllerNotificationListener.store.all()
             override fun reply(key: String, text: String) = ControllerNotificationListener.sendReply(key, text, app)
-            override fun notifGroups() = ControllerNotificationListener.notifs.groups()
+            override fun notifGroups() = ControllerNotificationListener.notifs.groups { ControllerNotificationListener.modules.forNotif(it).groupKey(it) }
+            override fun notifRead(n: Notif) = ControllerNotificationListener.modules.forNotif(n).read(n)
+            override fun notifSummary(n: Notif) = ControllerNotificationListener.modules.forNotif(n).summary(n)
             override fun notifFire(key: String, index: Int) = ControllerNotificationListener.fireAction(key, index, null, app)
             override fun notifDismiss(key: String) = ControllerNotificationListener.dismiss(key)
             override fun startNotifReply(key: String, index: Int) = launchWrite { text -> ControllerNotificationListener.fireAction(key, index, text, app) }

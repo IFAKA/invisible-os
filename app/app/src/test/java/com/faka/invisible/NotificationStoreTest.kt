@@ -76,3 +76,29 @@ class NotificationStoreTest {
         assertEquals(1, x.reply!!.index)
     }
 }
+
+class NotificationModulesTest {
+    private val n = Notif("k", "com.chat", "Chat", "Ana", "hola", 1)
+    private val chat = object : NotificationModule {
+        override fun matches(pkg: String) = pkg == "com.chat"
+        override fun read(n: Notif) = "${n.title}: ${n.text}"
+        override fun groupKey(n: Notif) = n.title
+    }
+
+    @Test fun genericIsTheDefault() {
+        val r = NotificationModules(listOf(chat))
+        assertSame(GenericModule, r.forPackage("com.other"))
+        assertEquals("Ana. hola", GenericModule.read(n))
+    }
+
+    @Test fun registeredModuleWinsByPackage() {
+        val r = NotificationModules(listOf(chat))
+        assertSame(chat, r.forNotif(n))
+        assertEquals("Ana: hola", r.forNotif(n).read(n))
+        assertEquals("Ana", r.forNotif(n).groupKey(n))
+    }
+
+    @Test fun genericSkipsBlankParts() {
+        assertEquals("only", GenericModule.read(n.copy(title = "", text = "only")))
+    }
+}

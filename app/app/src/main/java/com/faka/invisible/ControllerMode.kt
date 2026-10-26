@@ -24,6 +24,8 @@ interface ModeOutput {
     fun messages(): List<Msg>        // latest unread messages, newest first
     fun reply(key: String, text: String): Boolean   // true if the reply was sent
     fun notifGroups(): List<NotifGroup> = emptyList()   // the mailbox: every app's notifications, grouped, muted apps left out
+    fun notifRead(n: Notif): String = GenericModule.read(n)         // what is read in full (the app's module decides)
+    fun notifSummary(n: Notif): String = GenericModule.summary(n)   // the one line in the list
     fun notifFire(key: String, index: Int): Boolean = false   // press action [index] of a notification
     fun notifDismiss(key: String): Boolean = false
     fun notifMute(pkg: String) {}
@@ -482,13 +484,13 @@ class ControllerMode(
     }
 
     /** What is read for a notification: a private one gives only the app. */
-    private fun notifLine(n: Notif, max: Int): Phrase {
+    private fun notifLine(n: Notif, max: Int, full: Boolean): Phrase {
         if (n.hidden) return Voice.newNotification(n.app)
-        val t = listOf(n.title, n.text).filter { it.isNotBlank() }.joinToString(". ")
+        val t = if (full) out.notifRead(n) else out.notifSummary(n)
         val lang = out.songLang(t)
         return Voice.cut(t.replace(Regex("\\s+"), " ").trim(), max, lang == "es", lang)
     }
-    private fun notifRead(n: Notif) = notifLine(n, 500)
+    private fun notifRead(n: Notif) = notifLine(n, 500, true)
 
     private fun notifAppOptions(): List<Opt> =
         out.notifGroups().map { g -> Opt("notif:app", Menu.notifApp(g.app, g.items.size)) { pick("notif:app"); notifGroup = g.id; show(Screen.NOTIF_LIST) } } +
@@ -498,7 +500,7 @@ class ControllerMode(
         Opt("notif:back", Menu.BACK) { pick("notif:back"); show(Screen.HUB) }
 
     private fun notifListOptions(): List<Opt> = (openGroup()?.items.orEmpty()).take(MAX_NOTIFS).map { n ->
-        Opt("notif:item", notifLine(n, MAX_SPOKEN)) { pick("notif:item"); notifKey = n.key; show(Screen.NOTIF_ACTIONS) }
+        Opt("notif:item", notifLine(n, MAX_SPOKEN, false)) { pick("notif:item"); notifKey = n.key; show(Screen.NOTIF_ACTIONS) }
     } + Opt("notif:back", Menu.BACK) { pick("notif:back"); show(Screen.NOTIF_APPS) }
 
     private fun notifActionOptions(): List<Opt> {
