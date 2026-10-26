@@ -112,7 +112,7 @@ object Actions {
             override fun notifMutedCount() = ControllerNotificationListener.mutes.all().size
             override fun notifUnmuteAll() = ControllerNotificationListener.unmuteAll()
             override fun startNotifReply(key: String, index: Int) = launchWrite({ text -> ControllerNotificationListener.fireAction(key, index, text, app) },
-                ControllerNotificationListener.notifs.get(key)?.takeUnless { it.hidden }?.text)
+                ControllerNotificationListener.notifs.get(key))
             override fun status(): Status {
                 val c = Calendar.getInstance()
                 val b = app.getSystemService(BatteryManager::class.java).getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -212,8 +212,8 @@ object Actions {
     fun startWriteDev() { handler.post { launchWrite() } }
 
     /** [sendTo] = Write for a notification reply: the written text goes to that action instead of the focused field.
-     *  [heard] = the message being answered; the reply language comes from it, because the screen is off and shows no chat. */
-    private fun launchWrite(sendTo: ((String) -> Boolean)? = null, heard: String? = null) {
+     *  [replyTo] = the message being answered: the screen is off and shows no chat, so the suggestions and the reply language come from it. */
+    private fun launchWrite(sendTo: ((String) -> Boolean)? = null, replyTo: Notif? = null) {
         typer?.stop()
         Thread({
             val lm = wordModel()
@@ -223,14 +223,14 @@ object Actions {
                     override fun set(key: String, delayMs: Long, task: () -> Unit) { clear(key); val r = Runnable { typeTimers.remove(key); task() }; typeTimers[key] = r; handler.postDelayed(r, delayMs) }
                     override fun clear(key: String) { typeTimers.remove(key)?.let { handler.removeCallbacks(it) } }
                 }
-                val frame = ButtonAccessibilityService.inst?.frame() ?: Frame()   // the place that has focus: app, kind of field, what is on the screen
+                val frame = if (sendTo != null) Frame.replyTo(replyTo) else ButtonAccessibilityService.inst?.frame() ?: Frame()   // the place that has focus: app, kind of field, what is on the screen
                 Log.d(TAG, "WRITE frame app=${frame.app} kind=${frame.kind} field=${frame.field} thread=${frame.thread} around=${frame.around.size} before=${frame.before.length}")
                 chatLang = null
                 Thread({   // the language of the place, from what is on the screen and in the field; unknown means nothing to translate
-                    val seen = if (sendTo != null) heard.orEmpty() else (frame.around + frame.before).joinToString(" ")
+                    val seen = (frame.around + frame.before).joinToString(" ")
                     val lang = ChatLang.of(seen) { MlKitLangDetector().detect(it) }
                     handler.post { chatLang = lang }
-                    if (lang != null && ChatLang.needsTranslation(lang) && MlKitTranslator.code(lang) != null && (sendTo != null || frame.kind == FieldKind.TEXT) && !MlKitTranslator.hasModel(lang)) MlKitTranslator.download(lang)
+                    if (lang != null && ChatLang.needsTranslation(lang) && MlKitTranslator.code(lang) != null && frame.kind == FieldKind.TEXT && !MlKitTranslator.hasModel(lang)) MlKitTranslator.download(lang)
                     Log.d(TAG, "WRITE chat language $lang")
                 }, "write-lang").start()
                 val out = object : TypeOut {
@@ -262,7 +262,7 @@ object Actions {
                     override fun written(text: String) { buckets.learn(frame, text.split(' ').filter { it.isNotEmpty() }, text) }
                     override fun translate(text: String, then: (Translation) -> Unit) {
                         val target = chatLang
-                        if ((sendTo == null && frame.kind != FieldKind.TEXT) || target == null || !ChatLang.needsTranslation(target)) { then(Translation.Same); return }
+                        if (frame.kind != FieldKind.TEXT || target == null || !ChatLang.needsTranslation(target)) { then(Translation.Same); return }
                         phraseWorker.execute {
                             val r: Translation = when {
                                 MlKitTranslator.code(target) == null -> Translation.Failed(TypeVoice.TRANSLATION_FAILED)

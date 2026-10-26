@@ -34,6 +34,17 @@ data class Frame(
     }
 
     val digits get() = kind == FieldKind.NUMBER
+
+    companion object {
+        /**
+         * The place of a reply sent from a notification: the screen is off, so the place is the message being answered.
+         * The same fields as a chat on the screen (app = package, thread = who wrote), so what is learned in one helps the other.
+         * A private notification has no kept text: only the app is known.
+         */
+        fun replyTo(n: Notif?): Frame =
+            if (n == null) Frame()
+            else Frame(app = n.pkg, thread = if (n.hidden) "" else n.title, around = if (n.hidden || n.text.isBlank()) emptyList() else listOf(n.text))
+    }
 }
 
 object Fields {

@@ -73,4 +73,18 @@ class ContextTest {
         val top = BucketRanker(base, BucketStore(emptyList()), chat).ranked(emptyList()).take(4).map { it.first }
         assertTrue(top.toString(), top.contains("cenar") || top.contains("vienes") || top.contains("mañana"))
     }
+
+    private fun notif(hidden: Boolean = false) = Notif("k", "com.whatsapp", "WhatsApp", "Ana", "vienes mañana a casa?", 0L, hidden = hidden)
+
+    @Test fun aReplyFromANotificationKnowsTheMessageItAnswers() {
+        val f = Frame.replyTo(notif())
+        assertEquals("com.whatsapp", f.app); assertEquals("Ana", f.thread); assertEquals(listOf("vienes mañana a casa?"), f.around)
+        assertTrue(f.brief().contains("vienes mañana a casa?")); assertFalse(f.hasField)
+        assertEquals("t:com.whatsapp/Ana", f.keys().first())
+    }
+    @Test fun aPrivateNotificationGivesOnlyTheApp() {
+        val f = Frame.replyTo(notif(hidden = true))
+        assertEquals("com.whatsapp", f.app); assertEquals("", f.thread); assertTrue(f.around.isEmpty())
+    }
+    @Test fun noNotificationIsAnEmptyFrame() = assertEquals(Frame(), Frame.replyTo(null))
 }
