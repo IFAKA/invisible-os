@@ -151,9 +151,41 @@ class MainActivity : Activity() {
 
     }
 
+    /** The spoken tree, drawn from the same builder the voice uses ([TreeLeaves], [AppTree]). Pin, hide and move are saved in the settings the voice reads. */
+    private fun treeCard() {
+        val all = TreeLeaves.all(this, s)
+        val root = AppTree.build(TreeLeaves.edit(all, s))
+        card("What you hear", "The exact tree the voice walks, in the same order. Pin: first menu. Group button: move it. Hide: remove it.") {
+            fun toggle(set: Set<String>, k: String) = if (k in set) set - k else set + k
+            fun node(n: TreeNode, depth: Int) {
+                val a = n.app
+                val pad = k.dp(14 * depth)
+                if (a == null) {
+                    if (n.label.isEmpty()) return
+                    addView(k.text("${n.label}  (${n.children.size})", 15f, Ui.soft, bold = true).apply { setPadding(pad, k.dp(10), 0, k.dp(2)) })
+                    n.children.forEach { node(it, depth + 1) }
+                    return
+                }
+                val group = AppCategories.main(s.moved[a.pkg] ?: a.category)
+                val row = k.row(k.grow(k.text(a.label, 15f).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }),
+                    k.chip(if (a.pkg in s.pinned) "Pinned" else "Pin") { change(s.copy(pinned = toggle(s.pinned, a.pkg))) },
+                    k.chip(group) { change(s.copy(moved = s.moved + (a.pkg to TreeLeaves.GROUPS[(TreeLeaves.GROUPS.indexOf(group) + 1) % TreeLeaves.GROUPS.size]))) },
+                    k.chip("Hide") { change(s.copy(hidden = s.hidden + a.pkg)) })
+                row.setPadding(pad, 0, 0, 0)
+                addView(row)
+            }
+            root.children.forEach { node(it, 0) }
+            val gone = all.filter { it.pkg in s.hidden }
+            if (gone.isNotEmpty()) {
+                addView(k.text("Hidden (${gone.size})", 15f, Ui.soft, bold = true).apply { setPadding(0, k.dp(14), 0, k.dp(2)) })
+                gone.forEach { a -> addView(k.row(k.grow(k.text(a.label, 15f)), k.chip("Show") { change(s.copy(hidden = s.hidden - a.pkg)) })) }
+            }
+        }
+    }
+
     private fun menuPage() {
-        card("What you hear first", "Hold \u2261 and drag to reorder. The switch turns an item off.") {
-            addView(k.dragList(s.hub, LauncherSettings.HUB_ITEMS, emptySet()) { order -> change(s.copy(hub = LauncherSettings.cleanHub(order))) })
+        treeCard()
+        card("Order and speed") {
             addView(k.row(k.grow(k.text("Reply options: put the ones you pick most first (automatic)", 14f, Ui.soft)),
                 Switch(this@MainActivity).apply { isChecked = s.learnOrder; setOnCheckedChangeListener { _, v -> change(s.copy(learnOrder = v)) } }),
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })

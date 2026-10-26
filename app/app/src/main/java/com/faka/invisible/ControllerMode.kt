@@ -501,17 +501,13 @@ class ControllerMode(
 
     /**
      * The leaves of the tree: the OS programs that are switched on and every installed app (muted ones and this app left out), so a place never moves
-     * because of a notification. Weight = launches and picks ([AppWeights]); unread is only for the label.
+     * because of a notification. Pin, hide and move edits are applied ([TreeLeaves.edit]). Weight = launches and picks ([AppWeights]); unread is only for the label.
      */
     private fun treeLeaves(builtins: Map<String, Opt>): List<AppLeaf> {
         val programs = builtins.map { (k, o) -> AppLeaf(k, o.label.text, AppCategories.categoryOf(k), if (k == "hub:messages") unread().size else 0, AppWeights.weight(k, 0, 0, out.pickCount(k)), native = true, rank = settings.hub.indexOf(k.removePrefix("hub:"))) }
         val unread = out.notifGroups().groupBy { it.pkg }.mapValues { (_, gs) -> gs.sumOf { it.items.size } }
-        val use = out.appUse()
-        val apps = out.installedApps().filter { it.pkg != AppWeights.SELF && !out.appMuted(it.pkg) }.map { a ->
-            val u = use[a.pkg] ?: AppUse(0, 0)
-            AppLeaf(a.pkg, a.label, AppCategories.categoryOf(a.pkg, a.hint), unread[a.pkg] ?: 0, AppWeights.weight(a.pkg, u.month, u.week, out.pickCount("app:${a.pkg}")), rank = APP_RANK)
-        }
-        return programs + apps
+        val apps = TreeLeaves.apps(out.installedApps(), out.appUse(), { out.appMuted(it) }, unread) { out.pickCount(it) }
+        return TreeLeaves.edit(programs + apps, settings)
     }
 
     private var treeKey: List<Any>? = null; private var treeCache: TreeNode? = null
@@ -825,7 +821,6 @@ class ControllerMode(
         const val FIND_MS = 20_000L   // "Find my phone" rings this long
         const val SPEARCON_AFTER = 30   // picks of one option, then it is scanned as a sped-up spearcon
         private const val MAX_SPOKEN = 160
-        private const val APP_RANK = 1000   // apps come after the OS programs when weights tie
         private const val MAX_NOTIFS = 20   // notifications read in one app list
     }
 }

@@ -17,6 +17,9 @@ data class LauncherSettings(
     val speechRate: Float = 0.9f,
     val learnOrder: Boolean = true,
     val ai: Boolean = false,   // reply sentences and task wording from the model on the phone (needs the 2.6 GB download)
+    val pinned: Set<String> = emptySet(),   // tree entries forced to the first menu
+    val hidden: Set<String> = emptySet(),   // tree entries removed from the tree (apps by package, OS programs as "hub:x")
+    val moved: Map<String, String> = emptyMap(),   // package -> group it was moved to
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
@@ -78,6 +81,9 @@ object SettingsStore {
             learnOrder = p.getBoolean("s_learn", d.learnOrder),
             ai = p.getBoolean("s_ai", d.ai),
             spearcons = p.getBoolean("s_spearcons", d.spearcons),
+            pinned = p.getString("s_pinned", "")!!.split(',').filter { it.isNotEmpty() }.toSet(),
+            hidden = p.getString("s_hidden", "")!!.split(',').filter { it.isNotEmpty() }.toSet(),
+            moved = p.getString("s_moved", "")!!.split(',').filter { '=' in it }.associate { it.substringBefore('=') to it.substringAfter('=') },
         )
     }
 
@@ -173,6 +179,6 @@ object SettingsStore {
     fun save(p: SharedPreferences, s: LauncherSettings) {
         p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_info", s.info.joinToString(",")).putString("s_phone", s.phone.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
             .putLong("s_gap", s.itemGapMs).putInt("s_loops", s.silentLoops).putLong("s_undo", s.undoMs)
-            .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).putBoolean("s_ai", s.ai).putBoolean("s_groups_saved", true).putBoolean("s_apps_saved", true).putBoolean("s_status_phone_saved", true).apply()
+            .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).putBoolean("s_ai", s.ai).putString("s_pinned", s.pinned.joinToString(",")).putString("s_hidden", s.hidden.joinToString(",")).putString("s_moved", s.moved.entries.joinToString(",") { it.key + "=" + it.value }).putBoolean("s_groups_saved", true).putBoolean("s_apps_saved", true).putBoolean("s_status_phone_saved", true).apply()
     }
 }
