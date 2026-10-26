@@ -8,6 +8,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/** The home programs before Set alarm and Calculator were added; the older tests count their menu items. */
+private val OLD_HUB = LauncherSettings.DEFAULT_HUB - "alarm" - "calculator"
+
 class ModeTest {
     private class Rig(ranker: OptionRanker = OptionRanker.DEFAULT, gap: Long = 800) {
         val log = ArrayList<String>()
@@ -56,6 +59,7 @@ class ModeTest {
             override fun volume(up: Boolean) { log.add("vol $up"); vol += if (up) 1 else -1 }
             override fun volumeLevel() = vol
             override fun startTimer(minutes: Int) { log.add("timer $minutes") }
+            override fun setAlarm(hour: Int, minute: Int): Boolean { log.add("alarm $hour:$minute"); return true }
             override fun stopAlarm() { log.add("stop"); speech() }
             override fun timerRinging() = ringing
             override fun messages() = msgs
@@ -100,8 +104,8 @@ class ModeTest {
             override fun clear(key: String) { timers.remove(key) }
         }, { now }, ranker, pauseMs = gap)
         init { m.settings = LauncherSettings(hub = listOf("messages", "music", "timer", "phone", "today", "games")) }   // the older timing tests count menu items
-        fun withTasks() = apply { m.settings = LauncherSettings() }
-        fun withInfo() = apply { m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "tasks") }
+        fun withTasks() = apply { m.settings = LauncherSettings(hub = OLD_HUB) }
+        fun withInfo() = apply { m.settings = LauncherSettings(hub = OLD_HUB - "tasks") }
         fun g(vararg x: Gesture) = x.forEach { m.onGesture(it) }
         fun advance(ms: Long) {
             val end = now + ms
@@ -714,8 +718,8 @@ class ModeTest {
     }
 
     @Test fun noMoreInTheHubAndOrderIsFixed() {
-        val a = Rig(); a.m.settings = LauncherSettings(); a.msgs = listOf(bob.copy(at = 1)); a.wake()
-        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games"), LauncherSettings.DEFAULT_HUB)
+        val a = Rig(); a.m.settings = LauncherSettings(hub = OLD_HUB); a.msgs = listOf(bob.copy(at = 1)); a.wake()
+        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator"), LauncherSettings.DEFAULT_HUB)
         a.advance(400 + 1300 * 8); assertFalse(a.spoken().contains("say More")); assertFalse(a.spoken().contains("say Exit"))
     }
 
@@ -761,13 +765,13 @@ class ModeTest {
     }
 
     @Test fun firstLayerIsShortAndInOrder() {
-        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games"), LauncherSettings.DEFAULT_HUB)
+        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator"), LauncherSettings.DEFAULT_HUB)
         assertEquals(listOf("timer"), LauncherSettings.cleanHub(listOf("weather", "timer", "volume")))
     }
 
     @Test fun migrationDropsMoreAndUnknownKeepsOffChoicesAndReorders() {
         assertEquals(listOf("messages", "timer", "games"), LauncherSettings.withoutMore(listOf("games", "more", "bogus", "timer", "messages")))
-        assertEquals(LauncherSettings.DEFAULT_HUB, LauncherSettings.withoutMore(LauncherSettings.DEFAULT_HUB.reversed() + "more"))
+        assertEquals(OLD_HUB, LauncherSettings.withoutMore(OLD_HUB.reversed() + "more"))
         assertEquals(emptyList<String>(), LauncherSettings.withoutMore(listOf("more")))
     }
 
@@ -1085,5 +1089,20 @@ class ModeTest {
         assertTrue(r.spoken().contains("say whatsapp, 1"))   // the home list was rebuilt without Mail
         assertFalse(r.spoken().any { it.startsWith("say Mail") })
         assertTrue(r.spoken().contains("say Unmute all apps"))
+    }
+
+    @Test fun calculatorSpeaksTheAnswer() {
+        val r = Rig(); r.m.settings = LauncherSettings(); r.wake()
+        r.pick("Calculator"); r.pick("Two"); r.pick("Plus"); r.pick("Three"); r.pick("Equals")
+        r.advance(3000)
+        assertTrue(r.spoken().toString(), r.spoken().any { it.endsWith(" 5") })
+    }
+
+    @Test fun setAlarmAsksHourThenMinuteAndSetsItAfterTheCancelWindow() {
+        val r = Rig(); r.m.settings = LauncherSettings(); r.wake()
+        r.pick("Set alarm"); r.pick("7 AM"); r.pick("Thirty")
+        assertFalse(r.has("alarm"))
+        r.advance(8000)
+        assertTrue(r.log.toString(), r.has("alarm 7:30"))
     }
 }

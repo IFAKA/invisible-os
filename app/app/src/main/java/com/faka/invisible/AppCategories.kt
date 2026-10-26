@@ -71,6 +71,9 @@ Out/Shop            com.xiaomi.mipicks
 Out/Health          com.maxsnr.workout
 Out/Health          digifit.android.virtuagym.pro.synergym
 Tools/Phone         hub:phone
+Tools/Utilities     hub:calculator
+Tools/Utilities     com.miui.calculator
+Day                 hub:alarm
 Tools/Phone         com.android.settings
 Tools/Phone         com.miui.securitycenter
 Tools/Phone         com.google.android.apps.adm
@@ -91,7 +94,6 @@ Tools/Web           com.android.chrome
 Tools/Web           com.mi.globalbrowser
 Tools/Web           org.chromium.webapk.a7e73b90ab8fcb825_v2
 Tools/Web           com.google.android.googlequicksearchbox
-Tools/Utilities     com.miui.calculator
 Tools/Utilities     com.xiaomi.scanner
 Tools/Utilities     com.android.soundrecorder
 Tools/Utilities     com.google.android.apps.nbu.files

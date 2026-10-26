@@ -2,6 +2,8 @@
 
 package com.faka.invisible.voicekit
 
+import com.faka.invisible.logickit.Calculator
+
 import com.faka.invisible.tell.Move
 import com.faka.invisible.tell.Round
 
@@ -78,6 +80,12 @@ object Voice {
     val TASK_DONE_UNDO = f("Done. Click to cancel")
     val NOTHING = f("Nothing")
     val NO_ALARM = f("No alarm")
+    fun calc(spoken: String) = f(spoken)
+    val ALARM_HOUR = f("Which hour?")
+    val ALARM_MINUTE = f("Which minute?")
+    fun settingAlarm(h24: Int, minute: Int) = f("Alarm " + Spoken.time(h24, minute) + ". Click to cancel")
+    val ALARM_RINGING = f("Alarm. Wake up")
+    val ALARM_FAILED = f("Alarm not set")
     fun alarmAt(h24: Int, minute: Int) = f("Alarm " + Spoken.time(h24, minute))
     fun time(h24: Int, minute: Int) = f(Spoken.time(h24, minute))
     /** The volume level as a word. */
@@ -147,6 +155,17 @@ object Menu {
     val VOLUME = f("Volume")
     val TORCH = f("Torch")
     val DND = f("Do not disturb")
+    val CALCULATOR = f("Calculator")
+    val SET_ALARM = f("Set alarm")
+    fun digit(n: Int) = f(Spoken.number(n).replaceFirstChar { it.uppercase() })
+    fun op(o: Char) = f(Calculator.WORDS.getValue(o).replaceFirstChar { it.uppercase() })
+    val POINT = f("Point")
+    val EQUALS = f("Equals")
+    val UNDO = f("Undo")
+    val CLEAR = f("Clear")
+    /** "7 AM", "12 PM", "12 AM". */
+    fun hour(h24: Int) = f("${(h24 % 12).let { if (it == 0) 12 else it }} ${if (h24 < 12) "AM" else "PM"}")
+    fun minute(m: Int) = f(if (m == 0) "Sharp" else Spoken.number(m).replaceFirstChar { it.uppercase() })
     val DUEL = f("Duel")
     val ECHO = f("Echo")
     val WRITE = f("Write")

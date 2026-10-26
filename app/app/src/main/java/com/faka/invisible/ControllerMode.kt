@@ -27,6 +27,7 @@ interface ModeOutput {
     fun volume(up: Boolean)          // music volume step (the mode speaks the level)
     fun volumeLevel(): Int           // current media volume index, as is (0..device max)
     fun startTimer(minutes: Int)
+    fun setAlarm(hour: Int, minute: Int): Boolean = false   // a wake-up alarm at this time; false = it could not be set
     fun stopAlarm()
     fun timerRinging(): Boolean
     fun messages(): List<Msg>        // latest unread messages, newest first
@@ -122,7 +123,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, SENT, TREE, APP_OPEN, NOTIF_LIST, NOTIF_ACTIONS }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_LIST, NOTIF_ACTIONS }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: Phrase, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: Phrase, val run: () -> Unit)
@@ -166,6 +167,9 @@ class ControllerMode(
         override fun tone(t: Tone) { tn(t) }
         override fun leave() { leaveSilent() }
     }
+    private val ALARM_HOURS = listOf(7, 6, 8, 9, 5, 10, 4, 11) + (0..23).filter { it !in listOf(7, 6, 8, 9, 5, 10, 4, 11) }
+    private val ALARM_MINUTES = listOf(0, 30, 15, 45, 10, 20, 40, 50, 5, 25, 35, 55)
+
     private val scanner = Scanner<Opt>(timers, { it.label }, scanOut,
         ScanCadence(pauseMs = { pause }, loops = { silentLoops }, tickLeadMs = tickLeadMs, restartLeadMs = restartLeadMs),
         spearcon = { settings.spearcons && out.pickCount(it.key) >= SPEARCON_AFTER })
@@ -279,7 +283,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS -> Tone.MORE; Screen.VOLUME -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -409,6 +413,8 @@ class ControllerMode(
                     "timer" -> all["hub:timer"] = Opt("hub:timer", Menu.TIMER) { pick("hub:timer"); show(Screen.TIMER_PICK) }
                     "today" -> all["hub:today"] = Opt("hub:today", Menu.TODAY) { pick("hub:today"); show(Screen.TODAY) }
                     "phone" -> all["hub:phone"] = Opt("hub:phone", Menu.PHONE) { pick("hub:phone"); show(Screen.PHONE) }
+                    "alarm" -> all["hub:alarm"] = Opt("hub:alarm", Menu.SET_ALARM) { pick("hub:alarm"); show(Screen.ALARM_HOUR) }
+                    "calculator" -> all["hub:calculator"] = Opt("hub:calculator", Menu.CALCULATOR) { pick("hub:calculator"); calc.clear(); show(Screen.CALC) }
                     "games" -> all["hub:games"] = Opt("hub:games", Menu.GAMES) { pick("hub:games"); show(Screen.GAMES) }
                 }
                 suggestedKeys = emptyList()
@@ -465,6 +471,11 @@ class ControllerMode(
                 Opt("games:write", Menu.WRITE) { pick("games:write"); pausedByUs = false; exit(false); out.startWrite() },   // a program of the OS, not a game; reachable here until it has its own place
                 Opt("games:howto", Menu.HOW_TO_PLAY) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) },
                 Opt("games:back", Menu.BACK) { pick("games:back"); show(Screen.HUB) })
+            Screen.CALC -> calcOptions()
+            Screen.ALARM_HOUR -> ALARM_HOURS.map { h -> Opt("alarm:h$h", Menu.hour(h)) { pick("alarm:h$h"); alarmHour = h; show(Screen.ALARM_MIN) } } +
+                Opt("alarm:back", Menu.BACK) { pick("alarm:back"); show(Screen.HUB) }
+            Screen.ALARM_MIN -> ALARM_MINUTES.map { m -> Opt("alarm:m$m", Menu.minute(m)) { pick("alarm:m$m"); setAlarmPending(alarmHour, m) } } +
+                Opt("alarm:back", Menu.BACK) { pick("alarm:back"); show(Screen.ALARM_HOUR) }
             Screen.TIMER_DONE -> listOf(
                 Opt("timer:stop", Menu.STOP) { pick("timer:stop"); out.stopAlarm(); afterSpeech { advance() } },
                 Opt("timer:plus5", Menu.FIVE_MORE) { pick("timer:plus5"); out.stopAlarm(); queue.removeAt(qi); startTimerPending(5) },
@@ -699,7 +710,8 @@ class ControllerMode(
             Screen.NOTIF_ACTIONS -> show(Screen.NOTIF_LIST)
             Screen.NOTIF_LIST, Screen.APP_OPEN -> treeUp()
             Screen.TREE -> { treePath.removeLastOrNull(); treeUp() }
-            Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES -> show(Screen.HUB)
+            Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR -> show(Screen.HUB)
+            Screen.ALARM_MIN -> show(Screen.ALARM_HOUR)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()
         }
@@ -719,6 +731,34 @@ class ControllerMode(
             onCancel = { handled.remove(hid(m)); replied.remove(hid(m)); show(Screen.MESSAGE) },
             after = { queue.remove(m); if (qi >= queue.size) qi = 0; showQueueItemOrHub() })
     }
+
+    // ---- calculator and alarm programs ----
+    private val calc = Calculator()
+    private var alarmHour = 7
+
+    /** The list adapts: typing a number puts Equals and the operators first, waiting for a number puts the digits first. */
+    private fun calcOptions(): List<Opt> {
+        fun then(key: String, label: Phrase, act: () -> Unit) = Opt("calc:$key", label) { pick("calc:$key"); act(); calcSay() }
+        val digits = (1..9).plus(0).map { d -> then("d$d", Menu.digit(d)) { calc.digit(d) } }
+        val point = then("point", Menu.POINT) { calc.point() }
+        val ops = "+-*/%".map { o -> then("op$o", Menu.op(o)) { calc.operate(o) } }
+        val equals = Opt("calc:equals", Menu.EQUALS) { pick("calc:equals"); calc.equals(); calcSay() }
+        val tail = listOf(then("undo", Menu.UNDO) { calc.undo() }, then("clear", Menu.CLEAR) { calc.clear() }, Opt("calc:back", Menu.BACK) { pick("calc:back"); show(Screen.HUB) })
+        return when {
+            calc.typing -> listOfNotNull(equals.takeIf { calc.canEquals }) + (if (calc.canOperate) ops else emptyList()) + digits + point + tail
+            calc.canOperate && !calc.typing && calc.isResult() -> ops + digits + point + tail
+            else -> digits + point + (if (calc.canOperate) ops else emptyList()) + tail
+        }
+    }
+
+    /** Say what the calculator holds now, then read the (changed) list again from the top. */
+    private fun calcSay() {
+        say(Voice.calc(calc.spoken()), true)
+        phase = Phase.WAIT; waitNext = { beginScan() }
+    }
+
+    private fun setAlarmPending(h: Int, m: Int) =
+        startPending(Voice.settingAlarm(h, m), { out.setAlarm(h, m).also { if (!it) say(Voice.ALARM_FAILED) } }, onCancel = { show(Screen.HUB) }, after = { exit(false) })
 
     private fun startTimerPending(min: Int) {
         out.setLastTimer(min)

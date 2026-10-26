@@ -96,6 +96,7 @@ object Actions {
             override fun volume(up: Boolean) = adjustVolume(up)
             override fun volumeLevel() = app.getSystemService(AudioManager::class.java).getStreamVolume(AudioManager.STREAM_MUSIC)
             override fun startTimer(minutes: Int) = startTimerNow(minutes)
+            override fun setAlarm(hour: Int, minute: Int) = setAlarmNow(hour, minute)
             override fun stopAlarm() = stopAlarmNow()
             override fun timerRinging() = ringing != null
             override fun messages() = ControllerNotificationListener.store.all()
@@ -369,17 +370,30 @@ object Actions {
         say(Voice.timerSet(minutes), false)
     }
 
+    /** A wake-up alarm at the next [hour]:[minute]. The system alarm keeps it and rings it in the clock app; when Android blocks the clock app (screen off) the alarm manager wakes [AlarmReceiver], which rings with tone and voice. */
+    private fun setAlarmNow(hour: Int, minute: Int): Boolean {
+        val intent = Intent(AlarmClock.ACTION_SET_ALARM).putExtra(AlarmClock.EXTRA_HOUR, hour).putExtra(AlarmClock.EXTRA_MINUTES, minute)
+            .putExtra(AlarmClock.EXTRA_MESSAGE, "Invisible").putExtra(AlarmClock.EXTRA_SKIP_UI, true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (appVisible()) try { app.startActivity(intent); Log.d(TAG, "ALARM $hour:$minute clockApp"); return true } catch (e: Exception) { Log.d(TAG, "ALARM clock app failed: $e") }
+        val at = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, minute); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0); if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1) }
+        val fire = android.app.PendingIntent.getBroadcast(app, 7, Intent(app, AlarmReceiver::class.java), android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+        return try { app.getSystemService(AlarmManager::class.java).setAlarmClock(AlarmManager.AlarmClockInfo(at.timeInMillis, fire), fire); Log.d(TAG, "ALARM $hour:$minute own"); true } catch (e: Exception) { Log.d(TAG, "ALARM own failed: $e"); false }
+    }
+
+    /** Called by [AlarmReceiver] when our own alarm fires. */
+    fun alarmRang() { handler.post { ring(0, Voice.ALARM_RINGING) } }
+
     private fun appVisible(): Boolean {
         val p = android.app.ActivityManager.RunningAppProcessInfo()
         android.app.ActivityManager.getMyMemoryState(p)
         return p.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
     }
 
-    private fun ring(n: Int) {
+    private fun ring(n: Int, line: Phrase = Voice.TIMER_DONE) {
         if (n >= 20) { ringing = null; return }
         narrator.beep(Tone.ALARM, minOf(1f, 0.5f + 0.15f * (n / 3)))   // louder every 10 s
-        if (n % 3 == 0) say(Voice.TIMER_DONE, true)
-        val r = Runnable { ring(n + 1) }
+        if (n % 3 == 0) say(line, true)
+        val r = Runnable { ring(n + 1, line) }
         ringing = r
         handler.postDelayed(r, 3000)
     }
