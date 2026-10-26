@@ -308,7 +308,10 @@ object Actions {
                 override fun hush() { narrator.hush() }
                 override fun prefetch(words: List<String>) { narrator.prefetch(words) }
                 override fun say(text: Phrase) { narrator.say(text, true) }
-                override fun cue(c: TypeCue) { Log.d(TAG, "WRITE cue $c"); narrator.cue(c) }
+                override fun log(event: String, vararg fields: Any?) {
+                        try { java.io.File(app.filesDir, "write_usage.tsv").appendText((listOf(System.currentTimeMillis(), event) + fields.map { it.toString().replace('\t', ' ').replace('\n', ' ') }).joinToString("\t") + "\n") } catch (e: Throwable) { Log.e(TAG, "usage log failed", e) }
+                    }
+                    override fun cue(c: TypeCue) { Log.d(TAG, "WRITE cue $c"); narrator.cue(c) }
                 override fun finished(text: String) {
                     if (sum.add(text)) handler.postDelayed({ this@Actions.say(TypeVoice.total(sum.spoken()), false) }, 400)
                     else { last = true; handler.postDelayed({ this@Actions.say(if (sum.isEmpty) TypeVoice.NO_PRICES else TypeVoice.total(sum.spoken()), false) }, 400) }

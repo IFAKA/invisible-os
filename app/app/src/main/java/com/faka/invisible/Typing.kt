@@ -20,6 +20,8 @@ interface TypeOut {
     fun prefetch(words: List<String>)
     fun say(text: Phrase)
     fun cue(c: TypeCue)
+    /** One line for the usage file (event, then fields); lets the layout be tuned from real use. */
+    fun log(event: String, vararg fields: Any?) {}
     fun finished(text: String)   // the written text; "" = nothing written
     /** Ask the big model (slow, in the background) for ways to finish [text]; call [then] with them when ready. Default: none. */
     fun phrases(text: String, then: (List<String>) -> Unit) {}
@@ -133,6 +135,7 @@ class TypeProgram(
         val r = items.getOrNull(page * 2 + 1)
         out.prefetch(items.drop(page * 2 + 2).take(4) )
         out.pair(l, r)
+        out.log("pair", l, r, page, if (phraseMode) "phrases" else if (letters) "letters" else "words", prefix, written.size)
         pressedSinceShow = false
         timers.set("t:replay", REPLAY_MS) { if (active && replays < MAX_REPLAYS) { replays++; show(true) } }
     }
@@ -175,8 +178,8 @@ class TypeProgram(
         if (menu) { if (n == 1) pickMenu() else closeMenu(); return }
         when (n) {
             1 -> choose(true)
-            2 -> { out.cue(TypeCue.NEXT); page++; show() }
-            3 -> openMenu()
+            2 -> { out.log("next", page); out.cue(TypeCue.NEXT); page++; show() }
+            3 -> { out.log("menu"); openMenu() }
             else -> show(true)   // 4 or more clicks mean nothing: play the pair again
         }
     }
@@ -225,6 +228,7 @@ class TypeProgram(
     private fun pickMenu() {
         val label = menuScan.list.current
         menu = false; menuScan.stop()
+        out.log("menupick", when (label) { TypeVoice.MENU_DONE -> "done"; TypeVoice.MENU_LEAVE -> "leave"; TypeVoice.MENU_DELETE -> "delete"; TypeVoice.PHRASES -> "phrases"; TypeVoice.DIGITS -> "digits"; else -> "letters/words" })
         when (label) {
             TypeVoice.MENU_DONE -> leave(true)
             TypeVoice.MENU_LEAVE -> leave(false)
@@ -238,6 +242,7 @@ class TypeProgram(
         val item = items.getOrNull(page * 2 + if (left) 0 else 1)
         if (item == null) { out.cue(TypeCue.NEXT); show(true); return }
         out.cue(if (left) TypeCue.PICK_LEFT else TypeCue.PICK_RIGHT)
+        out.log("pick", if (left) "L" else "R", item, page, if (phraseMode) "phrases" else if (letters) "letters" else "words", prefix)
         if (phraseMode) { written.addAll(item.split(' ').filter { it.isNotEmpty() }); phraseMode = false; prefix = ""; askPhrases() }
         else if (letters) { prefix += item; letters = false; out.say(TypeVoice.wordsWith(prefix)) } else { lm.picked(written.takeLast(8), item); written.add(item); prefix = ""; askPhrases() }
         page = 0
@@ -247,6 +252,7 @@ class TypeProgram(
     private fun leave(done: Boolean) {
         if (done && prefix.isNotEmpty()) { written.add(prefix); prefix = "" }   // letters spelled but not yet a word: keep them
         val t = if (done) text() else ""
+        out.log("end", if (done) "done" else "leave", written.size, t.length)
         if (t.isEmpty()) { send(""); return }
         waiting = true; timers.clear("t:replay")
         out.translate(t) { r ->
