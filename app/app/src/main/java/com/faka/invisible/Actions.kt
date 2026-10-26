@@ -101,6 +101,9 @@ object Actions {
             override fun notifSummary(n: Notif) = ControllerNotificationListener.modules.forNotif(n).summary(n)
             override fun notifFire(key: String, index: Int) = ControllerNotificationListener.fireAction(key, index, null, app)
             override fun notifDismiss(key: String) = ControllerNotificationListener.dismiss(key)
+            override fun notifMute(pkg: String) = ControllerNotificationListener.mute(pkg)
+            override fun notifMutedCount() = ControllerNotificationListener.mutes.all().size
+            override fun notifUnmuteAll() = ControllerNotificationListener.unmuteAll()
             override fun startNotifReply(key: String, index: Int) = launchWrite { text -> ControllerNotificationListener.fireAction(key, index, text, app) }
             override fun status(): Status {
                 val c = Calendar.getInstance()
@@ -160,6 +163,7 @@ object Actions {
         buckets = BucketStore(if (bf.exists()) bf.readLines() else emptyList()) { lines -> try { bf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "buckets.txt write failed", e) } }
         Thread({ wordModel() }, "write-warm").start()
         com.faka.invisible.tell.TellSynth.warmAsync()   // the Duel's sounds take seconds to build on a phone: do it now, quietly
+        ControllerNotificationListener.loadMutes(app)
         mode.settings = SettingsStore.load(prefs())
         val f = java.io.File(app.filesDir, "choices.log")
         choices = ChoiceLog(if (f.exists()) f.readLines() else emptyList()) { line -> try { f.appendText(line + "\n") } catch (e: Exception) { Log.e(TAG, "choices.log write failed", e) } }

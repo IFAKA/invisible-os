@@ -20,7 +20,11 @@ class ControllerNotificationListener : NotificationListenerService() {
         val modules = NotificationModules(listOf(chat))
         val store get() = chat.store
         /** The mailbox: every app's notifications (not ongoing, not group summaries), see [NotificationStore]. */
-        val notifs = NotificationStore()
+        val notifs = NotificationStore(muted = { mutes.isMuted(it) })
+        /** Apps the user muted from the Notifications screen: not counted, not announced. Saved in SharedPreferences. */
+        @Volatile var mutes = MuteSet()
+            private set
+        private var mutesLoaded = false
         private val notifActions = HashMap<String, Array<Notification.Action>>()
         @Volatile private var live: ControllerNotificationListener? = null
         /** The latest Google Maps navigation sentence while it is active, else null. */
@@ -52,6 +56,18 @@ class ControllerNotificationListener : NotificationListenerService() {
             } catch (e: Exception) { Log.e("Invisible", "ACTION failed", e); false }
         }
 
+        @Synchronized fun loadMutes(ctx: android.content.Context) {
+            if (mutesLoaded) return
+            mutesLoaded = true
+            val prefs = ctx.getSharedPreferences("notif_mute", android.content.Context.MODE_PRIVATE)
+            mutes = MuteSet(prefs.getStringSet("pkgs", emptySet()).orEmpty()) { prefs.edit().putStringSet("pkgs", it).apply() }
+        }
+
+        fun mute(pkg: String) { mutes.mute(pkg); modules.all().forEach { it.onMuted(pkg) } }
+
+        /** Unmutes every app and reads the notifications that are showing again (silently: no arrival announcements). */
+        fun unmuteAll() { mutes.unmuteAll(); live?.reloadActive() }
+
         /** Swipes the notification away, as the user would. */
         fun dismiss(key: String): Boolean {
             val l = live ?: return false
@@ -62,9 +78,14 @@ class ControllerNotificationListener : NotificationListenerService() {
     @Volatile private var loaded = false
 
     override fun onListenerConnected() {
-        loaded = false; live = this
+        loaded = false; live = this; loadMutes(applicationContext)
         modules.all().forEach { it.onConnected(applicationContext) }
         notifs.clear(); synchronized(Companion) { notifActions.clear() }; navigation = null; navKey = null
+        reloadActive()
+    }
+
+    private fun reloadActive() {
+        loaded = false
         try { activeNotifications?.forEach { take(it) } } catch (e: Exception) { Log.e("Invisible", "NL load failed", e) }
         loaded = true
     }
@@ -108,6 +129,7 @@ class ControllerNotificationListener : NotificationListenerService() {
             return
         }
         keep(sbn)
+        if (mutes.isMuted(sbn.packageName)) return   // muted: kept in the mailbox but hidden from every read; the module neither counts nor announces it
         modules.forPackage(sbn.packageName).onPosted(sbn, loaded)
     }
 }
