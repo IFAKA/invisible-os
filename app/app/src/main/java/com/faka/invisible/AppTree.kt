@@ -25,14 +25,17 @@ class TreeNode(val label: String, val children: List<TreeNode> = emptyList(), va
  *    The same holds for groups, whose weight is the sum below them (top-level groups end up ordered by total weight).
  *  - where a long list is cut by "More": exact dynamic programming per list ([arrange]); the cut is chosen by cost, each list is 3 to 6 long.
  *    "More" taking the light tail is also how a big sub-group is split into a head and a tail by weight.
- *  - the level of each leaf: in its sub-group, flattened into the group list, or promoted to the group list or home. A leaf is lifted
+ *  - the level of each leaf: in its sub-group, flattened into the group list, or promoted to the group list, or (two apps at most) home. A leaf is lifted
  *    only when what it saves beats what it adds to the others (the search compares whole-tree costs). Sub-groups flatten the same way.
- * The level assignment is found by local search (best single move until none helps) from three starts (deepest, sub-groups flattened, everything at home); each step is an exact layout.
- * A group or sub-group with one entry is replaced by it. Home has at most [HOME] entries, no list more than [MAX_LIST],
+ * The level assignment is found by local search (best single move until none helps) from two starts (deepest, sub-groups flattened); each step is an exact layout.
+ * Every group is always a direct entry of home (never behind "More"), ordered by total weight, and at most [PROMOTED] apps may be promoted to home on top
+ * of them, so home has up to [HOME_MAX] entries. A sub-group with one entry is replaced by it. No other list is more than [MAX_LIST],
  * and a leaf is at most 3 lists deep (home, group, sub-group), "More" tails not counted.
  */
 object AppTree {
-    const val HOME = 6
+    const val HOME = 6          // kept for the old builder's comparison
+    const val PROMOTED = 2      // apps that may sit on home next to the groups
+    const val HOME_MAX = 6 + PROMOTED
     const val MAX_LIST = 6
     const val MIN_LIST = 3
     const val LEVEL = 0.5
@@ -47,7 +50,7 @@ object AppTree {
     fun build(leaves: List<AppLeaf>): TreeNode {
         val ls = leaves.sortedBy { it.pkg }
         if (ls.isEmpty()) return TreeNode("")
-        val starts = listOf(ls.associate { it.pkg to maxLevel(it) }, ls.associate { it.pkg to minOf(1, maxLevel(it)) }, ls.associate { it.pkg to 0 })
+        val starts = listOf(ls.associate { it.pkg to maxLevel(it) }, ls.associate { it.pkg to minOf(1, maxLevel(it)) })
         return starts.map { climb(ls, layout(ls, it)) }.minBy { it.cost }.root
     }
 
@@ -62,7 +65,8 @@ object AppTree {
     private fun layout(ls: List<AppLeaf>, lv: Map<String, Int>): Layout {
         val home = ls.filter { lv.getValue(it.pkg) == 0 }.map(::leafEntry) +
             ls.filter { lv.getValue(it.pkg) > 0 }.groupBy { AppCategories.main(it.category) }.mapNotNull { (g, l) -> listEntry(g, groupEntries(l, lv)) }
-        val (cost, kids) = arrange(home, HOME)
+        if (home.size > HOME_MAX || ls.count { lv.getValue(it.pkg) == 0 } > PROMOTED) return Layout(Double.MAX_VALUE, node("", emptyList()), lv)
+        val (cost, kids) = arrange(home, HOME_MAX)
         return Layout(cost, node("", kids), lv)
     }
 
@@ -73,7 +77,7 @@ object AppTree {
     /** A group as one list entry; nothing -> none, one entry -> that entry itself. */
     private fun listEntry(label: String, entries: List<Entry>): Entry? = when (entries.size) {
         0 -> null
-        1 -> entries[0]
+        1 -> entries[0].let { e -> if (e.node.isApp) e else Entry(node(label, e.node.children, e.node.isMore), e.inner) }   // a group keeps its name; a lone app is itself
         else -> arrange(entries, MAX_LIST).let { (cost, kids) -> node(label, kids).let { Entry(it, LEVEL * it.weight + cost) } }
     }
 

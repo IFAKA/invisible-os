@@ -31,7 +31,15 @@ class AppTreeTest {
     private val usage: Map<String, Pair<Int, Int>> = javaClass.classLoader!!.getResource("app_usage.tsv")!!.readText().lines().drop(1).filter { it.isNotBlank() }
         .associate { l -> l.split('\t').let { it[0] to (it[1].toInt() to it[3].toInt()) } }
 
-    private fun leaf(p: String, w: Double, unread: Int = 0) = AppLeaf(p, p.removePrefix("hub:").substringAfterLast('.'), AppCategories.categoryOf(p), unread, w)
+    private fun leaf(p: String, w: Double, unread: Int = 0) = AppLeaf(p, title(p), AppCategories.categoryOf(p), unread, w)
+
+    /** A readable name from a package (the phone gives real labels): the last part that is not a filler word, capitalised. */
+    private fun title(p: String): String {
+        val skip = setOf("android", "app", "apps", "es", "core", "ui", "mobile", "red", "wallet", "client", "integrated", "community", "wallet", "latin", "manager", "m", "main", "mshop", "v2")
+        val parts = p.removePrefix("hub:").split('.')
+        val w = parts.reversed().firstOrNull { it !in skip && it.length > 2 } ?: parts.last()
+        return w.replaceFirstChar { it.uppercase() }
+    }
 
     /** All apps of the owner's phone (not this app) with weights from real launches, plus the OS programs. */
     private fun phone(): List<AppLeaf> = usage.filterKeys { it != AppWeights.SELF }.map { (p, u) -> leaf(p, AppWeights.weight(p, u.first, u.second, 0)) } +
@@ -44,7 +52,8 @@ class AppTreeTest {
     private fun flat(l: List<AppLeaf>) = TreeNode("", l.sortedWith(compareByDescending<AppLeaf> { it.weight }.thenBy { it.pkg }).map { TreeNode(it.label, app = it, weight = it.weight) })
 
     @Test fun weightUsesLaunchesNotMinutes() {
-        assertEquals(1.0 + 10 + 2 * 3 + 5 * 2, AppWeights.weight("com.x", 10, 3, 2), 1e-9)
+        assertEquals(1.0 + 3 * Math.log(17.0) + 5 * 2, AppWeights.weight("com.x", 10, 3, 2), 1e-9)
+        assertEquals(1.0, AppWeights.weight("com.microsoft.launcher", 155, 122, 0), 1e-9)
         assertEquals(3.0, AppWeights.weight("hub:tasks", 0, 0, 0), 1e-9)
         assertEquals(1.0, AppWeights.weight("com.unseen", 0, 0, 0), 1e-9)
     }
@@ -65,7 +74,12 @@ class AppTreeTest {
         println("REPORT depth=${AppTree.depth(opt)} rawDepth=${AppTree.rawDepth(opt)} maxList=${AppTree.maxListLength(opt)}")
         println("REPORT tree (label (length) [weight]):\n" + dump(opt))
         assertTrue("$cOpt <= $cOld", cOpt <= cOld + 1e-9); assertTrue("$cOld <= $cFlat", cOld <= cFlat)
-        assertTrue(AppTree.maxListLength(opt) <= AppTree.MAX_LIST); assertTrue(opt.children.size <= AppTree.HOME)
+        assertTrue(lists(opt).drop(1).all { it.children.size <= AppTree.MAX_LIST }); assertTrue(opt.children.size <= AppTree.HOME_MAX)
+        val groups = setOf("Messages", "Day", "Money", "Media", "Out", "Tools")
+        assertEquals(groups, opt.children.map { it.label }.filter { it in groups }.toSet())   // every group is a direct entry of home
+        assertTrue(opt.children.count { it.isApp } <= AppTree.PROMOTED)
+        assertFalse(opt.children.any { it.isMore })
+        println("REPORT top-5 vs flat: optimized=%.0f flat=%.0f".format(AppTree.heardToTop(opt, 5), AppTree.heardToTop(fl, 5)))
         assertTrue(AppTree.depth(opt) <= 4)
         assertEquals(l.map { it.pkg }.sorted(), AppTree.apps(opt).map { it.pkg }.sorted())
         assertTrue("build took $ms ms", ms < 1000)
@@ -98,23 +112,22 @@ class AppTreeTest {
         val t = AppTree.build(l)
         // the best possible by brute force over the cut c in 2..5 (head c, then More with the rest as one list of at most 6)
         val best = (2..5).minOf { c -> ws.take(c).withIndex().sumOf { (i, w) -> w * (i + 1) } + ws.drop(c).withIndex().sumOf { (i, w) -> w * (c + 1 + AppTree.LEVEL + i + 1) } }
-        val flatAll = ws.withIndex().sumOf { (i, w) -> w * (i + 1) }
-        val want = minOf(best, flatAll.takeIf { false } ?: best) / ws.sum()
+        val want = (best + (1 + AppTree.LEVEL) * ws.sum()) / ws.sum()   // the group is one entry of home; promoting apps to home can only be cheaper
         assertTrue("cost ${AppTree.expectedCost(t)} vs $want", AppTree.expectedCost(t) <= want + 1e-9)
-        assertTrue(AppTree.maxListLength(t) <= 6)
+        assertTrue(lists(t).drop(1).all { it.children.size <= 6 })
     }
 
     @Test fun aHeavyLeafIsPromotedAndALightGroupStaysDown() {
         val l = (1..8).map { AppLeaf("m$it", "M$it", "Money/Banks", 0, 1.0) } + AppLeaf("star", "Star", "Tools/Web", 0, 500.0) + (1..8).map { AppLeaf("d$it", "D$it", "Tools/Dev", 0, 1.0) }
         val t = AppTree.build(l)
-        assertEquals("Star", t.children.first().label)
-        assertTrue(t.children.size <= AppTree.HOME)
+        assertTrue(t.children.any { it.label == "Star" })
+        assertTrue(t.children.size <= AppTree.HOME_MAX)
     }
 
     @Test fun emptyAndSingle() {
         assertTrue(AppTree.build(emptyList()).children.isEmpty())
         val one = AppTree.build(listOf(leaf("com.x", 1.0)))
-        assertEquals(1, one.children.size); assertTrue(one.children[0].isApp)
+        assertEquals(1, one.children.size)
     }
 
     @Test fun oldBuilderStillWorks() {
