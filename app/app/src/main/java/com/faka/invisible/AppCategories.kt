@@ -45,11 +45,11 @@ Money/Pay           com.transferwise.android
 Money/Pay           com.mercadopago.wallet
 Money/Pay           com.westernunion.moneytransferr3app.es
 Money/Pay           com.google.android.apps.walletnfcrel
-Media/Music         hub:music
-Media/Music         com.google.android.apps.youtube.music
-Media/Music         app.morphe.android.apps.youtube.music
-Media/Music         org.oxycblt.auxio
-Media/Music         com.miui.player
+Media/Listen         hub:music
+Media/Listen         com.google.android.apps.youtube.music
+Media/Listen         app.morphe.android.apps.youtube.music
+Media/Listen         org.oxycblt.auxio
+Media/Listen         com.miui.player
 Media/Watch         com.google.android.videos
 Media/Watch         com.miui.videoplayer
 Media/Watch         com.google.android.apps.photos
@@ -60,7 +60,7 @@ Media/Play          com.mojang.minecraftpe
 Media/Play          com.valvesoftware.android.steam.community
 Media/Play          com.xiaomi.glgm
 Media/Play          com.duolingo
-Media/Music         com.sonkins.tguitar
+Media/Listen         com.sonkins.tguitar
 Out/Move            com.google.android.apps.maps
 Out/Move            com.ubercab
 Out/Move            com.crtm.integrated
@@ -72,14 +72,14 @@ Out/Shop            com.alibaba.aliexpresshd
 Out/Shop            com.xiaomi.mipicks
 Out/Health          com.maxsnr.workout
 Out/Health          digifit.android.virtuagym.pro.synergym
-Tools/Phone         hub:phone
+Tools/System        hub:phone
 Tools/Utilities     hub:calculator
 Tools/Utilities     com.miui.calculator
 Day                 hub:alarm
-Tools/Phone         com.android.settings
-Tools/Phone         com.miui.securitycenter
-Tools/Phone         com.google.android.apps.adm
-Tools/Phone         com.google.android.apps.safetyhub
+Tools/System        com.android.settings
+Tools/System        com.miui.securitycenter
+Tools/System        com.google.android.apps.adm
+Tools/System        com.google.android.apps.safetyhub
 Tools/Setup         com.android.thememanager
 Tools/Setup         com.orange.update
 Media/Audio         com.mi.earphone
@@ -109,7 +109,7 @@ Tools/Dev           com.k2fsa.sherpa.onnx.tts.engine
 Tools/Dev           app.morphe.manager
 Tools/Dev           app.revanced.android.gms
 Day/Work            com.themis.clientmobile
-Tools/Phone         dev.jason.com.google.android.inputmethod.latin
+Tools/System        dev.jason.com.google.android.inputmethod.latin
 """
 
     /** Package -> place. */
@@ -123,7 +123,7 @@ Tools/Phone         dev.jason.com.google.android.inputmethod.latin
         "Messages/Chat" to listOf("whatsapp", "telegram", "signal", "messenger", "discord", "slack", "teams", "wechat", "viber"),
         "Messages/Mail" to listOf("mail", "outlook"),
         "Messages/Social" to listOf("instagram", "facebook", "twitter", "tiktok", "linkedin", "reddit", "snapchat", "mastodon"),
-        "Media/Music" to listOf("music", "spotify", "podcast"),
+        "Media/Listen" to listOf("music", "spotify", "podcast"),
         "Media/Watch" to listOf("youtube", "video", "netflix"),
         "Media/Watch" to listOf("photos", "gallery"),
         "Media/Play" to listOf("game", "minecraft", "steam"),
@@ -135,7 +135,7 @@ Tools/Phone         dev.jason.com.google.android.inputmethod.latin
 
     // ApplicationInfo.CATEGORY_* values, kept as numbers so this file has no Android types.
     private val HINTS: Map<Int, String> = mapOf(
-        0 to "Media/Play", 1 to "Media/Music", 2 to "Media/Watch", 3 to "Media/Watch",
+        0 to "Media/Play", 1 to "Media/Listen", 2 to "Media/Watch", 3 to "Media/Watch",
         4 to "Messages/Social", 5 to "Media/Watch", 6 to "Out/Move", 7 to "Day/Work",
     )
 

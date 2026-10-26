@@ -1,6 +1,7 @@
 package com.faka.invisible
 
 import android.content.Context
+import com.faka.invisible.logickit.UniqueNames
 
 /**
  * The one place that decides which entries are in the spoken tree and where they sit. The voice ([ControllerMode]) and the settings screen both call it,
@@ -21,9 +22,12 @@ object TreeLeaves {
         }
 
     /** The edits: hidden entries leave, moved ones change group (no subgroup), pinned ones get [PIN_BOOST]. */
-    fun edit(leaves: List<AppLeaf>, s: LauncherSettings): List<AppLeaf> = leaves.filter { it.pkg !in s.hidden }.map { l ->
+    fun edit(leaves: List<AppLeaf>, s: LauncherSettings): List<AppLeaf> = UniqueNames.apply(leaves.filter { it.pkg !in s.hidden }, reservedNames()).map { l ->
         l.copy(category = s.moved[l.pkg] ?: l.category, weight = if (l.pkg in s.pinned) l.weight + PIN_BOOST else l.weight)
     }
+
+    /** Group names are always on the home list: an app may not be called like one. (Sub-groups are renamed in the tags instead; a sub with one entry disappears.) */
+    private fun reservedNames(): Set<String> = GROUPS.toSet()
 
     /** All entries before the edits, for the settings screen (the OS programs that are always there, plus every app). */
     fun all(c: Context, s: LauncherSettings): List<AppLeaf> {

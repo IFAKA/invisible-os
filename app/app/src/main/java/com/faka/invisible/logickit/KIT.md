@@ -8,6 +8,7 @@ Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rule
 | File | What it is |
 |---|---|
 | Text.kt | `String.squash()` = collapse white space and trim. `String.words()` = the words of a text. The only place that writes `Regex("\\s+")`. |
+| UniqueNames.kt | `UniqueNames.apply(leaves, reserved)` = every spoken leaf name unique (no screen: two same names cannot be told apart). A program keeps its name; an app gets its maker ("Xiaomi Calculator"), then a number. Used by `TreeLeaves.edit`. |
 | Calculator.kt | `Calculator` = state of the spoken calculator (digit, point, operate, equals, undo, `spoken()`), left to right; `%` = percent of. Used by the Calculator program. |
 | ChatLang.kt | `ChatLang.of(seen, detect)` = the language of the chat or message a reply goes to (null if too short or unknown). `needsTranslation(target)`. Used by Write for screen chats and for notification replies. |
 
