@@ -7,12 +7,12 @@ import org.junit.Test
 
 class SetupTest {
     private val none = SetupState(false, false, false, false, false, false, false, false, 34)
-    private val all = SetupState(true, true, true, true, true, true, true, true, 34)
+    private val all = SetupState(true, true, true, true, true, true, true, true, 34, contacts = true, calls = true, sms = true)
 
     @Test fun firstStepIsButtonAccess() {
         val st = Setup.steps(none)
         assertEquals("button", st[Setup.current(st)].id)
-        assertEquals("Step 1 of 8", Setup.label(0, st.size))
+        assertEquals("Step 1 of 11", Setup.label(0, st.size))
     }
     @Test fun testStepWaitsForButtonAccess() {
         val st = Setup.steps(none.copy(button = true))

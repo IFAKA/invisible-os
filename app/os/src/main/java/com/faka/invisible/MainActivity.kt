@@ -100,6 +100,9 @@ class MainActivity : Activity() {
             "assist" -> startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
             "post" -> ask(Manifest.permission.POST_NOTIFICATIONS)
             "calendar" -> ask(Manifest.permission.READ_CALENDAR)
+            "contacts" -> ask(Manifest.permission.READ_CONTACTS)
+            "calls" -> requestPermissions(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.ANSWER_PHONE_CALLS), 1)
+            "sms" -> ask(Manifest.permission.SEND_SMS)
             "location" -> ask(Manifest.permission.ACCESS_COARSE_LOCATION)
             "usage" -> startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
         }
@@ -129,7 +132,8 @@ class MainActivity : Activity() {
         if (a11y && EventLog.lastGesture != null) sp.edit().putBoolean("button_tested", true).apply()
         val tested = a11y && sp.getBoolean("button_tested", false)
         val steps = Setup.steps(SetupState(a11y, tested, notif, assist, granted(Manifest.permission.POST_NOTIFICATIONS), granted(Manifest.permission.READ_CALENDAR),
-            granted(Manifest.permission.ACCESS_COARSE_LOCATION), usageOn(), android.os.Build.VERSION.SDK_INT, sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()))
+            granted(Manifest.permission.ACCESS_COARSE_LOCATION), usageOn(), android.os.Build.VERSION.SDK_INT, sp.getStringSet("setup_skipped", emptySet()) ?: emptySet(),
+            contacts = granted(Manifest.permission.READ_CONTACTS), calls = granted(Manifest.permission.CALL_PHONE) && granted(Manifest.permission.ANSWER_PHONE_CALLS), sms = granted(Manifest.permission.SEND_SMS)))
         val next = Setup.current(steps)
         body.addView(k.text("Invisible", 30f, bold = true))
         if (next >= 0) {
@@ -137,7 +141,7 @@ class MainActivity : Activity() {
             val head = Setup.label(next, steps.size) + ": " + t.title + if (t.optional) " (optional)" else ""
             val line = if (t.id == "test") (if (a11y) "Press your earbud button once. This screen will say when it hears you." else t.reason) else t.reason + " Turn it on once. Then come back."
             k.banner(body, head, line, Ui.accent) {
-                if (t.id != "test") addView(k.bannerBtn(if (t.id in setOf("post", "calendar", "location")) "Allow" else "Turn on") { doStep(t.id) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
+                if (t.id != "test") addView(k.bannerBtn(if (t.id in setOf("post", "calendar", "location", "contacts", "calls", "sms")) "Allow" else "Turn on") { doStep(t.id) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
                 if (t.optional) addView(k.bannerBtn("Skip") { sp.edit().putStringSet("setup_skipped", (sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + t.id).apply(); render() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
             }
             body.addView(k.text(steps.withIndex().joinToString("\n") { (i, st) -> "${i + 1}. ${st.title}  " + if (st.done) "- done" else if (st.skipped) "- skipped" else if (i == next) "- now" else "" }, 14f, Ui.soft).apply { setPadding(0, k.dp(8), 0, k.dp(8)); setLineSpacing(0f, 1.2f) })
@@ -154,6 +158,18 @@ class MainActivity : Activity() {
         k.navRow(body, "Voice and speed", "Voice ${"%.1f".format(s.speechRate)}x, pause ${"%.1f".format(s.itemGapMs / 1000f)} s") { open(Page.VOICE) }
         k.navRow(body, "AI on the phone", if (!s.ai) "Off" else if (ModelDownload.ready(this)) "On, ready" else "On, model not downloaded") { open(Page.AI) }
         k.navRow(body, "Help", "Button gestures and your last presses") { open(Page.HELP) }
+        card("Emergency contact", "A phone number that gets a text when you pick Emergency in the Phone list. Leave empty for no text.") {
+            val box = k.input("Phone number, e.g. +54 11 5555 1234").apply {
+                minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_CLASS_PHONE; setText(Actions.emergencyContact())
+            }
+            val note = k.text("", 14f, Ui.good).apply { setPadding(0, k.dp(6), 0, 0) }
+            addView(box, LinearLayout.LayoutParams(-1, -2))
+            addView(k.btn("Save", true) {
+                Actions.setEmergencyContact(box.text.toString())
+                note.text = if (Actions.emergencyContact().isEmpty()) "Saved: no emergency contact." else "Saved."
+            }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+            addView(note)
+        }
         if (next < 0 && EventLog.running) body.addView(k.btn("Stop listening") { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = k.dp(16) })
     }
 

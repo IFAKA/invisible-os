@@ -5,6 +5,7 @@ data class SetupState(
     val button: Boolean, val buttonTested: Boolean, val notifications: Boolean, val assistant: Boolean,
     val postNotifications: Boolean, val calendar: Boolean, val location: Boolean, val usage: Boolean,
     val sdk: Int, val skipped: Set<String> = emptySet(),
+    val contacts: Boolean = false, val calls: Boolean = false, val sms: Boolean = false,
 )
 
 /** One line of the setup checklist. [optional] steps can be skipped; a skipped step counts as passed. */
@@ -22,6 +23,9 @@ object Setup {
         if (s.sdk >= 33) add(SetupStep("post", "Show notifications", "So the app can show that it is listening.", s.postNotifications, true))
         add(SetupStep("calendar", "Calendar", "So it can tell you your next event.", s.calendar, true))
         add(SetupStep("location", "Location", "So it can tell you the weather where you are.", s.location, true))
+        add(SetupStep("contacts", "Contacts", "So it can say who is calling and let you call a contact.", s.contacts, true))
+        add(SetupStep("calls", "Phone calls", "So you can answer, reject, end and start calls with the button.", s.calls, true))
+        add(SetupStep("sms", "Text messages", "So Emergency can text your emergency contact.", s.sms, true))
         add(SetupStep("usage", "Usage access", "Better order of apps: the ones you use most come first.", s.usage, true))
     }.map { it.copy(skipped = !it.done && it.optional && it.id in s.skipped) }
 

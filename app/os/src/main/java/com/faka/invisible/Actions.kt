@@ -147,6 +147,13 @@ object Actions {
             }
             override fun navigation() = ControllerNotificationListener.navigation
             override fun findPhone(on: Boolean) = narrator.findLoop(on)
+            override fun callCaller() = ControllerNotificationListener.ringing?.name
+            override fun answerCall() = PhoneCalls.answer(app) || ControllerNotificationListener.fireCall(app, answer = true)
+            override fun rejectCall() = PhoneCalls.end(app) || ControllerNotificationListener.fireCall(app, answer = false)
+            override fun endCall() = PhoneCalls.end(app) || ControllerNotificationListener.fireCall(app, answer = false)
+            override fun callContacts() = PhoneCalls.contacts(app)
+            override fun dial(c: com.faka.invisible.logickit.Contact) = PhoneCalls.place(app, c.number)
+            override fun emergency() = PhoneCalls.emergency(app, emergencyContact())
             override fun dndAllowed() = this@Actions.dndAllowed()
             override fun background(work: () -> Unit, done: () -> Unit) { Thread { work(); handler.post { done() } }.start() }
             override fun findHintSeen() = prefs().getBoolean("find_hint_seen", false)
@@ -353,6 +360,17 @@ object Actions {
 
     /** Long press launched the assistant role / hands-free. */
     fun assistHold() = VoiceKit.buttons.assistHold()
+
+    /** The emergency contact's phone number (empty = none); set on the app's home screen. */
+    fun emergencyContact(): String = prefs().getString("emergency_contact", "").orEmpty()
+    fun setEmergencyContact(n: String) { prefs().edit().putString("emergency_contact", Calls.digits(n)).apply() }
+
+    /** A call rings: open the Answer / Reject list. */
+    fun callRinging() { if (::app.isInitialized) handler.post { mode.callIncoming() } }
+    /** The call was answered elsewhere (on the phone itself). */
+    fun callAnswered() { if (::app.isInitialized) handler.post { mode.callOngoing() } }
+    /** No call is left. */
+    fun callOver() { if (::app.isInitialized) handler.post { mode.callEnded() } }
 
     /** New chat message arrived: short earcon, no speech. Favourite senders get a different tone. */
     fun arrival(sender: String) {

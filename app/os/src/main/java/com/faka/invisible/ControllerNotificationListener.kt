@@ -37,6 +37,19 @@ class ControllerNotificationListener : NotificationListenerService() {
         @Volatile private var live: ControllerNotificationListener? = null
         /** The latest Google Maps navigation sentence while it is active, else null. */
         @Volatile var navigation: String? = null
+        /** A call of the dialer: the ringing one (name and answer / decline button) and the running one. */
+        class Call(val key: String, val name: String, val answer: Int, val decline: Int)
+        @Volatile var ringing: Call? = null
+            private set
+        @Volatile private var ongoingKey: String? = null
+        private val callHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+        /** Presses the dialer's own Answer or Decline button; used when the phone permission is not given. */
+        fun fireCall(ctx: android.content.Context, answer: Boolean): Boolean {
+            val c = ringing ?: return false
+            val i = if (answer) c.answer else c.decline
+            return i >= 0 && fireAction(c.key, i, null, ctx)
+        }
         @Volatile private var navKey: String? = null
         /** Voice for a song name: English only when the detector clearly says English, otherwise Spanish (same rule as messages). */
         fun voiceFor(text: String): String {
@@ -103,6 +116,11 @@ class ControllerNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) = take(sbn)
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        if (sbn.key == ringing?.key || sbn.key == ongoingKey) {
+            if (sbn.key == ringing?.key) ringing = null
+            if (sbn.key == ongoingKey) ongoingKey = null
+            callHandler.postDelayed({ if (ringing == null && ongoingKey == null) Actions.callOver() }, 700)   // an answered call swaps its notification: wait a moment
+        }
         if (sbn.packageName == Navigation.PACKAGE && sbn.key == navKey) { navigation = null; navKey = null }
         notifs.remove(sbn.key); synchronized(Companion) { notifActions.remove(sbn.key) }
         modules.all().forEach { it.onRemoved(sbn) }
@@ -129,7 +147,28 @@ class ControllerNotificationListener : NotificationListenerService() {
         packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
     } catch (e: Exception) { pkg.substringAfterLast('.') }
 
+    /** A dialer notification: a ringing call opens the Answer / Reject list, a running one is remembered. True = handled here. */
+    private fun call(sbn: StatusBarNotification): Boolean {
+        val n = sbn.notification
+        if (sbn.packageName == packageName) return false
+        val titles = n.actions.orEmpty().map { it.title?.toString().orEmpty() }
+        when (Calls.kind(n.category, n.extras.getInt("android.callType", 0), titles.size)) {
+            CallKind.NONE -> return false
+            CallKind.ONGOING -> { ongoingKey = sbn.key; if (ringing?.key == sbn.key) ringing = null; Actions.callAnswered() }
+            CallKind.INCOMING -> {
+                val title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+                val resolved = if (title.any { it.isLetter() }) null else PhoneCalls.nameFor(this, title)
+                val first = ringing?.key != sbn.key
+                ringing = Call(sbn.key, Calls.callerName(title, resolved), Calls.answerIndex(titles), Calls.declineIndex(titles))
+                n.actions?.let { a -> synchronized(Companion) { notifActions[sbn.key] = a } }
+                if (first) Actions.callRinging()
+            }
+        }
+        return true
+    }
+
     private fun take(sbn: StatusBarNotification) {
+        if (call(sbn)) return
         if (sbn.packageName == Navigation.PACKAGE) {
             val x = sbn.notification.extras
             fun s(k: String) = x.getCharSequence(k)?.toString()

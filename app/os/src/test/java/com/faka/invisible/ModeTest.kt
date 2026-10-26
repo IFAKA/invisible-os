@@ -74,6 +74,12 @@ class ModeTest {
             override fun installedApps() = installed
             override fun pickCount(intent: String) = picksOf[intent] ?: 0
             override fun appMuted(pkg: String) = pkg in mutedPkgs
+            override fun callCaller() = "Mama"
+            override fun answerCall(): Boolean { log.add("answer"); return true }
+            override fun endCall(): Boolean { log.add("endcall"); return true }
+            override fun emergency(): Boolean { log.add("emergency"); return true }
+            override fun callContacts() = listOf(com.faka.invisible.logickit.Contact("Ana", "123"))
+            override fun dial(c: com.faka.invisible.logickit.Contact): Boolean { log.add("dial ${c.number}"); return true }
             override fun openApp(pkg: String): Boolean { log.add("open $pkg"); opened += pkg; return true }
             override fun notifFire(key: String, index: Int): Boolean { log.add("nfire $key $index"); return true }
             override fun notifDismiss(key: String): Boolean { log.add("ndismiss $key"); groups = groups.map { it.copy(items = it.items.filter { n -> n.key != key }) }.filter { it.items.isNotEmpty() }; return true }
@@ -753,15 +759,15 @@ class ModeTest {
     }
 
     @Test fun phoneGroupListsItemsInOrderAndDndOnlyWithAccess() {
-        val a = Rig(); a.wake(); a.pick("Phone"); a.advance(400 + 1300 * 5 + 100)
-        assertEquals(listOf("say Status", "say Volume", "say Torch", "say Do not disturb", "say ${Voice.FIND_PHONE}"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
-        val b = Rig(); b.dnd = false; b.wake(); b.pick("Phone"); b.advance(400 + 1300 * 4 + 100)
-        assertEquals(listOf("say Status", "say Volume", "say Torch", "say ${Voice.FIND_PHONE}"), b.spoken())
+        val a = Rig(); a.wake(); a.pick("Phone"); a.advance(400 + 1300 * 7 + 100)
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Torch", "say Do not disturb", "say ${Voice.FIND_PHONE}"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
+        val b = Rig(); b.dnd = false; b.wake(); b.pick("Phone"); b.advance(400 + 1300 * 6 + 100)
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Torch", "say ${Voice.FIND_PHONE}"), b.spoken())
     }
 
     @Test fun phoneGroupHidesFindWhenWired() {
-        val r = Rig(); r.wired = true; r.wake(); r.pick("Phone"); r.advance(400 + 1300 * 4 + 100)
-        assertEquals(listOf("say Status", "say Volume", "say Torch", "say Do not disturb"), r.spoken())
+        val r = Rig(); r.wired = true; r.wake(); r.pick("Phone"); r.advance(400 + 1300 * 6 + 100)
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Torch", "say Do not disturb"), r.spoken())
     }
 
     @Test fun infoAndPhoneFollowTheSettings() {
@@ -770,8 +776,8 @@ class ModeTest {
         assertEquals(emptyList<String>(), LauncherSettings.cleanInfo(listOf("")))
         val r = Rig().withInfo(); r.m.settings = r.m.settings.copy(info = listOf("turn", "weather")); r.wake(); r.pick("Today"); r.advance(400 + 1300 * 3 + 100)
         assertEquals(listOf("say Next turn", "say Weather", "say Next turn"), r.spoken())
-        val p = Rig(); p.m.settings = p.m.settings.copy(phone = listOf("torch", "volume")); p.wake(); p.pick("Phone"); p.advance(400 + 1300 * 3 + 100)
-        assertEquals(listOf("say Torch", "say Volume", "say Torch"), p.spoken())
+        val p = Rig(); p.m.settings = p.m.settings.copy(phone = listOf("torch", "volume")); p.wake(); p.pick("Phone"); p.advance(400 + 1300 * 5 + 100)
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Torch", "say Volume", "say Emergency"), p.spoken())
     }
 
     @Test fun infoGroupListsItemsInOrderAndTripleClickReturnsToTheHub() {
@@ -790,7 +796,35 @@ class ModeTest {
     @Test fun torchRunsAndTheListRestartsAfterItsSpeech() {
         val r = Rig(); r.wake(); r.pick("Phone"); r.pick("Torch")
         assertTrue(r.has("run Flashlight")); r.advance(1500)
-        assertTrue(r.spoken().contains("say Status")); assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
+        assertTrue(r.spoken().contains("say Emergency")); assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
+    }
+
+    @Test fun emergencyAsksFirstAndTheSafeAnswerIsReadFirst() {
+        val r = Rig(); r.wake(); r.pick("Phone"); r.pick("Emergency")
+        assertEquals(ControllerMode.Screen.EMERGENCY, r.m.screen)
+        r.advance(3000)
+        assertTrue(r.spoken().indexOf("say ${Voice.EMERGENCY_ASK.text}") < r.spoken().indexOf("say No, go back"))
+        assertTrue(r.log.none { it.startsWith("emergency") })
+        r.clearLog(); r.pick("No, go back"); assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
+    }
+
+    @Test fun emergencyYesCalls() {
+        val r = Rig(); r.wake(); r.pick("Phone"); r.pick("Emergency"); r.pick("Yes, call now")
+        assertTrue(r.has("emergency"))
+    }
+
+    @Test fun incomingCallListsAnswerAndReject() {
+        val r = Rig(); r.wake(); r.m.callIncoming()
+        assertEquals(ControllerMode.Screen.CALL_IN, r.m.screen)
+        r.advance(4000); assertTrue(r.spoken().contains("say Call from Mama")); assertTrue(r.spoken().contains("say Answer"))
+        r.clearLog(); r.pick("Answer"); assertTrue(r.has("answer")); assertEquals(ControllerMode.Screen.CALL_ACTIVE, r.m.screen)
+        r.pick("End call"); assertTrue(r.has("endcall"))
+    }
+
+    @Test fun callContactsAreListedAndDialled() {
+        val r = Rig(); r.wake(); r.pick("Phone"); r.pick("Call a contact")
+        assertEquals(ControllerMode.Screen.CONTACTS, r.m.screen)
+        r.pick("Ana"); assertTrue(r.has("dial 123"))
     }
 
     @Test fun firstLayerIsShortAndInOrder() {

@@ -17,6 +17,7 @@ Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rule
 | NameLang.kt | `NameLang.of(pkg, label)` = "es" or "en" for an app name (package table, then Spanish words/letters, else en); `voice()` = "es" or null. Used by `ControllerMode.treeLabel` (tree, Find, Suggested). |
 | Calculator.kt | `Calculator` = state of the spoken calculator (digit, point, operate, equals, undo, `spoken()`), left to right; `%` = percent of. Used by the Calculator program. |
 | PriceSum.kt | `PriceSum` = running total of prices in cents (`add("12.5")`, `undo()`, `spoken()`). Used by the Sum prices tool (`launchSum` in Actions). |
+| Calls.kt | `Calls.kind(category, callType, actions)` = a dialer notification is INCOMING, ONGOING or NONE. `callerName`, `spokenNumber`, `rank(contacts)` (starred, then most called, one per number), `emergencyNumber(country)` (112 fallback), `emergencyText()`. Used by the call screens in `ControllerMode` and the listener. |
 | ChatLang.kt | `ChatLang.of(seen, detect)` = the language of the chat or message a reply goes to (null if too short or unknown). `needsTranslation(target)`. Used by Write for screen chats and for notification replies. |
 
 ## Elsewhere (use these, do not copy them)

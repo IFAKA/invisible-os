@@ -85,7 +85,14 @@ interface ModeOutput {
     fun nextEvent(done: (Phrase) -> Unit) { done(Voice.CALENDAR_FAILED) }   // same: the next calendar event sentence
     fun wiredConnected(): Boolean = false   // a wired headset or USB audio is plugged in: then "Find my phone" is not offered
     fun navigation(): String? = null   // the latest Google Maps instruction as one sentence; null = not navigating
-    fun findPhone(on: Boolean) {}   // ring loudly on the alarm stream (on) or stop (off)
+    fun findPhone(on: Boolean) {}
+    fun callCaller(): String? = null   // the name (or number) of the ringing call, null = nothing rings
+    fun answerCall(): Boolean = false
+    fun rejectCall(): Boolean = false
+    fun endCall(): Boolean = false
+    fun callContacts(): List<Contact> = emptyList()   // starred and most called first; slow: call it inside [background]
+    fun dial(c: Contact): Boolean = false             // start a call to this contact
+    fun emergency(): Boolean = false                  // call the emergency number of the phone's country and text the emergency contact (if set)   // ring loudly on the alarm stream (on) or stop (off)
     fun setContext(tags: Set<String>) {}   // the situation now (Suggester.TAGS); it is stored with every choice
     fun suggest(candidates: Collection<String>, now: Long, others: Collection<String> = emptyList(), accept: (String, Double, Int) -> Boolean = { _, _, _ -> true }): List<String> = emptyList()   // others = home entries that compete (never offered); accept = see SuggestGate; the OS's "Suggested" slot: up to 3 of these deep options, best first
     fun pickCount(intent: String): Int = 0   // how often this option was picked (spearcon after [ControllerMode.SPEARCON_AFTER] picks)
@@ -136,7 +143,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL, CALL_IN, CALL_ACTIVE, CONTACTS, EMERGENCY }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: Phrase, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: Phrase, val run: () -> Unit)
@@ -319,7 +326,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY -> Tone.MORE; Screen.VOLUME, Screen.VOLUME_DIAL -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY, Screen.CONTACTS -> Tone.MORE; Screen.CALL_IN, Screen.CALL_ACTIVE, Screen.EMERGENCY -> Tone.TIMER; Screen.VOLUME, Screen.VOLUME_DIAL -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -337,6 +344,9 @@ class ControllerMode(
         if (s == Screen.MESSAGE && m != null && hid(m) !in heard) intro += Intro(Phrase.content("${m.sender}: ${shortText(m)}", vl(m)), hid(m))
         if (s == Screen.FIND && findStack.size == 1 && !out.findHintSeen()) { out.setFindHintSeen(); intro += Intro(Voice.FIND_HINT, null, hint = true) }
         if (s == Screen.TIMER_DONE) intro += Intro(Voice.TIMER_DONE, null)
+        if (s == Screen.CALL_IN) intro += Intro(Voice.callFrom(out.callCaller() ?: "unknown"), null)
+        if (s == Screen.CALL_ACTIVE) intro += Intro(Voice.CALL_ANSWERED, null)
+        if (s == Screen.EMERGENCY) intro += Intro(Voice.EMERGENCY_ASK, null)
         if (s == Screen.NOTIF_ACTIONS) openNotif()?.let { intro += Intro(notifRead(it), null) }
         curIntro = null
         if (s == Screen.VOLUME_DIAL) {   // no list: the song plays on and the button is the dial
@@ -516,7 +526,18 @@ class ControllerMode(
                 "turn" -> Opt("info:turn", Menu.NEXT_TURN) { pick("info:turn"); outro(out.navigation()?.let { Phrase.content(it) } ?: Voice.NO_NAVIGATION) }
                 else -> null
             } }
-            Screen.PHONE -> settings.phone.mapNotNull { k -> when (k) {
+            Screen.CALL_IN -> listOf(
+                Opt("call:answer", Menu.ANSWER) { pick("call:answer"); if (out.answerCall()) show(Screen.CALL_ACTIVE) else callFailed() },
+                Opt("call:reject", Menu.REJECT) { pick("call:reject"); if (out.rejectCall()) exit(false) else callFailed() })
+            Screen.CALL_ACTIVE -> listOf(Opt("call:end", Menu.END_CALL) { pick("call:end"); out.endCall(); exit(false) })
+            Screen.CONTACTS -> contacts.map { c -> Opt("call:contact", Phrase.content(c.name, null)) { pick("call:contact"); exit(false); if (out.dial(c)) out.speak(Voice.calling(c.name)) else out.speak(Voice.CALL_FAILED) } }
+            Screen.EMERGENCY -> listOf(   // the safe answer is read first: a click right after hearing it picks it
+                Opt("emergency:no", Menu.EMERGENCY_NO) { pick("emergency:no"); show(Screen.PHONE) },
+                Opt("emergency:yes", Menu.EMERGENCY_YES) { pick("emergency:yes"); exit(false); out.speak(if (out.emergency()) Voice.EMERGENCY_CALLING else Voice.CALL_FAILED) })
+            Screen.PHONE -> listOf(   // Emergency is always first and cannot be switched off; then Call a contact
+                Opt("phone:emergency", Menu.EMERGENCY) { pick("phone:emergency"); show(Screen.EMERGENCY) },
+                Opt("phone:call", Menu.CALL_CONTACT) { pick("phone:call"); out.background({ contacts = out.callContacts() }, { if (contacts.isEmpty()) outro(Voice.NO_CONTACTS) else show(Screen.CONTACTS) }) }
+            ) + settings.phone.mapNotNull { k -> when (k) {
                 "status" -> Opt("phone:status", Menu.STATUS) { pick("phone:status"); outro(Voice.status(out.status(), unread().size)) }
                 "volume" -> Opt("phone:volume", Menu.VOLUME) { pick("phone:volume"); show(Screen.VOLUME) }
                 "torch" -> Opt("phone:torch", Menu.TORCH) { pick("phone:torch"); out.runAction("Flashlight"); afterSpeech { beginScan() } }
@@ -693,6 +714,25 @@ class ControllerMode(
     }
 
     private var musicBack = Screen.HUB
+    private var contacts = listOf<Contact>()   // snapshot while the contact list is open
+
+    private fun callFailed() { phase = Phase.OUTRO; say(Voice.CALL_FAILED) }
+
+    /** A call rings: open the answer list now, over whatever is open. */
+    fun callIncoming() {
+        if (!active) { active = true; pausedByUs = out.pauseMusic(); queue = mutableListOf(); qi = 0; fromHub = false; speechOpen = false; hintPending = false; musicBack = Screen.HUB }
+        out.log("MODE call")
+        show(Screen.CALL_IN)
+    }
+
+    /** The call was answered on the phone itself while the list rings: the list becomes End call. */
+    fun callOngoing() { if (active && screen == Screen.CALL_IN) show(Screen.CALL_ACTIVE) }
+
+    /** The call is over (the other side hung up, or it was answered elsewhere): leave the call lists. */
+    fun callEnded() {
+        if (!active || (screen != Screen.CALL_IN && screen != Screen.CALL_ACTIVE)) return
+        exit(false); out.speak(Voice.CALL_ENDED)
+    }
 
     /** The Music page: what is playing, shuffle, repeat, radio from this song, play something (6 at most). Pause, next and previous are the earbud's own job. */
     private fun musicOptions(): List<Opt> {
@@ -894,6 +934,7 @@ class ControllerMode(
             Screen.FIND -> { findStack.removeLastOrNull(); if (findStack.isEmpty()) show(Screen.HUB) else show(Screen.FIND) }
             Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR -> show(Screen.HUB)
             Screen.ALARM_MIN -> show(Screen.ALARM_HOUR)
+            Screen.CONTACTS, Screen.EMERGENCY -> show(Screen.PHONE)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()
         }
