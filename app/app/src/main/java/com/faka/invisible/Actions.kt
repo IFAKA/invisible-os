@@ -653,7 +653,7 @@ object Actions {
 
     private fun playLiked(pkg: String, link: String) {
         try {
-            app.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            app.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))   // reuse the window it already has: the retries must not stack copies
         } catch (e: Throwable) { Log.e(TAG, "play liked failed", e) }
     }
 
