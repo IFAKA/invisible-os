@@ -41,11 +41,13 @@ class TypingTest {
         override fun prefetch(words: List<String>) {}
         override fun say(text: Phrase) { said.add(text.text) }
         override fun cue(c: TypeCue) { cues.add(c) }
+        override fun written(text: String) { learnedText.add(text) }
         override fun finished(text: String) { result = text }
         override fun phrases(text: String, then: (List<String>) -> Unit) { asked.add(text); if (endings.isNotEmpty()) then(endings) }
     }, t, onEnded = {})
 
     private val said = ArrayList<String>()
+    private val learnedText = ArrayList<String>()
     private val asked = ArrayList<String>()
     private var endings: List<String> = emptyList()
     private fun click() { p.down(t.now); t.advance(80); p.up(t.now); t.advance(120) }
@@ -143,6 +145,23 @@ class TypingTest {
         assertEquals("Next word", said.last())
         clicks(1)
         assertEquals(1, p.text().length)
+    }
+
+    @Test fun withNoWordToGuessFromTheLettersGoFromAToZ() {
+        empty = true; p.start(); clicks(3); clicks(1)
+        assertEquals("a" to "b", pairs.last())
+    }
+
+    @Test fun aReplayWhileSpellingSaysTheLettersSoFarFirst() {
+        spellOneLetterWithNoWordsKnown(); said.clear()
+        t.advance(TypeProgram.REPLAY_MS + 50)
+        assertEquals(1, said.size); assertEquals("a", said.last())
+    }
+
+    @Test fun spelledWordsAreNotLearned() {
+        spellOneLetterWithNoWordsKnown(); clicks(3); t.advance(TypeProgram.MENU_GAP_MS * 3 + 50)   // Words, Next word, Delete, Done
+        clicks(1)
+        assertEquals("A", result); assertTrue(learnedText.isEmpty())
     }
 
     @Test fun menuClosesByItselfAfterTwoSilentLoops() {

@@ -73,6 +73,7 @@ class TypeProgram(
     }
 
     private val written = ArrayList<String>()
+    private val spelledWords = HashSet<String>()   // words made of spelled letters: not learned
     private var prefix = ""
     private var letters = false
     private var page = 0
@@ -122,6 +123,7 @@ class TypeProgram(
         return if (letters) {
             val mass = LinkedHashMap<Char, Double>()
             for ((w, lp) in all) if (w.length > prefix.length && w.startsWith(prefix) && LETTER_RE.matches(w)) mass.merge(w[prefix.length], Math.exp(lp), Double::plus)
+            if (mass.isEmpty()) return ALPHABET.toList().sorted().map { it.toString() }   // no word to guess from: A to Z, so where a letter is can be predicted
             // the whole alphabet is ranked: the model's chance first, a small prior for common letters breaks ties and orders letters it has no word for
             ALPHABET.toList().sortedByDescending { (mass[it] ?: 0.0) + 1e-6 * (ALPHABET.length - ALPHABET_BY_USE.indexOf(it).let { i -> if (i < 0) ALPHABET.length else i }) }.map { it.toString() }
         } else all.asSequence().filter { it.first !in recent }.filter { it.first.startsWith(prefix) && LETTER_RE.matches(it.first) && (prefix.isNotEmpty() || !lm.skipShortFirst || (it.first.length >= 3 && '\'' !in it.first)) }.take(WORD_PAGES * 2).map { it.first }.toList()
@@ -131,12 +133,13 @@ class TypeProgram(
         if (!again) replays = 0
         items = if (phraseMode) phrases else candidates()
         if (phraseMode && items.isEmpty()) phraseMode = false
-        if (items.isEmpty()) { if (prefix.isNotEmpty() && !letters && !frame.digits) { letters = true; page = 0; items = candidates(); out.say(TypeVoice.spelling(prefix)) }   // no word starts so: keep spelling, never drop the letters
+        if (items.isEmpty()) { if (prefix.isNotEmpty() && !letters && !frame.digits) { letters = true; page = 0; items = candidates() }   // no word starts so: keep spelling, never drop the letters
         else if (letters) { letters = false; page = 0; items = candidates() } else { items = candidates() } }
         val n = (items.size + 1) / 2
         if (n > 0) page %= n else page = 0
         val l = items.getOrNull(page * 2) ?: return
         val r = items.getOrNull(page * 2 + 1)
+        if (letters && prefix.isNotEmpty()) out.say(TypeVoice.spelled(prefix))   // every letter pair, replays too: you always hear what you have so far
         out.prefetch(items.drop(page * 2 + 2).take(4) )
         out.pair(l, r)
         out.log("pair", l, r, page, if (phraseMode) "phrases" else if (letters) "letters" else "words", prefix, written.size)
@@ -238,7 +241,7 @@ class TypeProgram(
             TypeVoice.MENU_DONE -> leave(true)
             TypeVoice.MENU_LEAVE -> leave(false)
             TypeVoice.MENU_DELETE -> { out.cue(TypeCue.DELETE); if (prefix.isNotEmpty()) prefix = prefix.dropLast(1) else if (written.isNotEmpty()) { written.removeAt(written.size - 1); askPhrases() }; letters = false; phraseMode = false; page = 0; show() }
-            TypeVoice.NEXT_WORD -> { written.add(prefix); prefix = ""; letters = false; phraseMode = false; page = 0; askPhrases(); out.cue(TypeCue.WORDS); show() }
+            TypeVoice.NEXT_WORD -> { spelledWords.add(prefix); written.add(prefix); prefix = ""; letters = false; phraseMode = false; page = 0; askPhrases(); out.cue(TypeCue.WORDS); show() }
             TypeVoice.READ -> { out.readBack((written + listOfNotNull(prefix.ifEmpty { null })).joinToString(" ")); show() }
             TypeVoice.PHRASES -> { phraseMode = true; letters = false; page = 0; out.cue(TypeCue.WORDS); show() }
             else -> { phraseMode = false; if (!frame.digits) letters = !letters; page = 0; out.cue(if (letters) TypeCue.LETTERS else TypeCue.WORDS); show() }
@@ -252,13 +255,13 @@ class TypeProgram(
         out.cue(if (left) TypeCue.PICK_LEFT else TypeCue.PICK_RIGHT)
         out.log("pick", if (left) "L" else "R", item, page, if (phraseMode) "phrases" else if (letters) "letters" else "words", prefix)
         if (phraseMode) { written.addAll(item.split(' ').filter { it.isNotEmpty() }); phraseMode = false; prefix = ""; askPhrases() }
-        else if (letters) { prefix += item; out.say(TypeVoice.spelled(prefix)) } else { lm.picked(written.takeLast(8), item); written.add(item); prefix = ""; askPhrases() }
+        else if (letters) { prefix += item } else { lm.picked(written.takeLast(8), item); written.add(item); prefix = ""; askPhrases() }
         page = 0
         show()
     }
 
     private fun leave(done: Boolean) {
-        if (done && prefix.isNotEmpty()) { written.add(prefix); prefix = "" }   // letters spelled but not yet a word: keep them
+        if (done && prefix.isNotEmpty()) { spelledWords.add(prefix); written.add(prefix); prefix = "" }   // letters spelled but not yet a word: keep them
         val t = if (done) text() else ""
         out.log("end", if (done) "done" else "leave", written.size, t.length)
         if (t.isEmpty()) { send(""); return }
@@ -278,9 +281,9 @@ class TypeProgram(
     private fun backToEdit() { pending = null; out.cue(TypeCue.NEXT); show() }
 
     private fun send(sent: String) {
-        val original = if (sent.isEmpty()) "" else text()
+        val original = if (sent.isEmpty()) "" else if (spelledWords.isEmpty()) text() else written.filter { it !in spelledWords }.joinToString(" ")   // spelled words are not learned
         stop()
-        if (sent.isNotEmpty()) { out.cue(TypeCue.DONE); out.written(original) }
+        if (sent.isNotEmpty()) { out.cue(TypeCue.DONE); if (original.isNotEmpty()) out.written(original) }
         out.finished(sent)
         onEnded()
     }
