@@ -41,6 +41,8 @@ class MainActivity : Activity() {
         setContentView(ScrollView(this).apply { setBackgroundColor(Ui.page); addView(body) })
         if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java))
         EventLog.onChange = { render() }
+        intent.getStringExtra("page")?.let { n -> Page.values().firstOrNull { it.name.equals(n, true) }?.let { page = it } }   // for screenshots: adb ... --es page menu --es open /Tools
+        intent.getStringExtra("open")?.let { openGroups = it.split(',').toSet() }
         render()
     }
 
@@ -106,7 +108,7 @@ class MainActivity : Activity() {
         }
         val n = Actions.tasks().size
         k.navRow(body, "Tasks", if (n == 0) "None yet. Add one." else "$n to do") { open(Page.TASKS) }
-        k.navRow(body, "Your menu", "${s.hub.size} items you hear, in your order") { open(Page.MENU) }
+        k.navRow(body, "Your menu", "Pin, move or hide what you hear") { open(Page.MENU) }
         k.navRow(body, "Voice and speed", "Voice ${"%.1f".format(s.speechRate)}x, pause ${"%.1f".format(s.itemGapMs / 1000f)} s") { open(Page.VOICE) }
         k.navRow(body, "AI on the phone", if (!s.ai) "Off" else if (ModelDownload.ready(this)) "On, ready" else "On, model not downloaded") { open(Page.AI) }
         k.navRow(body, "Help", "Button gestures and your last presses") { open(Page.HELP) }
@@ -155,33 +157,57 @@ class MainActivity : Activity() {
     private fun treeCard() {
         val all = TreeLeaves.all(this, s)
         val root = AppTree.build(TreeLeaves.edit(all, s))
-        card("What you hear", "The exact tree the voice walks, in the same order. Pin: first menu. Group button: move it. Hide: remove it.") {
+        card("What you hear", "The tree the voice walks, in its order. Tap a group to open it. Tap an app to pin, move or hide it.") {
             fun toggle(set: Set<String>, k: String) = if (k in set) set - k else set + k
-            fun node(n: TreeNode, depth: Int) {
+            fun actions(a: AppLeaf) {
+                val pinned = a.pkg in s.pinned
+                val here = AppCategories.main(s.moved[a.pkg] ?: a.category)
+                val items = listOf(if (pinned) "Unpin from the first menu" else "Pin to the first menu", "Move to another group", "Hide")
+                android.app.AlertDialog.Builder(this@MainActivity).setTitle(a.label).setItems(items.toTypedArray()) { _, i ->
+                    when (i) {
+                        0 -> change(s.copy(pinned = toggle(s.pinned, a.pkg)))
+                        1 -> android.app.AlertDialog.Builder(this@MainActivity).setTitle("Move ${a.label} to").setItems(TreeLeaves.GROUPS.toTypedArray()) { _, g ->
+                            change(s.copy(moved = s.moved + (a.pkg to TreeLeaves.GROUPS[g])))
+                        }.show()
+                        else -> change(s.copy(hidden = s.hidden + a.pkg))
+                    }
+                }.show()
+            }
+            fun leafCount(n: TreeNode): Int = if (n.app != null) 1 else n.children.sumOf { leafCount(it) }
+            fun node(n: TreeNode, depth: Int, path: String) {
                 val a = n.app
-                val pad = k.dp(14 * depth)
+                val pad = k.dp(16 * depth)
                 if (a == null) {
                     if (n.label.isEmpty()) return
-                    addView(k.text("${n.label}  (${n.children.size})", 15f, Ui.soft, bold = true).apply { setPadding(pad, k.dp(10), 0, k.dp(2)) })
-                    n.children.forEach { node(it, depth + 1) }
+                    val key = "$path/${n.label}"
+                    val open = key in openGroups
+                    val head = k.row(k.grow(k.text(n.label, 17f, bold = true)), k.text("${leafCount(n)}  " + if (open) "\u25B4" else "\u25BE", 15f, Ui.soft))
+                    head.minimumHeight = k.dp(52); head.setPadding(pad, 0, k.dp(4), 0)
+                    head.setOnClickListener { openGroups = if (open) openGroups - key else openGroups + key; render() }
+                    addView(head)
+                    if (open) n.children.forEach { node(it, depth + 1, key) }
                     return
                 }
-                val group = AppCategories.main(s.moved[a.pkg] ?: a.category)
-                val row = k.row(k.grow(k.text(a.label, 15f).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }),
-                    k.chip(if (a.pkg in s.pinned) "Pinned" else "Pin") { change(s.copy(pinned = toggle(s.pinned, a.pkg))) },
-                    k.chip(group) { change(s.copy(moved = s.moved + (a.pkg to TreeLeaves.GROUPS[(TreeLeaves.GROUPS.indexOf(group) + 1) % TreeLeaves.GROUPS.size]))) },
-                    k.chip("Hide") { change(s.copy(hidden = s.hidden + a.pkg)) })
-                row.setPadding(pad, 0, 0, 0)
+                val tag = listOfNotNull(if (a.pkg in s.pinned) "pinned" else null, if (a.pkg in s.moved) "moved" else null).joinToString(", ")
+                val row = k.row(k.grow(k.text(a.label, 16f).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }), k.text(tag, 13f, Ui.soft))
+                row.minimumHeight = k.dp(52); row.setPadding(pad, 0, k.dp(4), 0)
+                row.setOnClickListener { actions(a) }
                 addView(row)
             }
-            root.children.forEach { node(it, 0) }
+            root.children.forEach { node(it, 0, "") }
             val gone = all.filter { it.pkg in s.hidden }
             if (gone.isNotEmpty()) {
-                addView(k.text("Hidden (${gone.size})", 15f, Ui.soft, bold = true).apply { setPadding(0, k.dp(14), 0, k.dp(2)) })
-                gone.forEach { a -> addView(k.row(k.grow(k.text(a.label, 15f)), k.chip("Show") { change(s.copy(hidden = s.hidden - a.pkg)) })) }
+                val key = "/hidden"; val open = key in openGroups
+                val head = k.row(k.grow(k.text("Hidden", 17f, bold = true)), k.text("${gone.size}  " + if (open) "\u25B4" else "\u25BE", 15f, Ui.soft))
+                head.minimumHeight = k.dp(52)
+                head.setOnClickListener { openGroups = if (open) openGroups - key else openGroups + key; render() }
+                addView(head)
+                if (open) gone.forEach { a -> addView(k.row(k.grow(k.text(a.label, 16f)), k.chip("Show") { change(s.copy(hidden = s.hidden - a.pkg)) })) }
             }
         }
     }
+
+    private var openGroups: Set<String> = emptySet()
 
     private fun menuPage() {
         treeCard()
