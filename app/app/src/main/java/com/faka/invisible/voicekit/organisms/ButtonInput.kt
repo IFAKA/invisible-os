@@ -14,6 +14,8 @@ import android.view.KeyEvent
 class ButtonInput(private val handler: Handler, private val narrator: Narrator, private val target: ButtonTarget) : ButtonPort {
     companion object {
         private const val TAG = "Invisible"
+        /** The system's long-press signal only counts when the key path has seen no key for this long (then it is the only source). */
+        private const val ASSIST_QUIET_MS = 3000L
         /** Only the earbud button counts. */
         fun isButton(e: KeyEvent) = e.keyCode == KeyEvent.KEYCODE_HEADSETHOOK || e.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
     }
@@ -29,6 +31,7 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
     private val deduper = Deduper()
     private var lastHoldAt = 0L
     private var clickHolding = false   // a click-then-hold is down (fast scroll): the system's long press must not also fire
+    private var lastKeyAt = 0L          // the last key event the key path saw (down or up)
     private var gestureTimer: Runnable? = null
     private val detector = GestureDetector(
         schedule = { delay, task -> val r = Runnable(task); gestureTimer = r; handler.postDelayed(r, delay) },
@@ -39,6 +42,7 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
     /** Call on the main thread. repeatCount > 0 is ignored (the hold timer handles holds). */
     override fun key(source: String, isDown: Boolean, repeat: Int, downTime: Long, time: Long) {
         if (repeat > 0) return
+        lastKeyAt = SystemClock.uptimeMillis()
         if (!deduper.accept(source, isDown, downTime)) { Log.d(TAG, "DEDUPE dropped $source down=$downTime"); return }
         target.raw()?.let { r -> if (isDown) r.down(downTime) else r.up(time); return }   // a program owns the raw button
         if (isDown && target.menuActive) narrator.beep(Tone.TAP)   // blind: every press is answered at once
@@ -48,6 +52,7 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
     /** Long press launched the assistant role / hands-free: act as HOLD unless a HOLD just fired from the key path. */
     fun assistHold() {
         if (target.raw() != null) return
+        if (SystemClock.uptimeMillis() - lastKeyAt < ASSIST_QUIET_MS) { Log.d(TAG, "ASSIST ignored, the key path is seeing this press"); return }   // a hold that woke the OS and goes on must not read as exit
         if (clickHolding || SystemClock.uptimeMillis() - lastHoldAt < 1500) { Log.d(TAG, "ASSIST ignored, hold just fired"); return }
         fire(Gesture.HOLD, 0)
     }
