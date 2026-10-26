@@ -805,7 +805,7 @@ class ControllerMode(
         if (!dialHolding) return
         val before = out.volumeLevel()
         out.volume(false)
-        if (out.volumeLevel() == before) { dialHolding = false; tn(Tone.CANCEL); return }   // the bottom: stop
+        if (out.volumeLevel() == before) { dialHolding = false; tn(Tone.CANCEL); say(Voice.level(out.volumeLevel())); return }   // the bottom: stop and say where
         tn(levelTone(out.volumeLevel()))
         timers.set("dial", DIAL_STEP_MS) { dialDown() }
     }
@@ -814,7 +814,7 @@ class ControllerMode(
     private fun levelTone(n: Int) = Tone.valueOf("LVL" + (1 + n * 5 / (out.volumeMax() + 1)).coerceIn(1, 5))
 
     private fun stopDial() {
-        timers.clear("dial"); dialHolding = false
+        stopAll(); timers.clear("dial"); dialHolding = false
         say(Voice.level(out.volumeLevel()))
     }
 
