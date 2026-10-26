@@ -144,6 +144,7 @@ object Menu {
     val NEXT_EVENT = f("Next event")
     val NEXT_TURN = f("Next turn")
     val BACK = f("Back")
+    val OPEN_APP = f("Open app")
     val STATUS = f("Status")
     val VOLUME = f("Volume")
     val TORCH = f("Torch")
