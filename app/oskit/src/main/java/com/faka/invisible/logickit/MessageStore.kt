@@ -1,4 +1,7 @@
-package com.faka.invisible
+package com.faka.invisible.logickit
+
+/** One unread conversation: key identifies it for replies. lang = detected language ("es", "en", ...) or "". at = arrival time (ms). */
+data class Msg(val key: String, val sender: String, val text: String, val lang: String = "", val at: Long = 0)
 
 /** Pure: latest unread message per conversation key, newest first, capped. */
 class MessageStore(private val max: Int = 20) {

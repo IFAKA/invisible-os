@@ -1,4 +1,6 @@
-package com.faka.invisible
+package com.faka.invisible.adapters
+
+import com.faka.invisible.oskit.*
 
 import android.service.notification.StatusBarNotification
 

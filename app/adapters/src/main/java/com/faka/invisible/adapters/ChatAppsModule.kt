@@ -1,4 +1,6 @@
-package com.faka.invisible
+package com.faka.invisible.adapters
+
+import com.faka.invisible.oskit.*
 
 import com.faka.invisible.logickit.*
 
@@ -17,6 +19,7 @@ class ChatAppsModule : NotificationModule {
     companion object { val APPS = setOf("com.whatsapp", "com.microsoft.teams", "com.tencent.mm", "com.anthropic.claude") }
 
     val store = MessageStore()
+    @Volatile private var host: NotificationHost? = null
     @Volatile private var convLang = ConvLang()
     private val worker by lazy { java.util.concurrent.Executors.newSingleThreadExecutor() }
     private val replies = HashMap<String, Notification.Action>()
@@ -24,7 +27,8 @@ class ChatAppsModule : NotificationModule {
     override fun matches(pkg: String) = pkg in APPS
     override fun read(n: Notif) = listOf(n.title, n.text).filter { it.isNotBlank() }.joinToString(": ")
 
-    override fun onConnected(ctx: android.content.Context) {
+    override fun onConnected(ctx: android.content.Context, host: NotificationHost) {
+        this.host = host
         val prefs = ctx.getSharedPreferences("conv_lang3", android.content.Context.MODE_PRIVATE)
         convLang = ConvLang(prefs.all.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }.toMap()) { m ->
             prefs.edit().clear().apply { m.forEach { (k, v) -> putString(k, v) } }.apply()
@@ -69,12 +73,12 @@ class ChatAppsModule : NotificationModule {
         val isNew = old == null || old.text != t
         val who = sbn.packageName + "|" + MessageLogic.stableName(sender!!)
         store.upsert(Msg(key, sender!!, t, convLang.get(who), if (isNew) sbn.postTime else old!!.at))
-        if (isNew && loaded) Actions.arrival(sender)
+        if (isNew && loaded) host?.arrival(sender)
         // One language per person, Spanish unless English (or another) clearly wins the votes; detect only until settled.
         if (!convLang.settled(who)) worker.execute { try {
             val clean = MessageLogic.stripLinks(t)
             // very short texts ("ok", "jaja") and WhatsApp's own media text are too weak to vote
-            if (MessageLogic.hasWords(t) && clean.words().size >= 3) convLang.learn(who, ControllerNotificationListener.detector.detect(clean))
+            if (MessageLogic.hasWords(t) && clean.words().size >= 3) convLang.learn(who, host?.detectLanguage(clean) ?: "")
             store.setLang(key, t, convLang.get(who))
         } catch (e: Exception) { Log.e("Invisible", "LANG failed", e) } }
         Log.d("Invisible", "MSG ${sbn.packageName} from $sender reply=${reply != null}")

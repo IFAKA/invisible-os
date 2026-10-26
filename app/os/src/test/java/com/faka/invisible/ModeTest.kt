@@ -1,5 +1,9 @@
 package com.faka.invisible
 
+import com.faka.invisible.logickit.*
+
+import com.faka.invisible.oskit.*
+
 import com.faka.invisible.oskit.ProgramEntry
 import com.faka.invisible.voicekit.*
 

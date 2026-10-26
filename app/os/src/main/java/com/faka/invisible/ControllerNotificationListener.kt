@@ -8,6 +8,8 @@ import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.faka.invisible.logickit.*
+import com.faka.invisible.oskit.*
 
 /**
  * Its enabled "notification access" lets us read other apps' media sessions, keeps every app's notifications in the mailbox
@@ -16,9 +18,14 @@ import android.util.Log
 class ControllerNotificationListener : NotificationListenerService() {
     companion object {
         /** The native modules, one line each; every other app is read by the generic module. */
-        private val chat = ChatAppsModule()
-        val modules = NotificationModules(listOf(TeamsModule(chat), chat))
+        val modules get() = Adapters.modules
+        private val chat get() = Adapters.chat
         val store get() = chat.store
+        /** What the adapters may ask of the OS. */
+        private val adapterHost = object : NotificationHost {
+            override fun arrival(sender: String) = Actions.arrival(sender)
+            override fun detectLanguage(text: String) = detector.detect(text)
+        }
         /** The mailbox: every app's notifications (not ongoing, not group summaries), see [NotificationStore]. */
         val notifs = NotificationStore(muted = { mutes.isMuted(it) })
         /** Apps the user muted from the Notifications screen: not counted, not announced. Saved in SharedPreferences. */
@@ -79,7 +86,7 @@ class ControllerNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         loaded = false; live = this; loadMutes(applicationContext)
-        modules.all().forEach { it.onConnected(applicationContext) }
+        modules.all().forEach { it.onConnected(applicationContext, adapterHost) }
         notifs.clear(); synchronized(Companion) { notifActions.clear() }; navigation = null; navKey = null
         reloadActive()
     }

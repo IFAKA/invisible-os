@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.logickit.*
+
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.nl.languageid.LanguageIdentification
 import com.google.mlkit.nl.languageid.LanguageIdentificationOptions

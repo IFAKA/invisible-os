@@ -1,4 +1,6 @@
-package com.faka.invisible
+package com.faka.invisible.adapters
+
+import com.faka.invisible.oskit.Notif
 
 import org.junit.Assert.*
 import org.junit.Test

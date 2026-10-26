@@ -1,4 +1,4 @@
-package com.faka.invisible
+package com.faka.invisible.logickit
 
 import com.faka.invisible.voicekit.*
 

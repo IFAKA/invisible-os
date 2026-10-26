@@ -1,19 +1,6 @@
 package com.faka.invisible
 
-/** One action button of a notification. [index] is its place in the notification's action list. */
-data class NotifAction(val index: Int, val label: String, val needsText: Boolean)
-
-/**
- * One notification, as plain data. [hidden] = private: title and text were never kept, only the app is known.
- * [needsText]-actions are replies (they ask for typed text).
- */
-data class Notif(
-    val key: String, val pkg: String, val app: String, val title: String, val text: String,
-    val at: Long, val actions: List<NotifAction> = emptyList(), val hidden: Boolean = false, val channel: String = "",
-) {
-    /** The action that wants typed text, if any. */
-    val reply: NotifAction? get() = actions.firstOrNull { it.needsText }
-}
+import com.faka.invisible.oskit.*
 
 /** All the notifications of one group (by default one app), newest first. */
 data class NotifGroup(val id: String, val app: String, val pkg: String, val items: List<Notif>)

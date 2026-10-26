@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.oskit.*
+
 import com.faka.invisible.logickit.*
 
 import android.app.AlarmManager

@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.oskit.*
+
 import org.junit.Assert.*
 import org.junit.Test
 

@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.oskit.*
+
 import com.faka.invisible.logickit.*
 import com.faka.invisible.oskit.ProgramEntry
 
@@ -11,8 +13,6 @@ data class InstalledApp(val pkg: String, val label: String, val hint: Int = -1)
 /** How often an app was opened in the last month and the last week. */
 data class AppUse(val month: Int, val week: Int)
 
-/** One unread conversation: key identifies it for replies. lang = detected language ("es", "en", ...) or "". at = arrival time (ms). */
-data class Msg(val key: String, val sender: String, val text: String, val lang: String = "", val at: Long = 0)
 
 enum class Forward { PLAY_PAUSE, NEXT, PREVIOUS }
 

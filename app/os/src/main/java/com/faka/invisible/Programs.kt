@@ -4,6 +4,9 @@ import com.faka.invisible.echo.EchoProgram
 import com.faka.invisible.compass.CompassProgram
 import com.faka.invisible.tell.DuelProgram
 import com.faka.invisible.guard.GuardProgram
+import com.faka.invisible.adapters.ChatAppsModule
+import com.faka.invisible.adapters.TeamsModule
+import com.faka.invisible.oskit.NotificationModules
 import com.faka.invisible.oskit.ProgramEntry
 import com.faka.invisible.write.WriteEntries
 import com.faka.invisible.write.WriteServices
@@ -31,4 +34,13 @@ object Programs {
     fun byId(id: String): ProgramEntry? = all.firstOrNull { it.id == id }
     /** Dev hook name (`--es start echo`) to entry: the part of the id after the colon. */
     fun byDevName(name: String): ProgramEntry? = all.firstOrNull { it.id.substringAfter(':') == name }
+}
+
+/**
+ * THE ADAPTER REGISTRY (same file: the OS lists everything it plugs in here). One line per outside app; every other app is
+ * read by the generic module. To add an app: one file in adapters/ and one line in [modules].
+ */
+object Adapters {
+    val chat = ChatAppsModule()
+    val modules = NotificationModules(listOf(TeamsModule(chat), chat))
 }
