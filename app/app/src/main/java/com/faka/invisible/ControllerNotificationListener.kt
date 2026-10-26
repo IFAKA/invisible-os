@@ -1,5 +1,6 @@
 package com.faka.invisible
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.RemoteInput
 import android.content.Intent
@@ -16,6 +17,10 @@ class ControllerNotificationListener : NotificationListenerService() {
     companion object {
         val apps = setOf("com.whatsapp", "com.microsoft.teams", "com.tencent.mm", "com.anthropic.claude")
         val store = MessageStore()
+        /** The mailbox: every app's notifications (not ongoing, not group summaries), see [NotificationStore]. */
+        val notifs = NotificationStore()
+        private val notifActions = HashMap<String, Array<Notification.Action>>()
+        @Volatile private var live: ControllerNotificationListener? = null
         /** The latest Google Maps navigation sentence while it is active, else null. */
         @Volatile var navigation: String? = null
         @Volatile private var navKey: String? = null
@@ -42,28 +47,73 @@ class ControllerNotificationListener : NotificationListenerService() {
                 true
             } catch (e: Exception) { Log.e("Invisible", "REPLY failed", e); false }
         }
+
+        /** Fires action [index] of the notification [key]. [text] fills the action's reply box when it has one. */
+        @Synchronized fun fireAction(key: String, index: Int, text: String?, ctx: android.content.Context): Boolean {
+            val a = notifActions[key]?.getOrNull(index) ?: return false
+            return try {
+                val intent = Intent()
+                val inputs = a.remoteInputs
+                if (text != null && !inputs.isNullOrEmpty()) {
+                    val b = Bundle()
+                    inputs.forEach { b.putCharSequence(it.resultKey, text) }
+                    RemoteInput.addResultsToIntent(inputs, intent, b)
+                }
+                a.actionIntent.send(ctx, 0, intent)
+                true
+            } catch (e: Exception) { Log.e("Invisible", "ACTION failed", e); false }
+        }
+
+        /** Swipes the notification away, as the user would. */
+        fun dismiss(key: String): Boolean {
+            val l = live ?: return false
+            return try { l.cancelNotification(key); true } catch (e: Exception) { Log.e("Invisible", "DISMISS failed", e); false }
+        }
     }
 
     @Volatile private var loaded = false
 
     override fun onListenerConnected() {
-        loaded = false
+        loaded = false; live = this
         val prefs = getSharedPreferences("conv_lang3", MODE_PRIVATE)
         convLang = ConvLang(prefs.all.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }.toMap()) { m ->
             prefs.edit().clear().apply { m.forEach { (k, v) -> putString(k, v) } }.apply()
         }
-        store.clear(); synchronized(Companion) { replies.clear() }; navigation = null; navKey = null
+        store.clear(); notifs.clear(); synchronized(Companion) { replies.clear(); notifActions.clear() }; navigation = null; navKey = null
         try { activeNotifications?.forEach { take(it) } } catch (e: Exception) { Log.e("Invisible", "NL load failed", e) }
         loaded = true
     }
+
+    override fun onListenerDisconnected() { live = null }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) = take(sbn)
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         if (sbn.packageName == Navigation.PACKAGE && sbn.key == navKey) { navigation = null; navKey = null }
+        notifs.remove(sbn.key); synchronized(Companion) { notifActions.remove(sbn.key) }
         if (sbn.packageName !in apps) return
         store.remove(sbn.key); synchronized(Companion) { replies.remove(sbn.key) }
     }
+
+    /** The mailbox: keeps any app's notification. A private one (see [NotifPrivacy]) keeps no title and no text at all. */
+    private fun keep(sbn: StatusBarNotification) {
+        val n = sbn.notification
+        if (sbn.packageName == packageName || n.flags and (Notification.FLAG_GROUP_SUMMARY or Notification.FLAG_ONGOING_EVENT) != 0) return
+        val x = n.extras
+        val title = x.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val text = (x.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: x.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
+        val locked = getSystemService(KeyguardManager::class.java)?.isDeviceLocked ?: true
+        val hidden = NotifPrivacy.mustHide(sbn.packageName, n.visibility, locked, title.isBlank() && text.isBlank())
+        val actions = n.actions.orEmpty().mapIndexedNotNull { i, a ->
+            a.title?.toString()?.takeIf { it.isNotBlank() }?.let { NotifAction(i, it, !a.remoteInputs.isNullOrEmpty()) }
+        }
+        synchronized(Companion) { if (n.actions != null) notifActions[sbn.key] = n.actions else notifActions.remove(sbn.key) }
+        notifs.upsert(Notif(sbn.key, sbn.packageName, appLabel(sbn.packageName), if (hidden) "" else title, if (hidden) "" else text, sbn.postTime, actions, hidden))
+    }
+
+    private fun appLabel(pkg: String): String = try {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+    } catch (e: Exception) { pkg.substringAfterLast('.') }
 
     private fun take(sbn: StatusBarNotification) {
         if (sbn.packageName == Navigation.PACKAGE) {
@@ -73,6 +123,7 @@ class ControllerNotificationListener : NotificationListenerService() {
             if (t != null && sbn.notification.flags and Notification.FLAG_ONGOING_EVENT != 0) { navigation = t; navKey = sbn.key }
             return
         }
+        keep(sbn)
         if (sbn.packageName !in apps) return
         val n = sbn.notification
         if (n.flags and (Notification.FLAG_GROUP_SUMMARY or Notification.FLAG_ONGOING_EVENT) != 0) return
