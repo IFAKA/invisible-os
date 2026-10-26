@@ -9,6 +9,7 @@ import android.util.Log
 class AiTestReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         i.getStringExtra("dl")?.let { l -> Thread { MlKitTranslator.download(l); android.util.Log.d("Invisible", "translate models requested for en+$l") }.start(); return }
+        if (i.hasExtra("pairtest")) { Actions.pairTest(); return }
         if (i.hasExtra("swap")) { Actions.setSwapEars(i.getBooleanExtra("swap", true)); return }
         if (i.hasExtra("write")) { Actions.startWriteDev(); return }
         val pr = goAsync(); val ctx = c.applicationContext

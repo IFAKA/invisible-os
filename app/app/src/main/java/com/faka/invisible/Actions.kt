@@ -138,6 +138,9 @@ object Actions {
         ranker = CountRanker { choices.intentCount(it) },   // HOOK: replace with a language-model ranker later
     )
 
+    /** Dev tool: play the pair "left" then "right" as Write does, to hear which ear is which. */
+    fun pairTest() { handler.post { narrator.pair("left", "right") } }
+
     fun setSwapEars(on: Boolean) { prefs().edit().putBoolean("swap_ears", on).apply() }
 
     fun saveSettings(s: LauncherSettings) { mode.settings = s; SettingsStore.save(prefs(), s) }
