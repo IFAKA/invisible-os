@@ -29,7 +29,7 @@ object Pacing {
     /** Time for one fast-scroll word: 650 ms, more for a long word (60 ms per letter above 3). */
     fun fastStepMs(word: String) = FAST_MS + 60L * maxOf(0, word.length - 3)
     /** Pause between scanned items, from the end of one item's speech to the start of the next. */
-    const val ITEM_GAP_MS = 700L
+    const val ITEM_GAP_MS = 500L
     /** Adaptive gap (logickit/ReactionGap): keep this many reaction samples, need this many before adapting, add this margin to the p90, never go under the floor. */
     const val REACTION_KEEP = 40
     const val REACTION_MIN_SAMPLES = 8
