@@ -16,6 +16,7 @@ allow	TellSentences.kt	phrase-make	the Duel's own fixed sentences (program-owned
 allow	TellMistake.kt	phrase-make	the Duel's mistake sentence
 allow	EchoSentences.kt	phrase-make	Echo's own fixed sentences (program-owned)
 allow	GuardSentences.kt	phrase-make	Guard's own fixed sentences (program-owned)
+allow	WhereAmISentences.kt	phrase-make	the Where am I fixed sentences (program-owned)
 allow	CompassSentences.kt	phrase-make	the Compass's own fixed sentences (program-owned)
 allow	WriteSentences.kt	phrase-make	Write and Sum's own fixed sentences (program-owned)
 allow	PracticeSentences.kt	phrase-make	the first-run practice sentences (program-owned)

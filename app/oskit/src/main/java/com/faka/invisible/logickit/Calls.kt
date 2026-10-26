@@ -47,6 +47,20 @@ object Calls {
             .sortedWith(compareByDescending<Contact> { it.starred }.thenByDescending { it.times }.thenBy { it.name.lowercase() })
             .take(max)
 
+    /** The most called people first ([top], in the given order, at most 3), then the usual order of [rank] for the rest; one entry per number. */
+    fun withTop(top: List<Contact>, rest: List<Contact>, max: Int = 8): List<Contact> {
+        val first = top.filter { it.number.isNotBlank() && it.name.isNotBlank() }.distinctBy { digits(it.number) }.take(3)
+        val seen = first.map { digits(it.number) }.toSet()
+        return first + rank(rest.filter { digits(it.number) !in seen }, max).take(max - first.size)
+    }
+
+    /** Numbers by how often they appear in a call log (most first, ties keep the newer first), at most [n]; blank numbers are skipped. [log] is newest first. */
+    fun topNumbers(log: List<String>, n: Int = 3): List<String> {
+        val order = LinkedHashMap<String, Int>()
+        log.map { digits(it) }.filter { it.isNotEmpty() }.forEach { order[it] = (order[it] ?: 0) + 1 }
+        return order.entries.withIndex().sortedWith(compareByDescending<IndexedValue<Map.Entry<String, Int>>> { it.value.value }.thenBy { it.index }).take(n).map { it.value.key }
+    }
+
     private fun find(titles: List<String>, words: List<String>) = titles.indexOfFirst { t -> words.any { t.lowercase().contains(it) } }
 
     /** Which button of the ringing-call notification answers it (by its title, English or Spanish); -1 = none. */

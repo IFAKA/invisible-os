@@ -39,4 +39,14 @@ class CallsTest {
         assertEquals(0, Calls.answerIndex(listOf("Contestar", "Rechazar")))
         assertEquals(-1, Calls.answerIndex(listOf("Hang up")))
     }
+
+    @Test fun topCalledComeFirst() {
+        val top = listOf(Contact("Mama", "+54 11 1"), Contact("Juan", "22"))
+        val rest = listOf(Contact("Ana", "5", starred = true), Contact("Mama", "+5411 1"), Contact("Zed", "9", times = 4))
+        assertEquals(listOf("Mama", "Juan", "Ana", "Zed"), Calls.withTop(top, rest).map { it.name })
+    }
+    @Test fun topNumbersByCount() {
+        assertEquals(listOf("2", "1", "3"), Calls.topNumbers(listOf("1", "2", "", "2", "3", "1", "2", "4"), 3))
+        assertEquals(listOf("7", "8"), Calls.topNumbers(listOf("7", "8"), 3))
+    }
 }

@@ -47,8 +47,21 @@ object PhoneCalls {
                 null, null, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)?.use { c ->
                 while (c.moveToNext() && seen.size < 30) seen += Contact(c.getString(0).orEmpty(), c.getString(1).orEmpty(), c.getInt(2) == 1)
             }
-            Calls.rank(seen)
+            Calls.withTop(topCalled(ctx), seen)
         } catch (e: Exception) { Log.e(TAG, "CALL contacts failed", e); emptyList() }
+    }
+
+    /** The 3 people you call most (last 90 days, calls you placed or answered). Only when READ_CALL_LOG is already allowed; else empty. */
+    private fun topCalled(ctx: Context): List<Contact> {
+        if (!has(ctx, Manifest.permission.READ_CALL_LOG) || !has(ctx, Manifest.permission.READ_CONTACTS)) return emptyList()
+        return try {
+            val log = ArrayList<String>()
+            ctx.contentResolver.query(android.provider.CallLog.Calls.CONTENT_URI, arrayOf(android.provider.CallLog.Calls.NUMBER),
+                "${android.provider.CallLog.Calls.DATE}>? AND ${android.provider.CallLog.Calls.TYPE} IN (?,?) AND ${android.provider.CallLog.Calls.DURATION}>0",
+                arrayOf((System.currentTimeMillis() - 90L * 86400000L).toString(), android.provider.CallLog.Calls.OUTGOING_TYPE.toString(), android.provider.CallLog.Calls.INCOMING_TYPE.toString()),
+                "${android.provider.CallLog.Calls.DATE} DESC")?.use { c -> while (c.moveToNext() && log.size < 500) c.getString(0)?.let { log += it } }
+            Calls.topNumbers(log).mapNotNull { n -> nameFor(ctx, n)?.let { Contact(it, n) } }   // only people in your contacts: a name you can hear
+        } catch (e: Exception) { Log.e(TAG, "CALL log failed", e); emptyList() }
     }
 
     private fun firstNumber(ctx: Context, id: Long): String? =

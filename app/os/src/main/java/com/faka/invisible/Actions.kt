@@ -198,7 +198,7 @@ object Actions {
     fun init(ctx: Context) {
         if (::app.isInitialized) return
         app = ctx.applicationContext
-        Programs.install(writeServices, app)
+        Programs.install(writeServices, app, object : com.faka.invisible.whereami.WhereServices { override fun navigation() = ControllerNotificationListener.navigation })
         Programs.all.forEach { it.warm() }   // some programs build their sounds in seconds on a phone: do it now, quietly
         ControllerNotificationListener.loadMutes(app)
         TreeLeaves.store = prefs()

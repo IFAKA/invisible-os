@@ -6,8 +6,10 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />   <!-- street and number for Where am I (optional; coarse works too) -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />   <!-- caller name and the "Call a contact" list (setup step, optional) -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />   <!-- the 3 most called people first in "Call a contact" (optional; used only if allowed) -->
     <uses-permission android:name="android.permission.CALL_PHONE" />   <!-- start a call from the list, and Emergency -->
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />   <!-- Answer, Reject and End call by button -->
     <uses-permission android:name="android.permission.SEND_SMS" />   <!-- Emergency texts the emergency contact -->

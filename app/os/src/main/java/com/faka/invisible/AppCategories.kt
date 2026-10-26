@@ -80,6 +80,7 @@ Go/Move             com.google.android.apps.maps
 Go/Move             com.ubercab
 Go/Move             com.crtm.integrated
 Go/Move             hub:compass
+Go/Move             hub:whereami
 Go/Move             com.miui.compass
 Go/Shop             com.amazon.mShop.android.shopping
 Go/Shop             com.alibaba.aliexpresshd

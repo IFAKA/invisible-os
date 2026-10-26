@@ -2,6 +2,8 @@ package com.faka.invisible
 
 import com.faka.invisible.echo.EchoProgram
 import com.faka.invisible.compass.CompassProgram
+import com.faka.invisible.whereami.WhereAmIEntry
+import com.faka.invisible.whereami.WhereServices
 import com.faka.invisible.practice.PracticeEntry
 import com.faka.invisible.tell.DuelProgram
 import com.faka.invisible.guard.GuardProgram
@@ -21,7 +23,8 @@ object Programs {
     private var services: WriteServices? = null
     private var appContext: android.content.Context? = null
     /** What the programs ask of the OS beyond the host; set once when the OS starts, before [all] is read. */
-    fun install(write: WriteServices, ctx: android.content.Context) { services = write; appContext = ctx }
+    private var where: WhereServices? = null
+    fun install(write: WriteServices, ctx: android.content.Context, whereServices: WhereServices) { services = write; appContext = ctx; where = whereServices }
 
     val all: List<ProgramEntry> by lazy { listOf(
         DuelProgram.play,
@@ -29,6 +32,7 @@ object Programs {
         GuardProgram.entry,
         DuelProgram.howTo,
         CompassProgram.entry,
+        WhereAmIEntry.entry(where!!),
         PracticeEntry.entry,
         WriteEntries.write(services!!) { appContext!! },
         WriteEntries.sum,
