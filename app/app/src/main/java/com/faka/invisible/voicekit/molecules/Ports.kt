@@ -45,6 +45,8 @@ interface RawButton {
     val exitOnClickHold: Boolean get() = true
     fun down(time: Long)
     fun up(time: Long)
+    /** The earbud's long press arrived only as the assistant signal (no key events): a hold that is already complete. */
+    fun assistHold() {}
 }
 
 /** What the button feeds. The OS (Actions) implements it; the kit does the rest. */

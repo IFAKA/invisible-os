@@ -159,6 +159,13 @@ class TypeProgram(
         timers.set("t:gap", Pacing.GAP_MS) { val n = clicks; clicks = 0; if (active) many(n) }
     }
 
+    override fun assistHold() {
+        if (!active || downAt >= 0) return
+        touched = true; pressedSinceShow = true
+        out.hush(); timers.clear("t:gap"); timers.clear("t:replay"); menuScan.stop()
+        clicks = 0; holdAction()
+    }
+
     /** A hold (one press of HOLD_MS): the right word; in the menu or while a translation waits, a way back. */
     private fun holdAction() { if (waiting) return; if (pending != null) backToEdit() else if (menu) closeMenu() else choose(false) }
 
