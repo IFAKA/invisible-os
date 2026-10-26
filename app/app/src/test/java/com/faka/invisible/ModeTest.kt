@@ -918,11 +918,11 @@ class ModeTest {
     @Test fun clickHoldScrollsFastWithFirstWordsAndTicks() {
         val r = scanReady(); r.clearLog()
         r.m.onGesture(Gesture.CLICK_HOLD)
-        r.advance(1000)
+        r.advance(2200)
         val said = r.spoken()
-        assertTrue("many steps in 1 s: $said", said.size >= 4)
+        assertTrue("steps in 2.2 s: $said", said.size >= 3)
         assertTrue("only first words: $said", said.all { !it.removePrefix("say ").contains(' ') })
-        assertTrue(r.count("tone TICK") >= 3)
+        assertTrue(r.count("tone TICK") >= 2)
     }
 
     @Test fun clickHoldReleaseSpeaksTheOptionInFullAndScanContinues() {

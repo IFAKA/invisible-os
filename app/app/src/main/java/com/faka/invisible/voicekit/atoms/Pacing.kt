@@ -14,8 +14,10 @@ object Pacing {
     const val LEAVE_MS = 3000L
 
     // ---- the scan ----
-    /** About 4 fast-scroll steps per second while the button is held. */
-    const val FAST_MS = 250L
+    /** Fast scroll: the least time one word gets before the next one starts. A word is never cut off by the next. */
+    const val FAST_MS = 650L
+    /** Time for one fast-scroll word: 650 ms, more for a long word (60 ms per letter above 3). */
+    fun fastStepMs(word: String) = FAST_MS + 60L * maxOf(0, word.length - 3)
     /** Pause between scanned items, from the end of one item's speech to the start of the next. */
     const val ITEM_GAP_MS = 1600L
     /** One click while scanning: how soon the next option starts. */

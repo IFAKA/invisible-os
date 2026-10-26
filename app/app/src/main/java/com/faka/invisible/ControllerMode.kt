@@ -84,7 +84,7 @@ class CountRanker(private val count: (String) -> Int) : OptionRanker {
  * Idle: clicks go to the music app, hold = WAKE. In the mode ONE rule on every screen: the phone speaks the
  * options one at a time (pause, tick between items, ding at the end) and loops. 1 click = the option spoken last,
  * 1 = next option now, 2 = choose the option spoken last, 3 = back one level (top: leave), 4 = leave. Two silent loops = leave. Hold = exit.
- * Click then hold (fast scroll, while options are read): steps through the options about 4 per second, first word + tick; on release the option is
+ * Click then hold (fast scroll, while options are read): steps through the options one word every 0.65 s or more (a word is never cut off), first word + tick; on release the option is
  * spoken in full and the scan goes on from there. Anywhere else a click-then-hold is a plain hold (exit), so you can never get stuck.
  * Sends and timer starts wait [undoMs] after "Click to cancel"; any click inside cancels them.
  * Events in: onGesture, onSpeechStarted, onSpeechDone. Time and timers are injected.

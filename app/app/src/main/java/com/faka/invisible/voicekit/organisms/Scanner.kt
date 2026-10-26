@@ -95,7 +95,7 @@ class Scanner<T>(
         val s = list.fastStep { label(it).text }
         out.tone(if (s.wrapped) Tone.RESTART else Tone.TICK)
         out.sayFast(Phrase.content(s.text, label(list.current).lang))
-        timers.set(fastKey, Pacing.FAST_MS) { fastTick() }
+        timers.set(fastKey, Pacing.fastStepMs(s.text)) { fastTick() }
     }
 
     /** Released. False if no fast scroll was on. The owner stops its speech and calls [resumeIn]. */
