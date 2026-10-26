@@ -1,6 +1,5 @@
 package com.faka.invisible.guard
 
-import com.faka.invisible.voicekit.GuardVoice
 import com.faka.invisible.voicekit.Phrase
 import com.faka.invisible.voicekit.Timers
 import java.util.Random

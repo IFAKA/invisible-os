@@ -1,6 +1,5 @@
 package com.faka.invisible.guard
 
-import com.faka.invisible.voicekit.GuardVoice
 import com.faka.invisible.voicekit.Phrase
 
 /** One thing the tutorial asks the game to do. */

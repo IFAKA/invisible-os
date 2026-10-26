@@ -1,6 +1,5 @@
 package com.faka.invisible.guard
 
-import com.faka.invisible.voicekit.GuardVoice
 import com.faka.invisible.voicekit.Pacing
 import java.util.Random
 import org.junit.Assert.assertEquals

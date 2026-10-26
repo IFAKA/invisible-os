@@ -1,36 +1,20 @@
 package com.faka.invisible.guard
 
-import android.content.SharedPreferences
-import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
 import com.faka.invisible.voicekit.FrameMixer
-import com.faka.invisible.voicekit.GuardVoice
+import com.faka.invisible.oskit.Program
+import com.faka.invisible.oskit.ProgramEntry
+import com.faka.invisible.oskit.ProgramHost
 import com.faka.invisible.voicekit.Phrase
-import com.faka.invisible.voicekit.RawButton
 import com.faka.invisible.voicekit.GameAudio
 import com.faka.invisible.voicekit.Timers
 
-/** What GUARD needs from the app (speech, the user's music, the log, which sound output is in use). */
-interface GuardHost {
-    /** Starts the OS wait sound (a soft heartbeat while the sounds are built); call the result when ready. */
-    fun waiting(): () -> Unit
-    fun speak(text: Phrase)
-    fun stopSpeech()
-    fun pauseMusic()
-    fun resumeMusic()
-    fun log(line: String)
-    /** A short key for the current sound output (earbuds, wired, phone speaker); the click delay is saved per output. */
-    fun outputDevice(): String
-}
-
 /** Android side of GUARD: the low-latency audio engine, the mixer lock, the timers, the saved best score and click delay. No audio input of any kind. */
-class GuardAndroid(
-    private val prefs: SharedPreferences,
-    private val handler: Handler,
-    private val host: GuardHost,
-    private val onEnded: () -> Unit,
-) : RawButton {
+class GuardAndroid : Program {
+    private lateinit var host: ProgramHost
+    private val handler get() = host.handler
+    private val prefs get() = host.prefs
     private val sr = GuardSynth.SR
     private val block = sr * 5 / 1000
     private val lock = Any()
@@ -74,8 +58,9 @@ class GuardAndroid(
     }
 
     /** Main thread. Builds the sounds in the background (the phone is slow at it), then opens the audio and starts. */
-    fun start() {
+    override fun start(host: ProgramHost) {
         if (running) return
+        this.host = host
         running = true
         gen++
         val g = gen
@@ -99,9 +84,9 @@ class GuardAndroid(
 
     override fun down(time: Long) { game?.down(time) }
     override fun up(time: Long) { game?.up(time) }
-    fun speechDone() { game?.onSpeechDone() }
+    override fun speechDone() { game?.onSpeechDone() }
 
-    fun stop() {
+    override fun stop() {
         if (!running) return
         game?.stop()
         shutdown()
@@ -114,6 +99,11 @@ class GuardAndroid(
         game = null
         audio.join()
         host.resumeMusic()
-        onEnded()
+        host.ended()
     }
+}
+
+/** What the OS registry lists for Guard. */
+object GuardProgram {
+    val entry = ProgramEntry("games:guard", GuardVoice.TITLE) { GuardAndroid() }
 }

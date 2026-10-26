@@ -24,8 +24,6 @@ import com.faka.invisible.compass.CompassHost
 import com.faka.invisible.oskit.Program
 import com.faka.invisible.oskit.ProgramEntry
 import com.faka.invisible.oskit.ProgramHost
-import com.faka.invisible.guard.GuardAndroid
-import com.faka.invisible.guard.GuardHost
 import com.faka.invisible.tell.TellAndroid
 import com.faka.invisible.voicekit.*
 import com.faka.invisible.tell.TellHost
@@ -157,7 +155,6 @@ object Actions {
             override fun startGame(coach: Boolean) = startDuel(coach)
             override fun programs() = Programs.all
             override fun startProgram(id: String) { Programs.byId(id)?.let { startProgramEntry(it) } }
-            override fun startGuard() = startGuardGame()
             override fun startCompass() = startCompassProgram()
             override fun startWrite() = launchWrite()
             override fun startSum() = launchSum()
@@ -210,7 +207,7 @@ object Actions {
         taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList(), onAdd = { taskMemory.record(it.text, it.lang) }) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
         VoiceKit.init(app, handler, { speechRate() }, object : SpeechListener {
             override fun started() { mode.onSpeechStarted() }
-            override fun ended() { mode.onSpeechDone(); duel?.takeIf { it.active }?.speechDone(); running?.takeIf { it.active }?.speechDone(); guard?.takeIf { it.active }?.speechDone() }
+            override fun ended() { mode.onSpeechDone(); duel?.takeIf { it.active }?.speechDone(); running?.takeIf { it.active }?.speechDone() }
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
     }
@@ -218,7 +215,6 @@ object Actions {
     private var duel: TellAndroid? = null
     /** The program of the registry that runs now (at most one). */
     private var running: Program? = null
-    private var guard: GuardAndroid? = null
     private var compass: CompassAndroid? = null
 
     // ---- Write: the stereo-pair keyboard (Typing.kt). The OS gives it the raw button and plays the close sound when it ends. ----
@@ -272,7 +268,7 @@ object Actions {
             if (i % 2 == 0) handler.postAtTime({ VoiceKit.buttons.key("dev", false, 0, down, end) }, end)
         }
     }
-    fun startDev(name: String) = handler.post { when (name) { "guard" -> startGuardGame(); "duel" -> startDuel(false); "compass" -> startCompassProgram(); "write" -> launchWrite(); else -> Programs.byDevName(name)?.let { startProgramEntry(it) } } }
+    fun startDev(name: String) = handler.post { when (name) { "duel" -> startDuel(false); "compass" -> startCompassProgram(); "write" -> launchWrite(); else -> Programs.byDevName(name)?.let { startProgramEntry(it) } } }
 
     /** Dev: drive the music session directly: "uri:<url>" or "search:<query>". */
     fun waitDev(ms: Long) = handler.post { val w = narrator.waiting(); handler.postDelayed({ w() }, ms) }
@@ -438,19 +434,6 @@ object Actions {
         })
     }
 
-    private fun startGuardGame() {
-        guard?.stop()
-        guard = GuardAndroid(prefs(), handler, object : GuardHost {
-            override fun waiting() = narrator.waiting()
-            override fun speak(text: Phrase) = say(text, false, slow = false)
-            override fun stopSpeech() = narrator.stopSpeech()
-            override fun pauseMusic() { pauseMusicNow() }
-            override fun resumeMusic() = resumeMusicNow()
-            override fun log(line: String) { Log.d(TAG, line); EventLog.add(line) }
-            override fun outputDevice() = outputDeviceKey()
-        }, onEnded = { guard = null; gameEnded() }).also { it.start() }
-    }
-
     /** Which sound output is in use (earbuds, wired, phone speaker): the click delay is saved per output. */
     private fun outputDeviceKey(): String {
         val am = app.getSystemService(AudioManager::class.java)
@@ -475,12 +458,11 @@ object Actions {
 
     /** What the button feeds: the programs that own the raw button, the menu, and the menu's own tones. */
     private val buttonTarget = object : ButtonTarget {
-        override fun raw(): RawButton? = duel?.takeIf { it.active } ?: running?.takeIf { it.active } ?: guard?.takeIf { it.active } ?: compass?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
+        override fun raw(): RawButton? = duel?.takeIf { it.active } ?: running?.takeIf { it.active } ?: compass?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
         override val menuActive get() = mode.active
         override fun exitProgram() {   // each stop() ends with the program's onEnded, which plays the OS close sound. Write is not here: its holds pick words; it leaves from its menu
             duel?.takeIf { it.active }?.let { it.stop(); return }
             running?.takeIf { it.active && it.exitOnClickHold }?.let { it.stop(); return }
-            guard?.takeIf { it.active }?.let { it.stop(); return }
             compass?.takeIf { it.active }?.let { it.stop(); return }
         }
         override fun gesture(g: Gesture, durationMs: Long) {

@@ -83,7 +83,6 @@ interface ModeOutput {
     fun startCompass() {}   // the compass program
     fun programs(): List<ProgramEntry> = emptyList()   // the programs the OS lists (its registry), in menu order
     fun startProgram(id: String) {}   // start the program with this menu id (a ProgramEntry.id); the program gets the raw button
-    fun startGuard() {}   // the gate-guard beat game
     fun startGame(coach: Boolean) {}   // coach = teach first (the "How to play" item)
     fun weather(done: (Phrase) -> Unit) { done(Voice.WEATHER_FAILED) }   // off the main thread inside; [done] runs on the main thread with ONE sentence
     fun nextEvent(done: (Phrase) -> Unit) { done(Voice.CALENDAR_FAILED) }   // same: the next calendar event sentence
@@ -515,7 +514,6 @@ class ControllerMode(
             Screen.GAMES -> listOf(   // every game lives here; a new game is one more line
                 Opt("games:duel", Menu.DUEL) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame(false) },   // music stays paused for the game, which resumes it
                 *programOpts("games:"),
-                Opt("games:guard", Menu.GUARD) { pick("games:guard"); pausedByUs = false; exit(false); out.startGuard() },
                 Opt("games:howto", Menu.HOW_TO_PLAY) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) })
             Screen.CALC -> calcOptions()
             Screen.ALARM_HOUR -> ALARM_HOURS.map { h -> Opt("alarm:h$h", Menu.hour(h)) { pick("alarm:h$h"); alarmHour = h; show(Screen.ALARM_MIN) } }
