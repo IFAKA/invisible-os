@@ -275,6 +275,16 @@ class ControllerMode(
     }
 
     // ---- wake: choose the screen by context ----
+    /** Back from a program that was started from this screen without a result: open the same list again and read that item first. */
+    fun resumeAt(s: Screen, key: String) {
+        if (active) return
+        active = true; pausedByUs = false; queue = mutableListOf(); qi = 0; fromHub = false; speechOpen = false; hintPending = false
+        musicBack = Screen.HUB; firstKey = key
+        out.log("MODE resume ${s.name}")
+        show(s)
+    }
+    private var firstKey: String? = null
+
     private fun wake() {
         active = true
         pausedByUs = out.pauseMusic()
@@ -374,7 +384,9 @@ class ControllerMode(
         scanStartedAt = clock()
         scanner.load(buildOptions())
         if (scanner.isEmpty) { leaveSilent(); return }
-        scanner.speakItem(0)
+        val first = firstKey?.let { k -> buildOptions().indexOfFirst { it.key == k } }?.takeIf { it > 0 } ?: 0
+        firstKey = null
+        scanner.speakItem(first)
     }
 
     private fun recordStart() {

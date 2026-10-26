@@ -34,6 +34,7 @@ import java.util.Locale
 /** Shared by ButtonService (media session path) and ButtonAccessibilityService (raw key path). */
 object Actions {
     private const val TAG = "Invisible"
+    private const val BACK_DELAY_MS = 2200L   // after "Nothing written" has been said
     /** Speech rate at the start (1.0 = normal). It rises 0.1 per 20 successful picks, up to 1.8: blind users listen fast. */
     const val SPEECH_RATE = 0.9f
     private fun speechRate() = (mode.settings.speechRate + 0.1f * (prefs().getInt("codeCount", 0) / 20)).coerceAtMost(1.8f)
@@ -99,7 +100,7 @@ object Actions {
             override fun musicToggles() = otherSessions().firstOrNull { it.packageName in musicApps }?.playbackState?.customActions?.map { it.name.toString() } ?: emptyList()
             override fun musicToggle(kind: String, then: (String) -> Unit) = toggleNow(kind, then)
             override fun musicRadio() = radioNow()
-            override fun searchMusic() = launchWrite({ q -> searchAndPlay(q); true }, null)
+            override fun searchMusic() = launchWrite({ q -> searchAndPlay(q); true }, null, backTo = { mode.resumeAt(ControllerMode.Screen.MUSIC_PLAY, "music:search") })
             override fun isMusicApp(pkg: String) = pkg in musicApps
             override fun playMusic(liked: Boolean) = playQuickPicks(liked)
             override fun songLang(text: String) = ControllerNotificationListener.voiceFor(text)
@@ -222,10 +223,16 @@ object Actions {
     }
 
     /** Write into a place that is not the focused field: [sendTo] gets the text (a notification reply, a music search). */
-    private fun launchWrite(sendTo: (String) -> Boolean, replyTo: Notif?) {
+    private fun launchWrite(sendTo: (String) -> Boolean, replyTo: Notif?, backTo: (() -> Unit)? = null) {
         val frame = if (replyTo == null) Frame() else Frame.reply(replyTo.pkg, replyTo.title, replyTo.text, replyTo.hidden)
-        startProgram(WriteProgram(writeServices, sendTo, frame))
+        var sent = false
+        val p = WriteProgram(writeServices, { t -> sent = true; sendTo(t) }, frame)
+        if (backTo == null) { startProgram(p); return }
+        // Left with nothing written: go back to the list it came from ("Nothing written" is said first), reading that item.
+        startProgram(p)
+        backAfterEnd = { if (sent) false else { handler.postDelayed({ backTo() }, BACK_DELAY_MS); true } }
     }
+    private var backAfterEnd: (() -> Boolean)? = null
 
     /** Dev tool (AiTestReceiver): start Write into the field that has focus, as the hub item does. */
     /** Dev: connect to the music app's browser service and log its tree two levels deep. */
@@ -301,7 +308,7 @@ object Actions {
             override fun resumeMusic() = resumeMusicNow()
             override fun log(line: String) { Log.d(TAG, line); EventLog.add(line) }
             override fun outputDevice() = outputDeviceKey()
-            override fun ended() { if (running === p) running = null; gameEnded() }
+            override fun ended() { if (running === p) running = null; val back = backAfterEnd; backAfterEnd = null; if (back == null || !back()) gameEnded() }
         })
     }
 
