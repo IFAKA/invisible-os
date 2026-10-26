@@ -43,10 +43,17 @@ class TtsSpeech(
 
     override val speaking get() = tts?.isSpeaking == true || spTrack != null || neural.speaking
 
+    private var startTries = 0
+
     fun start() {
-        if (NEURAL) neural.start()
+        if (NEURAL && startTries == 0) neural.start()
         tts = TextToSpeech(app) { s ->
-            if (s == TextToSpeech.SUCCESS) {
+            if (s != TextToSpeech.SUCCESS) {   // the engine did not bind in time (seen after an install): the app stayed silent for good. Try again.
+                Log.d(tag, "TTS init failed ($s), try ${startTries + 1}")
+                tts?.shutdown(); tts = null
+                if (startTries++ < 20) handler.postDelayed({ start() }, 3000)
+            } else {
+                startTries = 0
                 tts?.language = Locale.US; ready = true
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) { if (id == lastUtt) handler.post { listener.started() } }
