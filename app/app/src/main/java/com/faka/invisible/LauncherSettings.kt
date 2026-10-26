@@ -23,7 +23,7 @@ data class LauncherSettings(
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "games" to "Games", "alarm" to "Set alarm", "calculator" to "Calculator")
+        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "games" to "Games", "alarm" to "Set alarm", "calculator" to "Calculator", "write" to "Write", "compass" to "Compass")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** Every key a saved menu has ever used, in a fixed order. Only the old migration steps use it; [cleanHub] drops what is no longer an app. */
@@ -70,7 +70,7 @@ object SettingsStore {
     fun load(p: SharedPreferences): LauncherSettings {
         val d = LauncherSettings()
         return LauncherSettings(
-            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withCalcAlarm(p, withApps(p, withNoMore(p, withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it))))))))))) } ?: d.hub,
+            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withWriteCompass(p, withCalcAlarm(p, withApps(p, withNoMore(p, withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it)))))))))))) } ?: d.hub,
             info = p.getString("s_info", null)?.split(',')?.let { LauncherSettings.cleanInfo(it) } ?: d.info,
             phone = p.getString("s_phone", null)?.split(',')?.let { LauncherSettings.cleanPhone(withStatus(p, it)) } ?: d.phone,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
@@ -96,6 +96,13 @@ object SettingsStore {
     }
 
     /** Once: a saved menu gets the Set alarm and Calculator programs at the end; the user can move or switch them off in settings. */
+    private fun withWriteCompass(p: SharedPreferences, keys: List<String>): List<String> {
+        if (p.getBoolean("s_write_compass_saved", false)) return keys
+        val moved = keys + listOf("write", "compass").filter { it !in keys }
+        p.edit().putBoolean("s_write_compass_saved", true).putString("s_hub", moved.joinToString(",")).apply()
+        return moved
+    }
+
     private fun withCalcAlarm(p: SharedPreferences, keys: List<String>): List<String> {
         if (p.getBoolean("s_calc_alarm_saved", false)) return keys
         val moved = keys + listOf("alarm", "calculator").filter { it !in keys }

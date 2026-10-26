@@ -415,6 +415,8 @@ class ControllerMode(
                     "today" -> all["hub:today"] = Opt("hub:today", Menu.TODAY) { pick("hub:today"); show(Screen.TODAY) }
                     "phone" -> all["hub:phone"] = Opt("hub:phone", Menu.PHONE) { pick("hub:phone"); show(Screen.PHONE) }
                     "alarm" -> all["hub:alarm"] = Opt("hub:alarm", Menu.SET_ALARM) { pick("hub:alarm"); show(Screen.ALARM_HOUR) }
+                    "write" -> all["hub:write"] = Opt("hub:write", Menu.WRITE) { pick("hub:write"); pausedByUs = false; exit(false); out.startWrite() }   // a program of the OS: its place comes from its tag in AppCategories
+                    "compass" -> all["hub:compass"] = Opt("hub:compass", Menu.COMPASS) { pick("hub:compass"); pausedByUs = false; exit(false); out.startCompass() }
                     "calculator" -> all["hub:calculator"] = Opt("hub:calculator", Menu.CALCULATOR) { pick("hub:calculator"); calc.clear(); show(Screen.CALC) }
                     "games" -> all["hub:games"] = Opt("hub:games", Menu.GAMES) { pick("hub:games"); show(Screen.GAMES) }
                 }
@@ -469,9 +471,7 @@ class ControllerMode(
             Screen.GAMES -> listOf(   // every game lives here; a new game is one more line
                 Opt("games:duel", Menu.DUEL) { pick("games:duel"); pausedByUs = false; exit(false); out.startGame(false) },   // music stays paused for the game, which resumes it
                 Opt("games:echo", Menu.ECHO) { pick("games:echo"); pausedByUs = false; exit(false); out.startEcho() },
-                Opt("games:write", Menu.WRITE) { pick("games:write"); pausedByUs = false; exit(false); out.startWrite() },   // a program of the OS, not a game; reachable here until it has its own place
                 Opt("games:howto", Menu.HOW_TO_PLAY) { pick("games:howto"); pausedByUs = false; exit(false); out.startGame(true) },
-                Opt("games:compass", Menu.COMPASS) { pick("games:compass"); pausedByUs = false; exit(false); out.startCompass() },   // a program of the OS, placed here with Write
                 Opt("games:back", Menu.BACK) { pick("games:back"); show(Screen.HUB) })
             Screen.CALC -> calcOptions()
             Screen.ALARM_HOUR -> ALARM_HOURS.map { h -> Opt("alarm:h$h", Menu.hour(h)) { pick("alarm:h$h"); alarmHour = h; show(Screen.ALARM_MIN) } } +

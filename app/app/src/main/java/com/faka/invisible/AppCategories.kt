@@ -11,13 +11,14 @@ object AppCategories {
     /** `place  package`, one app per line. */
     private const val TABLE = """
 Messages            hub:messages
+Messages/Write      hub:write
 Messages/Chat       com.whatsapp
 Messages/Chat       com.microsoft.teams
 Messages/Chat       com.tencent.mm
 Messages/Chat       com.discord
 Messages/Mail       com.google.android.gm
 Messages/Calls      com.google.android.dialer
-Messages/Calls      com.google.android.apps.messaging
+Messages/Chat       com.google.android.apps.messaging
 Messages/Calls      com.google.android.apps.tachyon
 Messages/Calls      com.google.android.contacts
 Messages/Social     com.linkedin.android
@@ -59,10 +60,11 @@ Media/Play          com.mojang.minecraftpe
 Media/Play          com.valvesoftware.android.steam.community
 Media/Play          com.xiaomi.glgm
 Media/Play          com.duolingo
-Media/Play          com.sonkins.tguitar
+Media/Music         com.sonkins.tguitar
 Out/Move            com.google.android.apps.maps
 Out/Move            com.ubercab
 Out/Move            com.crtm.integrated
+Out/Move            hub:compass
 Out/Move            com.miui.compass
 Out/Trips           com.airbnb.android
 Out/Shop            com.amazon.mShop.android.shopping
