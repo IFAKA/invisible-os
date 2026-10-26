@@ -92,3 +92,13 @@ Checks: 6 sound tests pass (every tone present, no clipping, <= 1.6 s, tap <= 30
 End of list = `ding` falls (E5 C5). About 0.45 s before the first option comes back, `restart` RISES (G4 C5 E5, from below). So you hear: fall = "it ended", rise = "starting over". Two clicks use the same rising sound, because two clicks also mean "start over": one meaning, one sound. After two silent loops there is no rise, only the leave sound.
 Hint (first 15 picks) is now: "Click when you hear it. Two clicks: start over. Three clicks: go back." (was "Two clicks, again. Three, back.")
 Checks: new test `listEndFallsThenRisesBeforeItStartsOver`; all tests pass; APK installed.
+
+## Rebuild (2026-10-26): Apple's rules
+Why: the old tones were plain sine notes, as loud as the speech (peaks -1 to -8 dBFS, speech about -2). That sounds like a toy.
+Rules used (WWDC17 "Designing Sound", WWDC19 810): sound matches a physical cause and material; short, sharp attack; UI sounds much quieter than results; fade out, never cut; remove what the speaker cannot play; keep the set small and consistent.
+- **One material:** a tuned wooden bar struck with a mallet. Partials 1 : 3.99 : 9.8 (the high ones die faster), plus a 3 ms noise knock. Tap and tick are a dry wood block.
+- **Sharp attack:** 2 ms (was 6 ms). Note length ends about -26 dB down and then a 25 ms fade: nothing is cut.
+- **Filter:** low-pass 4.5 kHz (no 3-6 kHz bite in an earbud), high-pass 200 Hz (a phone speaker cannot play it). Error note moved from C4 to G4 for the same reason.
+- **Levels (peak dBFS, speech about -2):** tap -26, tick -24, screen notes -20, pick/back/cancel -17, hub -14, sent -13, alarm -10. Set in `LEVEL` in Earcons.kt. Write-program cues use the same material.
+- **Audition:** `sound/tones_ab.wav`: each tone as voice, OLD, voice, NEW. Check on the phone speaker and the earbud, and live with it a week.
+- Not done: small random variation of the repeated sounds (tap, tick), and a setting to turn tones off.
