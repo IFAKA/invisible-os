@@ -28,7 +28,7 @@ object TreeLeaves {
     /** All entries before the edits, for the settings screen (the OS programs that are always there, plus every app). */
     fun all(c: Context, s: LauncherSettings): List<AppLeaf> {
         val programs = LauncherSettings.HUB_ITEMS.keys.map { k -> val key = "hub:$k"
-            AppLeaf(key, programLabel(key), AppCategories.categoryOf(key), 0, AppWeights.weight(key, 0, 0, Actions.choices.intentCount(key)), native = true, rank = s.hub.indexOf(k)) }
+            AppLeaf(key, programLabel(key), AppCategories.categoryOf(key), 0, AppWeights.weight(key, 0, 0, Actions.choices.intentCount(key)), rank = s.hub.indexOf(k)) }
         val use = java.util.concurrent.CompletableFuture.supplyAsync { DeviceApps.use(c) }   // the slow usage query runs while the app list loads
         return programs + apps(DeviceApps.installed(c), use.get(), { ControllerNotificationListener.mutes.isMuted(it) }, emptyMap()) { Actions.choices.intentCount(it) }
     }

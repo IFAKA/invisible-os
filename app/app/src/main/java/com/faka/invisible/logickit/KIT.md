@@ -26,7 +26,7 @@ Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rule
 | Tasks, and offering past texts again | `TaskStore`, `PhraseMemory` | TaskStore.kt, PhraseMemory.kt |
 | What to offer first in the hub | `Suggester` | Suggester.kt |
 | The place Write types into (app, field kind, screen text) | `Frame`, `BucketStore`, `BucketRanker` | Context.kt |
-| Next word (English) | `NextWord`; Spanish `NgramWords` is kept but not wired | NextWord.kt, NgramWords.kt |
+| Next word (English) | `NextWord` | NextWord.kt |
 | Phone AI (replies, endings, tasks) | `LocalAi`, `ModelDownload` | LocalAi.kt, ModelDownload.kt |
 | Weather and navigation sentences | `Weather`, the nav parser | Info.kt |
 | Local choice log and gesture log | `ChoiceLog`, `EventLog` | ChoiceLog.kt, EventLog.kt |

@@ -3,9 +3,9 @@ package com.faka.invisible
 /**
  * An entry that may appear in the tree: an app, or a built-in program of the OS (pkg "hub:tasks"). [category] = place, see [AppCategories].
  * [unread] = its notifications now (shown in the label only; it never changes the order). [weight] = how much it is used, see [AppWeights].
- * [rank] = the user's own order, used only when weights tie (lower first). [native] is only used by the old [AppTreeRules].
+ * [rank] = the user's own order, used only when weights tie (lower first).
  */
-data class AppLeaf(val pkg: String, val label: String, val category: String, val unread: Int, val weight: Double, val native: Boolean = false, val rank: Int = 0)
+data class AppLeaf(val pkg: String, val label: String, val category: String, val unread: Int, val weight: Double, val rank: Int = 0)
 
 /** One list entry: a group ([children]), a "More" tail, or an app ([app]). [unread] and [weight] are sums over the leaves below. */
 class TreeNode(val label: String, val children: List<TreeNode> = emptyList(), val app: AppLeaf? = null, val unread: Int = 0, val weight: Double = 0.0, val isMore: Boolean = false, val rank: Int = 0) {

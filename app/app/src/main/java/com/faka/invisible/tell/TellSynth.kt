@@ -30,8 +30,6 @@ object TellSynth {
     private fun hz(pc: Int, oct: Int) = 261.6256 * 2.0.pow((pc + 12 * (oct - 4)) / 12.0)
     /** Status pitch for energy 0..5: C3 Eb3 F3 G3 Bb3 C4. */
     val STATUS_HZ = doubleArrayOf(hz(C, 3), hz(EB, 3), hz(F, 3), hz(G, 3), hz(BB, 3), hz(C, 4))
-    /** The scale as pitch classes (semitones above C). */
-    val SCALE = intArrayOf(C, EB, F, G, BB)
 
     // ---- small tools ----
     private class Noise(seed: Int) {

@@ -99,7 +99,6 @@ class TellGame(
     private var pressUsed = false      // this press already committed a move
 
     val isOver get() = phase == Phase.OVER
-    val currentRung get() = rung
     val roundsPlayed get() = rounds.size
 
     // ---- time helpers ----

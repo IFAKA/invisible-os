@@ -19,8 +19,6 @@ class Phrase private constructor(val text: String, val lang: String?, val isFixe
     override fun hashCode() = text.hashCode() * 31 + (lang?.hashCode() ?: 0)
     override fun toString() = text
 
-    /** The same words with a language for the voice. */
-    fun inLang(l: String?) = Phrase(text, l, isFixed)
     val isEmpty get() = text.isEmpty()
     val isNotEmpty get() = text.isNotEmpty()
     operator fun plus(o: Phrase) = Phrase(text + o.text, lang ?: o.lang, isFixed && o.isFixed)

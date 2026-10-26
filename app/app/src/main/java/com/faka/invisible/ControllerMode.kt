@@ -508,7 +508,7 @@ class ControllerMode(
      * because of a notification. Pin, hide and move edits are applied ([TreeLeaves.edit]). Weight = launches and picks ([AppWeights]); unread is only for the label.
      */
     private fun treeLeaves(builtins: Map<String, Opt>): List<AppLeaf> {
-        val programs = builtins.map { (k, o) -> AppLeaf(k, o.label.text, AppCategories.categoryOf(k), if (k == "hub:messages") unread().size else 0, AppWeights.weight(k, 0, 0, out.pickCount(k)), native = true, rank = settings.hub.indexOf(k.removePrefix("hub:"))) }
+        val programs = builtins.map { (k, o) -> AppLeaf(k, o.label.text, AppCategories.categoryOf(k), if (k == "hub:messages") unread().size else 0, AppWeights.weight(k, 0, 0, out.pickCount(k)), rank = settings.hub.indexOf(k.removePrefix("hub:"))) }
         val unread = out.notifGroups().groupBy { it.pkg }.mapValues { (_, gs) -> gs.sumOf { it.items.size } }
         val apps = TreeLeaves.apps(out.installedApps(), out.appUse(), { out.appMuted(it) }, unread) { out.pickCount(it) }
         return TreeLeaves.edit(programs + apps, settings)

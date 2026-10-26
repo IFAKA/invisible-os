@@ -61,10 +61,8 @@ object Voice {
     fun battery(percent: Int) = f("Battery $percent percent")
     fun doNotDisturb(on: Boolean) = f("Do not disturb " + if (on) "on" else "off")
     fun tasksAdded(n: Int) = f(when (n) { 0 -> "No new open tasks"; 1 -> "1 task added"; else -> "$n tasks added" })
-    val NO_TASKS = f("No tasks yet")
     val ALL_DONE = f("All done")
     val TASK_ADDED = f("Task added")
-    val NO_NOTIFICATIONS = f("No notifications")
     /** A private notification: the app only, never the content. */
     fun newNotification(app: String) = f("$app, new notification")
     val NOTIF_DONE = f("Done")
@@ -201,7 +199,6 @@ object TellVoice {
     }))
 
     private val NUM = listOf("zero", "one", "two", "three", "four", "five")
-    fun firstMatch(rung: Int) = f("First match. Rung ${NUM[rung.coerceIn(0, 5)]}.")
     fun duelRung(rung: Int) = f("Duel. Rung ${NUM[rung.coerceIn(0, 5)]}.")
     val LOADING = f("Loading the duel")
     val COULD_NOT_START = f("Duel could not start")
@@ -297,11 +294,9 @@ object TypeVoice {
     val CONFIRM = f("Click to send. Hold to edit.")
     val TRANSLATION_MISSING = f("Translation not ready. Nothing sent.")
     val TRANSLATION_FAILED = f("Translation failed. Nothing sent.")
-    val DELETED = f("Deleted")
     val LETTERS = f("Letters")
     val WORDS = f("Words")
     val WORDS_WITH = f("Words with")
-    val CHECKING = f("Pick the left or the right")
     /** "Words with a b c": the letters chosen so far, spoken one by one. */
     fun wordsWith(prefix: String) = f(WORDS_WITH.text + " " + prefix.toCharArray().joinToString(" "))
 }

@@ -63,17 +63,16 @@ class AppTreeTest {
         val t0 = System.nanoTime()
         val opt = AppTree.build(l)
         val ms = (System.nanoTime() - t0) / 1_000_000
-        val old = AppTreeRules.build(l.map { it.copy(native = true) })
         val fl = flat(l)
-        val cOpt = AppTree.expectedCost(opt); val cOld = AppTree.expectedCost(old); val cFlat = AppTree.expectedCost(fl)
+        val cOpt = AppTree.expectedCost(opt); val cFlat = AppTree.expectedCost(fl)
         println("REPORT build ${ms} ms, ${l.size} leaves")
-        println("REPORT expected cost per open (items heard + 0.5 per level): flat=%.2f old=%.2f optimized=%.2f".format(cFlat, cOld, cOpt))
-        println("REPORT expected items heard per open: flat=%.2f old=%.2f optimized=%.2f".format(AppTree.expectedHeard(fl), AppTree.expectedHeard(old), AppTree.expectedHeard(opt)))
-        println("REPORT items heard to reach the top 5 apps (sum): flat=%.0f old=%.0f optimized=%.0f".format(AppTree.heardToTop(fl, 5), AppTree.heardToTop(old, 5), AppTree.heardToTop(opt, 5)))
+        println("REPORT expected cost per open (items heard + 0.5 per level): flat=%.2f optimized=%.2f".format(cFlat, cOpt))
+        println("REPORT expected items heard per open: flat=%.2f optimized=%.2f".format(AppTree.expectedHeard(fl), AppTree.expectedHeard(opt)))
+        println("REPORT items heard to reach the top 5 apps (sum): flat=%.0f optimized=%.0f".format(AppTree.heardToTop(fl, 5), AppTree.heardToTop(opt, 5)))
         println("REPORT list lengths: " + lists(opt).map { (it.label.ifEmpty { "HOME" }) + "=" + it.children.size })
         println("REPORT depth=${AppTree.depth(opt)} rawDepth=${AppTree.rawDepth(opt)} maxList=${AppTree.maxListLength(opt)}")
         println("REPORT tree (label (length) [weight]):\n" + dump(opt))
-        assertTrue("$cOpt <= $cOld", cOpt <= cOld + 1e-9); assertTrue("$cOld <= $cFlat", cOld <= cFlat)
+        assertTrue("$cOpt <= $cFlat", cOpt <= cFlat + 1e-9)
         assertTrue(lists(opt).drop(1).all { it.children.size <= AppTree.MAX_LIST }); assertTrue(opt.children.size <= AppTree.HOME_MAX)
         val groups = setOf("Messages", "Day", "Money", "Media", "Out", "Tools")
         assertEquals(groups, opt.children.map { it.label }.filter { it in groups }.toSet())   // every group is a direct entry of home
@@ -130,8 +129,4 @@ class AppTreeTest {
         assertEquals(1, one.children.size)
     }
 
-    @Test fun oldBuilderStillWorks() {
-        val l = phone().map { it.copy(native = true) }
-        assertEquals(l.map { it.pkg }.sorted(), AppTree.apps(AppTreeRules.build(l)).map { it.pkg }.sorted())
-    }
 }

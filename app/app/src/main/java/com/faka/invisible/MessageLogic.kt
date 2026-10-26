@@ -90,14 +90,6 @@ object MessageLogic {
         return MsgType.INFO
     }
 
-    fun tagWord(type: MsgType, lang: String): String = if (wordingLang(lang) == "es") when (type) {
-        MsgType.INVITE -> "Invitación"; MsgType.QUESTION -> "Pregunta"; MsgType.REQUEST -> "Pedido"
-        MsgType.THANKS -> "Gracias"; MsgType.INFO -> "Mensaje"
-    } else when (type) {
-        MsgType.INVITE -> "Invitation"; MsgType.QUESTION -> "Question"; MsgType.REQUEST -> "Request"
-        MsgType.THANKS -> "Thanks"; MsgType.INFO -> "Message"
-    }
-
     // ---- reply composer: Answer -> When -> Extra, built from templates ----
     /** Answer options for a message type, best first. THANKS / INFO answers are final (sent at once). */
     fun answers(type: MsgType): List<Answer> = when (type) {
@@ -109,7 +101,6 @@ object MessageLogic {
     }
 
     fun isFinal(type: MsgType) = type == MsgType.THANKS || type == MsgType.INFO
-    fun asksWhen(a: Answer) = a == Answer.YES || a == Answer.NO || a == Answer.MAYBE || a == Answer.LATER
 
     private fun pick(lang: String, es: String, en: String) = if (wordingLang(lang) == "es") es else en
 

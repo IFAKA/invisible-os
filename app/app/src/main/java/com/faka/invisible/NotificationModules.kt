@@ -16,8 +16,6 @@ interface NotificationModule {
     fun read(n: Notif): String = listOf(n.title, n.text).filter { it.isNotBlank() }.joinToString(". ")
     /** The one line in the list (the caller cuts it). */
     fun summary(n: Notif): String = read(n)
-    /** The action that takes typed text (the reply), if this app has one. */
-    fun replyAction(n: Notif): NotifAction? = n.reply
 
     /** True for a channel of this app that is only noise: it is not kept in the mailbox. */
     fun skips(channel: String): Boolean = false

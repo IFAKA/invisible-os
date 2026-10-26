@@ -58,7 +58,6 @@ class Kit(private val c: Context) {
         v.forEach { addView(it) }
     }
 
-    fun spacer() = View(c).apply { layoutParams = LinearLayout.LayoutParams(0, 0) }
 
     fun grow(v: View) = v.apply { layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
 
