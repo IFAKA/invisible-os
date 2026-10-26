@@ -33,7 +33,7 @@ class TtsSpeech(
         setVoice(null); tts?.setSpeechRate(Pacing.WORD_RATE); tts?.synthesizeToFile(text, null, f, id) == TextToSpeech.SUCCESS
     }, { handler.post(it) })
 
-    override val speaking get() = tts?.isSpeaking == true
+    override val speaking get() = tts?.isSpeaking == true || spTrack != null
 
     fun start() {
         tts = TextToSpeech(app) { s ->
@@ -49,7 +49,7 @@ class TtsSpeech(
         }
     }
 
-    override fun stop() { tts?.stop(); spTrack?.let { try { it.stop() } catch (e: Exception) {} }; spTrack = null; lastUtt = "" }
+    override fun stop() { tts?.stop(); stopClips(); spTrack?.let { try { it.stop() } catch (e: Exception) {} }; spTrack = null; lastUtt = "" }
 
     /** Only the newest utterance counts: older ones were flushed. Tells the listener the speech is over. */
     private fun ended(id: String?) { if (id == lastUtt) handler.post { listener.ended() } }
@@ -68,9 +68,11 @@ class TtsSpeech(
         val text = p.text; val lang = p.lang
         Log.d(tag, "SPEAK[$lang] $text ready=$ready fast=$fast")
         if (!ready) { handler.post { listener.ended() }; return }
+        if (p.isFixed && !fast && sayClip(p, queue)) return   // the recorded voice; free text (messages, tasks) always uses the live voice
+        if (!queue) stopClips()
         val spKey = Spearcon.key(text, lang)
         if (fast) spearcon(spKey)?.let { sp ->
-            tts?.stop(); lastUtt = "inv${++uttSeq}"; val me = lastUtt
+            tts?.stop(); stopClips(); lastUtt = "inv${++uttSeq}"; val me = lastUtt
             handler.post { listener.started() }
             spTrack = tones.play(sp.samples, sp.rate) { if (lastUtt == me) { spTrack = null; listener.ended() } }
             return
@@ -80,6 +82,30 @@ class TtsSpeech(
         lastUtt = "inv${++uttSeq}"
         if (fast) { val k = spKey; val l = lang; handler.postDelayed({ makeSpearcon(k, text, l) }, 4000) }   // after the word, not during it
         tts?.speak(text, if (queue) TextToSpeech.QUEUE_ADD else TextToSpeech.QUEUE_FLUSH, null, lastUtt)
+    }
+
+    // ---- the recorded voice (ClipBank): clips of one text play one after the other; a new non-queued phrase replaces them ----
+    private val clipQueue = ArrayDeque<Pair<String, Spearcon.Pcm>>()
+    private var clipSeq = 0
+
+    private fun stopClips() { clipSeq++; clipQueue.clear(); spTrack?.let { try { it.stop() } catch (e: Exception) {} }; spTrack = null }
+
+    /** True if the fixed [p] was played from clips (all of it); false = the phone's voice must say it. */
+    private fun sayClip(p: Phrase, queue: Boolean): Boolean {
+        val pcm = ClipBank.load(app, p.text, p.lang)
+        if (pcm == null) { if (ClipBank.firstMiss(p.text, p.lang)) try { File(app.filesDir, "spoken_miss.log").appendText("${p.lang ?: "en"}\t${p.text}\n") } catch (e: Exception) {}; return false }
+        if (!queue) { tts?.stop(); stopClips() }
+        lastUtt = "inv${++uttSeq}"
+        clipQueue.addLast(lastUtt to pcm)
+        if (spTrack == null) nextClip()
+        return true
+    }
+
+    private fun nextClip() {
+        val (id, pcm) = clipQueue.removeFirstOrNull() ?: return
+        val me = ++clipSeq
+        if (id == lastUtt) handler.post { listener.started() }
+        spTrack = tones.play(pcm.samples, pcm.rate) { if (me == clipSeq) { spTrack = null; if (clipQueue.isEmpty()) { if (id == lastUtt) handler.post { listener.ended() } } else nextClip() } }
     }
 
     // ---- spearcons: an option picked often is scanned as its sped-up spoken word ----
