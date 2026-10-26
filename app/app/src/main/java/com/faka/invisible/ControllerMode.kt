@@ -77,7 +77,7 @@ interface ModeOutput {
     fun navigation(): String? = null   // the latest Google Maps instruction as one sentence; null = not navigating
     fun findPhone(on: Boolean) {}   // ring loudly on the alarm stream (on) or stop (off)
     fun setContext(tags: Set<String>) {}   // the situation now (Suggester.TAGS); it is stored with every choice
-    fun suggest(candidates: Collection<String>, now: Long): List<String> = emptyList()   // the OS's "Suggested" slot: up to 3 of these deep options, best first
+    fun suggest(candidates: Collection<String>, now: Long, others: Collection<String> = emptyList(), accept: (String, Double, Int) -> Boolean = { _, _, _ -> true }): List<String> = emptyList()   // others = home entries that compete (never offered); accept = see SuggestGate; the OS's "Suggested" slot: up to 3 of these deep options, best first
     fun pickCount(intent: String): Int = 0   // how often this option was picked (spearcon after [ControllerMode.SPEARCON_AFTER] picks)
 }
 
@@ -438,11 +438,15 @@ class ControllerMode(
                 }
                 suggestedKeys = emptyList()
                 out.setContext(buildSet { if (n > 0) add("unread"); if (out.nowPlaying() != null) add("playing"); if (out.navigation() != null) add("navigating"); if (out.wiredConnected()) add("wired") })
-                val deep = deepOptions()
-                val sug = out.suggest(deep.keys, clock()).mapNotNull { deep[it] }
-                suggestedKeys = sug.map { it.key }
                 hubOpts = all
                 val root = cachedTree(treeLeaves(all)); treeRoot = root; treePath.clear()
+                val deep = deepOptions()
+                val far = suggestableLeaves(root)   // apps and programs that are not direct entries of home: offered too, when worth it
+                val home = root.children.map { c -> c.app?.let { leafKey(it.pkg) } ?: "group:${c.label}" }
+                val cost = far.mapValues { it.value.second }
+                val sug = out.suggest(deep.keys + far.keys, clock(), home) { key, share, pos -> key !in cost || SuggestGate.worth(share, cost.getValue(key), pos) }
+                    .mapNotNull { deep[it] ?: far[it]?.first }
+                suggestedKeys = sug.map { it.key }
                 sug + treeOptions(root) + unmuteOption()   // the home list is the tree's top; only the small Suggested slot in front adapts
             }
             Screen.TASK -> {   // "Add task" first, then this page of tasks (a click right after hearing one = done), then "More tasks"
@@ -570,10 +574,27 @@ class ControllerMode(
         val a = c.app
         when {
             a != null && a.pkg in hubOpts -> hubOpts.getValue(a.pkg)
-            a != null -> Opt("tree:app", treeLabel(c)) { pick("app:${a.pkg}"); notifPkg = a.pkg; show(if (c.unread > 0) Screen.NOTIF_LIST else Screen.APP_OPEN) }
+            a != null -> treeAppOption(c)
             else -> Opt("tree:group", treeLabel(c)) { pick("group:${c.label}"); treePath.add(c); show(Screen.TREE) }
         }
     }
+
+    /** The history key of a leaf: an OS program is its own key ("hub:phone"), an app is "app:<package>" (what [pick] logs from the tree). */
+    private fun leafKey(pkg: String) = if (pkg in hubOpts) pkg else "app:$pkg"
+
+    /** Leaves below home (not its direct entries): key -> (an option that does what picking it in the tree does, cost of its path in the tree). */
+    private fun suggestableLeaves(root: TreeNode): Map<String, Pair<Opt, Double>> {
+        val out = LinkedHashMap<String, Pair<Opt, Double>>()
+        for (p in AppTree.paths(root)) {
+            if (p.levels == 0) continue
+            val a = p.app; val key = leafKey(a.pkg)
+            val opt = hubOpts[a.pkg] ?: treeAppOption(TreeNode(a.label, app = a, unread = a.unread))
+            out[key] = opt to SuggestGate.treeCost(p.heard, p.levels)
+        }
+        return out
+    }
+
+    private fun treeAppOption(c: TreeNode): Opt { val a = c.app!!; return Opt("app:${a.pkg}", treeLabel(c)) { pick("app:${a.pkg}"); notifPkg = a.pkg; show(if (c.unread > 0) Screen.NOTIF_LIST else Screen.APP_OPEN) } }
 
     private fun unmuteOption(): List<Opt> = if (out.notifMutedCount() == 0) emptyList() else listOf(Opt("notif:unmute", Menu.UNMUTE_ALL) {
         pick("notif:unmute"); out.notifUnmuteAll(); say(Voice.APPS_UNMUTED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }

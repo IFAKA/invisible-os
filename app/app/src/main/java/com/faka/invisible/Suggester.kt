@@ -24,18 +24,28 @@ object Suggester {
     private fun hourOf(ts: Long) = Calendar.getInstance().apply { timeInMillis = ts }.get(Calendar.HOUR_OF_DAY)
     private fun hourGap(a: Int, b: Int) = minOf((a - b + 24) % 24, (b - a + 24) % 24)
 
-    /** Up to [n] of [candidates], best first. An option needs [MIN_PICKS] picks before it can be suggested. */
-    fun top(history: List<Pick>, candidates: Collection<String>, now: Long, n: Int = 3, tags: Set<String> = emptySet()): List<String> {
+    /**
+     * Up to [n] of [candidates], best first. An option needs [MIN_PICKS] picks before it can be suggested.
+     * [others] = picks that compete but are never offered (the direct entries of home): they only count in the denominator of the share.
+     * [accept] (key, share = its score / all scores, position it would take) can refuse a candidate (see [SuggestGate]); the default accepts all.
+     */
+    fun top(history: List<Pick>, candidates: Collection<String>, now: Long, n: Int = 3, tags: Set<String> = emptySet(),
+            others: Collection<String> = emptySet(), accept: (String, Double, Int) -> Boolean = { _, _, _ -> true }): List<String> {
         val hour = hourOf(now)
         val score = HashMap<String, Double>(); val picks = HashMap<String, Int>()
         for (p in history) {
-            if (p.intent !in candidates || p.ts > now) continue
+            if (p.intent !in candidates && p.intent !in others || p.ts > now) continue
             val ageDays = (now - p.ts) / 86_400_000.0
             val w = Math.pow(0.5, ageDays / HALF_LIFE_DAYS) * (if (hourGap(hourOf(p.ts), hour) <= NEAR_HOURS) 2.0 else 1.0) * likeness(p.tags, tags)
             score[p.intent] = (score[p.intent] ?: 0.0) + w; picks[p.intent] = (picks[p.intent] ?: 0) + 1
         }
-        return score.keys.filter { (picks[it] ?: 0) >= MIN_PICKS }
-            .sortedWith(compareBy({ -(score[it] ?: 0.0) }, { it })).take(n)
+        val total = score.values.sum()
+        val out = ArrayList<String>()
+        for (k in score.keys.filter { it in candidates && (picks[it] ?: 0) >= MIN_PICKS }.sortedWith(compareBy({ -(score[it] ?: 0.0) }, { it }))) {
+            if (out.size >= n) break
+            if (accept(k, (score[k] ?: 0.0) / total, out.size + 1)) out += k
+        }
+        return out
     }
 
     /** Replay the history: how often was each pick of a candidate inside the 3 suggested from the picks before it? */

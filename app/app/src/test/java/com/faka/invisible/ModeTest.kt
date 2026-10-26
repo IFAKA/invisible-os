@@ -98,7 +98,7 @@ class ModeTest {
             override fun addTask(text: String, lang: String) = taskStore.add(text, lang) != null
             override fun setLastTimer(minutes: Int) { last = minutes }
             override fun favourites() = favs
-            override fun suggest(candidates: Collection<String>, now: Long) = suggested.filter { it in candidates }
+            override fun suggest(candidates: Collection<String>, now: Long, others: Collection<String>, accept: (String, Double, Int) -> Boolean) = suggested.filter { it in candidates }
             override fun loadReactions() = savedReactions
             override fun saveReactions(text: String) { savedReactions = text }
             override fun codeCount() = codes
@@ -1071,6 +1071,15 @@ class ModeTest {
     @Test fun notificationsHiddenWhenEmpty() {
         val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("timer")); r.wake(); r.advance(100)
         assertFalse(r.spoken().any { it.contains("Notifications") })
+    }
+
+    @Test fun suggestedSlotOffersAnAppFromBelowHomeAndPickingItLogsTheTreeIntent() {
+        val r = many(); r.suggested = listOf("app:com.brubank")
+        r.wake(); r.advance(450 + 700); assertEquals("say brubank", r.spoken().first())   // in front of home, though it lives in a group
+        r.advance(400); r.click()
+        assertTrue(r.log.contains("choice HUB -1 suggest:hit"))
+        assertTrue(r.log.any { it.endsWith("app:com.brubank") })
+        assertEquals(ControllerMode.Screen.APP_OPEN, r.m.screen)
     }
 
     @Test fun walkTreeToAnAppAndBackWithTripleClick() {

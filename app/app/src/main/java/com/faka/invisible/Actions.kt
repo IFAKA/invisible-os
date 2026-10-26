@@ -146,7 +146,7 @@ object Actions {
             override fun startWrite() = launchWrite()
             override fun pickCount(intent: String) = choices.intentCount(intent)
             override fun favourites() = choices.favourites()
-            override fun suggest(candidates: Collection<String>, now: Long) = Suggester.top(choices.history(), candidates, now, tags = context)
+            override fun suggest(candidates: Collection<String>, now: Long, others: Collection<String>, accept: (String, Double, Int) -> Boolean) = Suggester.top(choices.history(), candidates, now, tags = context, others = others, accept = accept)
             override fun setContext(tags: Set<String>) { context = tags }
             override fun choice(screen: String, code: Int, intent: String, sender: String, pickMs: Long) {
                 choices.record(System.currentTimeMillis(), screen, code, intent, sender, context, pickMs)
