@@ -547,17 +547,20 @@ object Actions {
         fun ask(c: android.media.session.MediaController) = c.transportControls.playFromSearch("", null)
         otherSessions().firstOrNull { it.packageName in musicApps }?.let { ask(it); return }
         val pkg = musicApps.firstOrNull { app.packageManager.getLaunchIntentForPackage(it) != null } ?: run { Log.d(TAG, "MODE no music app"); return }
-        Log.d(TAG, "MODE music: no session, open the app by link, then ask it to play")   // the link opens it with the screen off but does not always play; the session then does
-        playLiked(pkg)
+        // no session: a media-play key (like the earbud) makes the system start the app's playback service, which the memory manager keeps alive; the link only opens an activity, which it kills with the screen off
+        Log.d(TAG, "MODE music: no session, media key")
+        val am = app.getSystemService(AudioManager::class.java)
+        for (a in listOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP)) am.dispatchMediaKeyEvent(android.view.KeyEvent(a, android.view.KeyEvent.KEYCODE_MEDIA_PLAY))
         var tries = 0
         val poll = object : Runnable {
             override fun run() {
                 val c = otherSessions().firstOrNull { it.packageName in musicApps }
                 if (c != null) { Log.d(TAG, "MODE music: session found, play"); ask(c); return }
-                if (++tries < 30) handler.postDelayed(this, 500)
+                if (++tries == 12) { Log.d(TAG, "MODE music: no session after key, open by link"); playLiked(pkg) }
+                if (tries < 40) handler.postDelayed(this, 500)
             }
         }
-        handler.postDelayed(poll, 2000)
+        handler.postDelayed(poll, 1000)
     }
 
     private fun playLiked(pkg: String) {
