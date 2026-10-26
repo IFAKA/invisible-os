@@ -4,7 +4,7 @@
 import os, sys, time, shutil
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from manifest import all_items, key
-D = os.environ.get("CLIPS", "~/code/projects/hardware/.lanes/invisible-controller/voice-clips/app/app/src/main/assets/voice")
+D = os.environ.get("CLIPS", "~/code/projects/hardware/.lanes/invisible-controller/voice-clips/app/os/src/main/assets/voice")
 G, Y, R, B, X = "\033[32m", "\033[33m", "\033[2m", "\033[1m", "\033[0m"
 def group(l, t): return "Spanish" if l == "es" else "Battery" if t.startswith("Battery ") else "Timer" if t.startswith("Timer ") and "minutes" in t else "Menu and sentences"
 def state():

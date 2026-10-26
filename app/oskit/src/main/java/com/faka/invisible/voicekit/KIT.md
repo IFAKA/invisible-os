@@ -6,6 +6,7 @@ Built on Atomic Design: small parts (atoms) make groups (molecules), engines tal
 Rules are checked two ways:
 - Compile time: `speak`/`say` take a `Phrase`. A fixed sentence can only be made inside this folder (`Phrase.fixed` needs `@KitOnly`). Text from the user or the world is `Phrase.content(text, lang)`.
 - Build time: Gradle task `checkVoiceKit` (runs before every build and in `check`) and `KitRulesTest` read `app/voicekit-rules.tsv`. They fail with file:line if code outside this folder uses a speech engine, plays audio, takes the button, makes a fixed Phrase, passes a string to say/speak, keeps its own list index, or hand-rolls HOLD_MS/GAP_MS.
+- The check covers the main sources of EVERY module (oskit, os, programs/*, adapters), not only the app. A program (or adapter) makes its own fixed sentences in its own `*Sentences.kt` (`@file:OptIn(KitOnly::class)`) and gets one `allow` line in the rules file. Programs and adapters may use only `:oskit` (the same task checks this: build files and package use).
 - Allowed outside: AudioManager volume stepping and reading devices (not playing), music control of other apps (pause, next), `Phrase.content` with real data.
 
 | File | Level | What it is |

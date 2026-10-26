@@ -3,7 +3,7 @@
 
 Usage:
   adb shell dumpsys usagestats > us.txt
-  python3 -I tools/usage_weights.py us.txt app/app/src/test/resources/phone_apps.txt app/app/src/test/resources/app_usage.tsv
+  python3 -I tools/usage_weights.py us.txt app/os/src/test/resources/phone_apps.txt app/os/src/test/resources/app_usage.tsv
 Without the last two arguments it only prints the top apps by minutes.
 Use the LAUNCH columns for weights: minutes are inflated by foreground services (this app, tailscale, crosspaste, termux).
 """

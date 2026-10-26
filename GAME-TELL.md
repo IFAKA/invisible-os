@@ -133,7 +133,7 @@ Each level opens with one line ("Level two. Charge.").
 - `TellGame.kt`: the clock, press handling, round loop. Takes an injected `Clock`, `Out` (audio events) and `Speech`.
 - `TellAndroid.kt`: AudioTrack thread, wiring from `Actions`, menu item "Duel", persistence of the rung (SharedPreferences),
   a per-match log line via `ModeOutput.log`.
-- Tests under `app/app/src/test/java/com/faka/invisible/tell/`.
+- Tests under `app/programs/duel/src/test/java/com/faka/invisible/tell/`.
 
 ## Checks (all run by `cd app && ./gradlew testDebugUnitTest --offline -q`)
 Rules: same results as yomi.py for a fixed table of 30 (state, moves) cases. Solver: start value within 0.05 of 0.5; Nash

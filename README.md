@@ -65,7 +65,7 @@ On some phones (Xiaomi / HyperOS and others) also allow the app to run in the ba
 cd app && ./gradlew testDebugUnitTest
 ```
 
-The menu is a pure state machine ([`ControllerMode.kt`](app/app/src/main/java/com/faka/invisible/ControllerMode.kt)) with injected time and output, so gestures, scanning, undo and replies are unit tested.
+The menu is a pure state machine ([`ControllerMode.kt`](app/os/src/main/java/com/faka/invisible/ControllerMode.kt)) with injected time and output, so gestures, scanning, undo and replies are unit tested.
 
 ## Who it is for
 

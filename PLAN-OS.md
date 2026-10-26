@@ -79,7 +79,7 @@ A unit is a letter, a word, a phrase or a whole value. The Write program does no
 Measure with one number: hit@2 per bucket and seconds per text. Not built yet: all of the above (Write today uses only the last 2 words and starts from Games).
 
 ### Status (2026-10-26)
-- Built: steps 1, 3, 5, 6, 7 (`Context.kt`: `Frame`, `Fields`, `BucketStore`, `BucketRanker`; digits, whole values, password rule in `Typing.kt`; Gemma gets the screen brief in `LocalAi.continuations`).
+- Built: steps 1, 3, 5, 6, 7 (`Context.kt`: `Frame`, `Fields`, `BucketStore`, `BucketRanker`; digits, whole values, password rule in `programs/write/.../Typing.kt`; Gemma gets the screen brief in `LocalAi.continuations`).
 - Door: **accessibility, not the IME, for now.** `ButtonAccessibilityService.frame()` reads the focused field and the screen; `setFieldText()` writes the result into it. The IME is still open as a second door (needed only if accessibility text setting fails in some apps).
 - Checked on the phone: Write starts standalone with the new code. **Not checked: typing into another app** (the phone was locked, so I could not drive another app). Test: unlock, open a chat, put the cursor in the message field, open Write from the hub, write a word, three clicks, Done. The text must appear in the field. Then the same with the screen off.
 - Limits today: email and URL fields offer only what you used there before (no spelling of new addresses yet); contacts are not read; learning needs a few finished texts per place before it shows.

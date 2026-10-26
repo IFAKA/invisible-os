@@ -27,8 +27,8 @@ Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rule
 | Strip links, spot "Photo" placeholders, make a link speakable, a person's stable name | `MessageLogic.stripLinks / isPlaceholder / spoken / stableName / wordingLang / voiceLang` | MessageLogic.kt |
 | Classify a message and word the answers | `MessageLogic` (MsgType, Answer, When, Extra) | MessageLogic.kt |
 | Latest unread message per conversation | `MessageStore` | MessageStore.kt |
-| All notifications, groups, one by key (`notifs.get(key)`) | `NotificationStore` (`Notif`, `NotifAction`); chat messages are a different store (`ControllerNotificationListener.store`) | NotificationStore.kt |
-| How one app's notifications are read, grouped, replied to | `NotificationModule` + the registry | NotificationModules.kt, ChatAppsModule.kt, TeamsModule.kt |
+| All notifications, groups, one by key (`notifs.get(key)`) | `NotificationStore` (`Notif`, `NotifAction`); chat messages are a different store (`ControllerNotificationListener.store`) | `Notif` in `oskit/Notifications.kt`, the store in `os/.../NotificationStore.kt` |
+| How one app's notifications are read, grouped, replied to | `NotificationModule` + the registry | `oskit/Notifications.kt` (the interface, `Notif`, `NotificationHost`), one file per outside app in `app/adapters/` (ChatAppsModule.kt, TeamsModule.kt), one line each in `Adapters` in `os/.../Programs.kt` |
 | Answer a notification (fire an action, reply, dismiss, mute) | `ControllerNotificationListener.fireAction / sendReply` | ControllerNotificationListener.kt |
 | Where an app sits in the spoken tree | `AppCategories`, `AppWeights`, `AppTree`, `TreeLeaves` (edits in `LauncherSettings`) | those files |
 | Which apps exist and how often they were opened | `DeviceApps` | DeviceApps.kt |
