@@ -20,7 +20,7 @@ class ButtonService : Service() {
         super.onCreate()
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel("inv", "Invisible", NotificationManager.IMPORTANCE_LOW))
-        val n = Notification.Builder(this, "inv").setContentTitle("Invisible controller on")
+        val n = Notification.Builder(this, "inv").setContentTitle("Invisible OS on")
             .setSmallIcon(android.R.drawable.ic_media_play).setOngoing(true).build()
         startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
 

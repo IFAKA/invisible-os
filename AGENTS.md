@@ -1,4 +1,4 @@
-# Invisible controller
+# Invisible OS
 
 Android app: control the phone with one earbud button, screen off. The phone speaks the options; one click picks.
 
