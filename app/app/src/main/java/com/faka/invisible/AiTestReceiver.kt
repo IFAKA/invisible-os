@@ -17,6 +17,7 @@ class AiTestReceiver : BroadcastReceiver() {
         if (i.hasExtra("tree")) { val ctx0 = c.applicationContext; Thread { Log.d("TREEDUMP", "\n" + TreeLeaves.dump(ctx0)) }.start(); return }
         if (i.hasExtra("playmusic")) { Actions.playMusicDev(); return }   // dev: what the Music item does with no song
         if (i.hasExtra("browse")) { Actions.browseMusicDev(); return }
+        i.getStringExtra("gesture")?.let { Actions.gestureDev(it); return }   // dev: a button gesture by name
         i.getStringExtra("ctl")?.let { Actions.ctlDev(it); return }
         if (i.hasExtra("wait")) { Actions.waitDev(i.getIntExtra("wait", 5000).toLong()); return }   // dev: the waiting heartbeat for this many ms
         i.getStringExtra("msearch")?.let { Actions.searchDev(it); return }   // dev: type a song search without the keyboard

@@ -256,6 +256,9 @@ object Actions {
         b.connect()
     }
 
+    /** Dev: press the button without the earbud (adb cannot inject key events on this phone): SINGLE, DOUBLE, TRIPLE, HOLD, CLICK_HOLD... */
+    fun gestureDev(name: String) = handler.post { buttonTarget.gesture(Gesture.valueOf(name.uppercase()), 0) }
+
     /** Dev: drive the music session directly: "uri:<url>" or "search:<query>". */
     fun waitDev(ms: Long) = handler.post { val w = narrator.waiting(); handler.postDelayed({ w() }, ms) }
     fun ctlDev(cmd: String) = handler.post {
@@ -467,7 +470,7 @@ object Actions {
         handler.post { narrator.beep(if (sender in choices.favourites()) Tone.ARRIVE_FAV else Tone.ARRIVE) }
     }
 
-    private fun say(p: Phrase, queue: Boolean, fast: Boolean = false, slow: Boolean = false) = narrator.say(p, queue, fast, slow)
+    private fun say(p: Phrase, queue: Boolean, fast: Boolean = false, slow: Boolean = false) { Log.d("SAY", p.text); narrator.say(p, queue, fast, slow) }   // SAY log: lets a dev check what the menu speaks
 
     private fun adjustVolume(up: Boolean) {
         val am = app.getSystemService(AudioManager::class.java)
