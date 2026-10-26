@@ -93,6 +93,7 @@ class TypeProgram(
     private var touched = false   // the player has pressed since the start
     private var waiting = false   // Done was picked: the translation is being made
     private var pending: String? = null   // the translation, read back, waiting for a click to send it
+    override val exitOnClickHold = false   // click then hold is "left word, then right word"; Write is left by holding 3 s
     override var active = false; private set
     var intro: List<Phrase> = listOf(TypeVoice.START, TypeVoice.START2, TypeVoice.START_NEXT, TypeVoice.START3)   // said once at the start
 
@@ -105,7 +106,7 @@ class TypeProgram(
         show()
     }
 
-    fun stop() { if (active) { active = false; waiting = false; pending = null; menu = false; menuScan.stop(); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:leave1"); timers.clear("t:leave2"); timers.clear("t:replay") } }
+    fun stop() { if (active) { active = false; waiting = false; pending = null; menu = false; menuScan.stop(); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:replay") } }
 
     fun text(): String = if (frame.digits) written.joinToString("") { if (it == POINT) "." else it } else written.joinToString(" ").replaceFirstChar { it.uppercase() }
 
@@ -142,21 +143,24 @@ class TypeProgram(
         touched = true; pressedSinceShow = true
         out.hush(); timers.clear("t:gap"); timers.clear("t:replay"); menuScan.stop()
         downAt = time; armed = false
-        timers.set("t:hold", Pacing.HOLD_MS) { if (active && downAt >= 0) { armed = true; out.cue(TypeCue.ARMED) } }
-        timers.set("t:leave1", Pacing.LEAVE_MS / 3) { if (active && downAt >= 0) out.cue(TypeCue.LEAVE1) }
-        timers.set("t:leave2", Pacing.LEAVE_MS * 2 / 3) { if (active && downAt >= 0) out.cue(TypeCue.LEAVE2) }
-        timers.set("t:leave", Pacing.LEAVE_MS) { if (active && downAt >= 0) leave(false) }
+        // The hold acts when it reaches HOLD_MS, while the button is still down: the pick sound is the feedback, and holding on does nothing more.
+        timers.set("t:hold", Pacing.HOLD_MS) { if (active && downAt >= 0) { armed = true; clicks = 0; holdAction() } }
     }
 
     override fun up(time: Long) {
         if (!active || downAt < 0) return
-        timers.clear("t:hold"); timers.clear("t:leave"); timers.clear("t:leave1"); timers.clear("t:leave2")
-        val long = armed || time - downAt >= Pacing.HOLD_MS
+        timers.clear("t:hold")
+        val long = time - downAt >= Pacing.HOLD_MS
+        val acted = armed
         downAt = -1; armed = false
-        if (long) { clicks = 0; if (waiting) return; if (pending != null) backToEdit() else if (menu) closeMenu() else choose(false); return }
+        if (acted) return   // the hold already acted while the button was down
+        if (long) { clicks = 0; holdAction(); return }   // the timer was late
         clicks++
         timers.set("t:gap", Pacing.GAP_MS) { val n = clicks; clicks = 0; if (active) many(n) }
     }
+
+    /** A hold (one press of HOLD_MS): the right word; in the menu or while a translation waits, a way back. */
+    private fun holdAction() { if (waiting) return; if (pending != null) backToEdit() else if (menu) closeMenu() else choose(false) }
 
     private fun many(n: Int) {
         if (waiting) return
@@ -173,7 +177,7 @@ class TypeProgram(
     // ---- the small menu: Done, Delete, Letters/Words, read one at a time ----
     private fun menuLabels(): List<Phrase> =   // Done is last: it is used once, at the end; the first items are used while typing
         (if (frame.digits) (if (phraseMode) listOf(TypeVoice.DIGITS) else emptyList()) else listOf(if (letters || phraseMode) TypeVoice.WORDS else TypeVoice.LETTERS)) +
-        listOf(TypeVoice.MENU_DELETE) + (if (phrases.isNotEmpty() && !phraseMode) listOf(TypeVoice.PHRASES) else emptyList()) + listOf(TypeVoice.MENU_DONE)
+        listOf(TypeVoice.MENU_DELETE) + (if (phrases.isNotEmpty() && !phraseMode) listOf(TypeVoice.PHRASES) else emptyList()) + listOf(TypeVoice.MENU_DONE, TypeVoice.MENU_LEAVE)
 
     /** The big model gets the text so far; a late answer for an older text is ignored. */
     private fun askPhrases() {
@@ -216,6 +220,7 @@ class TypeProgram(
         menu = false; menuScan.stop()
         when (label) {
             TypeVoice.MENU_DONE -> leave(true)
+            TypeVoice.MENU_LEAVE -> leave(false)
             TypeVoice.MENU_DELETE -> { out.cue(TypeCue.DELETE); if (prefix.isNotEmpty()) prefix = "" else if (written.isNotEmpty()) { written.removeAt(written.size - 1); askPhrases() }; letters = false; phraseMode = false; page = 0; show() }
             TypeVoice.PHRASES -> { phraseMode = true; letters = false; page = 0; out.cue(TypeCue.WORDS); show() }
             else -> { phraseMode = false; if (!frame.digits) letters = !letters; page = 0; out.cue(if (letters) TypeCue.LETTERS else TypeCue.WORDS); show() }

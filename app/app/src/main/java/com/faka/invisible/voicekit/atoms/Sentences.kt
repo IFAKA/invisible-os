@@ -379,6 +379,7 @@ object TypeVoice {
     val START3 = f("Three clicks for more.")
     val MENU_DONE = f("Done")
     val MENU_DELETE = f("Delete")
+    val MENU_LEAVE = f("Leave")
     val PHRASES = f("Phrases")
     val DIGITS = f("Digits")
     val SUM_START = f("Sum prices. Type a price.")

@@ -463,12 +463,11 @@ object Actions {
     private val buttonTarget = object : ButtonTarget {
         override fun raw(): RawButton? = duel?.takeIf { it.active } ?: echo?.takeIf { it.active } ?: guard?.takeIf { it.active } ?: compass?.takeIf { it.active } ?: typer?.takeIf { it.active }   // the Duel and Write own the raw button
         override val menuActive get() = mode.active
-        override fun exitProgram() {   // each stop() ends with the program's onEnded, which plays the OS close sound; Write's stop() does not
+        override fun exitProgram() {   // each stop() ends with the program's onEnded, which plays the OS close sound. Write is not here: its holds pick words; it leaves from its menu
             duel?.takeIf { it.active }?.let { it.stop(); return }
             echo?.takeIf { it.active }?.let { it.stop(); return }
             guard?.takeIf { it.active }?.let { it.stop(); return }
             compass?.takeIf { it.active }?.let { it.stop(); return }
-            typer?.takeIf { it.active }?.let { it.stop(); typer = null; narrator.hush(); gameEnded() }
         }
         override fun gesture(g: Gesture, durationMs: Long) {
             EventLog.add("${g.name.lowercase()}  ${durationMs}ms")

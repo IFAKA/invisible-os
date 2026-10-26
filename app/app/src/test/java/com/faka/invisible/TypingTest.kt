@@ -83,13 +83,14 @@ class TypingTest {
         assertEquals("hello" to "thanks", pairs.last())
     }
 
-    @Test fun holdingToLeaveTicksAtOneAndTwoSeconds() {
+    @Test fun aHoldPicksTheRightWordWhileTheButtonIsDownAndHoldingOnDoesNothingMore() {
         p.start(); cues.clear()
-        p.down(t.now); t.advance(1100)
-        assertTrue(cues.contains(TypeCue.LEAVE1) && !cues.contains(TypeCue.LEAVE2))
-        t.advance(1000)
-        assertTrue(cues.contains(TypeCue.LEAVE2))
+        p.down(t.now); t.advance(Pacing.HOLD_MS + 50)
+        assertTrue(cues.contains(TypeCue.PICK_RIGHT))
+        t.advance(4000)
+        assertTrue(p.active); assertEquals(1, cues.count { it == TypeCue.PICK_RIGHT })
         p.up(t.now)
+        assertEquals(1, cues.count { it == TypeCue.PICK_RIGHT }); assertTrue(p.active)
     }
 
     @Test fun menuLettersItemSpellsAndThenOffersWords() {
@@ -116,7 +117,7 @@ class TypingTest {
 
     @Test fun menuClosesByItselfAfterTwoSilentLoops() {
         p.start(); clicks(3); val n = pairs.size
-        t.advance(TypeProgram.MENU_GAP_MS * 6 + 50)
+        t.advance(TypeProgram.MENU_GAP_MS * 8 + 50)
         assertEquals(n + 1, pairs.size); assertTrue(p.active)
     }
 
@@ -126,8 +127,10 @@ class TypingTest {
         assertTrue(p.active); assertEquals("Hello", p.text()); assertEquals(n + 2, pairs.size)
     }
 
-    @Test fun holdThreeSecondsLeavesWithNothing() {
-        p.start(); clicks(1); hold(3200)
+    @Test fun theMenuLeaveItemLeavesWithNothing() {
+        p.start(); clicks(1); clicks(3)
+        t.advance(TypeProgram.MENU_GAP_MS * 3)
+        clicks(1)
         assertEquals("", result)
         assertTrue(!p.active)
     }
