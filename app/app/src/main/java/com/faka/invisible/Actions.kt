@@ -164,7 +164,7 @@ object Actions {
             override fun started() { mode.onSpeechStarted() }
             override fun ended() { mode.onSpeechDone(); duel?.takeIf { it.active }?.speechDone() }
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
-        VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
+        VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", false) }
     }
 
     private var duel: TellAndroid? = null
