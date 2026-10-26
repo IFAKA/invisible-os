@@ -52,7 +52,7 @@ object Voice {
     // idle:    1 = play/pause, 2 = next, 3 = previous, hold = wake
     // in a list: click then hold = fast scroll (first words), release = that option in full; elsewhere it is a plain hold
     // in menu: 1 = pick the option just spoken, 2 = one back, 3 = back, 4 = leave, hold = exit; any click cancels a pending send
-    val HINT = f("Two clicks when you hear it. One click: next. Three clicks: go back.")
+    val HINT = f("Click when you hear it. Two clicks: next. Three clicks: go back.")
     val GESTURE_HELP = f("In the menu: click when you hear the option. 2 = one back, 3 = back, 4 = leave. Hold = exit.")
     fun timerSet(minutes: Int) = f("Timer $minutes minutes")
     val TIMER_DONE = f("Timer done")
