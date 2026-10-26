@@ -1,0 +1,40 @@
+# Logic Kit
+
+The shared logic of the OS: text, language, message wording, notifications, the tree, tasks, learning. **Before you write any helper, look here.** If it exists, call it. If it is almost right, extend it. Only when nothing fits, add it here (new shared helpers go in this folder; the table points to older logic that lives elsewhere).
+
+Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rules.tsv`, rule ids starting `logic-`). They fail with file:line. Pure logic has a unit test next to it; a rule that only matches one pattern is a floor, not a promise that nothing else is duplicated, so search this table by hand too.
+
+## In this folder (`logickit/`)
+| File | What it is |
+|---|---|
+| Text.kt | `String.squash()` = collapse white space and trim. `String.words()` = the words of a text. The only place that writes `Regex("\\s+")`. |
+| ChatLang.kt | `ChatLang.of(seen, detect)` = the language of the chat or message a reply goes to (null if too short or unknown). `needsTranslation(target)`. Used by Write for screen chats and for notification replies. |
+
+## Elsewhere (use these, do not copy them)
+| Need | Use | Where |
+|---|---|---|
+| Detect a text's language | `MlKitLangDetector` (`LangDetector`), falls back to `MessageLogic.guessLang` | MlKitLangDetector.kt, MessageLogic.kt |
+| Translate English to the chat language | `MlKitTranslator` (a missing model is an answer, not a silent skip) | MlKitTranslator.kt |
+| Strip links, spot "Photo" placeholders, make a link speakable, a person's stable name | `MessageLogic.stripLinks / isPlaceholder / spoken / stableName / wordingLang / voiceLang` | MessageLogic.kt |
+| Classify a message and word the answers | `MessageLogic` (MsgType, Answer, When, Extra) | MessageLogic.kt |
+| Latest unread message per conversation | `MessageStore` | MessageStore.kt |
+| All notifications, groups, one by key (`notifs.get(key)`) | `NotificationStore` (`Notif`, `NotifAction`); chat messages are a different store (`ControllerNotificationListener.store`) | NotificationStore.kt |
+| How one app's notifications are read, grouped, replied to | `NotificationModule` + the registry | NotificationModules.kt, ChatAppsModule.kt, TeamsModule.kt |
+| Answer a notification (fire an action, reply, dismiss, mute) | `ControllerNotificationListener.fireAction / sendReply` | ControllerNotificationListener.kt |
+| Where an app sits in the spoken tree | `AppCategories`, `AppWeights`, `AppTree`, `TreeLeaves` (edits in `LauncherSettings`) | those files |
+| Which apps exist and how often they were opened | `DeviceApps` | DeviceApps.kt |
+| Tasks, and offering past texts again | `TaskStore`, `PhraseMemory` | TaskStore.kt, PhraseMemory.kt |
+| What to offer first in the hub | `Suggester` | Suggester.kt |
+| The place Write types into (app, field kind, screen text) | `Frame`, `BucketStore`, `BucketRanker` | Context.kt |
+| Next word (English) | `NextWord`; Spanish `NgramWords` is kept but not wired | NextWord.kt, NgramWords.kt |
+| Phone AI (replies, endings, tasks) | `LocalAi`, `ModelDownload` | LocalAi.kt, ModelDownload.kt |
+| Weather and navigation sentences | `Weather`, the nav parser | Info.kt |
+| Local choice log and gesture log | `ChoiceLog`, `EventLog` | ChoiceLog.kt, EventLog.kt |
+| Speak, play, read the button, a list | the **Voice Kit** | voicekit/KIT.md |
+| Colors, rows, switches | the **UI Kit** | Ui.kt |
+
+## Add something
+1. Search this table and `krn find` for it. Reuse if it exists.
+2. If you copy the same lines a second time, move them here, make the call sites use it, and add a row.
+3. Pure logic only (no Android, no I/O, no speech): it must have a unit test. Anything that touches Android goes to an engine/door that already exists, or is a new row in the table.
+4. If a duplicate has a clear text pattern, add a `logic-` rule to `voicekit-rules.tsv` and its test line in `KitRulesTest`.

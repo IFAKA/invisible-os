@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.logickit.*
+
 import com.faka.invisible.voicekit.*
 
 /** A launchable app: [hint] = ApplicationInfo.category, -1 = none. */
@@ -319,7 +321,7 @@ class ControllerMode(
 
     /** Plain one-line text for speech, cut at [MAX_SPOKEN] chars. */
     private fun shortText(m: Msg): String =
-        Voice.cut(MessageLogic.spoken(m.text, m.lang).replace(Regex("\\s+"), " ").trim(), MAX_SPOKEN, isEs(m), null).text
+        Voice.cut(MessageLogic.spoken(m.text, m.lang).squash(), MAX_SPOKEN, isEs(m), null).text
 
     private fun say(text: Phrase, fast: Boolean = false) {
         speechOpen = true
@@ -552,7 +554,7 @@ class ControllerMode(
         if (n.hidden) return Voice.newNotification(n.app)
         val t = if (full) out.notifRead(n) else out.notifSummary(n)
         val lang = out.songLang(t)
-        return Voice.cut(t.replace(Regex("\\s+"), " ").trim(), max, lang == "es", lang)
+        return Voice.cut(t.squash(), max, lang == "es", lang)
     }
     private fun notifRead(n: Notif) = notifLine(n, 500, true)
 
@@ -614,7 +616,7 @@ class ControllerMode(
 
     /** One step: the answer. The time word of the message (today, tonight, tomorrow) is pre-filled in the sent text. */
     private fun addReplyTask(m: Msg) {
-        out.addTask("Reply to ${m.sender}: ${MessageLogic.spoken(m.text, m.lang).replace(Regex("\\s+"), " ").trim().take(60)}", vl(m) ?: "")
+        out.addTask("Reply to ${m.sender}: ${MessageLogic.spoken(m.text, m.lang).squash().take(60)}", vl(m) ?: "")
         say(Voice.TASK_ADDED); phase = Phase.WAIT; waitNext = { show(Screen.MESSAGE) }
     }
 

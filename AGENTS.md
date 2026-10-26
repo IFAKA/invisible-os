@@ -15,6 +15,11 @@ Android app: control the phone with one earbud button, screen off. The phone spe
 - No `Color.*`, raw `TextView`/`Button`/`GradientDrawable` outside `Ui.kt`. If a part is missing, add it to the kit first, then use it.
 - Lists: use the kit `Scanner`. Sounds: `Earcons.kt` in the kit. Check the kit with `cd app && ./gradlew checkVoiceKit --offline -q`.
 
+## Logic Kit (check before you write any helper)
+- Shared logic has a registry: `app/app/src/main/java/com/faka/invisible/logickit/KIT.md`. It lists what exists (text, language, messages, notifications, tree, tasks, learning, AI) and where. Search it and `krn find` first; reuse or extend. Never write a second copy.
+- New shared pure helpers go in `logickit/` with a unit test and a row in the registry. Copying lines a second time is the sign to move them there.
+- Enforced for what a pattern can catch: rule ids `logic-*` in `app/app/voicekit-rules.tsv` (now: white-space cleaning must use `squash()`/`words()`). Add a rule when you remove a duplicate.
+
 ## The OS and its programs (how every new game or tool is built)
 The app is a small OS with no screen. Android is the building; this app is a shop inside it that you walk through with your ears.
 - **The OS owns:** the one button (clicks and holds), the home menu (`ControllerMode`, `LauncherSettings.HUB_ITEMS`), speech, the screen tones (`voicekit/atoms/Earcons.kt`), the close sound, and the Games section (`Screen.GAMES`).

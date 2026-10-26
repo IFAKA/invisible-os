@@ -10,3 +10,5 @@ phrase-literal	Phrase\.content\(\s*"[^"$]*"\s*[,)]	A plain text in Phrase.conten
 say-literal	\b(say|speak)\(\s*"	Spoken sentences come from Sentences.kt, not from a string
 second-list	\b(scanIdx|menuIdx|menuSteps|itemIdx|listIdx)\b|\bvar\s+loops\b|\bScanList\s*[<(]	Every list is a kit Scanner
 hand-timing	(?<!Pacing\.)\b(HOLD_MS|GAP_MS)\b	Button timing comes from Pacing
+logic-squash	Regex\("\\\\s\+"\)	Collapsing or splitting white space is logickit/Text.kt: use squash() or words()
+allow	Text.kt	logic-squash	the one definition

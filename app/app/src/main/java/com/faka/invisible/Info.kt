@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.logickit.*
+
 import com.faka.invisible.voicekit.*
 
 import android.Manifest
@@ -42,7 +44,7 @@ object Navigation {
     const val PACKAGE = "com.google.android.apps.maps"
     /** Title and text are the instruction and the distance (Maps orders them either way); the sub text (arrival time) is used only if both are empty. Null if nothing to say. */
     fun sentence(title: String?, text: String?, subText: String?): String? {
-        fun clean(s: String?) = s?.replace(Regex("\\s+"), " ")?.trim()?.trimEnd('.', ',', ' ').orEmpty()
+        fun clean(s: String?) = s?.squash()?.trimEnd('.', ',', ' ').orEmpty()
         val main = listOf(clean(title), clean(text)).filter { it.isNotEmpty() }.distinct()
         val parts = main.ifEmpty { listOf(clean(subText)).filter { it.isNotEmpty() } }
         if (parts.isEmpty()) return null
@@ -54,7 +56,7 @@ object Navigation {
 object Agenda {
     /** [offsetMs] = the time zone offset of the phone, to read the clock time of [beginMs]. */
     fun sentence(title: String?, beginMs: Long, nowMs: Long, offsetMs: Long): Phrase {
-        val name = title?.replace(Regex("\\s+"), " ")?.trim().orEmpty().ifEmpty { Voice.EVENT_UNNAMED }.let { if (it.length > 60) it.take(60).trimEnd() else it }
+        val name = title?.squash().orEmpty().ifEmpty { Voice.EVENT_UNNAMED }.let { if (it.length > 60) it.take(60).trimEnd() else it }
         val mins = ((beginMs - nowMs) / 60_000).toInt()
         if (mins <= 0) return Voice.eventNow(name)
         val dayMin = Math.floorMod((beginMs + offsetMs) / 60_000, 1440L).toInt()

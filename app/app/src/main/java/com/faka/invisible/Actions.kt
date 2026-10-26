@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.logickit.*
+
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.content.Intent
@@ -226,9 +228,9 @@ object Actions {
                 chatLang = null
                 Thread({   // the language of the place, from what is on the screen and in the field; unknown means nothing to translate
                     val seen = if (sendTo != null) heard.orEmpty() else (frame.around + frame.before).joinToString(" ")
-                    val lang = if (seen.length >= 12) MlKitLangDetector().detect(seen) else null
-                    handler.post { chatLang = lang?.takeIf { it != "und" } }
-                    if (lang != null && lang != "und" && lang != "en" && MlKitTranslator.code(lang) != null && (sendTo != null || frame.kind == FieldKind.TEXT) && !MlKitTranslator.hasModel(lang)) MlKitTranslator.download(lang)
+                    val lang = ChatLang.of(seen) { MlKitLangDetector().detect(it) }
+                    handler.post { chatLang = lang }
+                    if (lang != null && ChatLang.needsTranslation(lang) && MlKitTranslator.code(lang) != null && (sendTo != null || frame.kind == FieldKind.TEXT) && !MlKitTranslator.hasModel(lang)) MlKitTranslator.download(lang)
                     Log.d(TAG, "WRITE chat language $lang")
                 }, "write-lang").start()
                 val out = object : TypeOut {
@@ -260,7 +262,7 @@ object Actions {
                     override fun written(text: String) { buckets.learn(frame, text.split(' ').filter { it.isNotEmpty() }, text) }
                     override fun translate(text: String, then: (Translation) -> Unit) {
                         val target = chatLang
-                        if ((sendTo == null && frame.kind != FieldKind.TEXT) || target == null || target == "en") { then(Translation.Same); return }
+                        if ((sendTo == null && frame.kind != FieldKind.TEXT) || target == null || !ChatLang.needsTranslation(target)) { then(Translation.Same); return }
                         phraseWorker.execute {
                             val r: Translation = when {
                                 MlKitTranslator.code(target) == null -> Translation.Failed(TypeVoice.TRANSLATION_FAILED)

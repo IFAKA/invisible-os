@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.logickit.*
+
 import android.app.Notification
 import android.app.RemoteInput
 import android.content.Intent
@@ -72,7 +74,7 @@ class ChatAppsModule : NotificationModule {
         if (!convLang.settled(who)) worker.execute { try {
             val clean = MessageLogic.stripLinks(t)
             // very short texts ("ok", "jaja") and WhatsApp's own media text are too weak to vote
-            if (MessageLogic.hasWords(t) && clean.split(Regex("\\s+")).size >= 3) convLang.learn(who, ControllerNotificationListener.detector.detect(clean))
+            if (MessageLogic.hasWords(t) && clean.words().size >= 3) convLang.learn(who, ControllerNotificationListener.detector.detect(clean))
             store.setLang(key, t, convLang.get(who))
         } catch (e: Exception) { Log.e("Invisible", "LANG failed", e) } }
         Log.d("Invisible", "MSG ${sbn.packageName} from $sender reply=${reply != null}")

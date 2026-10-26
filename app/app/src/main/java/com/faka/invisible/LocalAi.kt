@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.logickit.*
+
 import android.content.Context
 import android.util.Log
 import com.google.ai.edge.litertlm.Backend
@@ -61,7 +63,7 @@ object LocalAi {
         val raw = ask(ctx, "You are the autocomplete of a phone keyboard.\n" + brief +
             (if (text.isBlank()) "Nothing is written yet: this is the start of the message.\n" else "The text so far: \"$text\"\n") +
             "List the 7 single words most likely to come next, most likely first, $language. One word per line, numbered 1. to 7. No explanations.", "next", 7)
-        return raw.mapNotNull { it.trim().split(Regex("\\s+")).firstOrNull()?.lowercase()?.filter { c -> c.isLetter() || c == '\'' }?.takeIf { w -> w.isNotEmpty() } }.distinct()
+        return raw.mapNotNull { it.words().firstOrNull()?.lowercase()?.filter { c -> c.isLetter() || c == '\'' }?.takeIf { w -> w.isNotEmpty() } }.distinct()
     }
 
     /** Up to 3 ways to finish a message that starts with [text], in [lang]: only the new words, short. [brief] says what the screen is about. */

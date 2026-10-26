@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.logickit.*
+
 /** One open to-do item. */
 /** lang = voice language detected when it was added ("es", "en"), "" if unknown. */
 data class Task(val id: Long, val text: String, val lang: String = "")
@@ -23,7 +25,7 @@ class TaskStore(lines: List<String> = emptyList(), private val onAdd: (Task) -> 
 
     /** Adds a task (line breaks become spaces). Returns it, or null if blank or the same task is already open. */
     @Synchronized fun add(text: String, lang: String = ""): Task? {
-        val t = text.replace(Regex("\\s+"), " ").trim()
+        val t = text.squash()
         if (t.isEmpty() || list.any { it.text.equals(t, ignoreCase = true) }) return null   // blank or already there
         return Task(nextId++, t, lang).also { list.add(it); persist(); onAdd(it) }
     }
@@ -54,12 +56,12 @@ class TaskStore(lines: List<String> = emptyList(), private val onAdd: (Task) -> 
                 return starts.mapIndexedNotNull { i, m ->
                     val end = starts.getOrNull(i + 1)?.range?.first ?: t.length
                     val checked = if (m.value.length > 1) m.value[1] != ' ' else m.value in "☑☒✅"
-                    t.substring(m.range.last + 1, end).replace(Regex("\\s+"), " ").trim().takeIf { !checked && it.isNotEmpty() }
+                    t.substring(m.range.last + 1, end).squash().takeIf { !checked && it.isNotEmpty() }
                 }
             }
             val bullets = t.lines().mapNotNull { bullet.find(it)?.groupValues?.get(1)?.trim() }
             if (bullets.isNotEmpty()) return bullets
-            return listOf(t.replace(Regex("\\s+"), " ").trim()).filter { it.isNotEmpty() }
+            return listOf(t.squash()).filter { it.isNotEmpty() }
         }
     }
 

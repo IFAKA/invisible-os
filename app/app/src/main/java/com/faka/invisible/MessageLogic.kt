@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.logickit.*
+
 import java.text.Normalizer
 
 /** On-device language detection. Returns a language code ("es", "en", ...) or "" if unknown. Blocking: off the main thread. */
@@ -16,7 +18,7 @@ object MessageLogic {
     private val urlRe = Regex("""(?i)\b(?:https?://|www\.)\S+|\b(?:youtu\.be|[a-z0-9-]+\.(?:com|net|org|me|tv))/\S*""")
 
     /** Text without links, for language detection and classification. */
-    fun stripLinks(text: String): String = urlRe.replace(text, " ").replace(Regex("\\s+"), " ").trim()
+    fun stripLinks(text: String): String = urlRe.replace(text, " ").squash()
 
     /** True if the text has no letters left once links are removed (link only, "📷 Photo" aside). */
     fun hasWords(text: String): Boolean = stripLinks(text).count { it.isLetter() } >= 2 && !isPlaceholder(text)
@@ -45,7 +47,7 @@ object MessageLogic {
         return urlRe.replace(text) { r ->
             val site = siteName(r.value)
             " " + (if (es) (if (site != null) "un link de $site" else "un link") else (if (site != null) "${if (site == "Instagram") "an" else "a"} $site link" else "a link")) + " "
-        }.replace(Regex("\\s+"), " ").trim()
+        }.squash()
     }
 
     /** "es" if the language is Spanish, else "en" (templates and tag words exist only for these two). */
@@ -56,7 +58,7 @@ object MessageLogic {
 
     private fun norm(s: String): String =
         Normalizer.normalize(s.lowercase().trim(), Normalizer.Form.NFD).replace(Regex("\\p{M}"), "")
-            .replace(Regex("[^a-z0-9?\\s']"), " ").replace(Regex("\\s+"), " ").trim()
+            .replace(Regex("[^a-z0-9?\\s']"), " ").squash()
 
     private fun hasWord(t: String, phrases: List<String>) =
         phrases.any { Regex("(^| )" + Regex.escape(it) + "( |\\?|$)").containsMatchIn(t) }
