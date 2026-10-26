@@ -928,40 +928,40 @@ class ModeTest {
         assertTrue("time-to-pick $t", t in 1500..2800)
     }
 
-    // ---------- item gap (default 0.5 s, from the end of each item's speech) ----------
+    // ---------- item gap (default 0.3 s, from the end of each item's speech) ----------
     @Test fun defaultGapIsMeasuredFromTheEndOfSpeech() {
         val r = Rig(gap = ControllerMode.ITEM_GAP_MS); r.wake()
         r.advance(400); assertEquals(listOf("say Timer"), r.spoken())        // speech t=400..900
-        r.advance(799); assertEquals(1, r.spoken().size)                      // tick due at 900+300=1200
+        r.advance(599); assertEquals(1, r.spoken().size)                      // tick due at 900+100=1000
         r.advance(1); assertEquals("tone TICK", r.log.last())
         r.advance(199); assertEquals(1, r.spoken().size)
-        r.advance(1); assertEquals("say Phone", r.spoken().last())          // t=1400 = 500 after done
+        r.advance(1); assertEquals("say Phone", r.spoken().last())          // t=1200 = 300 after done
     }
 
     @Test fun learnedFastReactionsShortenTheGapAndAClickIsSaved() {
-        val r = Rig(gap = null, reactionText = List(20) { 0 }.joinToString(",")); r.wake()   // p90 0 + 300 -> floor 700 ms instead of 1600
+        val r = Rig(gap = null, reactionText = List(20) { 0 }.joinToString(",")); r.m.settings = r.m.settings.copy(itemGapMs = 1600); r.wake()   // p90 0 + 200 -> floor 300 ms instead of 1600
         r.advance(400); assertEquals(listOf("say Timer"), r.spoken())        // speech t=400..900
-        r.advance(900); assertEquals(1, r.spoken().size)                     // t=1300: the next item is not due yet
-        r.advance(500); assertEquals("say Phone", r.spoken().last())         // t=1800: 700 ms gap (the default gap would start it at 2500)
+        r.advance(700); assertEquals(1, r.spoken().size)                     // t=1100: the next item is not due yet
+        r.advance(200); assertEquals("say Phone", r.spoken().last())         // t=1300: 300 ms gap (the user setting would start it at 2500)
         r.click()
         assertEquals(21, r.savedReactions.split(",").size)                   // the click was learned and saved
     }
 
     @Test fun defaultGapClickDuringGapBindsToTheItemJustSpoken() {
-        val r = Rig(gap = ControllerMode.ITEM_GAP_MS); r.wake(); r.advance(450 + 1000 + 700)   // Phone spoken at 1400, now in its gap
+        val r = Rig(gap = ControllerMode.ITEM_GAP_MS); r.wake(); r.advance(450 + 800 + 600)   // Phone spoken at 1200, now in its gap
         r.click(); assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
     }
 
     @Test fun defaultGapGraceStillPicksThePreviousJustAfterNextStarts() {
-        val r = Rig(gap = ControllerMode.ITEM_GAP_MS); r.wake(); r.advance(1400 + 50 + 100)   // Phone started at 1450, 100 ms ago
+        val r = Rig(gap = ControllerMode.ITEM_GAP_MS); r.wake(); r.advance(1200 + 50 + 100)   // Phone started at 1250, 100 ms ago
         r.click(); assertEquals(ControllerMode.Screen.TIMER_PICK, r.m.screen)
     }
 
     @Test fun defaultGapTwoSilentLoopsLeave() {
         val r = Rig(gap = ControllerMode.ITEM_GAP_MS); r.wake()
-        r.advance(400 + 4 * 1000 + 500 + 500 - 1)   // after the 1st ding's gap the list restarts; leave after the 2nd ding's gap
+        r.advance(400 + 4 * 800 + 300 + 300 - 1)   // after the 1st ding's gap the list restarts; leave after the 2nd ding's gap
         assertTrue(r.m.active)
-        r.advance(400 + 4 * 1000 + 5000)
+        r.advance(400 + 4 * 800 + 5000)
         assertFalse(r.m.active); assertEquals(2, r.count("tone DING")); assertEquals(1, r.count("tone LEAVE"))
     }
 

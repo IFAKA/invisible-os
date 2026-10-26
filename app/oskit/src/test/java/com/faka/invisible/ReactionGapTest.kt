@@ -15,7 +15,7 @@ class ReactionGapTest {
     }
 
     @Test fun neverBelowTheFloorNeverAboveTheSetting() {
-        assertEquals(500L, ReactionGap(List(20) { -500L }).gap(1600))
+        assertEquals(300L, ReactionGap(List(20) { -500L }).gap(1600))
         assertEquals(1600L, ReactionGap(List(20) { 5000L }).gap(1600))
         assertEquals(600L, ReactionGap(List(20) { 5000L }).gap(600))   // a setting under the floor wins
     }
@@ -25,7 +25,7 @@ class ReactionGapTest {
         repeat(40) { g.add(5000) }
         repeat(40) { g.add(100) }
         assertEquals(40, g.size)
-        assertEquals(500L, g.gap(1600))
+        assertEquals(300L, g.gap(1600))
     }
 
     @Test fun savesAndLoads() {
