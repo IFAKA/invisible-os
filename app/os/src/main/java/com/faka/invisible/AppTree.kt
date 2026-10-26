@@ -35,8 +35,8 @@ class TreeNode(val label: String, val children: List<TreeNode> = emptyList(), va
 object AppTree {
     const val HOME = 6          // kept for the old builder's comparison
     const val PROMOTED = 2      // apps that may sit on home next to the groups
-    const val HOME_MAX = 6 + PROMOTED
-    const val MAX_LIST = 6
+    const val HOME_MAX = 8 + PROMOTED
+    const val MAX_LIST = 8
     const val LEVEL = 0.5
     private const val INF = Double.POSITIVE_INFINITY
     private const val EPS = 1e-9
@@ -56,10 +56,10 @@ object AppTree {
         val ls = spread(leaves).sortedBy { it.pkg }
         if (ls.isEmpty()) return TreeNode("") to emptyMap()
         val memo = HashMap<List<Any>, List<Entry>>()   // one group's list for one level assignment; a move changes one group, the others are reused
-        val fits = warm != null && ls.all { l -> warm[l.pkg]?.let { it in 0..maxLevel(l) } == true }
+        val fits = warm != null && ls.all { l -> warm[l.pkg]?.let { allowed(l, it) } == true }
         val warmLayout = if (fits) layout(ls, warm!!, memo).takeIf { it.cost < INF } else null
         val best = if (warmLayout != null) climb(ls, warmLayout, memo)
-        else listOf(ls.associate { it.pkg to maxLevel(it) }, ls.associate { it.pkg to minOf(1, maxLevel(it)) }).map { climb(ls, layout(ls, it, memo), memo) }.minBy { it.cost }
+        else climb(ls, layout(ls, ls.associate { it.pkg to maxLevel(it) }, memo), memo)
         return (if (best.cost < INF) best.root else crowded(ls)) to best.levels
     }
 
@@ -86,9 +86,12 @@ object AppTree {
     /** The tree for levels found earlier: one layout, no search. Null when the levels no longer fit these leaves. */
     fun fromLevels(leaves: List<AppLeaf>, levels: Map<String, Int>): TreeNode? {
         val ls = spread(leaves).sortedBy { it.pkg }
-        if (ls.isEmpty() || !ls.all { l -> levels[l.pkg]?.let { it in 0..maxLevel(l) } == true }) return null
+        if (ls.isEmpty() || !ls.all { l -> levels[l.pkg]?.let { allowed(l, it) } == true }) return null
         return layout(ls, levels, HashMap()).takeIf { it.cost < INF }?.root
     }
+
+    /** An app is in its own place (group, or group/sub) or promoted to home: it is never lifted out of its sub-group into a mixed list, so each list holds one kind of thing. */
+    private fun allowed(l: AppLeaf, v: Int) = v == 0 || v == maxLevel(l)
 
     private fun maxLevel(l: AppLeaf) = if (AppCategories.sub(l.category) != null) 2 else 1
 
@@ -137,22 +140,9 @@ object AppTree {
         }
     }
 
-    /** Every level assignment one move away: one leaf a level up or down, one leaf straight home, a sub-group or a group flattened. */
-    private fun moves(ls: List<AppLeaf>, lv: Map<String, Int>): List<Map<String, Int>> {
-        val out = ArrayList<Map<String, Int>>()
-        for (l in ls) {
-            val v = lv.getValue(l.pkg)
-            if (v > 0) out += lv + (l.pkg to v - 1)
-            if (v < maxLevel(l)) out += lv + (l.pkg to v + 1)
-            if (v > 1) out += lv + (l.pkg to 0)
-        }
-        for (key in ls.map { it.category }.distinct().sorted()) out += flatten(ls, lv) { it.category == key }
-        for (key in ls.map { AppCategories.main(it.category) }.distinct().sorted()) out += flatten(ls, lv) { AppCategories.main(it.category) == key }
-        return out.filter { it != lv }
-    }
-
-    private fun flatten(ls: List<AppLeaf>, lv: Map<String, Int>, inSet: (AppLeaf) -> Boolean): Map<String, Int> =
-        lv + ls.filter { inSet(it) && lv.getValue(it.pkg) == 2 }.map { it.pkg to 1 }
+    /** Every level assignment one move away: one app straight home (promoted) or back to its place. */
+    private fun moves(ls: List<AppLeaf>, lv: Map<String, Int>): List<Map<String, Int>> =
+        ls.map { l -> lv + (l.pkg to if (lv.getValue(l.pkg) > 0) 0 else maxLevel(l)) }
 
     // ---- measuring any tree (the old one, the flat list, this one) ----
     class Path(val app: AppLeaf, val heard: Int, val levels: Int)

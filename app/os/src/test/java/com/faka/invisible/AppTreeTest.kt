@@ -14,17 +14,18 @@ class AppTreeTest {
 
     @Test fun knownApps() {
         fun g(p: String) = AppCategories.main(AppCategories.categoryOf(p))
-        for (p in listOf("com.revolut.revolut", "com.bbva.bbvacontigo", "com.brubank", "com.mercadopago.wallet", "de.traderepublic.app", "com.transferwise.android", "com.westernunion.moneytransferr3app.es", "es.bancosantander.apps", "com.myinvestor.es")) assertEquals(p, "Money", g(p))
-        for (p in listOf("com.whatsapp", "com.microsoft.teams", "com.tencent.mm", "com.discord", "com.google.android.apps.messaging", "com.linkedin.android", "com.zhiliaoapp.musically", "com.google.android.gm")) assertEquals(p, "Messages", g(p))
-        for (p in listOf("com.google.android.calendar", "com.google.android.apps.docs", "com.google.android.keep", "com.atlassian.android.jira.core")) assertEquals(p, "Day", g(p))
+        for (p in listOf("com.revolut.revolut", "com.bbva.bbvacontigo", "com.brubank", "com.mercadopago.wallet", "de.traderepublic.app", "com.transferwise.android", "com.westernunion.moneytransferr3app.es", "es.bancosantander.apps", "com.myinvestor.es")) assertEquals(p, "Pay", g(p))
+        for (p in listOf("com.whatsapp", "com.microsoft.teams", "com.tencent.mm", "com.discord", "com.google.android.apps.messaging", "com.linkedin.android", "com.zhiliaoapp.musically", "com.google.android.gm")) assertEquals(p, "Talk", g(p))
+        for (p in listOf("com.google.android.calendar", "com.google.android.keep")) assertEquals(p, "Plan", g(p))
+        for (p in listOf("com.google.android.apps.docs", "com.atlassian.android.jira.core")) assertEquals(p, "Work", g(p))
         for (p in listOf("com.android.settings", "com.miui.securitycenter", "com.x8bit.bitwarden")) assertEquals(p, "Tools", g(p))
     }
 
     @Test fun unknownPackageUsesWordsThenHintThenDefault() {
-        assertEquals("Money/Pay", AppCategories.categoryOf("com.some.newbank"))
-        assertEquals("Media/Play", AppCategories.categoryOf("com.zzz.app", 0))
-        assertEquals("Out/Move", AppCategories.categoryOf("com.zzz.app", 6))
-        assertEquals("Tools/Dev", AppCategories.categoryOf("com.zzz.app", -1))
+        assertEquals("Pay/Send", AppCategories.categoryOf("com.some.newbank"))
+        assertEquals("Play/Games", AppCategories.categoryOf("com.zzz.app", 0))
+        assertEquals("Go/Move", AppCategories.categoryOf("com.zzz.app", 6))
+        assertEquals("Tools/Setup", AppCategories.categoryOf("com.zzz.app", -1))
     }
 
     // ---------- the optimized tree ----------
@@ -74,7 +75,7 @@ class AppTreeTest {
         println("REPORT tree (label (length) [weight]):\n" + dump(opt))
         assertTrue("$cOpt <= $cFlat", cOpt <= cFlat + 1e-9)
         assertTrue(lists(opt).drop(1).all { it.children.size <= AppTree.MAX_LIST }); assertTrue(opt.children.size <= AppTree.HOME_MAX)
-        val groups = setOf("Messages", "Day", "Money", "Media", "Out", "Tools")
+        val groups = TreeLeaves.GROUPS.toSet()
         assertEquals(groups, opt.children.map { it.label }.filter { it in groups }.toSet())   // every group is a direct entry of home
         assertTrue(opt.children.count { it.isApp } <= AppTree.PROMOTED)
         assertTrue("the tags must split every place so the letter fallback is never needed: " + lists(opt).map { it.label }.filter { " to " in it }, lists(opt).none { " to " in it.label })
@@ -105,17 +106,17 @@ class AppTreeTest {
     }
 
     @Test fun anUntaggedPileIsCutByLetterNotBehindMore() {
-        // 8 apps in one place: no "More"; two sorted sub-lists by first letter
-        val l = (0 until 8).map { AppLeaf("a$it", "App${'A' + it}", "Tools/Dev", 0, (100 - it).toDouble()) }
+        // 12 apps in one place: no "More"; two sorted sub-lists by first letter
+        val l = (0 until 12).map { AppLeaf("a$it", "App${'A' + it}", "Tools/Setup", 0, (100 - it).toDouble()) }
         val t = AppTree.build(l)
         assertTrue(lists(t).none { it.label == "More" })
         assertTrue(lists(t).drop(1).all { it.children.size <= AppTree.MAX_LIST })
         assertEquals(l.map { it.pkg }.sorted(), AppTree.apps(t).map { it.pkg }.sorted())
-        assertTrue(lists(t).any { it.label.startsWith("Dev ") })
+        assertTrue(lists(t).any { it.label.startsWith("Setup ") })
     }
 
     @Test fun aHeavyLeafIsPromotedAndALightGroupStaysDown() {
-        val l = (1..8).map { AppLeaf("m$it", "M$it", "Money/Banks", 0, 1.0) } + AppLeaf("star", "Star", "Tools/Web", 0, 500.0) + (1..8).map { AppLeaf("d$it", "D$it", "Tools/Dev", 0, 1.0) }
+        val l = (1..8).map { AppLeaf("m$it", "M$it", "Pay/Banks", 0, 1.0) } + AppLeaf("star", "Star", "Tools/Web", 0, 500.0) + (1..8).map { AppLeaf("d$it", "D$it", "Tools/Developer", 0, 1.0) }
         val t = AppTree.build(l)
         assertTrue(t.children.any { it.label == "Star" })
         assertTrue(t.children.size <= AppTree.HOME_MAX)

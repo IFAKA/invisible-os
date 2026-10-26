@@ -1092,11 +1092,11 @@ class ModeTest {
     }
 
     @Test fun suggestedSlotOffersAnAppFromBelowHomeAndPickingItLogsTheTreeIntent() {
-        val r = many(); r.suggested = listOf("app:com.brubank")
-        r.wake(); r.advance(450 + 700); assertEquals("say[es] brubank", r.spoken().first())   // in front of home, though it lives in a group
+        val r = many(); r.suggested = listOf("app:com.termux")
+        r.wake(); r.advance(450 + 700); assertEquals("say termux", r.spoken().first())   // in front of home, though it lives in a group
         r.advance(400); r.click()
         assertTrue(r.log.contains("choice HUB -1 suggest:hit"))
-        assertTrue(r.log.any { it.endsWith("app:com.brubank") })
+        assertTrue(r.log.any { it.endsWith("app:com.termux") })
         assertEquals(ControllerMode.Screen.APP_OPEN, r.m.screen)
     }
 
@@ -1174,7 +1174,7 @@ class ModeTest {
 
     @Test fun calculatorSpeaksTheAnswer() {
         val r = Rig(); r.m.settings = LauncherSettings(hub = LauncherSettings.DEFAULT_HUB - "write" - "compass"); r.wake()
-        r.pick("Calculator"); r.pick("Two"); r.pick("Plus"); r.pick("Three"); r.pick("Equals")
+        r.pick("Tools"); r.pick("Calculator"); r.pick("Two"); r.pick("Plus"); r.pick("Three"); r.pick("Equals")
         r.advance(3000)
         assertTrue(r.spoken().toString(), r.spoken().any { it.endsWith(" 5") })
     }

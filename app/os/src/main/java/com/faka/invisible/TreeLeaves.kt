@@ -7,7 +7,7 @@ import android.content.Context
  * so what you hear and what you see are the same tree. The edits (pin, hide, move) live in [LauncherSettings] and are applied here, once.
  */
 object TreeLeaves {
-    val GROUPS = listOf("Messages", "Day", "Money", "Media", "Out", "Tools")
+    val GROUPS = listOf("Talk", "Plan", "Pay", "Work", "Watch and listen", "Play", "Go", "Tools")
     /** A pinned entry gets this much weight, so the tree search lifts it to the first menu. */
     const val PIN_BOOST = 1000.0
 
