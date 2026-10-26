@@ -42,12 +42,14 @@ class TypingTest {
         override fun say(text: Phrase) { said.add(text.text) }
         override fun cue(c: TypeCue) { cues.add(c) }
         override fun written(text: String) { learnedText.add(text) }
+        override fun readBack(text: String) { recaps.add(text) }
         override fun finished(text: String) { result = text }
         override fun phrases(text: String, then: (List<String>) -> Unit) { asked.add(text); if (endings.isNotEmpty()) then(endings) }
     }, t, onEnded = {})
 
     private val said = ArrayList<String>()
     private val learnedText = ArrayList<String>()
+    private val recaps = ArrayList<String>()
     private val asked = ArrayList<String>()
     private var endings: List<String> = emptyList()
     private fun click() { p.down(t.now); t.advance(80); p.up(t.now); t.advance(120) }
@@ -72,7 +74,7 @@ class TypingTest {
         p.start(); clicks(1); said.clear(); clicks(3)
         assertEquals(listOf("Letters"), said)   // Done is last: used once, at the end
         t.advance(TypeProgram.MENU_GAP_MS * 2)
-        assertEquals(listOf("Letters", "Delete", "Done"), said)
+        assertEquals(listOf("Letters", "Delete word", "Done"), said)
         clicks(1)
         assertEquals("Hello", result)
         assertTrue(!p.active)
@@ -81,8 +83,8 @@ class TypingTest {
     @Test fun menuReadsLettersDeleteDoneAndAClickPicksTheLastSpoken() {
         p.start(); clicks(1); said.clear(); clicks(3)
         t.advance(TypeProgram.MENU_GAP_MS)
-        assertEquals(listOf("Letters", "Delete"), said)
-        clicks(1)                                   // Delete: the last word goes
+        assertEquals(listOf("Letters", "Delete word"), said)
+        clicks(1)                                   // Delete word: the last word goes
         assertEquals("", p.text())
         assertEquals("hello" to "thanks", pairs.last())
     }
@@ -140,9 +142,9 @@ class TypingTest {
         assertEquals("", p.text())
     }
 
-    @Test fun nextWordInTheMenuTurnsTheKeptLettersIntoAWord() {
-        spellOneLetterWithNoWordsKnown(); said.clear(); clicks(3); t.advance(TypeProgram.MENU_GAP_MS + 50)   // Words, then Next word
-        assertEquals("Next word", said.last())
+    @Test fun spaceInTheMenuTurnsTheKeptLettersIntoAWord() {
+        spellOneLetterWithNoWordsKnown(); said.clear(); clicks(3); t.advance(TypeProgram.MENU_GAP_MS + 50)   // Words, then Space
+        assertEquals("Space", said.last())
         clicks(1)
         assertEquals(1, p.text().length)
     }
@@ -159,9 +161,28 @@ class TypingTest {
     }
 
     @Test fun spelledWordsAreNotLearned() {
-        spellOneLetterWithNoWordsKnown(); clicks(3); t.advance(TypeProgram.MENU_GAP_MS * 3 + 50)   // Words, Next word, Delete, Done
+        spellOneLetterWithNoWordsKnown(); clicks(3); t.advance(TypeProgram.MENU_GAP_MS * 3 + 50)   // Words, Space, Delete, Done
         clicks(1)
         assertEquals("A", result); assertTrue(learnedText.isEmpty())
+    }
+
+    @Test fun deleteWhileSpellingRemovesOneLetterAndStaysOnLetters() {
+        p.start(); clicks(3); clicks(1); clicks(1)   // menu, Letters, the first letter
+        clicks(3); t.advance(TypeProgram.MENU_GAP_MS * 2 + 50)   // Words, Space, Delete letter
+        assertEquals("Delete letter", said.last())
+        clicks(1)
+        assertEquals(1, pairs.last().first.length); assertEquals("", p.text())
+    }
+
+    @Test fun aNewWordStartsWithTheSentenceSoFar() {
+        p.start(); clicks(1)
+        assertEquals(listOf("hello"), recaps)
+    }
+
+    @Test fun aReplayInWordsAlsoSaysTheSentenceSoFar() {
+        p.start(); clicks(1); recaps.clear()
+        t.advance(TypeProgram.REPLAY_MS + 50)
+        assertEquals(listOf("hello"), recaps)
     }
 
     @Test fun menuClosesByItselfAfterTwoSilentLoops() {
@@ -205,7 +226,7 @@ class TypingTest {
     @Test fun noEndingsMeansNoPhrasesItem() {
         p.start(); clicks(1); said.clear(); clicks(3)
         t.advance(TypeProgram.MENU_GAP_MS * 2)
-        assertEquals(listOf("Letters", "Delete", "Done"), said)
+        assertEquals(listOf("Letters", "Delete word", "Done"), said)
     }
 
     private fun program(frame: Frame, sug: List<String> = emptyList(), ended: () -> Unit = {}) = TypeProgram(lm, object : TypeOut {
@@ -310,7 +331,7 @@ class TypingTest {
     }, t, onEnded = {})
 
     private fun writeHelloAndDone(q: TypeProgram) {
-        q.start(); q.down(t.now); t.advance(80); q.up(t.now); t.advance(500)   // click: Hello
+        q.start(); q.down(t.now); t.advance(80); q.up(t.now); t.advance(500); readBacks.clear()   // click: Hello (the sentence so far is read back: not what these tests look at)
         repeat(3) { q.down(t.now); t.advance(80); q.up(t.now); t.advance(120) }; t.advance(400)   // menu: Letters, Delete, Done
         t.advance(TypeProgram.MENU_GAP_MS * 2)
         q.down(t.now); t.advance(80); q.up(t.now); t.advance(500)   // Done
