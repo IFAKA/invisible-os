@@ -616,7 +616,7 @@ class ControllerMode(
         if (key == findPlanKey) return
         findPlanKey = key; findPlan = null
         val ls = homeLeaves; val box = arrayOfNulls<NameFinder.Node>(1)
-        out.background({ box[0] = NameFinder.plan(ls) }) { if (findPlanKey === key) findPlan = box[0] }
+        out.background({ box[0] = NameFinder.plan(ls) }) { if (findPlanKey === key) { findPlan = box[0]; out.log("FINDPLAN\n" + NameFinder.dump(box[0]!!)) } }
     }
 
     private fun startFind() {

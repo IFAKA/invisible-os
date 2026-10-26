@@ -25,6 +25,9 @@ object NameFinder {
     fun plan(leaves: List<AppLeaf>): Node = Planner(leaves.sortedWith(compareBy({ key(it.label) }, { it.pkg }))).root()
 
     /** Every leaf below a part or list. */
+    /** Dev: the lists exactly as they are read, one line per part, indented per level. */
+    fun dump(n: Node, ind: String = ""): String = n.parts.joinToString("") { p -> ind + p.label + (if (p.leaf != null) "  [app]" else "") + "\n" + (p.sub?.let { dump(it, ind + "    ") } ?: "") }
+
     fun leavesOf(n: Node): List<AppLeaf> = n.parts.flatMap { leavesOf(it) }
     fun leavesOf(p: Part): List<AppLeaf> = p.leaf?.let { listOf(it) } ?: leavesOf(p.sub!!)
 
