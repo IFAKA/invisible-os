@@ -61,7 +61,7 @@ object Voice {
     val HINT = f("Click when you hear it. Two clicks: back one. Three clicks: go up.")
     val DIAL_HINT = f("Hold: quieter, any press stops. Click: louder.")   // said while learning
     val FIND_HINT = f("Find. Pick the first letter.")   // said the first time only
-    val GESTURE_HELP = f("In the menu: click when you hear the option. 2 = one back, 3 = back, 4 = leave. Click then hold = exit.")
+    val GESTURE_HELP = f("Click when you hear the option. 2 clicks: back one. 3 clicks: go up. 4 clicks: leave. Click, then hold: exit.")
     fun timerSet(minutes: Int) = f("Timer $minutes minutes")
     val TIMER_DONE = f("Timer done")
     // calls
@@ -89,7 +89,7 @@ object Voice {
     val APPS_UNMUTED = f("Apps unmuted")
     val TASK_STARTERS = listOf("Buy groceries", "Call someone", "Pay a bill", "Send an email", "Clean up")   // stored as tasks, not spoken here
     val NO_MESSAGES = f("No unread messages")
-    val CANNOT = f("Cannot do it")
+    val CANNOT = f("Cannot do that")
     val CANCELLED = f("Cancelled")
     val SENDING = f("Sending. Click to cancel")
     val STARTING = f("Starting. Click to cancel")
@@ -186,7 +186,7 @@ object Menu {
     val OPEN_APP = f("Open app")
     val STATUS = f("Status")
     val VOLUME = f("Volume")
-    val TORCH = f("Torch")
+    val TORCH = f("Flashlight")
     val DND = f("Do not disturb")
     val CALCULATOR = f("Calculator")
     val SET_ALARM = f("Set alarm")

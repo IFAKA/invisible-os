@@ -612,7 +612,7 @@ class ModeTest {
     @Test fun hubSpeaksSuggestedDeepOptionsFirstAndLeavesTheRestInPlace() {
         val r = Rig(); r.suggested = listOf("phone:torch", "info:weather", "phone:back", "hub:today")   // Back and non-deep keys are never offered
         r.wake(); r.advance(1300 * 6 + 50)
-        assertEquals(listOf("say Torch", "say Weather", "say Timer", "say Phone"), r.spoken().take(4))
+        assertEquals(listOf("say Flashlight", "say Weather", "say Timer", "say Phone"), r.spoken().take(4))
     }
 
     @Test fun hubOrderMatchesWhatIsSpoken() {
@@ -760,14 +760,14 @@ class ModeTest {
 
     @Test fun phoneGroupListsItemsInOrderAndDndOnlyWithAccess() {
         val a = Rig(); a.wake(); a.pick("Phone"); a.advance(400 + 1300 * 7 + 100)
-        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Torch", "say Do not disturb", "say ${Voice.FIND_PHONE}"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say Do not disturb", "say ${Voice.FIND_PHONE}"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
         val b = Rig(); b.dnd = false; b.wake(); b.pick("Phone"); b.advance(400 + 1300 * 6 + 100)
-        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Torch", "say ${Voice.FIND_PHONE}"), b.spoken())
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say ${Voice.FIND_PHONE}"), b.spoken())
     }
 
     @Test fun phoneGroupHidesFindWhenWired() {
         val r = Rig(); r.wired = true; r.wake(); r.pick("Phone"); r.advance(400 + 1300 * 6 + 100)
-        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Torch", "say Do not disturb"), r.spoken())
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say Do not disturb"), r.spoken())
     }
 
     @Test fun infoAndPhoneFollowTheSettings() {
@@ -777,7 +777,7 @@ class ModeTest {
         val r = Rig().withInfo(); r.m.settings = r.m.settings.copy(info = listOf("turn", "weather")); r.wake(); r.pick("Today"); r.advance(400 + 1300 * 3 + 100)
         assertEquals(listOf("say Next turn", "say Weather", "say Next turn"), r.spoken())
         val p = Rig(); p.m.settings = p.m.settings.copy(phone = listOf("torch", "volume")); p.wake(); p.pick("Phone"); p.advance(400 + 1300 * 5 + 100)
-        assertEquals(listOf("say Emergency", "say Call a contact", "say Torch", "say Volume", "say Emergency"), p.spoken())
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Flashlight", "say Volume", "say Emergency"), p.spoken())
     }
 
     @Test fun infoGroupListsItemsInOrderAndTripleClickReturnsToTheHub() {
@@ -789,12 +789,12 @@ class ModeTest {
 
     @Test fun picksInsideGroupsAreLoggedWithTheirKey() {
         val a = Rig().withInfo(); a.wake(); a.pick("Today"); a.pick("Weather"); assertTrue(a.log.any { it.endsWith("info:weather") })
-        val b = Rig(); b.wake(); b.pick("Phone"); b.pick("Torch")
+        val b = Rig(); b.wake(); b.pick("Phone"); b.pick("Flashlight")
         assertTrue(b.log.any { it.endsWith("phone:torch") }); assertTrue(b.has("run Flashlight"))
     }
 
     @Test fun torchRunsAndTheListRestartsAfterItsSpeech() {
-        val r = Rig(); r.wake(); r.pick("Phone"); r.pick("Torch")
+        val r = Rig(); r.wake(); r.pick("Phone"); r.pick("Flashlight")
         assertTrue(r.has("run Flashlight")); r.advance(1500)
         assertTrue(r.spoken().contains("say Emergency")); assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
     }

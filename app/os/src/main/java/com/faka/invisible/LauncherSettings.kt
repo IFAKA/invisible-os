@@ -37,7 +37,7 @@ data class LauncherSettings(
         val INFO_ITEMS = linkedMapOf("weather" to "Weather", "calendar" to "Next event", "turn" to "Next turn")
         val DEFAULT_INFO = INFO_ITEMS.keys.toList()
         fun cleanInfo(keys: List<String>): List<String> = keys.filter { it in INFO_ITEMS }.distinct()
-        val PHONE_ITEMS = linkedMapOf("status" to "Status", "volume" to "Volume", "torch" to "Torch", "dnd" to "Do not disturb", "find" to "Find my phone")
+        val PHONE_ITEMS = linkedMapOf("status" to "Status", "volume" to "Volume", "torch" to "Flashlight", "dnd" to "Do not disturb", "find" to "Find my phone")
         val DEFAULT_PHONE = PHONE_ITEMS.keys.toList()
         fun cleanPhone(keys: List<String>): List<String> = keys.filter { it in PHONE_ITEMS }.distinct()
 

@@ -37,11 +37,12 @@ class MainActivity : Activity() {
         super.onCreate(b)
         Actions.init(applicationContext)
         s = Actions.mode.settings
-        body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(k.dp(16), k.dp(40), k.dp(16), k.dp(32)) }
-        setContentView(ScrollView(this).apply { setBackgroundColor(Ui.page); addView(body) })
+        body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(k.dp(Ui.S2), k.dp(Ui.S2), k.dp(Ui.S2), k.dp(Ui.S4)) }
+        setContentView(k.screen(this, body))
         if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java))
         EventLog.onChange = { render() }
         intent.getStringExtra("page")?.let { n -> Page.values().firstOrNull { it.name.equals(n, true) }?.let { page = it } }   // for screenshots: adb ... --es page menu --es open /Tools
+        if (intent.getBooleanExtra("disclosure", false)) disclosure = true   // for screenshots
         intent.getStringExtra("open")?.let { openGroups = it.split(',').toSet() }
         render()
         warmTree()   // the Menu page opens at once
@@ -58,21 +59,21 @@ class MainActivity : Activity() {
     private fun change(n: LauncherSettings) { s = n; Actions.saveSettings(n); render() }
 
     // ---- small view helpers: the parts live in Kit (Ui.kt) ----
-    private fun card(title: String, hint: String? = null, fill: LinearLayout.() -> Unit) = k.card(body, title, hint, fill)
+    private fun card(title: String, hint: String? = null, fill: LinearLayout.() -> Unit) = k.card(body, title, hint, true, fill)
     private fun slider(label: String, valueText: String, max: Int, now: Int, apply: (Int) -> LauncherSettings) = k.slider(label, valueText, max, now) { change(apply(it)) }
 
     // ---- screens: Home shows one thing to do and a few doors; each door opens one small page ----
     private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), VOICE("Voice and speed"), AI("AI on the phone"), HELP("Help") }
     private var page = Page.HOME
 
-    private fun open(p: Page) { page = p; render(); (body.parent as? ScrollView)?.scrollTo(0, 0) }
+    private fun open(p: Page) { page = p; render(); (body.parent as? ScrollView)?.scrollTo(0, 0); k.enter(body) }
 
     @Deprecated("Back goes to Home first, then leaves")
     override fun onBackPressed() { if (page != Page.HOME) open(Page.HOME) else super.onBackPressed() }
 
     private fun render() {
         body.removeAllViews()
-        if (page != Page.HOME) body.addView(k.header(page.title) { open(Page.HOME) })
+        if (page != Page.HOME) body.addView(k.header(page.title, { open(Page.HOME) }))
         when (page) {
             Page.HOME -> home()
             Page.TASKS -> tasksPage()
@@ -81,7 +82,8 @@ class MainActivity : Activity() {
             Page.AI -> aiPage()
             Page.HELP -> helpPage()
         }
-        body.addView(k.text("Version ${BuildConfig.VERSION_NAME} · ${BuildConfig.BUILD_STAMP}", 12f, Ui.soft), LinearLayout.LayoutParams(-2, -2).apply { topMargin = k.dp(24) })
+        body.addView(k.text("Version ${BuildConfig.VERSION_NAME}" + if (page == Page.HELP) " (${BuildConfig.BUILD_STAMP})" else "", Type.CAPTION, Ui.soft).apply { gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S4) })
     }
 
     private val sp get() = getSharedPreferences("invisible", MODE_PRIVATE)
@@ -114,18 +116,19 @@ class MainActivity : Activity() {
 
     /** Shown before the Button access step opens Settings: says in plain words what the accessibility service does. */
     private fun disclosureCard() {
-        k.banner(body, "Before you turn on Button access",
+        k.onboarding(body, 0.04f, "Before you start", "Button access",
             "This app uses an Android accessibility service. It reads only the key presses of your earbud button. " +
-            "It does not read what is on your screen, and it reads no messages or passwords. " +
-            "The one exception is the Write keyboard: only while you use it, the app looks at the text field you are typing in and the words around it, to help you write, and it types your text there. " +
-            "None of this leaves the phone. Nothing is sent to anyone.", Ui.accent) {
-            addView(k.bannerBtn("Agree") { sp.edit().putBoolean("a11y_agreed", true).apply(); disclosure = false; render(); startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
-            addView(k.bannerBtn("Not now") { disclosure = false; render() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
-        }
+            "It does not read what is on your screen, and it reads no messages or passwords.\n\n" +
+            "The one exception is the Write keyboard. Only while you use it, the app looks at the text field you are typing in, to help you write.\n\n" +
+            "None of this leaves the phone.",
+            "Agree", { sp.edit().putBoolean("a11y_agreed", true).apply(); disclosure = false; render(); startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+            "Not now", { disclosure = false; render() })
     }
 
+    private var lastStep = ""
+
     private fun home() {
-        if (disclosure) { body.addView(k.text("Invisible OS", 30f, bold = true)); disclosureCard(); return }
+        if (disclosure) { disclosureCard(); return }
         val notif = (Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: "").contains(packageName)
         val assist = (Settings.Secure.getString(contentResolver, "assistant") ?: "").contains(packageName)
         val a11y = Actions.accessibilityConnected
@@ -135,48 +138,53 @@ class MainActivity : Activity() {
             granted(Manifest.permission.ACCESS_COARSE_LOCATION), usageOn(), android.os.Build.VERSION.SDK_INT, sp.getStringSet("setup_skipped", emptySet()) ?: emptySet(),
             contacts = granted(Manifest.permission.READ_CONTACTS), calls = granted(Manifest.permission.CALL_PHONE) && granted(Manifest.permission.ANSWER_PHONE_CALLS), sms = granted(Manifest.permission.SEND_SMS)))
         val next = Setup.current(steps)
-        body.addView(k.text("Invisible OS", 30f, bold = true))
+        val stepKey = if (next >= 0) steps[next].id else if (!EventLog.running) "stopped" else "ready"
+        if (stepKey != lastStep) { lastStep = stepKey; body.post { k.enter(body) } }
         if (next >= 0) {
             val t = steps[next]
-            val head = Setup.label(next, steps.size) + ": " + t.title + if (t.optional) " (optional)" else ""
-            val line = if (t.id == "test") (if (a11y) "Press your earbud button once. This screen will say when it hears you." else t.reason) else t.reason + " Turn it on once. Then come back."
-            k.banner(body, head, line, Ui.accent) {
-                if (t.id != "test") addView(k.bannerBtn(if (t.id in setOf("post", "calendar", "location", "contacts", "calls", "sms")) "Allow" else "Turn on") { doStep(t.id) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
-                if (t.optional) addView(k.bannerBtn("Skip") { sp.edit().putStringSet("setup_skipped", (sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + t.id).apply(); render() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
-            }
-            body.addView(k.text(steps.withIndex().joinToString("\n") { (i, st) -> "${i + 1}. ${st.title}  " + if (st.done) "- done" else if (st.skipped) "- skipped" else if (i == next) "- now" else "" }, 14f, Ui.soft).apply { setPadding(0, k.dp(8), 0, k.dp(8)); setLineSpacing(0f, 1.2f) })
-        } else if (!EventLog.running) {
-            k.banner(body, "Stopped", "The app is not listening to the button.", Ui.bad) {
-                addView(k.bannerBtn("Start") { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
+            val perm = t.id in setOf("post", "calendar", "location", "contacts", "calls", "sms")
+            val line = if (t.id == "test") (if (a11y) "Press your earbud button once. This screen will say when it hears you." else t.reason) else t.reason + " You turn it on once."
+            k.onboarding(body, (next + 1f) / steps.size, Setup.label(next, steps.size) + if (t.optional) " \u00B7 Optional" else "", t.title, line,
+                if (t.id == "test") null else if (perm) "Allow" else "Turn on", { doStep(t.id) },
+                if (t.optional) "Skip" else null, { sp.edit().putStringSet("setup_skipped", (sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + t.id).apply(); render() })
+            val before = steps.take(next).filter { it.passed }
+            if (before.isNotEmpty()) k.stepList(body, before.map { (if (it.skipped) "\u2013" else "\u2713") to it.title })
+            return
+        }
+        if (!EventLog.running) {
+            k.status(body, "Stopped", "The app is not listening to the button.", Ui.bad) {
+                addView(k.primary("Start") { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) })
             }
         } else {
-            k.banner(body, "All set", "Turn the screen off. Hold your earbud button to hear the menu.", Ui.good)
+            k.status(body, "Ready", "Turn the screen off. Hold your earbud button to hear the menu.", Ui.good)
         }
         val n = Actions.tasks().size
-        k.navRow(body, "Tasks", if (n == 0) "None yet. Add one." else "$n to do") { open(Page.TASKS) }
-        k.navRow(body, "Your menu", "Pin, move or hide what you hear") { open(Page.MENU) }
-        k.navRow(body, "Voice and speed", "Voice ${"%.1f".format(s.speechRate)}x, pause ${"%.1f".format(s.itemGapMs / 1000f)} s") { open(Page.VOICE) }
-        k.navRow(body, "AI on the phone", if (!s.ai) "Off" else if (ModelDownload.ready(this)) "On, ready" else "On, model not downloaded") { open(Page.AI) }
-        k.navRow(body, "Help", "Button gestures and your last presses") { open(Page.HELP) }
-        card("Emergency contact", "A phone number that gets a text when you pick Emergency in the Phone list. Leave empty for no text.") {
+        k.group(body) {
+            k.navRow(this, "Tasks", if (n == 0) "None yet" else "$n to do") { open(Page.TASKS) }
+            k.navRow(this, "Your menu", "Pin, move or hide what you hear") { open(Page.MENU) }
+            k.navRow(this, "Voice and speed", "Voice ${"%.1f".format(s.speechRate)}x, pause ${"%.1f".format(s.itemGapMs / 1000f)} s") { open(Page.VOICE) }
+            k.navRow(this, "AI on the phone", if (!s.ai) "Off" else if (ModelDownload.ready(this@MainActivity)) "On" else "On, model not downloaded") { open(Page.AI) }
+            k.navRow(this, "Help", "Button gestures and practice") { open(Page.HELP) }
+        }
+        card("Emergency contact", "Gets a text when you pick Emergency in Phone. Leave empty for no text.") {
             val box = k.input("Phone number, e.g. +54 11 5555 1234").apply {
                 minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_CLASS_PHONE; setText(Actions.emergencyContact())
             }
-            val note = k.text("", 14f, Ui.good).apply { setPadding(0, k.dp(6), 0, 0) }
+            val note = k.text("", Type.CAPTION, Ui.good).apply { setPadding(0, k.dp(Ui.S1), 0, 0) }
             addView(box, LinearLayout.LayoutParams(-1, -2))
-            addView(k.btn("Save", true) {
+            addView(k.btn("Save") {
                 Actions.setEmergencyContact(box.text.toString())
-                note.text = if (Actions.emergencyContact().isEmpty()) "Saved: no emergency contact." else "Saved."
-            }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+                note.text = if (Actions.emergencyContact().isEmpty()) "Saved. No emergency contact." else "Saved."
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
             addView(note)
         }
-        if (next < 0 && EventLog.running) body.addView(k.btn("Stop listening") { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = k.dp(16) })
+        if (EventLog.running) body.addView(k.quiet("Stop listening", Ui.bad) { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
     }
 
     private fun tasksPage() {
         card("Tasks" + Actions.tasks().size.let { if (it > 0) " ($it)" else "" }, "Add one here, or share from Google Keep. Hold the button and pick \"Tasks\" to hear them.") {
             val input = k.input("Write a task, or paste a checklist")
-            val note = k.text(taskNote, 14f, if (taskNoteBad) Ui.bad else Ui.good).apply { setPadding(0, k.dp(6), 0, 0) }
+            val note = k.text(taskNote, Type.CAPTION, if (taskNoteBad) Ui.bad else Ui.good).apply { setPadding(0, k.dp(6), 0, 0) }
             fun add() {
                 val t = input.text.toString()
                 if (t.isBlank()) { taskNote = "Write a task in the box first."; taskNoteBad = true; render(); return }
@@ -187,15 +195,15 @@ class MainActivity : Activity() {
                 }
             }
             addView(input, LinearLayout.LayoutParams(-1, -2))
-            addView(k.btn("Add task", true) { add() }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+            addView(k.btn("Add task", true) { add() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
             if (taskNote.isNotEmpty()) addView(note)
             val ts = Actions.tasks()
-            if (ts.isEmpty()) addView(k.text("No tasks yet.\nIn Google Keep: open a note, tap Share, choose \"Invisible task\". Only unchecked items are added.", 14f, Ui.soft).apply { setPadding(0, k.dp(12), 0, 0) })
+            if (ts.isEmpty()) addView(k.text("No tasks yet.\nIn Google Keep: open a note, tap Share, choose \"Invisible task\". Only unchecked items are added.", Type.CAPTION, Ui.soft).apply { setPadding(0, k.dp(12), 0, 0) })
             val taskRows = ArrayList<View>()
             val th = k.dp(68)
             ts.forEachIndexed { i, t ->
                 val handle = k.handle(40, visible = ts.size > 1)
-                val item = k.row(handle, k.grow(k.text(t.text, 16f).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }),
+                val item = k.row(handle, k.grow(k.text(t.text).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }),
                     k.btn("Done") { Actions.completeTask(t.id); taskNote = ""; render() }.apply { minWidth = k.dp(84) })
                 item.setPadding(k.dp(4), 0, k.dp(8), 0)
                 k.surface(item)
@@ -211,7 +219,7 @@ class MainActivity : Activity() {
     private fun treeCard() {
         // The phone queries (installed apps, 30 days of usage) and the tree search are slow: they run once, off the main thread, and are reused.
         val all = treeAll; val built = treeBuilt
-        if (built == null || all == null) { warmTree(); card("What you hear") { addView(k.text("Loading your apps\u2026", 16f, Ui.soft)) }; return }
+        if (built == null || all == null) { warmTree(); card("What you hear") { addView(k.text("Loading your apps\u2026", Type.BODY, Ui.soft)) }; return }
         if (built.first != treeKey()) warmTree()   // an edit was made: the old tree stays on screen until the new one is ready
         val root = built.second
         card("What you hear", "The tree the voice walks, in its order. Tap a group to open it. Tap an app to pin, move or hide it.") {
@@ -239,7 +247,7 @@ class MainActivity : Activity() {
                     if (n.label.isEmpty()) return
                     val key = "$path/${n.label}"
                     val open = key in openGroups
-                    val head = k.row(k.grow(k.text(n.label, 16f, bold = true)), k.text("${leafCount(n)}  " + if (open) "\u25B4" else "\u25BE", 15f, Ui.soft))
+                    val head = k.row(k.grow(k.text(n.label, Type.HEAD)), k.text("${leafCount(n)}  " + if (open) "\u25B4" else "\u25BE", Type.SMALL, Ui.soft))
                     head.minimumHeight = k.dp(48); head.setPadding(pad, 0, k.dp(4), 0)
                     head.setOnClickListener { openGroups = if (open) openGroups - key else if (depth == 0) setOf(key) else openGroups + key; render() }
                     addView(head)
@@ -247,7 +255,7 @@ class MainActivity : Activity() {
                     return
                 }
                 val tag = listOfNotNull(if (a.pkg in s.pinned) "pinned" else null, if (a.pkg in s.moved) "moved" else null).joinToString(", ")
-                val row = k.row(k.grow(k.text(a.label, 16f).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }), k.text(tag, 13f, Ui.soft))
+                val row = k.row(k.grow(k.text(a.label).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }), k.text(tag, Type.CAPTION, Ui.soft))
                 row.minimumHeight = k.dp(48); row.setPadding(pad, 0, k.dp(4), 0)
                 row.setOnClickListener { actions(a) }
                 addView(row)
@@ -256,11 +264,11 @@ class MainActivity : Activity() {
             val gone = all.filter { it.pkg in s.hidden }
             if (gone.isNotEmpty()) {
                 val key = "/hidden"; val open = key in openGroups
-                val head = k.row(k.grow(k.text("Hidden", 17f, bold = true)), k.text("${gone.size}  " + if (open) "\u25B4" else "\u25BE", 15f, Ui.soft))
+                val head = k.row(k.grow(k.text("Hidden", Type.HEAD)), k.text("${gone.size}  " + if (open) "\u25B4" else "\u25BE", Type.SMALL, Ui.soft))
                 head.minimumHeight = k.dp(52)
                 head.setOnClickListener { openGroups = if (open) openGroups - key else openGroups + key; render() }
                 addView(head)
-                if (open) gone.forEach { a -> addView(k.row(k.grow(k.text(a.label, 16f)), k.chip("Show") { change(s.copy(hidden = s.hidden - a.pkg)) })) }
+                if (open) gone.forEach { a -> addView(k.row(k.grow(k.text(a.label)), k.chip("Show") { change(s.copy(hidden = s.hidden - a.pkg)) })) }
             }
         }
     }
@@ -283,11 +291,11 @@ class MainActivity : Activity() {
             out.removeAllViews()
             if (treeQuery.isBlank()) return
             val hits = TreeSearch.search(root, treeFind, treeQuery)
-            if (hits.isEmpty()) { out.addView(k.text("Nothing found", 14f, Ui.soft)); return }
+            if (hits.isEmpty()) { out.addView(k.text("Nothing found", Type.CAPTION, Ui.soft)); return }
             hits.forEach { h ->
-                out.addView(k.text(h.app.label, 16f, bold = true), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
-                out.addView(k.text("Click: " + h.tree, 14f, Ui.soft))
-                out.addView(k.text("Hold on home: " + (h.find ?: "working it out\u2026"), 14f, Ui.soft))
+                out.addView(k.text(h.app.label, Type.HEAD), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
+                out.addView(k.text("Click: " + h.tree, Type.CAPTION, Ui.soft))
+                out.addView(k.text("Hold on home: " + (h.find ?: "working it out\u2026"), Type.CAPTION, Ui.soft))
             }
         }
         box.addTextChangedListener(object : android.text.TextWatcher {
@@ -329,20 +337,16 @@ class MainActivity : Activity() {
 
     private fun menuPage() {
         treeCard()
-        card("Order and speed") {
-            addView(k.row(k.grow(k.text("Reply options: put the ones you pick most first (automatic)", 14f, Ui.soft)),
-                k.toggle("Reply options by use", s.learnOrder) { v -> change(s.copy(learnOrder = v)) }),
-                LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
-            addView(k.row(k.grow(k.text("Speak well-known options as a fast sound (spearcon)", 14f, Ui.soft)),
-                k.toggle("Fast sound for known options", s.spearcons) { v -> change(s.copy(spearcons = v)) }),
-                LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
+        k.group(body, "Order and speed") {
+            k.toggleRow(this, "Reply options by use", "Put the ones you pick most first.", s.learnOrder) { v -> change(s.copy(learnOrder = v)) }
+            k.toggleRow(this, "Fast sound for known options", "Well-known options are spoken as a short sound.", s.spearcons) { v -> change(s.copy(spearcons = v)) }
         }
 
-        card("Inside \"Today\"", "What you hear after you click Today. Same drag and switch.") {
+        k.card(body, "Inside Today", "What you hear after you pick Today. Drag to reorder.", pad = false) {
             addView(k.dragList(s.info, LauncherSettings.INFO_ITEMS, emptySet()) { order -> change(s.copy(info = LauncherSettings.cleanInfo(order))) })
         }
 
-        card("Inside \"Phone\"", "What you hear after you click Phone. Same drag and switch.") {
+        k.card(body, "Inside Phone", "What you hear after you pick Phone. Drag to reorder.", pad = false) {
             addView(k.dragList(s.phone, LauncherSettings.PHONE_ITEMS, emptySet()) { order -> change(s.copy(phone = LauncherSettings.cleanPhone(order))) })
         }
 
@@ -370,16 +374,14 @@ class MainActivity : Activity() {
     }
 
     private fun aiPage() {
-        card("AI on the phone", "Writes reply sentences and clean tasks from a message. It runs on the phone, no network use after the download, and it never listens.") {
-            addView(k.row(k.grow(k.text("Use AI for replies and tasks", 14f, Ui.soft)),
-                k.toggle("Use AI for replies and tasks", s.ai) { v -> change(s.copy(ai = v)); if (v) ModelDownload.start(applicationContext) { EventLog.refresh() } }),
-                LinearLayout.LayoutParams(-1, -2))
+        card("AI on the phone", "Writes replies and tidy tasks. It runs on the phone, uses no network after the download, and never listens.") {
+            k.toggleRow(this, "Use AI for replies and tasks", null, s.ai) { v -> change(s.copy(ai = v)); if (v) ModelDownload.start(applicationContext) { EventLog.refresh() } }
             if (s.ai) {
                 val ready = ModelDownload.ready(this@MainActivity)
-                addView(k.text(if (ready) "Ready. The model is on this phone." else ModelDownload.status.ifEmpty { "The model (2.6 GB) is not on this phone yet." }, 14f, Ui.soft),
+                addView(k.text(if (ready) "Ready. The model is on this phone." else ModelDownload.status.ifEmpty { "The model (2.6 GB) is not on this phone yet." }, Type.CAPTION, Ui.soft),
                     LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
                 if (!ready) addView(k.btn("Download model (Wi-Fi only)", true) { ModelDownload.start(applicationContext) { EventLog.refresh() }; render() },
-                    LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(8) })
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
             }
         }
 
@@ -389,7 +391,7 @@ class MainActivity : Activity() {
         card("How to use it") {
             addView(k.text("Music playing or phone idle: click = play/pause, 2 = next, 3 = previous.\n" +
                 "Hold: wake the menu.\n" +
-                com.faka.invisible.voicekit.Voice.GESTURE_HELP.text, 16f).apply { setLineSpacing(0f, 1.25f); setPadding(0, k.dp(6), 0, 0) })
+                com.faka.invisible.voicekit.Voice.GESTURE_HELP.text).apply { setLineSpacing(0f, 1.25f); setPadding(0, k.dp(6), 0, 0) })
         }
 
         card("Practice", "A one-minute lesson you hear: click, two clicks, three clicks, close.") {
@@ -397,7 +399,7 @@ class MainActivity : Activity() {
         }
 
         card("Last button presses") {
-            addView(k.text(EventLog.items.joinToString("\n").ifEmpty { "None yet. Press your button." }, 15f, Ui.soft).apply { setLineSpacing(0f, 1.2f) })
+            addView(k.text(EventLog.items.joinToString("\n").ifEmpty { "None yet. Press your button." }, Type.SMALL, Ui.soft).apply { setLineSpacing(0f, 1.2f) })
         }
 
         body.addView(k.btn("Reset settings") { k.confirm("Reset all settings?", "Reset") { change(LauncherSettings()) } }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = k.dp(12) })

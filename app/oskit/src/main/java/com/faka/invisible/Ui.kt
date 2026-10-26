@@ -1,7 +1,10 @@
 package com.faka.invisible
 
+import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -11,68 +14,131 @@ import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.NumberPicker
+import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 
 /**
- * UI Kit: every colour and corner size of the screen you can see. Change a value here, the whole app changes. */
+ * UI Kit values: one calm system. Colours follow the system light or dark mode ([sync] reads it).
+ * Spacing is an 8 dp grid. Type is the system font in four steps ([Type]).
+ */
 object Ui {
-    val ink = Color.parseColor("#1B1F23")         // main text
-    val soft = Color.parseColor("#5F6872")        // hints
-    val accent = Color.parseColor("#2F5BEA")      // buttons, values
-    val good = Color.parseColor("#1E8E4E")
-    val bad = Color.parseColor("#C5392B")
-    val page = Color.parseColor("#F3F4F7")        // screen background, task row
-    val tint = Color.parseColor("#E8EDFB")        // soft button, chip
-    val edge = Color.parseColor("#B8C0CC")        // outline of the input box
-    val card = Color.WHITE
+    @Volatile var dark = false
+    /** Read the system mode from [c]; the Kit does this when it is made. */
+    fun sync(c: Context) { dark = (c.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES }
+    private fun pick(light: String, night: String) = Color.parseColor(if (dark) night else light)
+
+    val ink get() = pick("#1C1C1E", "#FFFFFF")            // main text
+    val soft get() = pick("#6C6C70", "#98989F")           // hints, captions
+    val accent get() = pick("#007AFF", "#0A84FF")         // the one accent: buttons, values, links
+    val good get() = pick("#1F8A3D", "#32D74B")
+    val bad get() = pick("#D70015", "#FF453A")
+    val page get() = pick("#F2F2F7", "#000000")           // screen background
+    val card get() = pick("#FFFFFF", "#1C1C1E")           // grouped surface
+    val field get() = pick("#F2F2F7", "#2C2C2E")          // input box and task row, inside a card
+    val tint get() = pick("#E5F0FF", "#0A2A4D")           // soft button
+    val line get() = pick("#D9D9DE", "#38383A")           // hairline between rows
+    val edge get() = pick("#C7C7CC", "#48484A")           // off switch, slider track
     val onAccent = Color.WHITE
     val clear = Color.TRANSPARENT
 
     // corner radius in dp
-    const val RADIUS_CARD = 14
+    const val RADIUS_CARD = 16
     const val RADIUS_ROW = 12
-    const val RADIUS_CHIP = 16
-    const val RADIUS_BUTTON = 24
+    const val RADIUS_CHIP = 12
+    const val RADIUS_BUTTON = 14
+
+    // 8 dp grid
+    const val S1 = 8
+    const val S2 = 16
+    const val S3 = 24
+    const val S4 = 32
+    const val S6 = 48
+}
+
+/** The type scale: large title, title, headline, body, caption. System font. */
+enum class Type(val size: Float, val face: String, val bold: Boolean = false) {
+    LARGE(34f, "sans-serif", true), TITLE(22f, "sans-serif-medium"), HEAD(17f, "sans-serif-medium"),
+    BODY(17f, "sans-serif"), SMALL(15f, "sans-serif"), CAPTION(13f, "sans-serif"), SECTION(13f, "sans-serif-medium")
 }
 
 /** UI Kit parts (composable). Screens build only from these and the [Ui] values; a missing part is added here first. */
 class Kit(private val c: Context) {
+    init { Ui.sync(c) }
     fun dp(n: Int) = (n * c.resources.displayMetrics.density).toInt()
+    private fun fill(color: Int, radiusDp: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radiusDp).toFloat() }
+    private fun lp(w: Int = -1, h: Int = -2, top: Int = 0) = LinearLayout.LayoutParams(w, h).apply { topMargin = dp(top) }
 
-    fun text(t: String, size: Float = 16f, color: Int = Ui.ink, bold: Boolean = false) = TextView(c).apply {
-        text = t; textSize = size; setTextColor(color); if (bold) setTypeface(null, Typeface.BOLD)
+    fun text(t: String, type: Type = Type.BODY, color: Int = Ui.ink) = TextView(c).apply {
+        text = t; textSize = type.size; setTextColor(color)
+        typeface = Typeface.create(type.face, if (type.bold) Typeface.BOLD else Typeface.NORMAL)
+        if (type == Type.LARGE) letterSpacing = -0.01f
+        if (type == Type.BODY || type == Type.SMALL) setLineSpacing(0f, 1.12f)
     }
 
-    fun btn(label: String, filled: Boolean = false, onClick: () -> Unit) = Button(c).apply {
-        text = label; isAllCaps = false; minHeight = dp(48); minimumHeight = dp(48)
-        stateListAnimator = null; elevation = 0f
-        if (filled) { setTextColor(Ui.onAccent); background = GradientDrawable().apply { setColor(Ui.accent); cornerRadius = dp(Ui.RADIUS_BUTTON).toFloat() } }
-        else { setTextColor(Ui.accent); background = GradientDrawable().apply { setColor(Ui.tint); cornerRadius = dp(Ui.RADIUS_BUTTON).toFloat() } }
+    /** The system bars take the page colour; the content stays clear of them. Call once from onCreate. */
+    fun screen(a: Activity, body: View): ScrollView {
+        a.window.statusBarColor = Ui.page; a.window.navigationBarColor = Ui.page
+        @Suppress("DEPRECATION")
+        a.window.decorView.systemUiVisibility = if (Ui.dark) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        return ScrollView(c).apply {
+            setBackgroundColor(Ui.page); isVerticalScrollBarEnabled = false; clipToPadding = false
+            addView(body)
+            setOnApplyWindowInsetsListener { v, i -> @Suppress("DEPRECATION") v.setPadding(i.systemWindowInsetLeft, i.systemWindowInsetTop, i.systemWindowInsetRight, i.systemWindowInsetBottom); i }
+        }
+    }
+
+    /** A page comes in softly: fade and a small rise. */
+    fun enter(v: View) {
+        if (android.provider.Settings.Global.getFloat(c.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f) return   // Reduce Motion
+        v.alpha = 0f; v.translationY = dp(8).toFloat()
+        v.animate().alpha(1f).translationY(0f).setDuration(220).start()
+    }
+
+    /** Filled button: the one main action of a page. */
+    fun primary(label: String, onClick: () -> Unit) = Button(c).apply {
+        text = label; isAllCaps = false; textSize = Type.HEAD.size; typeface = Typeface.create(Type.HEAD.face, Typeface.NORMAL)
+        minHeight = dp(52); minimumHeight = dp(52); stateListAnimator = null; elevation = 0f
+        setTextColor(Ui.onAccent); background = fill(Ui.accent, Ui.RADIUS_BUTTON)
         setOnClickListener { onClick() }
     }
+
+    /** Quiet text button: Skip, Not now. No box. */
+    fun quiet(label: String, color: Int = Ui.accent, onClick: () -> Unit) = Button(c).apply {
+        text = label; isAllCaps = false; textSize = Type.BODY.size; minHeight = dp(48); minimumHeight = dp(48)
+        stateListAnimator = null; elevation = 0f; setTextColor(color); background = null
+        setOnClickListener { onClick() }
+    }
+
+    /** Soft button: [filled] is the main one, otherwise a tinted one. */
+    fun btn(label: String, filled: Boolean = false, onClick: () -> Unit): Button =
+        if (filled) primary(label, onClick) else Button(c).apply {
+            text = label; isAllCaps = false; textSize = Type.SMALL.size; minHeight = dp(44); minimumHeight = dp(44)
+            stateListAnimator = null; elevation = 0f
+            setTextColor(Ui.accent); background = fill(Ui.tint, Ui.RADIUS_BUTTON)
+            setOnClickListener { onClick() }
+        }
 
     fun row(vararg v: View) = LinearLayout(c).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         v.forEach { addView(it) }
     }
 
-
     fun grow(v: View) = v.apply { layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
 
-    /** Multi-line text box with an outline. */
+    /** Text box on a soft field. No outline. */
     fun input(hintText: String) = android.widget.EditText(c).apply {
-        hint = hintText; setHintTextColor(Ui.soft); setTextColor(Ui.ink); textSize = 16f
+        hint = hintText; setHintTextColor(Ui.soft); setTextColor(Ui.ink); textSize = Type.BODY.size
         minLines = 2; maxLines = 5; gravity = Gravity.TOP or Gravity.START
-        setPadding(dp(14), dp(12), dp(14), dp(12))
-        background = GradientDrawable().apply { setColor(Ui.card); setStroke(dp(2), Ui.edge); cornerRadius = dp(Ui.RADIUS_ROW).toFloat() }
+        setPadding(dp(Ui.S2), dp(12), dp(Ui.S2), dp(12))
+        background = fill(Ui.field, Ui.RADIUS_ROW)
         inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
     }
 
-    /** The ≡ grip of a draggable row; [visible] false keeps the space but hides it. */
+    /** The grip of a draggable row; [visible] false keeps the space but hides it. */
     fun handle(widthDp: Int, visible: Boolean = true) = TextView(c).apply {
-        text = "\u2261"; textSize = 26f; setTextColor(if (visible) Ui.soft else Ui.clear); gravity = Gravity.CENTER
+        text = "\u2261"; textSize = 24f; setTextColor(if (visible) Ui.soft else Ui.clear); gravity = Gravity.CENTER
         layoutParams = LinearLayout.LayoutParams(dp(maxOf(widthDp, 48)), -1)   // a touch target is at least 48 dp
         if (visible) contentDescription = "Reorder"
     }
@@ -81,9 +147,21 @@ class Kit(private val c: Context) {
     fun toggle(label: String, on: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) = Switch(c).apply {
         isChecked = on; isEnabled = enabled; minimumHeight = dp(48); contentDescription = label
         val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
-        thumbTintList = android.content.res.ColorStateList(states, intArrayOf(Ui.accent, Ui.edge))
-        trackTintList = android.content.res.ColorStateList(states, intArrayOf(Ui.tint, Ui.page))
+        thumbTintList = ColorStateList(states, intArrayOf(Ui.onAccent, Ui.onAccent))
+        trackTintList = ColorStateList(states, intArrayOf(Ui.good, Ui.edge))
         setOnCheckedChangeListener { _, v -> onChange(v) }
+    }
+
+    /** A row with a label (and a quiet line under it) and a switch on the right. */
+    fun toggleRow(parent: LinearLayout, label: String, note: String?, on: Boolean, onChange: (Boolean) -> Unit) {
+        val box = LinearLayout(c).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(text(label))
+            if (note != null) addView(text(note, Type.CAPTION, Ui.soft).apply { setPadding(0, dp(2), 0, 0) })
+        }
+        val r = row(grow(box), toggle(label, on, true, onChange))
+        r.minimumHeight = dp(56); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
+        parent.addView(r, lp())
     }
 
     /** Ask before something that cannot be undone. */
@@ -91,72 +169,104 @@ class Kit(private val c: Context) {
         AlertDialog.Builder(c).setTitle(title).setNegativeButton("Cancel", null).setPositiveButton(yes) { _, _ -> onYes() }.show()
     }
 
-    /** Grey rounded background of a list row. */
-    fun surface(v: View) { v.background = GradientDrawable().apply { setColor(Ui.page); cornerRadius = dp(Ui.RADIUS_ROW).toFloat() } }
+    /** Soft rounded background of a list row inside a card. */
+    fun surface(v: View) { v.background = fill(Ui.field, Ui.RADIUS_ROW) }
 
-    /** Top bar of a sub-screen: a back button and the page title. */
-    fun header(title: String, onBack: () -> Unit) = row(
-        btn("\u2190 Back") { onBack() }.apply { minWidth = dp(88) },
-        grow(text(title, 22f, bold = true).apply { setPadding(dp(14), 0, 0, 0) }))
+    /** Top of a sub-page: a quiet back link, then the large title. */
+    fun header(title: String, onBack: () -> Unit, backLabel: String = "Home"): LinearLayout = LinearLayout(c).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(quiet("\u2039 $backLabel", onClick = onBack).apply { minWidth = dp(64); setPadding(0, 0, dp(Ui.S2), 0); gravity = Gravity.START or Gravity.CENTER_VERTICAL },
+            LinearLayout.LayoutParams(-2, dp(48)))
+        addView(text(title, Type.LARGE), lp(top = Ui.S1))
+    }
 
-    /** A tappable card that opens a page: title, one line that shows its current state, and a chevron. */
+    /** One grouped section like iOS Settings: a small [header] above, a rounded surface, a quiet [footer] below. Rows are separated by hairlines. */
+    fun group(parent: LinearLayout, header: String? = null, footer: String? = null, fill: LinearLayout.() -> Unit) {
+        if (header != null) parent.addView(text(header, Type.SECTION, Ui.soft).apply { setPadding(dp(Ui.S2), 0, dp(Ui.S2), dp(6)) }, lp(top = Ui.S3))
+        val g = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL; background = fill(Ui.card, Ui.RADIUS_CARD) }
+        g.fill()
+        val kids = (0 until g.childCount).map { g.getChildAt(it) }
+        g.removeAllViews()
+        kids.forEachIndexed { i, v ->
+            if (i > 0) g.addView(View(c).apply { setBackgroundColor(Ui.line) }, LinearLayout.LayoutParams(-1, maxOf(1, dp(1) / 2)).apply { marginStart = dp(Ui.S2) })
+            g.addView(v)
+        }
+        parent.addView(g, lp(top = if (header == null) Ui.S3 else 0))
+        if (footer != null) parent.addView(text(footer, Type.CAPTION, Ui.soft).apply { setPadding(dp(Ui.S2), dp(6), dp(Ui.S2), 0) }, lp())
+    }
+
+    /** A card with a header, optional hint under it, and free content with 16 dp inside. */
+    fun card(parent: LinearLayout, title: String, hint: String? = null, pad: Boolean = true, fill: LinearLayout.() -> Unit) {
+        group(parent, title, hint) {
+            addView(LinearLayout(c).apply {
+                orientation = LinearLayout.VERTICAL
+                if (pad) setPadding(dp(Ui.S2), dp(Ui.S2), dp(Ui.S2), dp(Ui.S2))
+                fill()
+            })
+        }
+    }
+
+    /** A row of a group that opens a page: title, one quiet line for its state, a chevron. */
     fun navRow(parent: LinearLayout, title: String, summary: String, onClick: () -> Unit) {
         val r = row(grow(LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL
-            addView(text(title, 18f, bold = true))
-            addView(text(summary, 14f, Ui.soft).apply { setPadding(0, dp(2), 0, 0) })
-        }), text("\u203A", 28f, Ui.soft))
-        r.minimumHeight = dp(72); r.setPadding(dp(16), dp(12), dp(16), dp(12))
-        r.background = GradientDrawable().apply { setColor(Ui.card); cornerRadius = dp(Ui.RADIUS_CARD).toFloat() }
+            addView(text(title))
+            addView(text(summary, Type.CAPTION, Ui.soft).apply { setPadding(0, dp(2), 0, 0) })
+        }), text("\u203A", Type.TITLE, Ui.edge))
+        r.minimumHeight = dp(64); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
         r.isClickable = true; r.setOnClickListener { onClick() }
-        parent.addView(r, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        parent.addView(r, lp())
     }
 
-    /** The one big message at the top of the home page: a colour, a headline and a line under it. */
-    fun banner(parent: LinearLayout, headline: String, line: String, color: Int, fill: LinearLayout.() -> Unit = {}) {
-        val v = LinearLayout(c).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(18), dp(20), dp(18))
-            background = GradientDrawable().apply { setColor(color); cornerRadius = dp(Ui.RADIUS_CARD).toFloat() }
+    /** Home status: a coloured dot, a large word, one quiet line. */
+    fun status(parent: LinearLayout, headline: String, line: String, color: Int, fill: LinearLayout.() -> Unit = {}) {
+        val dot = View(c).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) } }
+        parent.addView(row(dot.apply { layoutParams = LinearLayout.LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(12) } }, text(headline, Type.TITLE)), lp(top = Ui.S3))
+        parent.addView(text(line, Type.SMALL, Ui.soft), lp(top = Ui.S1))
+        val extra = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
+        extra.fill()
+        if (extra.childCount > 0) parent.addView(extra, lp(top = Ui.S2))
+    }
+
+    /** One onboarding step: a thin progress bar, a quiet step label, a large title, a plain line, one main button, one quiet one. */
+    fun onboarding(parent: LinearLayout, progress: Float, stepLabel: String, title: String, line: String,
+                   primaryLabel: String?, onPrimary: () -> Unit, secondaryLabel: String? = null, onSecondary: () -> Unit = {}) {
+        val track = FrameBar(progress)
+        parent.addView(track, lp(h = dp(4), top = Ui.S3))
+        parent.addView(text(stepLabel, Type.SECTION, Ui.accent), lp(top = Ui.S6))
+        parent.addView(text(title, Type.LARGE), lp(top = Ui.S1))
+        parent.addView(text(line, Type.BODY, Ui.soft), lp(top = Ui.S2))
+        if (primaryLabel != null) parent.addView(primary(primaryLabel, onPrimary), lp(top = Ui.S6))
+        if (secondaryLabel != null) parent.addView(quiet(secondaryLabel, Ui.soft, onSecondary), lp(top = Ui.S1))
+    }
+
+    private inner class FrameBar(private val frac: Float) : View(c) {
+        private val track = fill(Ui.line, 2); private val bar = fill(Ui.accent, 2)
+        override fun onDraw(canvas: android.graphics.Canvas) {
+            track.setBounds(0, 0, width, height); track.draw(canvas)
+            bar.setBounds(0, 0, (width * frac.coerceIn(0.04f, 1f)).toInt(), height); bar.draw(canvas)
         }
-        v.addView(text(headline, 22f, Ui.onAccent, true))
-        v.addView(text(line, 15f, Ui.onAccent).apply { setPadding(0, dp(4), 0, dp(4)) })
-        v.fill()
-        parent.addView(v, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
     }
 
-    /** Big button on a coloured banner (white, accent text). */
-    fun bannerBtn(label: String, onClick: () -> Unit) = Button(c).apply {
-        text = label; isAllCaps = false; minHeight = dp(52); minimumHeight = dp(52); stateListAnimator = null; elevation = 0f
-        setTextColor(Ui.accent); background = GradientDrawable().apply { setColor(Ui.onAccent); cornerRadius = dp(Ui.RADIUS_BUTTON).toFloat() }
-        setOnClickListener { onClick() }
+    /** The finished and coming steps, small and quiet. */
+    fun stepList(parent: LinearLayout, items: List<Pair<String, String>>) {
+        parent.addView(text(items.joinToString("\n") { (mark, name) -> "$mark  $name" }, Type.CAPTION, Ui.soft).apply { setLineSpacing(0f, 1.3f) }, lp(top = Ui.S6))
     }
 
-    /** Big tinted button for one value (a timer length). */
+    /** A tinted button for one value (a timer length). */
     fun chip(label: String, onClick: () -> Unit) = Button(c).apply {
-        text = label; isAllCaps = false; textSize = 18f; setTextColor(Ui.accent); stateListAnimator = null; elevation = 0f
-        background = GradientDrawable().apply { setColor(Ui.tint); cornerRadius = dp(Ui.RADIUS_CHIP).toFloat() }
+        text = label; isAllCaps = false; textSize = Type.TITLE.size; setTextColor(Ui.accent); stateListAnimator = null; elevation = 0f
+        background = fill(Ui.tint, Ui.RADIUS_CHIP)
         setOnClickListener { onClick() }
-    }
-
-    /** A white card with a title and optional hint; [fill] adds the content. Added to [parent]. */
-    fun card(parent: LinearLayout, title: String, hint: String? = null, fill: LinearLayout.() -> Unit) {
-        val v = LinearLayout(c).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(14), dp(16), dp(14))
-            background = GradientDrawable().apply { setColor(Ui.card); cornerRadius = dp(Ui.RADIUS_CARD).toFloat() }
-        }
-        v.addView(text(title, 18f, bold = true))
-        if (hint != null) v.addView(text(hint, 14f, Ui.soft).apply { setPadding(0, dp(2), 0, dp(6)) })
-        v.fill()
-        parent.addView(v, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
     }
 
     fun slider(label: String, valueText: String, max: Int, now: Int, onCommit: (Int) -> Unit): View = LinearLayout(c).apply {
         orientation = LinearLayout.VERTICAL; setPadding(0, dp(6), 0, 0)
-        addView(row(grow(text(label, 15f)), text(valueText, 15f, Ui.accent, true)))
+        addView(row(grow(text(label)), text(valueText, Type.BODY, Ui.accent)))
         addView(SeekBar(c).apply {
             this.max = max; progress = now; minimumHeight = dp(48); contentDescription = "$label, $valueText"
-            progressTintList = android.content.res.ColorStateList.valueOf(Ui.accent); thumbTintList = android.content.res.ColorStateList.valueOf(Ui.accent)
-            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Ui.edge)
+            progressTintList = ColorStateList.valueOf(Ui.accent); thumbTintList = ColorStateList.valueOf(Ui.accent)
+            progressBackgroundTintList = ColorStateList.valueOf(Ui.edge)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(sb: SeekBar?, p: Int, user: Boolean) {}
                 override fun onStartTrackingTouch(sb: SeekBar?) {}
@@ -165,15 +275,14 @@ class Kit(private val c: Context) {
         })
     }
 
-
     /** Native-style wheels for hours and minutes. */
     fun pickTime(now: Int, set: (Int) -> Unit) {
         fun wheel(max: Int, v: Int) = NumberPicker(c).apply { minValue = 0; maxValue = max; value = v; wrapSelectorWheel = true; setFormatter { "%02d".format(it) } }
         val h = wheel(3, now / 60); val m = wheel(59, now % 60)
         val box = LinearLayout(c).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(16), dp(16), dp(16), dp(8))
-            addView(h); addView(text("h", 16f, Ui.soft).apply { setPadding(dp(8), 0, dp(24), 0) })
-            addView(m); addView(text("min", 16f, Ui.soft).apply { setPadding(dp(8), 0, 0, 0) })
+            addView(h); addView(text("h", Type.BODY, Ui.soft).apply { setPadding(dp(8), 0, dp(24), 0) })
+            addView(m); addView(text("min", Type.BODY, Ui.soft).apply { setPadding(dp(8), 0, 0, 0) })
         }
         AlertDialog.Builder(c).setTitle("Timer length").setView(box)
             .setPositiveButton("Set") { _, _ -> set((h.value * 60 + m.value).coerceIn(1, 180)) }
@@ -219,7 +328,7 @@ class Kit(private val c: Context) {
         all.forEach { k ->
             val isOn = k in on
             val handle = handle(48, isOn).apply { layoutParams = LinearLayout.LayoutParams(dp(48), rowH) }
-            val r = row(handle, grow(text(names[k]!!, 16f, if (isOn) Ui.ink else Ui.soft)),
+            val r = row(handle, grow(text(names[k]!!, Type.BODY, if (isOn) Ui.ink else Ui.soft)),
                 toggle(names[k]!!, isOn, k !in locked) { v -> onOrder(if (v) on + k else on - k) })
             r.tag = k; r.minimumHeight = rowH
             box.addView(r, LinearLayout.LayoutParams(-1, rowH))
