@@ -26,26 +26,10 @@ object NameFinder {
 
     fun key(label: String) = label.lowercase().filter { it.isLetterOrDigit() }
 
-    /** Most used apps read first in Find, before the letters: use is very uneven, so most opens end in the first few items. At most this many. */
-    const val MAX_TOP = 5
-
     private fun byName(ls: List<AppLeaf>) = ls.sortedWith(compareBy({ key(it.label) }, { it.pkg }))
 
-    /**
-     * The Find home list: the [MAX_TOP] or fewer most used apps (as many as lower the expected cost), then the letter ranges of all the others.
-     * Expected cost of K top apps = their places + K more items heard for everything else + the cost of the letter plan of the rest.
-     */
-    fun plan(leaves: List<AppLeaf>): Node {
-        val byUse = leaves.sortedWith(compareByDescending<AppLeaf> { it.weight }.thenBy { key(it.label) }.thenBy { it.pkg })
-        var best: Pair<Double, Node>? = null
-        for (k in 0..minOf(MAX_TOP, byUse.size)) {
-            val top = byUse.take(k); val rest = Planner(byName(byUse.drop(k)))
-            val restW = byUse.drop(k).sumOf { it.weight }
-            val cost = top.withIndex().sumOf { (i, a) -> (i + 1) * a.weight } + k * restW + rest.total()
-            if (best == null || cost < best.first - 1e-9) best = cost to Node(top.map { Part(it.label, it, null) } + rest.root().parts)
-        }
-        return best?.second ?: Node(emptyList())
-    }
+    /** The Find home list: the letter ranges of all apps (no favourites block: the tree already promotes the most used apps to home). */
+    fun plan(leaves: List<AppLeaf>): Node = Planner(byName(leaves)).root()
 
     /** Every leaf below a part or list. */
     /** Dev: the lists exactly as they are read, one line per part, indented per level. */

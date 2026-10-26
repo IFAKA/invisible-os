@@ -110,13 +110,13 @@ class NameFinderTest {
         }
     }
 
-    @Test fun theMostUsedAppsAreReadFirstAndNothingIsLost() {
+    @Test fun noFavouritesBlockAndNothingIsLost() {
         val ls = leaves.mapIndexed { i, l -> if (i < 3) l.copy(weight = 60.0 - i) else l }
         val p = NameFinder.plan(ls)
-        assertEquals(ls.take(3).map { it.pkg }, p.parts.take(3).map { it.leaf?.pkg })
         assertEquals(ls.map { it.pkg }.sorted(), NameFinder.leavesOf(p).map { it.pkg }.sorted())
-        assertTrue(p.parts.size <= NameFinder.MAX_TOP + NameFinder.MAX_PARTS)
-        assertTrue("never worse than letters alone", findCost(p, ls[0]) <= 1.0 + 1e-9)
+        assertTrue(p.parts.size <= NameFinder.MAX_PARTS)
+        val names = p.parts.map { NameFinder.key(it.label) }
+        assertEquals("home list is A to Z", names, names.sorted())
     }
 
     @Test fun aBigLetterIsReadWholeMostUsedFirstAndNeverHasOther() {
