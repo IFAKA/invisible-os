@@ -81,4 +81,27 @@ class NameFinderTest {
         println("REPORT home list of Find: " + plan.parts.map { it.label })
         assertTrue("Find within 1 item of the tree", sumF / w <= sumT / w + 1.0)
     }
+
+    @Test fun aRangeIsSpokenWithTheFullFirstAndLastNameAndAnyAppIsFoundByFollowingRanges() {
+        val p = NameFinder.plan(leaves)
+        val names = leaves.map { it.label }.toSet()
+        for (n in lists(p)) for (part in n.parts) if (part.sub != null) {
+            val (a, b) = part.label.split(" to ")
+            assertTrue("$a is a full name", a in names); assertTrue("$b is a full name", b in names)
+        }
+        // a person who knows only the name: at each list take the range whose sorted span holds it; ends at the app
+        fun key(x: String) = NameFinder.key(x)
+        for (target in leaves) {
+            var n = p; var steps = 0
+            while (true) {
+                steps++
+                val part = n.parts.first { pt -> NameFinder.leavesOf(pt).any { it.pkg == target.pkg } }
+                if (part.leaf != null) { assertEquals(target.pkg, part.leaf.pkg); break }
+                val (a, b) = part.label.split(" to ")
+                assertTrue("${target.label} between $a and $b", key(a) <= key(target.label) && key(target.label) <= key(b))
+                n = part.sub!!
+            }
+            assertTrue("${target.label} in $steps steps", steps <= 4)
+        }
+    }
 }

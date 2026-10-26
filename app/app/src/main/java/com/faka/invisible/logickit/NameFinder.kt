@@ -96,7 +96,7 @@ object NameFinder {
             val order = (0 until k).sortedWith(compareBy({ -w(b[it], b[it + 1]) }, { it }))
             return Node(order.map { x ->
                 val a = b[x]; val e = b[x + 1]
-                if (e - a == 1) Part(ls[a].label, ls[a], null) else { solve(a, e); Part(Spoken.range(from(a), to(e - 1)), null, build(a, e)) }
+                if (e - a == 1) Part(ls[a].label, ls[a], null) else { solve(a, e); Part(Spoken.range(ls[a].label, ls[e - 1].label), null, build(a, e)) }
             })
         }
 
