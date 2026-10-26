@@ -171,8 +171,9 @@ class TypeProgram(
     }
 
     // ---- the small menu: Done, Delete, Letters/Words, read one at a time ----
-    private fun menuLabels(): List<Phrase> = listOf(TypeVoice.MENU_DONE, TypeVoice.MENU_DELETE) + (if (phrases.isNotEmpty() && !phraseMode) listOf(TypeVoice.PHRASES) else emptyList()) +
-        (if (frame.digits) (if (phraseMode) listOf(TypeVoice.DIGITS) else emptyList()) else listOf(if (letters || phraseMode) TypeVoice.WORDS else TypeVoice.LETTERS))
+    private fun menuLabels(): List<Phrase> =   // Done is last: it is used once, at the end; the first items are used while typing
+        (if (frame.digits) (if (phraseMode) listOf(TypeVoice.DIGITS) else emptyList()) else listOf(if (letters || phraseMode) TypeVoice.WORDS else TypeVoice.LETTERS)) +
+        listOf(TypeVoice.MENU_DELETE) + (if (phrases.isNotEmpty() && !phraseMode) listOf(TypeVoice.PHRASES) else emptyList()) + listOf(TypeVoice.MENU_DONE)
 
     /** The big model gets the text so far; a late answer for an older text is ignored. */
     private fun askPhrases() {

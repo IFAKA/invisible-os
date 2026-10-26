@@ -66,16 +66,18 @@ class TypingTest {
 
     @Test fun threeClicksOpenTheMenuAndAClickOnDonePicksDone() {
         p.start(); clicks(1); said.clear(); clicks(3)
-        assertEquals(listOf("Done"), said)
+        assertEquals(listOf("Letters"), said)   // Done is last: used once, at the end
+        t.advance(TypeProgram.MENU_GAP_MS * 2)
+        assertEquals(listOf("Letters", "Delete", "Done"), said)
         clicks(1)
         assertEquals("Hello", result)
         assertTrue(!p.active)
     }
 
-    @Test fun menuReadsDoneDeleteLettersAndAClickPicksTheLastSpoken() {
+    @Test fun menuReadsLettersDeleteDoneAndAClickPicksTheLastSpoken() {
         p.start(); clicks(1); said.clear(); clicks(3)
         t.advance(TypeProgram.MENU_GAP_MS)
-        assertEquals(listOf("Done", "Delete"), said)
+        assertEquals(listOf("Letters", "Delete"), said)
         clicks(1)                                   // Delete: the last word goes
         assertEquals("", p.text())
         assertEquals("hello" to "thanks", pairs.last())
@@ -92,15 +94,13 @@ class TypingTest {
 
     @Test fun menuLettersItemSpellsAndThenOffersWords() {
         p.start(); said.clear(); clicks(3)
-        t.advance(TypeProgram.MENU_GAP_MS * 2)
-        assertEquals(listOf("Done", "Delete", "Letters"), said)
-        clicks(1)
+        assertEquals(listOf("Letters"), said)
+        clicks(1)   // Letters is first, so one click picks it
         assertTrue(cues.contains(TypeCue.LETTERS))
         val (l, _) = pairs.last()
         assertEquals(1, l.length)
         said.clear(); clicks(3)
-        t.advance(TypeProgram.MENU_GAP_MS * 2)
-        assertEquals("Words", said.last())          // while the letters are offered, the third item is the way back
+        assertEquals("Words", said.last())          // while the letters are offered, the first item is the way back
         clicks(1)
         assertTrue(cues.contains(TypeCue.WORDS))
     }
@@ -141,7 +141,7 @@ class TypingTest {
     @Test fun noEndingsMeansNoPhrasesItem() {
         p.start(); clicks(1); said.clear(); clicks(3)
         t.advance(TypeProgram.MENU_GAP_MS * 2)
-        assertEquals(listOf("Done", "Delete", "Letters"), said)
+        assertEquals(listOf("Letters", "Delete", "Done"), said)
     }
 
     private fun program(frame: Frame, sug: List<String> = emptyList(), ended: () -> Unit = {}) = TypeProgram(lm, object : TypeOut {
@@ -247,7 +247,8 @@ class TypingTest {
 
     private fun writeHelloAndDone(q: TypeProgram) {
         q.start(); q.down(t.now); t.advance(80); q.up(t.now); t.advance(500)   // click: Hello
-        repeat(3) { q.down(t.now); t.advance(80); q.up(t.now); t.advance(120) }; t.advance(400)   // menu
+        repeat(3) { q.down(t.now); t.advance(80); q.up(t.now); t.advance(120) }; t.advance(400)   // menu: Letters, Delete, Done
+        t.advance(TypeProgram.MENU_GAP_MS * 2)
         q.down(t.now); t.advance(80); q.up(t.now); t.advance(500)   // Done
     }
 
