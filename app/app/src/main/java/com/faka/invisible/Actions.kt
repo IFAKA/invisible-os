@@ -134,6 +134,7 @@ object Actions {
             override fun navigation() = ControllerNotificationListener.navigation
             override fun findPhone(on: Boolean) = narrator.findLoop(on)
             override fun dndAllowed() = this@Actions.dndAllowed()
+            override fun background(work: () -> Unit, done: () -> Unit) { Thread { work(); handler.post { done() } }.start() }
             override fun findHintSeen() = prefs().getBoolean("find_hint_seen", false)
             override fun setFindHintSeen() { prefs().edit().putBoolean("find_hint_seen", true).apply() }
             override fun loadReactions() = prefs().getString("reactions", "") ?: ""

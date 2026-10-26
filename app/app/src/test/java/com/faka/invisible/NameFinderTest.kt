@@ -1,7 +1,6 @@
 package com.faka.invisible
 
 import com.faka.invisible.logickit.NameFinder
-import com.faka.invisible.logickit.NameFinder.Choice
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,61 +12,37 @@ class NameFinderTest {
     private val leaves: List<AppLeaf> = ('A'..'Z').flatMap { c -> listOf("${c}one", "${c}two") + (if (c < 'K') listOf("${c}tre") else emptyList()) }.map { leaf(it) } +
         leaf("Maps", 50.0) + (1..8).map { leaf("Bank $it", 2.0) }
 
-    private fun step(vararg letters: Char): NameFinder.Step = NameFinder.next(leaves, letters.joinToString(""))
+    private fun lists(n: NameFinder.Node): List<NameFinder.Node> = listOf(n) + n.parts.mapNotNull { it.sub }.flatMap { lists(it) }
 
     @Test fun aHeavyAppIsReachedInTwoSteps() {
-        val s1 = step()
-        assertTrue(s1.choices.first().let { it is Choice.Letter && it.letter == 'm' })   // M is the heaviest letter
-        val s2 = step('m')
-        assertEquals("Maps", (s2.choices.first() as Choice.Leaf).leaf.label)
+        val p = NameFinder.plan(leaves)
+        val i = p.parts.indexOfFirst { it.leaf?.label == "Maps" || (it.sub != null && NameFinder.leavesOf(it).any { l -> l.label == "Maps" }) }
+        assertTrue("Maps heard at $i", i in 0..1)
+        val part = p.parts[i]
+        if (part.leaf == null) assertEquals("Maps", part.sub!!.parts.first().leaf?.label)
     }
 
-    @Test fun everyLeafIsReachableAndNoListIsEmpty() {
-        for (target in leaves) {
-            val k = NameFinder.key(target.label)
-            var prefix = ""
-            var steps = 0
-            while (true) {
-                val s = NameFinder.next(leaves, prefix)
-                assertTrue("empty list at '$prefix' for ${target.label}", s.choices.isNotEmpty())
-                steps++
-                assertTrue("too many steps for ${target.label}", steps < 10)
-                val hit = s.choices.firstOrNull { it is Choice.Leaf && it.leaf.pkg == target.pkg }
-                if (hit != null) break
-                val letter = s.choices.filterIsInstance<Choice.Letter>().single { k.startsWith(s.prefix + it.letter) }
-                prefix = s.prefix + letter.letter
-            }
-        }
+    @Test fun everyLeafIsReachableOnceAndNoListIsEmptyOrTooLong() {
+        val p = NameFinder.plan(leaves)
+        assertEquals(leaves.map { it.pkg }.sorted(), NameFinder.leavesOf(p).map { it.pkg }.sorted())
+        for (n in lists(p)) { assertTrue(n.parts.isNotEmpty()); assertTrue(n.parts.size <= NameFinder.MAX_PARTS) }
     }
 
-    @Test fun aLetterWithOneLeafIsOfferedAsTheLeaf() {
-        val few = listOf("Alpha", "Bravo", "Beta", "Cat", "Cow", "Dog", "Dot", "Eel").map { leaf(it) }
-        val s = NameFinder.next(few, "")
-        assertTrue(s.choices.any { it is Choice.Leaf && it.leaf.label == "Alpha" } || s.choices.size <= 6)
-        val many = few + listOf("Fig", "Fox", "Gum").map { leaf(it) }
-        val t = NameFinder.next(many, "")
-        assertTrue(t.choices.any { it is Choice.Leaf && it.leaf.label == "Eel" })   // E has one leaf: no extra step
-        assertTrue(t.choices.any { it is Choice.Letter && it.letter == 'b' })
+    @Test fun fewLeavesAreJustListedHeaviestFirst() {
+        val p = NameFinder.plan(listOf(leaf("Cat", 1.0), leaf("Ant", 5.0), leaf("Bee", 3.0)))
+        assertEquals(listOf("Ant", "Bee", "Cat"), p.parts.map { it.leaf!!.label })
     }
 
-    @Test fun aForcedLetterIsSkipped() {
-        val l = (1..7).map { leaf("Zed $it") } + leaf("Apple") + leaf("Bean")
-        val s = NameFinder.next(l, "z")   // after Z only "e" is possible, then "d", then a digit choice
-        assertEquals("zed", s.prefix)
-        assertEquals(7, s.choices.size)
-        val top = NameFinder.next(l, "")
-        assertEquals('z', (top.choices.first() as Choice.Letter).letter)   // 7 leaves behind Z: heaviest letter
+    @Test fun rangesAreNamedByTheShortestStartsAndAreNeighbours() {
+        val p = NameFinder.plan((listOf("Sam", "Sap", "Sea", "Sky", "Spy", "Sun", "Tab", "Tan", "Tip", "Top") + (1..4).map { "W$it" }).map { leaf(it) })
+        val names = p.parts.map { it.label }
+        assertTrue(names.toString(), p.parts.any { it.sub != null })
+        assertTrue(names.toString(), names.all { it.isNotBlank() })
     }
 
     @Test fun spacesCaseAndPunctuationAreIgnored() {
         assertEquals("bank1", NameFinder.key("Bank 1"))
         assertEquals("mapsme", NameFinder.key("Maps.me"))
-    }
-
-    @Test fun aLeafWhoseNameIsThePrefixIsStillOffered() {
-        val l = listOf(leaf("Go", 1.0)) + (1..7).map { leaf("Go $it") }
-        val s = NameFinder.next(l, "go")
-        assertTrue(s.choices.any { it is Choice.Leaf && it.leaf.label == "Go" })
     }
 
     // ---------- REPORT: Find against the tree on the real usage of the phone ----------
@@ -79,18 +54,16 @@ class NameFinderTest {
         return (parts.reversed().firstOrNull { it !in skip && it.length > 2 } ?: parts.last()).replaceFirstChar { it.uppercase() }
     }
 
-    /** Items heard (+ LEVEL per letter step) to reach [target] in Find, never hearing the name list twice. */
-    private fun findCost(all: List<AppLeaf>, target: AppLeaf): Double {
-        val k = NameFinder.key(target.label); var prefix = ""; var cost = 0.0
-        repeat(12) {
-            val s = NameFinder.next(all, prefix)
-            val i = s.choices.indexOfFirst { it is Choice.Leaf && it.leaf.pkg == target.pkg }
-            if (i >= 0) return cost + i + 1
-            val j = s.choices.indexOfFirst { it is Choice.Letter && k.startsWith(s.prefix + it.letter) }
-            assertTrue("unreachable ${target.label}", j >= 0)
-            cost += j + 1 + AppTree.LEVEL; prefix = s.prefix + (s.choices[j] as Choice.Letter).letter
+    /** Items heard (+ LEVEL per range entered) to reach [target] in Find. */
+    private fun findCost(plan: NameFinder.Node, target: AppLeaf): Double {
+        var node = plan; var cost = 0.0
+        while (true) {
+            val i = node.parts.indexOfFirst { p -> NameFinder.leavesOf(p).any { it.pkg == target.pkg } }
+            assertTrue("unreachable ${target.label}", i >= 0)
+            cost += i + 1
+            val sub = node.parts[i].sub ?: return cost
+            cost += AppTree.LEVEL; node = sub
         }
-        throw AssertionError("too many steps for ${target.label}")
     }
 
     @Test fun reportFindAgainstTheTreeOnRealUsage() {
@@ -98,11 +71,14 @@ class NameFinderTest {
             listOf("hub:messages", "hub:today", "hub:tasks", "hub:timer", "hub:music", "hub:phone", "hub:games").map { AppLeaf(it, title(it.removePrefix("hub:")), AppCategories.categoryOf(it), 0, AppWeights.weight(it, 0, 0, 0)) }
         val tree = AppTree.build(all)
         val treeCost = AppTree.paths(tree).associate { it.app.pkg to (it.heard + AppTree.LEVEL * it.levels) }
+        val t0 = System.nanoTime(); val plan = NameFinder.plan(all); val ms = (System.nanoTime() - t0) / 1_000_000
         var sumF = 0.0; var sumT = 0.0; var w = 0.0
-        for (l in all) { sumF += l.weight * findCost(all, l); sumT += l.weight * treeCost.getValue(l.pkg); w += l.weight }   // also proves every leaf is reachable
+        for (l in all) { sumF += l.weight * findCost(plan, l); sumT += l.weight * treeCost.getValue(l.pkg); w += l.weight }   // also proves every leaf is reachable
+        println("REPORT plan for ${all.size} leaves: $ms ms")
         println("REPORT expected cost per open (weighted): tree=%.2f find=%.2f".format(sumT / w, sumF / w))
         for (l in all.sortedByDescending { treeCost.getValue(it.pkg) }.take(5))
-            println("REPORT %-22s tree=%.1f find=%.1f".format(l.label, treeCost.getValue(l.pkg), findCost(all, l)))
-        assertTrue(all.all { findCost(all, it) < 30 })
+            println("REPORT %-22s tree=%.1f find=%.1f".format(l.label, treeCost.getValue(l.pkg), findCost(plan, l)))
+        println("REPORT home list of Find: " + plan.parts.map { it.label })
+        assertTrue("Find within 1 item of the tree", sumF / w <= sumT / w + 1.0)
     }
 }

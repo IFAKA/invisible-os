@@ -1104,9 +1104,9 @@ class ModeTest {
         assertFalse(r.spoken().any { it.contains("Pick the first letter") })
     }
 
-    @Test fun findWithManyAppsSpeaksLettersAndTripleClickGoesBack() {
+    @Test fun findWithManyAppsSpeaksRangesAndTripleClickGoesBack() {
         val r = many(); r.wake(); hold(r); r.advance(2500)
-        assertTrue(r.spoken().any { it.matches(Regex("say [A-Z]")) })
+        assertTrue(r.spoken().any { it.contains(" to ") || it.matches(Regex("say [A-Z][a-z]*")) })   // ranges such as "B to Br"
         r.m.onGesture(Gesture.TRIPLE); r.advance(300)
         assertEquals(ControllerMode.Screen.HUB, r.m.screen)
     }

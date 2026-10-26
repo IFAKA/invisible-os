@@ -65,6 +65,7 @@ interface ModeOutput {
     fun choice(screen: String, code: Int, intent: String, sender: String, pickMs: Long = -1)   // pickMs = time from the start of the list to the press (-1 = not a list pick); choice log; code 0 = wake, else the position of the option in the list
     fun codeCount(): Int             // successful code actions so far (persisted); learning mode while < 15
     fun setCodeCount(n: Int)
+    fun background(work: () -> Unit, done: () -> Unit) { work(); done() }   // heavy work off the main thread; [done] runs on the main thread
     fun findHintSeen(): Boolean = true   // "Find. Pick the first letter." is said only once
     fun setFindHintSeen() {}
     fun loadReactions(): String = ""   // saved reaction samples (see ReactionGap.encode)
@@ -260,7 +261,7 @@ class ControllerMode(
 
     /** Stop speech and every scan timer. */
     private fun stopAll() {
-        scanner.stop(); timers.clear("dog")
+        scanner.stop(); timers.clear("dog"); timers.clear("findwait")
         if (speechOpen) out.stopSpeech()
         speechOpen = false; awaitStart = -1
     }
@@ -443,6 +444,7 @@ class ControllerMode(
                 out.setContext(buildSet { if (n > 0) add("unread"); if (out.nowPlaying() != null) add("playing"); if (out.navigation() != null) add("navigating"); if (out.wiredConnected()) add("wired") })
                 hubOpts = all
                 homeLeaves = treeLeaves(all)
+                planFind()
                 val root = cachedTree(homeLeaves); treeRoot = root; treePath.clear()
                 val deep = deepOptions()
                 val far = suggestableLeaves(root)   // apps and programs that are not direct entries of home: offered too, when worth it
@@ -604,27 +606,33 @@ class ControllerMode(
 
     // ---- Find: reach any app or program by the letters of its name (a hold on home). The steps come from NameFinder, computed from the leaves of the home build. ----
     private var homeLeaves: List<AppLeaf> = emptyList()
-    private val findStack = ArrayList<String>()   // the prefix of every step shown, the last one is on screen
+    private var findPlan: NameFinder.Node? = null          // the Find lists for the leaves of the last home build (built off the main thread)
+    private var findPlanKey: List<Any>? = null
+    private val findStack = ArrayList<NameFinder.Node>()   // the lists walked down; the last one is on screen
+
+    /** Called when the home list is built: plan Find in the background if the leaves changed. */
+    private fun planFind() {
+        val key = homeLeaves.map { listOf(it.pkg, it.label, it.weight) }
+        if (key == findPlanKey) return
+        findPlanKey = key; findPlan = null
+        val ls = homeLeaves; val box = arrayOfNulls<NameFinder.Node>(1)
+        out.background({ box[0] = NameFinder.plan(ls) }) { if (findPlanKey === key) findPlan = box[0] }
+    }
 
     private fun startFind() {
+        val plan = findPlan
+        if (plan == null) { stopAll(); tn(Tone.TICK); timers.set("findwait", 300) { if (active && screen == Screen.HUB) startFind() }; return }   // not ready yet: a tick, then again
         stopAll()
         out.choice(screen.name, 7, "find", "")   // for tools/menu_report.py: how often Find is used
-        findStack.clear(); findStack.add("")
+        findStack.clear(); findStack.add(plan)
         show(Screen.FIND)
     }
 
-    private fun findOptions(): List<Opt> {
-        val step = NameFinder.next(homeLeaves, findStack.lastOrNull() ?: "")
-        if (findStack.isNotEmpty()) findStack[findStack.size - 1] = step.prefix   // forced letters are already in it
-        return step.choices.map { c ->
-            when (c) {
-                is NameFinder.Choice.Letter -> Opt("find:letter", Phrase.content(c.letter.uppercase())) {
-                    pick("find:step", c.letter.toString()); findStack.add(step.prefix + c.letter); show(Screen.FIND)
-                }
-                is NameFinder.Choice.Leaf -> leafOption(c.leaf).let { o ->
-                    Opt(o.key, o.label) { out.choice(screen.name, code, "find:${findStack.size}", "", -1); o.run() }   // then exactly what the tree does (same pick intent)
-                }
-            }
+    private fun findOptions(): List<Opt> = (findStack.lastOrNull()?.parts ?: emptyList()).map { p ->
+        val sub = p.sub
+        if (sub != null) Opt("find:range", Phrase.content(p.label)) { pick("find:step", p.label); findStack.add(sub); show(Screen.FIND) }
+        else leafOption(p.leaf!!).let { o ->
+            Opt(o.key, o.label) { out.choice(screen.name, code, "find:${findStack.size}", "", -1); o.run() }   // then exactly what the tree does (same pick intent)
         }
     }
 

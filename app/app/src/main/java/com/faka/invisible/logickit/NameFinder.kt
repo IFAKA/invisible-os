@@ -2,67 +2,109 @@ package com.faka.invisible.logickit
 
 import com.faka.invisible.AppLeaf
 import com.faka.invisible.AppTree
+import com.faka.invisible.voicekit.Spoken
 
 /**
- * "Find": reach ANY app or program by the first letters of its spoken name, without knowing its group. Pure.
- * [next] gives the list to read for the letters picked so far ([prefix]):
- *  - 6 leaves or fewer match: the leaves themselves, heaviest first, unless splitting by the next letter is cheaper (expected items heard, weighted, +[AppTree.LEVEL] per letter step);
- *  - more: the next letters, heaviest first (weight = the sum of the leaves behind the letter); a letter with one leaf behind it is that leaf
- *    (one step less); a leaf whose whole name is the prefix is offered as itself;
- *  - when only one letter is possible, it is added to the prefix at once (nothing to choose), so every list is a real choice.
- * Letters are compared without case; spaces and punctuation are ignored.
+ * "Find": reach ANY app or program by its name, without knowing its group. Pure.
+ * All leaves are sorted by spoken name. A Find list splits a stretch of that order into at most [MAX_PARTS] neighbouring parts:
+ * a part with one leaf is that leaf (its name), a part with more is a RANGE named by the shortest starts that tell it from its neighbours
+ * ("W", "Sa to Sp"). Parts are read heaviest first. Cost = sum over leaves of weight * (place in its list + [AppTree.LEVEL] per range entered).
+ * [plan] picks the splits for the lowest cost: exact for stretches of 6 or fewer leaves, and for longer ones the best of a few
+ * weight-balanced starts improved by moving one cut at a time (memoised per stretch). It is slow on a phone: build it off the main thread.
  */
 object NameFinder {
-    const val MAX_LEAVES = 6
+    const val MAX_PARTS = AppTree.MAX_LIST
 
-    sealed class Choice(val weight: Double) {
-        class Letter(val letter: Char, weight: Double) : Choice(weight)
-        class Leaf(val leaf: AppLeaf) : Choice(leaf.weight)
-    }
-
-    /** [prefix] is the prefix really used (the asked one, plus letters that were forced); [choices] is never empty when something matches. */
-    class Step(val prefix: String, val choices: List<Choice>)
+    /** One entry of a Find list: a leaf ([leaf]), or a range ([sub] = the list inside it). [label] is what is spoken for a range. */
+    class Part(val label: String, val leaf: AppLeaf?, val sub: Node?)
+    /** One Find list, in reading order. */
+    class Node(val parts: List<Part>)
 
     fun key(label: String) = label.lowercase().filter { it.isLetterOrDigit() }
 
-    fun next(leaves: List<AppLeaf>, prefix0: String = ""): Step {
-        val all = leaves.map { it to key(it.label) }
-        var prefix = key(prefix0)
-        while (true) {
-            val m = all.filter { it.second.startsWith(prefix) }
-            val exact = m.filter { it.second.length == prefix.length }
-            val groups = m.filter { it.second.length > prefix.length }.groupBy { it.second[prefix.length] }
-            if (exact.isEmpty() && groups.size == 1) { prefix += groups.keys.single(); continue }   // one letter possible: nothing to choose
-            if (m.size <= MAX_LEAVES && listCost(m) <= splitCost(m, prefix) + EPS) return Step(prefix, byWeight(m.map { Choice.Leaf(it.first) }))
-            return Step(prefix, byWeight(choices(m, prefix)))
+    fun plan(leaves: List<AppLeaf>): Node = Planner(leaves.sortedWith(compareBy({ key(it.label) }, { it.pkg }))).root()
+
+    /** Every leaf below a part or list. */
+    fun leavesOf(n: Node): List<AppLeaf> = n.parts.flatMap { leavesOf(it) }
+    fun leavesOf(p: Part): List<AppLeaf> = p.leaf?.let { listOf(it) } ?: leavesOf(p.sub!!)
+
+    private class Planner(val ls: List<AppLeaf>) {
+        val n = ls.size
+        val keys = ls.map { key(it.label) }
+        val pre = DoubleArray(n + 1).also { for (i in 0 until n) it[i + 1] = it[i] + ls[i].weight }
+        val cost = Array(n + 1) { DoubleArray(n + 1) { -1.0 } }
+        val cuts = Array(n + 1) { arrayOfNulls<IntArray>(n + 1) }
+        fun w(i: Int, j: Int) = pre[j] - pre[i]
+
+        fun root(): Node = if (n == 0) Node(emptyList()) else { solve(0, n); build(0, n) }
+
+        /** Cost of reading the stretch i until j as one list, with the best boundaries (kept in [cuts]). */
+        fun solve(i: Int, j: Int): Double {
+            if (cost[i][j] >= 0) return cost[i][j]
+            val m = j - i
+            var best = Double.MAX_VALUE; var bb = intArrayOf(i, j)
+            fun offer(b: IntArray) { val c = eval(b); if (c < best - 1e-9) { best = c; bb = b.copyOf() } }
+            if (m == 1) best = w(i, j)
+            else if (m <= MAX_PARTS) {
+                for (mask in 1 until (1 shl (m - 1))) {
+                    val b = ArrayList<Int>(); b += i
+                    for (t in 0 until m - 1) if (mask and (1 shl t) != 0) b += i + t + 1
+                    b += j; offer(b.toIntArray())
+                }
+            } else {
+                for (k in listOf(MAX_PARTS, 3).distinct()) {
+                    var b = start(i, j, k); var c = eval(b)
+                    repeat(4) {
+                        var moved = false
+                        for (x in 1 until k) for (p in b[x - 1] + 1 until b[x + 1]) if (p != b[x]) {
+                            val t = b.copyOf(); t[x] = p; val tc = eval(t)
+                            if (tc < c - 1e-9) { c = tc; b = t; moved = true }
+                        }
+                        if (!moved) return@repeat
+                    }
+                    offer(b)
+                }
+            }
+            cost[i][j] = best; cuts[i][j] = bb
+            return best
         }
-    }
 
-    private const val EPS = 1e-9
-    private fun choices(m: List<Pair<AppLeaf, String>>, prefix: String): List<Choice> {
-        val exact = m.filter { it.second.length == prefix.length }
-        val groups = m.filter { it.second.length > prefix.length }.groupBy { it.second[prefix.length] }
-        return exact.map { Choice.Leaf(it.first) } +
-            groups.map { (ch, g) -> if (g.size == 1) Choice.Leaf(g.single().first) else Choice.Letter(ch, g.sumOf { it.first.weight }) }
-    }
-
-    /** Weighted items heard to find a leaf of [m] when the names are listed, heaviest first. */
-    private fun listCost(m: List<Pair<AppLeaf, String>>) = m.map { it.first.weight }.sortedDescending().withIndex().sumOf { (i, w) -> (i + 1) * w }
-
-    /** The same when the list is the next letters (each letter costs [AppTree.LEVEL] more, then the best way inside it). */
-    private fun splitCost(m: List<Pair<AppLeaf, String>>, prefix: String): Double {
-        val exact = m.filter { it.second.length == prefix.length }
-        val groups = m.filter { it.second.length > prefix.length }.groupBy { it.second[prefix.length] }
-        val parts = exact.map { it.first.weight to 0.0 } + groups.map { (ch, g) ->
-            val w = g.sumOf { it.first.weight }
-            if (g.size == 1) w to 0.0 else w to (AppTree.LEVEL * w + bestCost(g, prefix + ch))
+        /** [k] parts of about equal weight. */
+        fun start(i: Int, j: Int, k: Int): IntArray {
+            val b = IntArray(k + 1); b[0] = i; b[k] = j
+            for (x in 1 until k) {
+                var p = i + 1
+                while (p < j && pre[p] - pre[i] < w(i, j) * x / k) p++
+                b[x] = p.coerceIn(b[x - 1] + 1, j - (k - x))
+            }
+            return b
         }
-        return parts.sortedByDescending { it.first }.withIndex().sumOf { (i, p) -> (i + 1) * p.first + p.second }
+
+        /** Cost of a split: parts read heaviest first; a range also costs LEVEL per leaf-weight and the best list inside it. */
+        fun eval(b: IntArray): Double {
+            val k = b.size - 1
+            val ws = DoubleArray(k) { w(b[it], b[it + 1]) }
+            var inner = 0.0
+            for (x in 0 until k) if (b[x + 1] - b[x] > 1) inner += AppTree.LEVEL * ws[x] + solve(b[x], b[x + 1])
+            val order = (0 until k).sortedWith(compareBy({ -ws[it] }, { it }))
+            return order.withIndex().sumOf { (r, x) -> (r + 1) * ws[x] } + inner
+        }
+
+        fun build(i: Int, j: Int): Node {
+            val b = cuts[i][j]!!
+            val k = b.size - 1
+            val order = (0 until k).sortedWith(compareBy({ -w(b[it], b[it + 1]) }, { it }))
+            return Node(order.map { x ->
+                val a = b[x]; val e = b[x + 1]
+                if (e - a == 1) Part(ls[a].label, ls[a], null) else { solve(a, e); Part(Spoken.range(from(a), to(e - 1)), null, build(a, e)) }
+            })
+        }
+
+        /** The shortest start of name [a] that tells it from the name before. */
+        fun from(a: Int): String = cap(if (a == 0) keys[a].take(1) else short(keys[a], keys[a - 1]))
+        /** The shortest start of name [z] that tells it from the name after. */
+        fun to(z: Int): String = cap(if (z == n - 1) keys[z].take(1) else short(keys[z], keys[z + 1]))
+        fun short(k: String, other: String): String = (1..k.length).map { k.take(it) }.firstOrNull { !other.startsWith(it) } ?: k
+        fun cap(s: String) = s.replaceFirstChar { it.uppercase() }
     }
-
-    private fun bestCost(m: List<Pair<AppLeaf, String>>, prefix: String): Double =
-        if (m.size <= 1) listCost(m) else minOf(listCost(m), splitCost(m, prefix))
-
-    private fun byWeight(c: List<Choice>) = c.sortedWith(compareBy({ -it.weight }, { name(it) }))
-    private fun name(c: Choice) = when (c) { is Choice.Letter -> c.letter.toString(); is Choice.Leaf -> key(c.leaf.label) + c.leaf.pkg }
 }

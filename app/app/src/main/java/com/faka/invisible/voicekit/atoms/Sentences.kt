@@ -24,6 +24,9 @@ object Spoken {
         "catorce", "quince", "dieciséis", "diecisiete", "dieciocho", "diecinueve", "veinte", "veintiuno", "veintidós", "veintitrés", "veinticuatro",
         "veinticinco", "veintiséis", "veintisiete", "veintiocho", "veintinueve", "treinta")
 
+    /** A Find range as it is read: "Sa to Sp", or just "W" when both ends are the same. */
+    fun range(from: String, to: String): String = if (from == to) from else "$from to $to"
+
     /** "Five minutes", "One minute", "90 minutes". */
     fun minutes(n: Int): String = number(n).replaceFirstChar { it.uppercase() } + if (n == 1) " minute" else " minutes"
 
