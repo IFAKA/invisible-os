@@ -162,6 +162,7 @@ object Menu {
     val QUIETER = f("Quieter")
     val DONE = f("Done")
     val WEATHER = f("Weather")
+    val SAY_WEATHER = f("Say the weather")
     val NEXT_EVENT = f("Next event")
     val NEXT_TURN = f("Next turn")
     val BACK = f("Back")

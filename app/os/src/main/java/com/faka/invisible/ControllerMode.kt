@@ -676,7 +676,8 @@ class ControllerMode(
     /** An app without notifications: open it, or go back. */
     private fun appOpenOptions(): List<Opt> {
         val music = if (notifPkg?.let { out.isMusicApp(it) } == true) listOf(Opt("app:music", Menu.MUSIC) { pick("app:music"); musicBack = Screen.APP_OPEN; show(Screen.MUSIC) }) else emptyList()
-        return music + listOf(Opt("app:open", Menu.OPEN_APP) { pick("app:open"); openApp() })
+        val weather = if (notifPkg?.contains("weather", true) == true) listOf(Opt("app:weather", Menu.SAY_WEATHER) { pick("app:weather"); lookup(out::weather) }) else emptyList()
+        return weather + music + listOf(Opt("app:open", Menu.OPEN_APP) { pick("app:open"); openApp() })
     }
 
     private var musicBack = Screen.HUB
