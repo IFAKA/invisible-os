@@ -99,6 +99,7 @@ object Voice {
     // ---- weather, calendar, find my phone ----
     val NEED_LOCATION = f("Open the app and allow location.")
     val WEATHER_FAILED = f("No weather now.")
+    val STILL_WORKING = f("Still working.")   // said once by Narrator.waiting after 10 s
     val NEED_CALENDAR = f("Open the app and allow the calendar.")
     val CALENDAR_FAILED = f("Cannot read the calendar.")
     val NO_EVENTS = f("No events today.")

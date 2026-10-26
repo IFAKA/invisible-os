@@ -102,3 +102,12 @@ Rules used (WWDC17 "Designing Sound", WWDC19 810): sound matches a physical caus
 - **Levels (peak dBFS, speech about -2):** tap -26, tick -24, screen notes -20, pick/back/cancel -17, hub -14, sent -13, alarm -10. Set in `LEVEL` in Earcons.kt. Write-program cues use the same material.
 - **Audition:** `sound/tones_ab.wav`: each tone as voice, OLD, voice, NEW. Check on the phone speaker and the earbud, and live with it a week.
 - Not done: small random variation of the repeated sounds (tap, tick), and a setting to turn tones off.
+
+## Waiting (2026-10-26): so a slow step never sounds like a crash
+Problem: weather, calendar, opening Write, a game building its sounds, music starting cold: seconds of silence, and silence sounds like a crash.
+Rules used (Nielsen's response times: under 1 s no sign is needed; screen readers' "busy" sounds; our own rule "a repeat = again"):
+- **Nothing for 0.6 s.** Fast work stays quiet.
+- **Then a heartbeat:** `wait`, C5 twice (150 ms apart, the second softer), LOW bar, -27 dBFS, every 1.4 s. Same note twice: no rise, no fall, so it means neither yes nor no, only "still going". Skipped while speech plays.
+- **At 10 s** the phone says "Still working." once. **At 60 s** the beat stops even if no one stopped it.
+- One door: `Narrator.waiting()` returns stop. Several waits at once give one heartbeat. Numbers in `Pacing` (`WAIT_*`).
+- Used by: weather, next event, Write (word model load), Echo, Guard, Duel (sound build), music search, music cold start.

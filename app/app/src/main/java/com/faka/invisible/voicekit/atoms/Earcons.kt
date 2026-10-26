@@ -47,6 +47,7 @@ object Earcons {
         Tone.ARRIVE to one("E5", 200, .25),
         Tone.ARRIVE_FAV to run(listOf("C5", "E5", "G5"), 90, 180, .35),
         Tone.ALARM to run(listOf("C5", "E5", "G5", "C6", "G5", "C6"), 140, 450, .40),
+        Tone.WAIT to listOf(N(V.LOW, hz.getValue("C5"), 0, 160, .40), N(V.LOW, hz.getValue("C5"), 150, 200, .28)),   // working: a soft heartbeat, same note twice, no rise or fall
     )
 
     /** Peak level of each tone in dBFS. The speech clips peak at about -2. UI feedback is much quieter than results. */
@@ -56,7 +57,7 @@ object Earcons {
         Tone.PICK to -17.0, Tone.AGAIN to -18.0, Tone.BACK to -17.0, Tone.RESTART to -17.0, Tone.UNDO to -22.0,
         Tone.DING to -22.0, Tone.ARRIVE to -20.0, Tone.ARRIVE_FAV to -17.0,
         Tone.HUB to -14.0, Tone.SENT to -13.0, Tone.CANCEL to -17.0, Tone.LEAVE to -18.0, Tone.EXIT to -18.0,
-        Tone.UNKNOWN to -16.0, Tone.ALARM to -10.0,
+        Tone.UNKNOWN to -16.0, Tone.ALARM to -10.0, Tone.WAIT to -27.0,
     )
 
     private val cache = HashMap<Tone, ShortArray>()

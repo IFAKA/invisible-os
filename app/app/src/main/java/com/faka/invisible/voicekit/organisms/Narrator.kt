@@ -20,6 +20,32 @@ class Narrator(private val speech: SpeechPort, private val tones: TonePort, priv
     fun cue(c: TypeCue) = tones.cue(c)
     fun findLoop(on: Boolean) = tones.findLoop(on)
 
+    private val waits = LinkedHashSet<Any>()
+    /**
+     * Main thread. A wait you can hear, so a slow step never sounds like a crash: silent for [Pacing.WAIT_DELAY_MS] (fast work
+     * stays quiet), then the soft [Tone.WAIT] heartbeat every [Pacing.WAIT_BEAT_MS] (skipped while speech plays), once
+     * [Voice.STILL_WORKING] at [Pacing.WAIT_SAY_MS], and it gives up at [Pacing.WAIT_MAX_MS]. Call the returned stop
+     * when the work is done (any thread, more than once is fine). Several waits at once make one heartbeat.
+     */
+    fun waiting(): () -> Unit {
+        val token = Any(); waits += token
+        val t0 = android.os.SystemClock.uptimeMillis()
+        var said = false
+        val beat = object : Runnable {
+            override fun run() {
+                if (token !in waits) return
+                val t = android.os.SystemClock.uptimeMillis() - t0
+                if (t >= Pacing.WAIT_MAX_MS) { waits -= token; return }
+                if (waits.first() === token && !speech.speaking) {   // only the oldest wait beats
+                    if (!said && t >= Pacing.WAIT_SAY_MS) { said = true; speech.speak(Voice.STILL_WORKING, false, false, false) } else tones.beep(Tone.WAIT)
+                }
+                handler.postDelayed(this, Pacing.WAIT_BEAT_MS)
+            }
+        }
+        handler.postDelayed(beat, Pacing.WAIT_DELAY_MS)
+        return { handler.post { waits -= token; handler.removeCallbacks(beat) } }
+    }
+
     /** Two words as one stereo sound. Both clips are made first; the sentence being spoken is never cut. */
     fun pair(left: String, right: String?) {
         hush(); val me = pairSeq

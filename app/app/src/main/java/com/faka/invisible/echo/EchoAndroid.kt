@@ -12,6 +12,8 @@ import com.faka.invisible.voicekit.Timers
 
 /** What ECHO needs from the app (speech, the user's music, the log). */
 interface EchoHost {
+    /** Starts the OS wait sound (a soft heartbeat while the sounds are built); call the result when ready. */
+    fun waiting(): () -> Unit
     fun speak(text: Phrase)
     fun stopSpeech()
     fun pauseMusic()
@@ -68,11 +70,12 @@ class EchoAndroid(
         val g = gen
         latency = 0.0
         host.pauseMusic()
+        val w = host.waiting()
         Thread({
             val t0 = SystemClock.uptimeMillis()
             try { EchoSynth.warm() } catch (e: Throwable) { Log.e("ECHO", "synth failed", e) }
             Log.d("ECHO", "sounds ready in ${SystemClock.uptimeMillis() - t0} ms")
-            handler.post { if (g == gen && running) begin() }
+            handler.post { w(); if (g == gen && running) begin() }
         }, "echo-load").start()
     }
 

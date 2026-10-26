@@ -12,6 +12,8 @@ import com.faka.invisible.voicekit.Timers
 
 /** What the duel needs from the app (speech, the user's music, the log). */
 interface TellHost {
+    /** Starts the OS wait sound (a soft heartbeat while the sounds are built); call the result when ready. */
+    fun waiting(): () -> Unit
     fun speak(text: Phrase, slow: Boolean = false)
     fun stopSpeech()
     fun pauseMusic()
@@ -85,11 +87,12 @@ class TellAndroid(
         val g = gen
         latency = 0.0
         if (!TellSynth.warmed) host.speak(TellVoice.LOADING)
+        val w = host.waiting()
         Thread({
             val t0 = SystemClock.uptimeMillis()
             val m = try { TellMixer(sr) } catch (e: Throwable) { Log.e("TELL", "mixer failed", e); null }
             Log.d("TELL", "sounds ready in ${SystemClock.uptimeMillis() - t0} ms")
-            handler.post { if (g == gen && running) begin(m) }
+            handler.post { w(); if (g == gen && running) begin(m) }
         }, "tell-load").start()
     }
 

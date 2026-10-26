@@ -13,6 +13,16 @@ object Pacing {
     /** Holding this long always leaves a program. */
     const val LEAVE_MS = 3000L
 
+    // ---- waiting (Narrator.waiting) ----
+    /** Work faster than this makes no sound at all (under about 1 s people do not feel a wait). */
+    const val WAIT_DELAY_MS = 600L
+    /** One heartbeat this often while the work goes on: slow enough to stay calm, fast enough that silence means something broke. */
+    const val WAIT_BEAT_MS = 1400L
+    /** After this long, one spoken "Still working." */
+    const val WAIT_SAY_MS = 10000L
+    /** The heartbeat stops here even if no one stopped it (a bug must never beat forever). */
+    const val WAIT_MAX_MS = 60000L
+
     // ---- the scan ----
     /** Fast scroll: the least time one word gets before the next one starts. A word is never cut off by the next. */
     const val FAST_MS = 650L

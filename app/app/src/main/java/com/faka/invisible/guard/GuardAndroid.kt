@@ -13,6 +13,8 @@ import com.faka.invisible.voicekit.Timers
 
 /** What GUARD needs from the app (speech, the user's music, the log, which sound output is in use). */
 interface GuardHost {
+    /** Starts the OS wait sound (a soft heartbeat while the sounds are built); call the result when ready. */
+    fun waiting(): () -> Unit
     fun speak(text: Phrase)
     fun stopSpeech()
     fun pauseMusic()
@@ -80,11 +82,12 @@ class GuardAndroid(
         latency = 0.0
         device = try { host.outputDevice() } catch (e: Throwable) { "speaker" }
         host.pauseMusic()
+        val w = host.waiting()
         Thread({
             val t0 = SystemClock.uptimeMillis()
             try { GuardSynth.warm() } catch (e: Throwable) { Log.e("GUARD", "synth failed", e) }
             Log.d("GUARD", "sounds ready in ${SystemClock.uptimeMillis() - t0} ms")
-            handler.post { if (g == gen && running) begin() }
+            handler.post { w(); if (g == gen && running) begin() }
         }, "guard-load").start()
     }
 

@@ -132,8 +132,8 @@ object Actions {
                 val a = t?.let { Calendar.getInstance().apply { timeInMillis = it } }
                 return Status(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), b, a?.get(Calendar.HOUR_OF_DAY), a?.get(Calendar.MINUTE))
             }
-            override fun weather(done: (Phrase) -> Unit) = PhoneInfo.weather(app) { t -> handler.post { done(t) } }
-            override fun nextEvent(done: (Phrase) -> Unit) = PhoneInfo.nextEvent(app) { t -> handler.post { done(t) } }
+            override fun weather(done: (Phrase) -> Unit) { val w = narrator.waiting(); PhoneInfo.weather(app) { t -> w(); handler.post { done(t) } } }
+            override fun nextEvent(done: (Phrase) -> Unit) { val w = narrator.waiting(); PhoneInfo.nextEvent(app) { t -> w(); handler.post { done(t) } } }
             override fun wiredConnected() = app.getSystemService(AudioManager::class.java).getDevices(AudioManager.GET_DEVICES_OUTPUTS).any {
                 it.type in setOf(android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET, android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
                     android.media.AudioDeviceInfo.TYPE_USB_HEADSET, android.media.AudioDeviceInfo.TYPE_USB_DEVICE)
@@ -303,9 +303,11 @@ object Actions {
 
     private fun launchWrite(sendTo: ((String) -> Boolean)? = null, replyTo: Notif? = null) {
         typer?.stop()
+        val w = narrator.waiting()
         Thread({
             val lm = wordModel()
             handler.post {
+                w()
                 if (lm == null) { say(TypeVoice.NO_MODEL, false); gameEnded(); return@post }
                                 val timers = object : Timers {
                     override fun set(key: String, delayMs: Long, task: () -> Unit) { clear(key); val r = Runnable { typeTimers.remove(key); task() }; typeTimers[key] = r; handler.postDelayed(r, delayMs) }
@@ -392,6 +394,7 @@ object Actions {
     private fun startEchoGame() {
         echo?.stop()
         echo = EchoAndroid(prefs(), handler, object : EchoHost {
+            override fun waiting() = narrator.waiting()
             override fun speak(text: Phrase) = say(text, false, slow = false)
             override fun stopSpeech() = narrator.stopSpeech()
             override fun pauseMusic() { pauseMusicNow() }
@@ -403,6 +406,7 @@ object Actions {
     private fun startGuardGame() {
         guard?.stop()
         guard = GuardAndroid(prefs(), handler, object : GuardHost {
+            override fun waiting() = narrator.waiting()
             override fun speak(text: Phrase) = say(text, false, slow = false)
             override fun stopSpeech() = narrator.stopSpeech()
             override fun pauseMusic() { pauseMusicNow() }
@@ -425,6 +429,7 @@ object Actions {
     private fun startDuel(coach: Boolean) {
         duel?.stop()
         duel = TellAndroid(prefs(), handler, object : TellHost {
+            override fun waiting() = narrator.waiting()
             override fun speak(text: Phrase, slow: Boolean) = say(text, false, slow = slow)
             override fun stopSpeech() = narrator.stopSpeech()
             override fun pauseMusic() { pauseMusicNow() }
@@ -585,12 +590,13 @@ object Actions {
         val am = app.getSystemService(AudioManager::class.java)
         for (a in listOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP)) am.dispatchMediaKeyEvent(android.view.KeyEvent(a, android.view.KeyEvent.KEYCODE_MEDIA_PLAY))
         var tries = 0
+        val w = narrator.waiting()   // a cold start takes seconds: the heartbeat says it is on its way
         val poll = object : Runnable {
             override fun run() {
                 val c = otherSessions().firstOrNull { it.packageName in musicApps }
-                if (c != null) { Log.d(TAG, "MODE music: session found, play"); ask(c); return }
+                if (c != null) { Log.d(TAG, "MODE music: session found, play"); w(); ask(c); return }
                 if (++tries in listOf(12, 44, 76)) { Log.d(TAG, "MODE music: no session, open by link ($tries)"); playLiked(pkg, link ?: LIKED_LINK) }   // the first open sometimes leaves the session asleep: try again
-                if (tries < 110) handler.postDelayed(this, 500)
+                if (tries < 110) handler.postDelayed(this, 500) else w()
             }
         }
         handler.postDelayed(poll, 1000)
@@ -598,6 +604,7 @@ object Actions {
 
     /** Look the typed text up on the web (off the main thread), say which song was found, play it. */
     private fun searchAndPlay(query: String) {
+        val w = narrator.waiting()
         Thread({
             val hit = try {
                 val c = java.net.URL(com.faka.invisible.logickit.MusicSearch.URL).openConnection() as java.net.HttpURLConnection
@@ -607,6 +614,7 @@ object Actions {
                 com.faka.invisible.logickit.MusicSearch.first(c.inputStream.bufferedReader().use { it.readText() })
             } catch (e: Throwable) { Log.e(TAG, "music search failed", e); null }
             handler.post {
+                w()
                 if (hit == null) { say(Menu.NO_SONG, false); gameEnded(); return@post }
                 Log.d(TAG, "MODE music search '$query' -> ${hit.title} / ${hit.artist}")
                 say(Phrase.content(listOf(hit.title, hit.artist).filter { it.isNotBlank() }.joinToString(", "), ControllerNotificationListener.voiceFor(hit.title + " " + hit.artist)), false)

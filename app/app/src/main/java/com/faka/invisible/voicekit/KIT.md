@@ -28,7 +28,7 @@ Rules are checked two ways:
 | engines/TonePlayer.kt | engine | The only short-sound player: earcons, cues, stereo pair, find-phone loop. |
 | engines/MediaKeyIntake.kt | engine | The only media session: takes the earbud button, wins it back, keeps it alive. |
 | engines/TellAudio.kt | engine | The Duel's low-latency stereo stream and latency estimate. |
-| organisms/Narrator.kt | organism | Say, beep, cue, stereo word pair. What screens call to be heard. |
+| organisms/Narrator.kt | organism | Say, beep, cue, stereo word pair, `waiting()` (the heartbeat for slow work). What screens call to be heard. |
 | organisms/ButtonInput.kt | organism | The one button: dedupe, raw button for programs, tap tone, gestures. |
 | organisms/Scanner.kt | organism | The spoken list: pauses, ticks, loops then leave, fast scroll. Used by the menu and the Write menu. |
 | VoiceKit.kt | facade | `init` once from the OS; `narrator`, `buttons`, `mediaKeys()`. |
