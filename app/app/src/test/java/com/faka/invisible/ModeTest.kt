@@ -961,11 +961,13 @@ class ModeTest {
         assertTrue(r.count("tone RESTART") >= 1)
     }
 
-    @Test fun clickHoldWhenNotScanningIsAnExit() {
+    @Test fun plainHoldWhenNotScanningDoesNothing_clickHoldExits() {
         val r = Rig(); r.wake()   // intro phase: not reading options yet
         r.m.onGesture(Gesture.CLICK_HOLD)
-        assertFalse(r.m.active)
+        assertTrue(r.m.active)
         r.m.onGesture(Gesture.CLICK_HOLD_END)
+        assertTrue(r.m.active)
+        r.m.onGesture(Gesture.HOLD)
         assertFalse(r.m.active)
     }
 

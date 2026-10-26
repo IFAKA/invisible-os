@@ -28,7 +28,13 @@ class GestureDetector(
     }
 
     private fun fireHold(d: Long, end: Long, dur: Long) {
-        val g = GestureRules.classify(presses + (d to end)) ?: Gesture.HOLD
+        // Swapped on purpose: a plain hold is the fast-scroll gesture (CLICK_HOLD, with an END), click-then-hold is HOLD (exit).
+        val c = GestureRules.classify(presses + (d to end)) ?: Gesture.HOLD
+        val g = when (c) {
+            Gesture.HOLD -> Gesture.CLICK_HOLD
+            Gesture.CLICK_HOLD -> Gesture.HOLD
+            else -> c
+        }
         presses.clear()
         clickHold = g == Gesture.CLICK_HOLD
         onGesture(g, dur)

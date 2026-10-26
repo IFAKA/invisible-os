@@ -94,9 +94,9 @@ class CountRanker(private val count: (String) -> Int) : OptionRanker {
  * Pure state machine for the v4 auto-scan launcher.
  * Idle: clicks go to the music app, hold = WAKE. In the mode ONE rule on every screen: the phone speaks the
  * options one at a time (pause, tick between items, ding at the end) and loops. 1 click = the option spoken last,
- * 1 = choose the option spoken last, 2 = next option now, 3 = back one level (top: leave), 4 = leave. Two silent loops = leave. Hold = exit.
- * Click then hold (fast scroll, while options are read): steps through the options one word every 0.65 s or more (a word is never cut off), first word + tick; on release the option is
- * spoken in full and the scan goes on from there. Anywhere else a click-then-hold is a plain hold (exit), so you can never get stuck.
+ * 1 = choose the option spoken last, 2 = next option now, 3 = back one level (top: leave), 4 = leave. Two silent loops = leave. Click then hold = exit.
+ * Hold (fast scroll, while options are read): steps through the options one word every 0.65 s or more (a word is never cut off), first word + tick; on release the option is
+ * spoken in full and the scan goes on from there. Anywhere else a plain hold does nothing; click then hold always exits, so you can never get stuck.
  * Sends and timer starts wait [undoMs] after "Click to cancel"; any click inside cancels them.
  * Events in: onGesture, onSpeechStarted, onSpeechDone. Time and timers are injected.
  */
@@ -184,8 +184,10 @@ class ControllerMode(
     /** [lastPressMs] = length of the last press; with the gesture gap it gives the time of the first press. */
     fun onGesture(g0: Gesture, lastPressMs: Long = 0) {
         if (g0 == Gesture.CLICK_HOLD_END) { endFast(); return }
-        // click-then-hold scrolls only while the options are read; everywhere else it is a plain hold (exit)
-        val g = if (g0 == Gesture.CLICK_HOLD && !(active && !finding && pending == null && phase == Phase.SCAN && !list.isEmpty)) Gesture.HOLD else g0
+        // The detector sends a plain hold as CLICK_HOLD (fast scroll, only while options are read) and click-then-hold as HOLD (exit):
+        // exit needs the harder gesture so it is never an accident. Idle: a plain hold wakes. Active outside a list: a plain hold does nothing.
+        val canFast = active && !finding && pending == null && phase == Phase.SCAN && !list.isEmpty
+        val g = if (g0 == Gesture.CLICK_HOLD && !active) Gesture.HOLD else g0
         val firstPress = clock() - gapMs - lastPressMs
         if (active && finding) { endFind(); return }   // ANY click or hold stops the ringing
         if (pending != null && g != Gesture.HOLD) { cancelPending(); return }   // ANY click cancels
@@ -202,7 +204,7 @@ class ControllerMode(
         }
         when (g) {
             Gesture.HOLD -> { stopAll(); out.choice(screen.name, 9, "exit", ""); exit(true) }
-            Gesture.CLICK_HOLD -> startFast()
+            Gesture.CLICK_HOLD -> if (canFast) startFast()
             Gesture.CLICK_HOLD_END -> {}
             Gesture.QUAD -> { stopAll(); out.choice(screen.name, 4, "leave", ""); leaveSilent() }
             Gesture.TRIPLE -> { stopAll(); out.choice(screen.name, 3, "back", ""); back() }

@@ -41,24 +41,24 @@ class GestureTest {
     @Test fun detectorHoldFiresEarlyOnce() {
         val s = Sim()
         s.d.down(0); s.advance(600)
-        assertEquals(listOf(Gesture.HOLD to 500L), s.out)
+        assertEquals(listOf(Gesture.CLICK_HOLD to 500L), s.out)
         s.advance(1600); s.d.up(1600); s.advance(3000)
-        assertEquals(1, s.out.size)
+        assertEquals(listOf(Gesture.CLICK_HOLD to 500L, Gesture.CLICK_HOLD_END to 1600L), s.out)
     }
 
     @Test fun detectorClickHoldStartsAndEnds() {
         val s = Sim()
         s.d.down(0); s.advance(100); s.d.up(100)
         s.advance(200); s.d.down(200); s.advance(800)
-        assertEquals(listOf(Gesture.CLICK_HOLD to 500L), s.out)
+        assertEquals(listOf(Gesture.HOLD to 500L), s.out)
         s.advance(2000); s.d.up(2000); s.advance(3000)
-        assertEquals(listOf(Gesture.CLICK_HOLD to 500L, Gesture.CLICK_HOLD_END to 1800L), s.out)
+        assertEquals(listOf(Gesture.HOLD to 500L), s.out)
     }
 
     @Test fun detectorFirstPressHoldStaysHold() {
         val s = Sim()
         s.d.down(0); s.advance(600); s.advance(2000); s.d.up(2000); s.advance(3000)
-        assertEquals(listOf(Gesture.HOLD to 500L), s.out)
+        assertEquals(listOf(Gesture.CLICK_HOLD to 500L, Gesture.CLICK_HOLD_END to 2000L), s.out)
     }
 
     @Test fun detectorSlowSecondPressIsPlainHold() {
@@ -66,7 +66,7 @@ class GestureTest {
         s.d.down(0); s.advance(100); s.d.up(100)
         s.advance(1000)   // the single click is reported
         s.d.down(1000); s.advance(1600)
-        assertEquals(listOf(Gesture.SINGLE to 100L, Gesture.HOLD to 500L), s.out)
+        assertEquals(listOf(Gesture.SINGLE to 100L, Gesture.CLICK_HOLD to 500L), s.out)
     }
 }
 
