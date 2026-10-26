@@ -131,7 +131,8 @@ class TypeProgram(
         if (!again) replays = 0
         items = if (phraseMode) phrases else candidates()
         if (phraseMode && items.isEmpty()) phraseMode = false
-        if (items.isEmpty()) { if (letters) { letters = false; page = 0; items = candidates() } else { if (prefix.isNotEmpty()) { written.add(prefix); askPhrases() }; prefix = ""; items = candidates() } }
+        if (items.isEmpty()) { if (prefix.isNotEmpty() && !letters && !frame.digits) { letters = true; page = 0; items = candidates(); out.say(TypeVoice.spelling(prefix)) }   // no word starts so: keep spelling, never drop the letters
+        else if (letters) { letters = false; page = 0; items = candidates() } else { items = candidates() } }
         val n = (items.size + 1) / 2
         if (n > 0) page %= n else page = 0
         val l = items.getOrNull(page * 2) ?: return
@@ -190,7 +191,8 @@ class TypeProgram(
     // ---- the small menu: Done, Delete, Letters/Words, read one at a time ----
     private fun menuLabels(): List<Phrase> =   // Done is last: it is used once, at the end; the first items are used while typing
         (if (frame.digits) (if (phraseMode) listOf(TypeVoice.DIGITS) else emptyList()) else listOf(if (letters || phraseMode) TypeVoice.WORDS else TypeVoice.LETTERS)) +
-        listOf(TypeVoice.MENU_DELETE) + (if (phrases.isNotEmpty() && !phraseMode) listOf(TypeVoice.PHRASES) else emptyList()) + listOf(TypeVoice.MENU_DONE, TypeVoice.MENU_LEAVE)
+        (if (prefix.isNotEmpty()) listOf(TypeVoice.NEXT_WORD) else emptyList()) + listOf(TypeVoice.MENU_DELETE) + (if (phrases.isNotEmpty() && !phraseMode) listOf(TypeVoice.PHRASES) else emptyList()) + listOf(TypeVoice.MENU_DONE, TypeVoice.MENU_LEAVE) +
+        (if (prefix.isNotEmpty() || written.isNotEmpty()) listOf(TypeVoice.READ) else emptyList())   // Read is last: two clicks on the first item reach it
 
     /** The big model gets the text so far; a late answer for an older text is ignored. */
     private fun askPhrases() {
@@ -231,11 +233,13 @@ class TypeProgram(
     private fun pickMenu() {
         val label = menuScan.list.current
         menu = false; menuScan.stop()
-        out.log("menupick", when (label) { TypeVoice.MENU_DONE -> "done"; TypeVoice.MENU_LEAVE -> "leave"; TypeVoice.MENU_DELETE -> "delete"; TypeVoice.PHRASES -> "phrases"; TypeVoice.DIGITS -> "digits"; else -> "letters/words" })
+        out.log("menupick", when (label) { TypeVoice.MENU_DONE -> "done"; TypeVoice.MENU_LEAVE -> "leave"; TypeVoice.MENU_DELETE -> "delete"; TypeVoice.PHRASES -> "phrases"; TypeVoice.NEXT_WORD -> "nextword"; TypeVoice.READ -> "read"; TypeVoice.DIGITS -> "digits"; else -> "letters/words" })
         when (label) {
             TypeVoice.MENU_DONE -> leave(true)
             TypeVoice.MENU_LEAVE -> leave(false)
-            TypeVoice.MENU_DELETE -> { out.cue(TypeCue.DELETE); if (prefix.isNotEmpty()) prefix = "" else if (written.isNotEmpty()) { written.removeAt(written.size - 1); askPhrases() }; letters = false; phraseMode = false; page = 0; show() }
+            TypeVoice.MENU_DELETE -> { out.cue(TypeCue.DELETE); if (prefix.isNotEmpty()) prefix = prefix.dropLast(1) else if (written.isNotEmpty()) { written.removeAt(written.size - 1); askPhrases() }; letters = false; phraseMode = false; page = 0; show() }
+            TypeVoice.NEXT_WORD -> { written.add(prefix); prefix = ""; letters = false; phraseMode = false; page = 0; askPhrases(); out.cue(TypeCue.WORDS); show() }
+            TypeVoice.READ -> { out.readBack((written + listOfNotNull(prefix.ifEmpty { null })).joinToString(" ")); show() }
             TypeVoice.PHRASES -> { phraseMode = true; letters = false; page = 0; out.cue(TypeCue.WORDS); show() }
             else -> { phraseMode = false; if (!frame.digits) letters = !letters; page = 0; out.cue(if (letters) TypeCue.LETTERS else TypeCue.WORDS); show() }
         }
@@ -247,7 +251,7 @@ class TypeProgram(
         out.cue(if (left) TypeCue.PICK_LEFT else TypeCue.PICK_RIGHT)
         out.log("pick", if (left) "L" else "R", item, page, if (phraseMode) "phrases" else if (letters) "letters" else "words", prefix)
         if (phraseMode) { written.addAll(item.split(' ').filter { it.isNotEmpty() }); phraseMode = false; prefix = ""; askPhrases() }
-        else if (letters) { prefix += item; letters = false; out.say(TypeVoice.wordsWith(prefix)) } else { lm.picked(written.takeLast(8), item); written.add(item); prefix = ""; askPhrases() }
+        else if (letters) { prefix += item; letters = false; if (candidates().isNotEmpty()) out.say(TypeVoice.wordsWith(prefix)) } else { lm.picked(written.takeLast(8), item); written.add(item); prefix = ""; askPhrases() }
         page = 0
         show()
     }

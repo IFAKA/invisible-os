@@ -20,6 +20,8 @@ object TypeVoice {
     val MENU_DELETE = f("Delete")
     val MENU_LEAVE = f("Leave")
     val PHRASES = f("Phrases")
+    val NEXT_WORD = f("Next word")
+    val READ = f("Read")
     val DIGITS = f("Digits")
     val SUM_START = f("Sum prices. Type a price.")
     val SUM_START2 = f("Four clicks adds it.")
@@ -37,5 +39,6 @@ object TypeVoice {
     val WORDS = f("Words")
     val WORDS_WITH = f("Words with")
     /** "Words with a b c": the letters chosen so far, spoken one by one. */
+    fun spelling(prefix: String) = f("No word yet. " + prefix.toCharArray().joinToString(" "))
     fun wordsWith(prefix: String) = f(WORDS_WITH.text + " " + prefix.toCharArray().joinToString(" "))
 }

@@ -22,8 +22,10 @@ class TypingTest {
         }
     }
 
+    private var empty = false
     private val lm = object : Ranker {
         override fun ranked(context: List<String>): List<Pair<String, Double>> {
+            if (empty) return emptyList()
             val ws = if (context.isEmpty()) listOf("hello", "thanks", "yes", "nope", "later", "okay", "call", "nowhere")
             else listOf("you", "mate", "soon", "later", "home", "work", "there", "here")
             return ws.mapIndexed { i, w -> w to -(i + 1).toDouble() }
@@ -125,6 +127,21 @@ class TypingTest {
         p.start(); said.clear()
         t.advance(TypeProgram.REPLAY_MS * 10)
         assertEquals(listOf(TypeVoice.STILL_HERE.text), said)
+    }
+
+    private fun spellOneLetterWithNoWordsKnown() { empty = true; p.start(); clicks(3); clicks(1); said.clear(); clicks(1) }   // menu, Letters, the first letter
+
+    @Test fun lettersNoWordStartsWithAreKeptAndSpelledNotWrittenAsAWord() {
+        spellOneLetterWithNoWordsKnown()
+        assertTrue(said.last().startsWith("No word yet. "))
+        assertEquals("", p.text())
+    }
+
+    @Test fun nextWordInTheMenuTurnsTheKeptLettersIntoAWord() {
+        spellOneLetterWithNoWordsKnown(); said.clear(); clicks(3); t.advance(TypeProgram.MENU_GAP_MS + 50)   // Words, then Next word
+        assertEquals("Next word", said.last())
+        clicks(1)
+        assertEquals(1, p.text().length)
     }
 
     @Test fun menuClosesByItselfAfterTwoSilentLoops() {
