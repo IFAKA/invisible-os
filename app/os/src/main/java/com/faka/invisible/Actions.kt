@@ -239,7 +239,7 @@ object Actions {
         taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList(), onAdd = { taskMemory.record(it.text, it.lang) }) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
         VoiceKit.init(app, handler, { speechRate() }, object : SpeechListener {
             override fun started() { mode.onSpeechStarted(); Log.d("E2E", "speech started") }
-            override fun ended() { mode.onSpeechDone(); running?.takeIf { it.active }?.speechDone() }
+            override fun ended() { mode.onSpeechDone(); running?.takeIf { it.active }?.speechDone(); Log.d("E2E", "speech ended") }
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
         rooms.restart()
@@ -346,6 +346,13 @@ object Actions {
         prefs().edit().putBoolean(PracticeProgram.DONE_KEY, practiceDone).apply()
         Log.d("E2E", "reset done")
     }
+    /** Dev (e2e): swap the speech engine for the instant stand-in (debug builds only; the class exists only there). */
+    fun voiceDev(instant: Boolean) = handler.post {
+        val sw = com.faka.invisible.voicekit.VoiceKit.speechSwitch
+        sw.alt = if (instant) Class.forName("com.faka.invisible.InstantSpeech").getConstructors()[0].newInstance(sw.words, { speechRate() }, com.faka.invisible.voicekit.VoiceKit.speechEvents) as com.faka.invisible.voicekit.SpeechPort else null
+        Log.d("E2E", "voice ${if (instant) "instant" else "real"}")
+    }
+    fun paceDev(f: Float) = handler.post { mode.devPace = f; Log.d("E2E", "pace $f") }
     fun showDev(name: String) = handler.post { mode.devShow(name); Log.d("E2E", "show $name") }
     fun stateDev() = handler.post { Log.d("E2E", "state ${mode.devState()} running=${running != null} rate=${mode.settings.speechRate} mirror=${com.faka.invisible.voicekit.ScreenMirror.active}:${com.faka.invisible.voicekit.ScreenMirror.items.size}:${com.faka.invisible.voicekit.ScreenMirror.lastPress?.replace(" ", "_")}") }
     fun rateDev(r: Float) = handler.post { saveSettings(mode.settings.copy(speechRate = r)); Log.d("E2E", "rate set $r") }

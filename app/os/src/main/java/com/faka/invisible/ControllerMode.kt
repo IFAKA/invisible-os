@@ -159,7 +159,10 @@ class ControllerMode(
     /** Set from the app's settings screen; read at use, so changes apply at once. */
     var settings = LauncherSettings()
     private val reactions by lazy { ReactionGap(ReactionGap.decode(out.loadReactions())) }   // how fast the user clicks (saved across restarts)
-    private val pause get() = pauseMs ?: reactions.gap(settings.itemGapMs)   // the gap between items adapts: never under the user setting, longer for a slow user
+    /** Dev only (e2e hook `pace`): scales the silences of the menu (gap between items, the screen-tone gap). Never touches button timing. 1 = real. */
+    var devPace = 1f
+    private val toneGap get() = (toneGapMs * devPace).toLong()
+    private val pause get() = ((pauseMs ?: reactions.gap(settings.itemGapMs)) * devPace).toLong()   // the gap between items adapts: never under the user setting, longer for a slow user
     private val silentLoops get() = silentLoopsOverride ?: settings.silentLoops
     private val undoMs get() = undoMsOverride ?: settings.undoMs
 
@@ -392,10 +395,10 @@ class ControllerMode(
         curIntro = null
         if (s == Screen.VOLUME_DIAL) {   // no list: the song plays on and the button is the dial
             phase = Phase.WAIT; waitNext = null; dialScreen()
-            timers.set("scan", toneGapMs) { say(Voice.level(out.volumeLevel())); timers.set("scan", 900) { say(Voice.DIAL_HINT) } }   // the level, then what to do
+            timers.set("scan", toneGap) { say(Voice.level(out.volumeLevel())); timers.set("scan", 900) { say(Voice.DIAL_HINT) } }   // the level, then what to do
             return
         }
-        timers.set("scan", toneGapMs) { nextIntro() }
+        timers.set("scan", toneGap) { nextIntro() }
         if (s == Screen.HUB) { val me = lookupId; timers.set("prebuild", 15) { if (screen == Screen.HUB && lookupId == me && prebuilt == null) prebuilt = buildOptions() } }   // the home list is built while the screen tone plays, not after it
     }
 
@@ -490,7 +493,7 @@ class ControllerMode(
             }
             Phase.WAIT -> { val n = waitNext; n?.invoke() }
             Phase.SCAN -> { phase = Phase.SCAN; scanner.prevIn(SKIP_MS) }   // the previous option now, at the user's own pace
-            else -> { tn(Tone.RESTART); phase = Phase.SCAN; history.clear(); scanner.restartIn(toneGapMs - tickLeadMs) }
+            else -> { tn(Tone.RESTART); phase = Phase.SCAN; history.clear(); scanner.restartIn(toneGap - tickLeadMs) }
         }
     }
 

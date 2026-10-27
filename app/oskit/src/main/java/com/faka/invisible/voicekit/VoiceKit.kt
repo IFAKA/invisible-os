@@ -17,6 +17,10 @@ object VoiceKit {
     private lateinit var watcher: ComponentName
     /** Dev tools only (AiTestReceiver): the neural voice. */
     lateinit var neural: NeuralSpeech
+    /** Dev tools only (AiTestReceiver): lets a debug stand-in speak instead of the engine. */
+    lateinit var speechSwitch: SwitchSpeech; private set
+    /** Dev tools only: what the engine tells when a line starts and ends (a stand-in must call the same). */
+    lateinit var speechEvents: SpeechListener; private set
     val ready get() = ::buttons.isInitialized
 
     /** [rate] = normal speech rate now; [watcher] = the notification listener component (lets the kit see other media sessions). */
@@ -29,7 +33,8 @@ object VoiceKit {
             override fun ended() = listener.ended()
         }
         val speech = TtsSpeech(app, handler, tones, rate, traced)
-        narrator = Narrator(speech, tones, handler)
+        speechSwitch = SwitchSpeech(speech); speechEvents = traced
+        narrator = Narrator(speechSwitch, tones, handler)
         buttons = ButtonInput(handler, narrator, target)
         speech.start(); neural = speech.neural
     }
