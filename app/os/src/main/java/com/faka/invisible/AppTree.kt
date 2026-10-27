@@ -38,6 +38,8 @@ object AppTree {
     const val PROMOTED = 2      // apps that may sit on home next to the groups
     const val HOME_MAX = 8 + PROMOTED
     const val MAX_LIST = 8
+    /** Always a direct entry of home (one of the promoted slots): the Laptop tool, the owner's most used place. */
+    val PINNED = setOf("hub:claude")
     const val LEVEL = 0.5
     private const val INF = Double.POSITIVE_INFINITY
     private const val EPS = 1e-9
@@ -45,7 +47,7 @@ object AppTree {
     private class Entry(val node: TreeNode, val inner: Double = 0.0)   // inner = LEVEL * weight + cost of the list below it (0 for an app)
     private class Layout(val cost: Double, val root: TreeNode, val levels: Map<String, Int>)
 
-    private val ORDER = compareByDescending<Entry> { it.node.weight }.thenBy { it.node.rank }.thenBy { it.node.label }.thenBy { it.node.app?.pkg ?: "" }
+    private val ORDER = compareByDescending<Entry> { it.node.app?.pkg in PINNED }.thenByDescending { it.node.weight }.thenBy { it.node.rank }.thenBy { it.node.label }.thenBy { it.node.app?.pkg ?: "" }
 
     fun build(leaves: List<AppLeaf>): TreeNode = built(leaves, null).first
 
@@ -60,7 +62,7 @@ object AppTree {
         val fits = warm != null && ls.all { l -> warm[l.pkg]?.let { allowed(l, it) } == true }
         val warmLayout = if (fits) layout(ls, warm!!, memo).takeIf { it.cost < INF } else null
         val best = if (warmLayout != null) climb(ls, warmLayout, memo)
-        else climb(ls, layout(ls, ls.associate { it.pkg to maxLevel(it) }, memo), memo)
+        else climb(ls, layout(ls, ls.associate { it.pkg to if (it.pkg in PINNED) 0 else maxLevel(it) }, memo), memo)
         return (if (best.cost < INF) best.root else crowded(ls)) to best.levels
     }
 
@@ -92,7 +94,7 @@ object AppTree {
     }
 
     /** An app is in its own place (group, or group/sub) or promoted to home: it is never lifted out of its sub-group into a mixed list, so each list holds one kind of thing. */
-    private fun allowed(l: AppLeaf, v: Int) = (v == 0 && !l.live) || v == maxLevel(l)
+    private fun allowed(l: AppLeaf, v: Int) = if (l.pkg in PINNED) v == 0 else (v == 0 && !l.live) || v == maxLevel(l)
 
     private fun maxLevel(l: AppLeaf) = if (AppCategories.sub(l.category) != null) 2 else 1
 
@@ -144,7 +146,7 @@ object AppTree {
 
     /** Every level assignment one move away: one app straight home (promoted) or back to its place. */
     private fun moves(ls: List<AppLeaf>, lv: Map<String, Int>): List<Map<String, Int>> =
-        ls.filter { !it.live }.map { l -> lv + (l.pkg to if (lv.getValue(l.pkg) > 0) 0 else maxLevel(l)) }
+        ls.filter { !it.live && it.pkg !in PINNED }.map { l -> lv + (l.pkg to if (lv.getValue(l.pkg) > 0) 0 else maxLevel(l)) }
 
     // ---- measuring any tree (the old one, the flat list, this one) ----
     class Path(val app: AppLeaf, val heard: Int, val levels: Int)
