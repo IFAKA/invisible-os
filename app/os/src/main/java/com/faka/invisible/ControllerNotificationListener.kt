@@ -99,6 +99,9 @@ class ControllerNotificationListener : NotificationListenerService() {
         /** Unmutes every app and reads the notifications that are showing again (silently: no arrival announcements). */
         fun unmuteAll() { mutes.unmuteAll(); live?.reloadActive() }
 
+        /** Swipes away every mailbox notification of [pkg] (null = every app, muted ones left alone); ongoing ones are not in the mailbox, so they stay. Returns how many. */
+        fun dismissAll(pkg: String?): Int = notifs.all().filter { pkg == null || it.pkg == pkg }.count { dismiss(it.key) }
+
         /** Swipes the notification away, as the user would. */
         fun dismiss(key: String): Boolean {
             val l = live ?: return false

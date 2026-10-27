@@ -41,6 +41,7 @@ interface ModeOutput {
     fun notifSummary(n: Notif): String = GenericModule.summary(n)   // the one line in the list
     fun notifFire(key: String, index: Int): Boolean = false   // press action [index] of a notification
     fun notifDismiss(key: String): Boolean = false
+    fun notifDismissAll(pkg: String?): Int = 0   // null = every app; returns how many were cleared (ongoing ones are kept)
     fun notifMute(pkg: String) {}
     fun installedApps(): List<InstalledApp> = emptyList()   // every launchable app (the leaves of the tree), this app left out
     fun appUse(): Map<String, AppUse> = emptyMap()   // launches per app in the last month and week
@@ -822,7 +823,11 @@ class ControllerMode(
 
     private fun notifListOptions(): List<Opt> = openItems().take(MAX_NOTIFS).map { n ->
         Opt("notif:item", notifLine(n, MAX_SPOKEN, false)) { pick("notif:item"); notifKey = n.key; show(Screen.NOTIF_ACTIONS) }
-    }
+    } + (if (openItems().size >= 2) listOf(
+        Opt("notif:clearapp", Menu.CLEAR_APP) { pick("notif:clearall"); clearedAll(out.notifDismissAll(notifPkg)) },
+        Opt("notif:clearall", Menu.CLEAR_ALL) { pick("notif:clearall"); clearedAll(out.notifDismissAll(null)) }) else emptyList())
+
+    private fun clearedAll(n: Int) { say(if (n > 0) Voice.cleared(n) else Voice.NOTIF_FAILED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } }
 
     private fun notifActionOptions(): List<Opt> {
         val n = openNotif() ?: return emptyList()

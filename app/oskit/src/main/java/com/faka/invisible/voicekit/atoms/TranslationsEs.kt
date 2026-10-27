@@ -101,6 +101,8 @@ private val SPOKEN_ES = mapOf(
     "Messages" to "Mensajes",
     "Messages, {0}" to "Mensajes, {0}",
     "Dismiss" to "Descartar",
+    "Clear all from this app" to "Borrar todo de esta app",
+    "Clear all apps" to "Borrar todo de todas las apps",
     "Mute this app" to "Silenciar esta app",
     "Unmute all apps" to "Dar sonido a todas",
     "Music" to "Música",

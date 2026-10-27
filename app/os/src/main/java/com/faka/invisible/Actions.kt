@@ -130,6 +130,7 @@ object Actions {
             override fun notifSummary(n: Notif) = ControllerNotificationListener.modules.forNotif(n).summary(n)
             override fun notifFire(key: String, index: Int) = ControllerNotificationListener.fireAction(key, index, null, app)
             override fun notifDismiss(key: String) = ControllerNotificationListener.dismiss(key)
+            override fun notifDismissAll(pkg: String?) = ControllerNotificationListener.dismissAll(pkg)
             override fun notifMute(pkg: String) = ControllerNotificationListener.mute(pkg)
             override fun notifAppHint(pkg: String) = try { app.packageManager.getApplicationInfo(pkg, 0).category } catch (e: Exception) { -1 }
             override fun installedApps() = DeviceApps.installedNow(app)

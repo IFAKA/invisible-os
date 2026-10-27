@@ -85,6 +85,7 @@ class ModeTest {
             override fun openApp(pkg: String): Boolean { log.add("open $pkg"); opened += pkg; return true }
             override fun notifFire(key: String, index: Int): Boolean { log.add("nfire $key $index"); return true }
             override fun notifDismiss(key: String): Boolean { log.add("ndismiss $key"); groups = groups.map { it.copy(items = it.items.filter { n -> n.key != key }) }.filter { it.items.isNotEmpty() }; return true }
+            override fun notifDismissAll(pkg: String?): Int { log.add("nclear ${pkg ?: "all"}"); val n = groups.filter { pkg == null || it.pkg == pkg }.sumOf { it.items.size }; groups = groups.filter { pkg != null && it.pkg != pkg }; return n }
             override fun notifMute(pkg: String) { log.add("nmute $pkg"); mutedPkgs += pkg; groups = groups.filter { it.pkg != pkg }; muted++ }
             override fun notifMutedCount() = muted
             override fun notifUnmuteAll() { log.add("nunmute"); muted = 0 }
@@ -1223,6 +1224,19 @@ class ModeTest {
         assertTrue(r.has("nreply k1 1"))
         val d = mail(); d.wake(); d.pick("Mail, 2 notifications"); d.pick("Boss. Call me"); d.pick("Dismiss")
         assertTrue(d.has("ndismiss k1"))
+    }
+
+    @Test fun clearAllFromAppSpeaksCountAndGoesHome() {
+        val r = mail(); r.wake(); r.pick("Mail, 2 notifications"); r.pick("Clear all from this app"); r.advance(3000)
+        assertTrue(r.has("nclear com.mail"))
+        assertTrue(r.spoken().any { it.contains("notifications cleared") })
+        assertEquals(ControllerMode.Screen.HUB, r.m.screen)
+    }
+
+    @Test fun clearAllAppsClearsEverything() {
+        val r = mail(); r.wake(); r.pick("Mail, 2 notifications"); r.pick("Clear all apps"); r.advance(3000)
+        assertTrue(r.has("nclear all"))
+        assertEquals(ControllerMode.Screen.HUB, r.m.screen)
     }
 
     @Test fun muteThisAppGoesHomeWithoutIt() {

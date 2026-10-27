@@ -93,6 +93,8 @@ object Voice {
     /** The phone now listens to this computer (after a switch). */
     fun listening(computer: String) = f("$computer, listening")
     val NOTIF_DONE get() = f("Done")
+    /** After "Clear all": the number comes with what it counts. */
+    fun cleared(n: Int) = f(if (n == 1) "1 notification cleared" else "$n notifications cleared")
     val NOTIF_FAILED get() = f("It did not work")
     val APP_MUTED get() = f("App muted")
     val APPS_UNMUTED get() = f("Apps unmuted")
@@ -175,6 +177,8 @@ object Menu {
     val MESSAGES get() = f("Messages")
     fun messages(unread: Int) = f("Messages, $unread unread")
     val DISMISS get() = f("Dismiss")
+    val CLEAR_APP get() = f("Clear all from this app")
+    val CLEAR_ALL get() = f("Clear all apps")
     val MUTE_APP get() = f("Mute this app")
     val UNMUTE_ALL get() = f("Unmute all apps")
     val MUSIC get() = f("Music")
