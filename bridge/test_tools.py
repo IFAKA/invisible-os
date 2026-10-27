@@ -335,6 +335,7 @@ class ServerTest(unittest.TestCase):
             f.write("{}")
 
         class R:
+            preview = None
             def room_row(self, p): return {"path": d} if p == "%1" else None
             def projects(self): return [{"path": d}]
         t, f = mk([("status", (0, "## main\n"))])

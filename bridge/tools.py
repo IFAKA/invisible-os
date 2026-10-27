@@ -228,7 +228,8 @@ class Tools:
 
     @classmethod
     def for_rooms(cls, rooms):
-        return cls(model=rooms.stories.model, open_window=rooms._new_window, claude_cmd=rooms.claude_cmd)
+        g = lambda o, n, d=None: getattr(o, n, d)
+        return cls(model=g(g(rooms, "stories"), "model"), open_window=g(rooms, "_new_window"), claude_cmd=g(rooms, "claude_cmd", "claude"))
 
     # -- the list --
     def has_dw(self, path):
