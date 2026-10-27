@@ -44,6 +44,7 @@ interface ModeOutput {
     fun notifDismissAll(pkg: String?): Int = 0   // null = every app; returns how many were cleared (ongoing ones are kept)
     fun notifMute(pkg: String) {}
     fun installedApps(): List<InstalledApp> = emptyList()   // every launchable app (the leaves of the tree), this app left out
+    fun resetLearning(group: String?): Int = 0   // forget the picks and launches of one home-tree group (null = all); returns how many picks went
     fun appUse(): Map<String, AppUse> = emptyMap()   // launches per app in the last month and week
     fun appMuted(pkg: String): Boolean = false   // a muted app is not in the tree
     fun openApp(pkg: String): Boolean = false   // start the app (its launch intent)
@@ -149,7 +150,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_APPS, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL, CALL_IN, CALL_ACTIVE, CONTACTS, EMERGENCY }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_APPS, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL, CALL_IN, CALL_ACTIVE, CONTACTS, EMERGENCY, RESET, RESET_ASK }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: Phrase, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: Phrase, val run: () -> Unit)
@@ -356,7 +357,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_APPS, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY, Screen.CONTACTS -> Tone.MORE; Screen.CALL_IN, Screen.CALL_ACTIVE, Screen.EMERGENCY -> Tone.TIMER; Screen.VOLUME, Screen.VOLUME_DIAL -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_APPS, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY, Screen.CONTACTS -> Tone.MORE; Screen.CALL_IN, Screen.CALL_ACTIVE, Screen.EMERGENCY, Screen.RESET, Screen.RESET_ASK -> Tone.TIMER; Screen.VOLUME, Screen.VOLUME_DIAL -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -385,6 +386,7 @@ class ControllerMode(
         if (s == Screen.CALL_IN) intro += Intro(Voice.callFrom(out.callCaller() ?: "unknown"), null)
         if (s == Screen.CALL_ACTIVE) intro += Intro(Voice.CALL_ANSWERED, null)
         if (s == Screen.EMERGENCY) intro += Intro(Voice.EMERGENCY_ASK, null)
+        if (s == Screen.RESET_ASK) intro += Intro(resetGroup?.let { Voice.resetAsk(it) } ?: Voice.RESET_ASK_ALL, null)
         if (s == Screen.NOTIF_ACTIONS) openNotif()?.let { intro += Intro(notifRead(it), null) }
         curIntro = null
         if (s == Screen.VOLUME_DIAL) {   // no list: the song plays on and the button is the dial
@@ -590,6 +592,11 @@ class ControllerMode(
             Screen.EMERGENCY -> listOf(   // the safe answer is read first: a click right after hearing it picks it
                 Opt("emergency:no", Menu.EMERGENCY_NO) { pick("emergency:no"); show(Screen.PHONE) },
                 Opt("emergency:yes", Menu.EMERGENCY_YES) { pick("emergency:yes"); exit(false); out.speak(if (out.emergency()) Voice.EMERGENCY_CALLING else callFailure()) })
+            Screen.RESET -> listOf(Opt("reset:all", Menu.RESET_EVERYTHING) { pick("reset:all"); resetGroup = null; show(Screen.RESET_ASK) }) +
+                TreeLeaves.GROUPS.map { g -> Opt("reset:$g", Menu.resetGroup(g)) { pick("reset:$g"); resetGroup = g; show(Screen.RESET_ASK) } }   // each list of the home tree learns on its own
+            Screen.RESET_ASK -> listOf(   // the safe answer is read first
+                Opt("reset:no", Menu.EMERGENCY_NO) { pick("reset:no"); show(Screen.RESET) },
+                Opt("reset:yes", Menu.RESET_YES) { pick("reset:yes"); out.resetLearning(resetGroup); treeKey = null; treeCache = null; resetGroup = null; say(Voice.RESET_DONE); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } })
             Screen.PHONE -> listOf(   // Emergency is always first and cannot be switched off; then Call a contact
                 Opt("phone:emergency", Menu.EMERGENCY) { pick("phone:emergency"); show(Screen.EMERGENCY) },
                 Opt("phone:call", Menu.CALL_CONTACT) { pick("phone:call"); out.background({ contacts = out.callContacts() }, { if (contacts.isEmpty()) outro(if (out.lacks("contacts")) { out.needed("contacts"); Voice.NEED_CONTACTS } else Voice.NO_CONTACTS) else show(Screen.CONTACTS) }) }
@@ -600,7 +607,7 @@ class ControllerMode(
                 "dnd" -> if (out.dndAllowed()) Opt("phone:dnd", Menu.DND) { pick("phone:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null
                 "find" -> if (!out.wiredConnected()) Opt("phone:find", Voice.FIND_PHONE) { pick("phone:find"); find() } else null
                 else -> null
-            } }
+            } } + Opt("phone:reset", Menu.RESET_LEARNING) { pick("phone:reset"); show(Screen.RESET) }
             Screen.GAMES -> programOpts("games:").toList()   // every game lives here, in the order of the registry (Programs.kt); a new game is one more line there
             Screen.CALC -> calcOptions()
             Screen.ALARM_HOUR -> ALARM_HOURS.map { h -> Opt("alarm:h$h", Menu.hour(h)) { pick("alarm:h$h"); alarmHour = h; show(Screen.ALARM_MIN) } }
@@ -680,6 +687,7 @@ class ControllerMode(
         return TreeLeaves.edit(programs + apps, settings)
     }
 
+    private var resetGroup: String? = null   // the list picked on the Reset learning page (null = everything)
     private var treeKey: List<Any>? = null; private var treeCache: TreeNode? = null
     /** The search is exact but not free: when no weight, label or place changed since the last home list, the same tree is reused (unread changes only labels, so they are left out of the key). */
     private fun cachedTree(leaves: List<AppLeaf>): TreeNode {
@@ -1037,7 +1045,8 @@ class ControllerMode(
             Screen.FIND -> { findStack.removeLastOrNull(); if (findStack.isEmpty()) show(Screen.HUB) else show(Screen.FIND) }
             Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR -> show(Screen.HUB)
             Screen.ALARM_MIN -> show(Screen.ALARM_HOUR)
-            Screen.CONTACTS, Screen.EMERGENCY -> show(Screen.PHONE)
+            Screen.CONTACTS, Screen.EMERGENCY, Screen.RESET -> show(Screen.PHONE)
+            Screen.RESET_ASK -> show(Screen.RESET)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()
         }

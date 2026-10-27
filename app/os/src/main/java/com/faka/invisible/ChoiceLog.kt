@@ -5,7 +5,8 @@ package com.faka.invisible
  * time, screen, code (0 = wake), intent, sender, tags, time-to-pick ms (list picks only). Counters give favourites (most frequent senders we replied to)
  * and intent frequency (for ordering later). `append` writes the line to disk.
  */
-class ChoiceLog(initial: List<String> = emptyList(), private val append: (String) -> Unit = {}) {
+class ChoiceLog(initial: List<String> = emptyList(), private val append: (String) -> Unit = {}, private val rewrite: (List<String>) -> Unit = {}) {
+    private val lines = ArrayList<String>(initial)
     private val senders = HashMap<String, Int>()
     private val intents = HashMap<String, Int>()
     private val picks = ArrayList<Suggester.Pick>()
@@ -16,6 +17,7 @@ class ChoiceLog(initial: List<String> = emptyList(), private val append: (String
     fun record(ts: Long, screen: String, code: Int, intent: String, sender: String = "", tags: Set<String> = emptySet(), pickMs: Long = -1): String {
         val cols = listOf(ts.toString(), screen, code.toString(), intent, sender, tags.sorted().joinToString(",")) + (if (pickMs >= 0) listOf(pickMs.toString()) else emptyList())   // 7th column (only for list picks): ms from list start to the press
         val line = cols.joinToString("\t") { it.replace(Regex("[\\t\\n\\r]"), " ") }
+        lines += line
         count(line)
         append(line)
         return line
@@ -27,6 +29,18 @@ class ChoiceLog(initial: List<String> = emptyList(), private val append: (String
         intents[p[3]] = (intents[p[3]] ?: 0) + 1
         p[0].toLongOrNull()?.let { picks += Suggester.Pick(it, p[3], p.getOrNull(5)?.split(',')?.filter { t -> t.isNotBlank() }?.toSet() ?: emptySet()) }
         if (p[3].startsWith("send") && p[4].isNotBlank()) senders[p[4]] = (senders[p[4]] ?: 0) + 1
+    }
+
+    /** Forget the picks whose intent [match]es (all of them when it is `{ true }`), save the log, and return how many lines went. */
+    fun forget(match: (String) -> Boolean): Int {
+        val keep = lines.filter { l -> l.split('\t').getOrNull(3)?.let { !match(it) } ?: true }
+        val gone = lines.size - keep.size
+        if (gone == 0) return 0
+        lines.clear(); lines += keep
+        senders.clear(); intents.clear(); picks.clear()
+        keep.forEach { count(it) }
+        rewrite(keep)
+        return gone
     }
 
     fun intentCount(intent: String) = intents[intent] ?: 0

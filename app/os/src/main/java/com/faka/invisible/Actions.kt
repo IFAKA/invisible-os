@@ -135,6 +135,15 @@ object Actions {
             override fun notifAppHint(pkg: String) = try { app.packageManager.getApplicationInfo(pkg, 0).category } catch (e: Exception) { -1 }
             override fun installedApps() = DeviceApps.installedNow(app)
             override fun appUse() = DeviceApps.useNow(app)
+            override fun resetLearning(group: String?): Int {
+                val installed = DeviceApps.installedNow(app)
+                val cat = installed.associate { it.pkg to AppCategories.categoryOf(it.pkg, it.hint) }
+                val categoryOf = { k: String -> cat[k] ?: AppCategories.categoryOf(k) }
+                val gone = choices.forget { LearningReset.matches(group, it, categoryOf) }
+                LearningReset.saveBaseline(prefs(), DeviceApps.useNow(app), installed.map { it.pkg }.filter { LearningReset.matches(group, "app:$it", categoryOf) })
+                Trace.ev("learning", "reset ${group ?: "everything"}: $gone picks")
+                return gone
+            }
             override fun appMuted(pkg: String) = ControllerNotificationListener.mutes.isMuted(pkg)
             override fun openApp(pkg: String) = DeviceApps.open(app, pkg)
             override fun notifMutedCount() = ControllerNotificationListener.mutes.all().size
@@ -221,7 +230,8 @@ object Actions {
         mode.settings = SettingsStore.load(prefs())
         applyLanguage(mode.settings)
         val f = java.io.File(app.filesDir, "choices.log")
-        choices = ChoiceLog(if (f.exists()) f.readLines() else emptyList()) { line -> try { f.appendText(line + "\n") } catch (e: Exception) { Log.e(TAG, "choices.log write failed", e) } }
+        choices = ChoiceLog(if (f.exists()) f.readLines() else emptyList(), { line -> try { f.appendText(line + "\n") } catch (e: Exception) { Log.e(TAG, "choices.log write failed", e) } },
+            { keep -> try { f.writeText(keep.joinToString("") { it + "\n" }) } catch (e: Exception) { Log.e(TAG, "choices.log rewrite failed", e) } })
         val tf = java.io.File(app.filesDir, "tasks.txt")
         val mf = java.io.File(app.filesDir, "task_memory.txt")
         val rf = java.io.File(app.filesDir, "reply_memory.txt")

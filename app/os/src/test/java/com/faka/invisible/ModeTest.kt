@@ -774,15 +774,15 @@ class ModeTest {
     }
 
     @Test fun phoneGroupListsItemsInOrderAndDndOnlyWithAccess() {
-        val a = Rig(); a.wake(); a.pick("Phone"); a.advance(400 + 1300 * 7 + 100)
-        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say Do not disturb", "say ${Voice.FIND_PHONE}"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
-        val b = Rig(); b.dnd = false; b.wake(); b.pick("Phone"); b.advance(400 + 1300 * 6 + 100)
-        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say ${Voice.FIND_PHONE}"), b.spoken())
+        val a = Rig(); a.wake(); a.pick("Phone"); a.advance(400 + 1300 * 8 + 100)
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say Do not disturb", "say ${Voice.FIND_PHONE}", "say Reset learning"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
+        val b = Rig(); b.dnd = false; b.wake(); b.pick("Phone"); b.advance(400 + 1300 * 7 + 100)
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say ${Voice.FIND_PHONE}", "say Reset learning"), b.spoken())
     }
 
     @Test fun phoneGroupHidesFindWhenWired() {
-        val r = Rig(); r.wired = true; r.wake(); r.pick("Phone"); r.advance(400 + 1300 * 6 + 100)
-        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say Do not disturb"), r.spoken())
+        val r = Rig(); r.wired = true; r.wake(); r.pick("Phone"); r.advance(400 + 1300 * 7 + 100)
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say Do not disturb", "say Reset learning"), r.spoken())
     }
 
     @Test fun infoAndPhoneFollowTheSettings() {
@@ -792,7 +792,7 @@ class ModeTest {
         val r = Rig().withInfo(); r.m.settings = r.m.settings.copy(info = listOf("turn", "weather")); r.wake(); r.pick("Today"); r.advance(400 + 1300 * 3 + 100)
         assertEquals(listOf("say Next turn", "say Weather", "say Next turn"), r.spoken())
         val p = Rig(); p.m.settings = p.m.settings.copy(phone = listOf("torch", "volume")); p.wake(); p.pick("Phone"); p.advance(400 + 1300 * 5 + 100)
-        assertEquals(listOf("say Emergency", "say Call a contact", "say Flashlight", "say Volume", "say Emergency"), p.spoken())
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Flashlight", "say Volume", "say Reset learning"), p.spoken())
     }
 
     @Test fun infoGroupListsItemsInOrderAndTripleClickReturnsToTheHub() {
@@ -1059,7 +1059,7 @@ class ModeTest {
 
     @Test fun clickHoldWrapsWithTheRestartTone() {
         val r = scanReady(); r.clearLog()
-        r.m.onGesture(Gesture.CLICK_HOLD); r.advance(4000)
+        r.m.onGesture(Gesture.CLICK_HOLD); r.advance(5300)
         assertTrue(r.count("tone RESTART") >= 1)
     }
 

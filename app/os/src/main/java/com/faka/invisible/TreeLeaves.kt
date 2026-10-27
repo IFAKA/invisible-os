@@ -16,7 +16,7 @@ object TreeLeaves {
     /** Every installed app (muted ones and this app left out), with its place and weight. */
     fun apps(installed: List<InstalledApp>, use: Map<String, AppUse>, muted: (String) -> Boolean, unread: Map<String, Int>, picks: (String) -> Int): List<AppLeaf> =
         installed.filter { it.pkg != AppWeights.SELF && !muted(it.pkg) }.map { a ->
-            val u = use[a.pkg] ?: AppUse(0, 0)
+            val u = LearningReset.net(store, a.pkg, use[a.pkg] ?: AppUse(0, 0))
             AppLeaf(a.pkg, a.label, AppCategories.categoryOf(a.pkg, a.hint), unread[a.pkg] ?: 0, AppWeights.weight(a.pkg, u.month, u.week, picks("app:${a.pkg}")), rank = APP_RANK)
         }
 
