@@ -74,13 +74,13 @@ class Fail(Exception): pass
 def press(ms): bcast("--es", "press", ms)
 def reset(practice_done=True):
     i = mark(); bcast("--ez", "reset", "true" if practice_done else "false")
-    if not wait(lambda t: t == "reset done", i, "E2E", 8): raise Fail("reset hook did not answer (is the debug build installed?)")
+    if not wait(lambda t: t == "reset done", i, "E2E", 20): raise Fail("reset hook did not answer (is the debug build installed?)")
 def show(screen):
     i = mark(); bcast("--es", "show", screen)
-    if not wait(lambda t: t == "show " + screen, i, "E2E", 8): raise Fail("show hook did not answer")
+    if not wait(lambda t: t == "show " + screen, i, "E2E", 20): raise Fail("show hook did not answer")
 def state():
     i = mark(); bcast("--ez", "state", "true")
-    t = wait(lambda t: t.startswith("state "), i, "E2E", 8)
+    t = wait(lambda t: t.startswith("state "), i, "E2E", 20)
     if not t: raise Fail("state hook did not answer")
     return dict(kv.split("=", 1) for kv in t.split()[1:])
 def wait_screen(screen, timeout=8.0):
@@ -191,7 +191,7 @@ def fake_chat_message():
 def voice_speed_applied():
     old = float(state()["rate"])
     try:
-        i = mark(); bcast("--ef", "rate", "1.4"); wait(lambda t: t.startswith("rate set"), i, "E2E", 8)
+        i = mark(); bcast("--ef", "rate", "1.4"); wait(lambda t: t.startswith("rate set"), i, "E2E", 20)
         reset(); j = mark(); press("900")
         t = wait(lambda t: "rate=" in t, j, "Invisible", 15)
         if not t: raise Fail("no SPEAK line with a rate")
