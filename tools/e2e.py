@@ -201,8 +201,34 @@ def voice_speed_applied():
     finally:
         bcast("--ef", "rate", str(old)); reset()
 
+def rooms_go():
+    """Laptop tool against the fake Rooms server: hear the rooms, open the first, hear its need, click Go, the server got it."""
+    sys.path.insert(0, os.path.join(HERE, "..", "bridge")); import fake_rooms
+    home = os.path.expanduser("~/.config/invisible-bridge/")
+    real_url = open(home + "url").read().strip() if os.path.exists(home + "url") else ""
+    real_tok = open(home + "token").read().strip() if os.path.exists(home + "token") else ""
+    host = re.sub(r"^https?://", "", real_url).split(":")[0].split("/")[0] or "0.0.0.0"
+    srv = fake_rooms.start(host, 8799, "e2e-token")
+    try:
+        bcast("--es", "bridge", f"http://{host}:8799", "--es", "token", "e2e-token")
+        reset(); i = mark(); bcast("--es", "start", "claude")
+        heard_start("Alpha, needs you", i, 20)
+        need("Beta, working", i); need("Gamma, done", i)
+        press("120")   # picks Alpha, the item just heard
+        j = mark(); need("The design doc is ready", j)
+        heard_start("Go", j)
+        press("120")
+        need("Sent to Alpha", j)
+        if ("/room/act", {"id": "%1", "action": "go"}) not in fake_rooms.POSTS: raise Fail(f"fake server got {fake_rooms.POSTS}")
+        return "rooms heard, Alpha need heard, Go reached the server"
+    finally:
+        srv.shutdown()
+        bcast("--es", "bridge", real_url, "--es", "token", real_tok)
+        try: reset()
+        except Fail: pass
+
 SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, practice_end_to_end,
-             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, voice_speed_applied]
+             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, voice_speed_applied, rooms_go]
 
 def main():
     args = sys.argv[1:]
