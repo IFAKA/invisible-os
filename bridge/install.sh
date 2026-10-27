@@ -15,6 +15,9 @@ cat <<TXT
     "Notification": [
       { "matcher": "idle_prompt|elicitation_dialog", "hooks": [ { "type": "command", "command": "$HOOK", "timeout": 10 } ] }
     ],
+    "SubagentStop": [
+      { "hooks": [ { "type": "command", "command": "$HOOK", "timeout": 10 } ] }
+    ],
     "Stop": [
       { "hooks": [ { "type": "command", "command": "$HOOK", "timeout": 10 } ] }
     ]

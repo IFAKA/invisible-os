@@ -150,6 +150,11 @@ class EndToEnd(unittest.TestCase):
         stop["v"] = True; t.join(5)
         self.assertIsNone(self.hook(dict(inp, hook_event_name="PermissionRequest"), url="http://127.0.0.1:1"))
 
+    def test_subagent_done_names_who_and_what(self):
+        self.hook({"hook_event_name": "SubagentStop", "cwd": "/x/demo", "agent_type": "reader", "last_assistant_message": "Found  the bug."})
+        items = fake_phone.call(self.url, self.token, "/events?since=0&wait=0")["items"]
+        self.assertEqual([i["summary"] for i in items if i["kind"] == "done"][-1], "reader agent: Found the bug.")
+
     def test_done_and_needs(self):
         seen = []
         self.hook({"hook_event_name": "Stop", "cwd": "/x/demo", "last_assistant_message": "All  done.\n" + "z" * 300})
