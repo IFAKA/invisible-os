@@ -208,6 +208,18 @@ private val SPOKEN_ES = mapOf(
     "Level {0}." to "Nivel {0}.",
     "Game over. New best, {0}." to "Fin. Nuevo récord, {0}.",
     "Game over. Score {0}. Best {1}." to "Fin. Puntos {0}. Récord {1}.",
+    // ---- Claude ----
+    "Claude" to "Claude",
+    "Claude is not set up. In the app, type the bridge address and token." to "Claude no está configurado. En la app, escribe dirección y clave.",
+    "Listening for Claude. Hold three seconds to leave." to "Esperando a Claude. Mantén tres segundos para salir.",
+    "Nothing waiting." to "Nada pendiente.",
+    "Read again" to "Leer otra vez",
+    "Cannot reach the laptop." to "No llego al portátil.",
+    "The laptop is back." to "El portátil volvió.",
+    "Could not send. Try again." to "No se envió. Inténtalo otra vez.",
+    "Too late. Answered on the laptop." to "Muy tarde. Ya respondiste en el portátil.",
+    "Skipped." to "Omitido.",
+    "Waiting for you. Click to hear it again." to "Te espera. Clic para oírlo otra vez.",
     // ---- Where am I ----
     "Where am I" to "Dónde estoy",
     "Finding where you are." to "Buscando dónde estás.",
