@@ -113,6 +113,7 @@ class MainActivity : Activity() {
         page == Page.MENUMORE -> { open(Page.MENU); true }
         page != Page.HOME -> { open(Page.HOME); true }
         settingsOpen -> { settingsOpen = false; render(); true }
+        ScreenMirror.state.let { it.active && it.title.isNotEmpty() } && EventLog.running -> { Actions.screenPress(com.faka.invisible.voicekit.Gesture.TRIPLE); true }   // the OS is deep in a list: Back is the OS's Back, like the Back button on the picture
         else -> false
     }
     @Deprecated("Back goes up one step, then leaves")
