@@ -9,6 +9,7 @@ from urllib.parse import urlparse, parse_qs
 TOKEN = "fake-token"
 FIRE_DONE = []   # append a name: the next /events says that window finished
 POSTS = []   # (path, parsed json body)
+GETS = []   # path of every GET, in order (a test can wait for the phone to ask)
 
 ACTIONS = ["go", "yes", "commit", "push", "readall", "screen", "write", "stop"]
 ROOMS = [
@@ -32,7 +33,7 @@ class H(BaseHTTPRequestHandler):
         self.send_response(code); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
     def do_GET(self):
         if not self._ok(): return
-        u = urlparse(self.path); q = parse_qs(u.query)
+        u = urlparse(self.path); q = parse_qs(u.query); GETS.append(u.path)
         if u.path == "/rooms": self._json({"seq": 1, "rooms": getattr(self.server, "rooms", ROOMS)})
         elif u.path == "/room/last": self._json({"text": "Alpha last message. The design doc is ready."})
         elif u.path == "/room/screen": self._json({"text": "$ claude\n> working on the design doc\n  done"})

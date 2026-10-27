@@ -6,17 +6,28 @@ what the OS says is read from the SAY log (and the SPEAK log for the voice rate)
   tools/e2e.py                run every scenario, one line each, log in app/logs/e2e.log
   tools/e2e.py --only NAME    run scenarios whose name contains NAME (comma-separate for several)
   tools/e2e.py --list         list the scenarios
+  tools/e2e.py --all          run every scenario even if its last pass has the same inputs (same: NOCACHE=1)
+
+Result cache (app/logs/e2e-cache.json): a scenario is skipped ("SKIP name (same as pass at HH:MM)") when its last PASS had the same inputs:
+the installed APK (sha256), the phone build (fingerprint), the helper code of this file, the voice and pace settings, the fake server, and
+the scenario's own source. A FAIL is never cached. `--only NAME` always runs what it names.
+Speed: the voice is the instant stand-in (debug build: same SAY/SPEAK/started/ended events, no audio) and the menu silences are scaled; only
+button timing (350 ms gap, 500 ms hold, click-then-hold, the 500 ms reaction grace) stays real. wake_reads_home_menu, click_picks,
+voice_speed_applied and chat_arrival_spoken keep the REAL voice: they prove the engine starts, speaks at its rate and reads a message.
 
 Every scenario starts with the debug hook `reset` (no program, menu closed, speech stopped, fake notifications gone)
 and waits on log events, never on fixed sleeps. Safety: no scenario ever picks "Yes, call now", Answer, Reject or a
 real reply; the fake call and chat are notifications posted by the app itself whose buttons point at nobody.
 Exit code 1 if any scenario fails."""
-import subprocess, sys, time, re, threading, os, datetime
+import subprocess, sys, time, re, threading, os, datetime, hashlib, json, inspect
 
 PKG = "com.faka.invisible"
+GAP_S = 0.35     # Pacing.GAP_MS: the gesture is counted this long after its last press
+GRACE_S = 0.5    # ControllerMode graceMs: a click in the first 500 ms of an item is for the one before
 RECV = f"{PKG}/.AiTestReceiver"
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOG = os.path.join(HERE, "..", "app", "logs", "e2e.log")
+CACHE = os.path.join(HERE, "..", "app", "logs", "e2e-cache.json")
 
 def _serial():
     """The real phone: another session may have an emulator attached too."""
@@ -28,8 +39,31 @@ SERIAL = _serial()
 def adb(*a, timeout=20):
     return subprocess.run(["adb", "-s", SERIAL, *a], capture_output=True, text=True, timeout=timeout).stdout
 
+class Shell:
+    """ONE long-lived `adb shell` for every hook broadcast: no new adb process (about 100 ms on Wi-Fi) per call. The answers come back through
+    logcat events, never through this pipe, so its output is dropped. Commands run in order, which is the order the receiver sees them."""
+    def __init__(self): self.p = None
+    def _open(self):
+        self.p = subprocess.Popen(["adb", "-s", SERIAL, "shell"], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    def send(self, line):
+        for attempt in (0, 1):
+            try:
+                if self.p is None or self.p.poll() is not None: self._open()
+                self.p.stdin.write((line + "\n").encode()); self.p.stdin.flush(); return
+            except (BrokenPipeError, OSError):
+                self.p = None
+        raise Fail("adb shell pipe is broken")
+    def close(self):
+        if self.p and self.p.poll() is None:
+            try: self.p.stdin.write(b"exit\n"); self.p.stdin.flush(); self.p.wait(3)
+            except Exception: self.p.kill()
+SHELL = Shell()
+T = {"adb": 0.0, "press": 0.0}   # per scenario: seconds spent sending hooks, seconds of button timing we asked for (press lengths + the gesture gap)
+
 def bcast(*extra):
-    adb("shell", "am", "broadcast", "-n", RECV, *extra)
+    t0 = time.time()
+    SHELL.send(f"cmd activity broadcast -n {RECV} " + " ".join(extra))
+    T["adb"] += time.time() - t0
 
 # ---- log reader: one logcat process for the whole run; events are (time, kind, text) ----
 events = []; LOGCAT = []
@@ -43,7 +77,7 @@ def reader():
         m = LINE.match(line.rstrip("\n"))
         if not m: continue
         kind, text = m.group(2), m.group(3)
-        if kind == "Invisible" and not text.startswith(("SPEAK[", "MSG ", "TRACE media")): continue
+        if kind == "Invisible" and not text.startswith(("SPEAK[", "MSG ", "TRACE media", "TRACE notif posted")): continue
         with lock: events.append((time.time(), kind, text))
 
 def mark():
@@ -71,7 +105,15 @@ def said(text, i, timeout=15.0):
 class Fail(Exception): pass
 
 # ---- phone helpers ----
-def press(ms): bcast("--es", "press", ms)
+PRESS_END = [0.0]
+def press(ms):
+    """Send presses "down,gap,down..." in ms. A press never starts while the one before is still going on the phone, or within the gesture gap after it (they would merge)."""
+    d = max(0.0, PRESS_END[0] - time.time())
+    if d: time.sleep(d)
+    parts = [float(x) for x in ms.split(",")]
+    T["press"] += sum(parts[::2]) / 1000 + GAP_S   # the presses (every even slot is a press length) and the gap that joins them
+    bcast("--es", "press", ms)
+    PRESS_END[0] = time.time() + sum(parts) / 1000 + GAP_S + 0.05   # the gesture gap too: a press nearer than that would join this one (a click then a hold)
 def reset(practice_done=True):
     i = mark(); bcast("--ez", "reset", "true" if practice_done else "false")
     if not wait(lambda t: t == "reset done", i, "E2E", 20): raise Fail("reset hook did not answer (is the debug build installed?)")
@@ -105,6 +147,9 @@ def heard_start(text, i, timeout=15.0):
     need(text, i, timeout)
     with lock: k = max(n for n, (_, kd, t) in enumerate(events[i:], i) if kd == "SAY" and text.lower() in t.lower())
     if wait(lambda t: t == "speech started", k, "E2E", 6) is None: raise Fail(f"{text!r} was logged but the voice never started it")
+    with lock: st = next(tm for tm, kd, t in events[k:] if kd == "E2E" and t == "speech started")
+    d = st + GRACE_S + 0.03 - time.time()   # reaction grace: a click in the first 500 ms of an item is for the one before; wait for exactly that, then the click is for this item
+    if d > 0: time.sleep(d)
 
 # ---- scenarios ----
 def wake_reads_home_menu():
@@ -118,21 +163,20 @@ def wake_reads_home_menu():
 def click_picks():
     reset(); show("PHONE"); i = mark()
     heard_start("Emergency", i, 30)
-    time.sleep(0.8)   # past the 500 ms grace after the item starts, so the click is for Emergency
     press("120")   # a click right after hearing an item picks it
     need("Call the emergency number", i)
     wait_screen("EMERGENCY")
     return "Emergency picked"
 
 def triple_click_goes_back():
-    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i, 30); time.sleep(0.8); press("120"); wait_screen("EMERGENCY")
+    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i, 30); press("120"); wait_screen("EMERGENCY")
     j = mark(); heard_start("No, go back", j)
     press("100,150,100,150,100")
     wait_screen("PHONE")
     return "Emergency -> Phone"
 
 def click_hold_closes():
-    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i, 30)
+    reset(); show("PHONE"); i = mark(); heard_start("Call a contact", i)   # any heard item; the first is quickest
     press("120,150,900")
     wait_closed()
     return "menu closed"
@@ -159,11 +203,17 @@ def screen_mirrors_menu():
     if state().get("mirror", "").split(":")[0] != "false": raise Fail(f"mirror still on after close: {state()}")
     return "mirror shows the list and the click, and clears on close"
 
+def spoken(text, i, timeout=15.0):
+    """The line `text` was said AND its speech is over: a program that listens only after its sentence (the practice) ignores a click before that."""
+    need(text, i, timeout)
+    with lock: k = max(n for n, (_, kd, t) in enumerate(events[i:], i) if kd == "SAY" and text.lower() in t.lower())
+    if wait(lambda t: t == "speech ended", k, "E2E", 20) is None: raise Fail(f"{text!r} was said but its speech never ended")
+
 def practice_end_to_end():
     reset(False); i = mark(); press("900")
-    need("click once now", i, 20)
-    press("120"); need("click twice", i)
-    press("120,150,120"); need("click three times", i)
+    spoken("click once now", i, 20)
+    press("120"); spoken("click twice", i)
+    press("120,150,120"); spoken("click three times", i)
     press("100,150,100,150,100"); need("click, then hold", i)
     j = mark(); press("120,150,900")
     # the practice ends, the OS plays the close sound, then the home menu opens by itself
@@ -185,7 +235,7 @@ def phone_list():
     return "Call a contact first, Emergency last"
 
 def emergency_confirm_goes_back():
-    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i, 30); time.sleep(0.8); press("120"); wait_screen("EMERGENCY")
+    reset(); show("EMERGENCY")   # starts on the confirm screen: walking to it is click_picks' job
     j = mark(); heard_start("No, go back", j)
     if any("yes, call" in t.lower() for t in since(j, "SAY")): raise Fail("Yes was read before our click; refusing to click")   # safety: never risk the call
     press("120")   # the click lands on "No, go back"
@@ -206,7 +256,7 @@ def fake_chat_message():
     press("900")
     need("E2E Friend", i, 15); need("dinner", i)
     t0 = time.time()   # the reply options follow the message
-    while time.time() - t0 < 15 and len(set(since(i, "SAY"))) < 3: time.sleep(0.2)
+    wait(lambda t: len(set(since(i, "SAY"))) >= 3, i, "SAY", 15)
     h = list(dict.fromkeys(since(i, "SAY")))
     if len(h) < 3: raise Fail("message read but no options: " + " | ".join(h))
     return " | ".join(h[:5])
@@ -224,14 +274,16 @@ def chat_arrival_spoken():
 
 def live_app_first_on_home():
     """An ongoing notification with a chronometer and a Lap button comes first on home (before the groups); a static one does not; a click opens its actions."""
-    reset(); bcast("--es", "fake", "static"); bcast("--es", "fake", "live"); time.sleep(1.5)
+    reset(); n0 = mark(); bcast("--es", "fake", "static"); bcast("--es", "fake", "live")
+    for who in ("title=E2E Workout", "text=Connected"):   # both notifications reached the listener
+        if not wait(lambda t: who in t, n0, "Invisible", 10): raise Fail(f"the listener never took the fake notification ({who})")
+    state()   # one round trip through the main thread: the listener has finished taking them
     i = mark(); press("900")
     heard_start("12:30 running", i, 20)
     h = list(dict.fromkeys(since(i, "SAY")))
     if "running" not in h[0] and "running" not in (h[1] if len(h) > 1 else ""): raise Fail("the live entry is not first: " + " | ".join(h[:4]))
     if any("Connected" in l for l in h): raise Fail("a static ongoing notification was offered: " + " | ".join(h))
-    time.sleep(1.3)   # a click in the first moments of an item is for the one before it (reaction grace)
-    press("120")
+    press("120")   # heard_start waited out the reaction grace
     j = mark(); need("Lap", j, 15); need("Dismiss", j, 15)
     wait_screen("NOTIF_ACTIONS")
     press("100,150,100,150,100"); wait_screen("HUB")   # triple click = back to home
@@ -296,7 +348,13 @@ def rooms_waiting_on_home():
     srv = fake_rooms.start(host, 8797, "e2e-token")
     try:
         bcast("--es", "bridge", f"http://{host}:8797", "--es", "token", "e2e-token")
-        press("900"); time.sleep(3); press("100,150,900"); time.sleep(2)   # no reset: it would drop the Claude tool from the home list
+        g = len(fake_rooms.GETS); t0 = time.time()
+        while not any(p == "/rooms" for p in fake_rooms.GETS[g:]):   # a wake builds the home list, which asks the server how many wait (a fetch still hanging on the old address skips one wake: wake again)
+            if time.time() - t0 > 40: raise Fail("the home list never asked the server how many windows wait")
+            i = mark(); press("900"); need("", i, 10); press("100,150,900"); wait_closed()
+            u0 = time.time()
+            while not any(p == "/rooms" for p in fake_rooms.GETS[g:]) and time.time() - u0 < 0.6: time.sleep(0.03)
+        time.sleep(0.15)   # its answer is taken
         i = mark(); press("900")
         heard_start("needs you", i, 20)
         h = list(dict.fromkeys(since(i, "SAY")))
@@ -369,8 +427,9 @@ def computers_two():
         reset(); i = mark()
         work_fire.append("Omega"); home_fire.append("Sigma")
         need("Sigma, done", i, 25)
-        time.sleep(5)
-        if said("Omega", i, 1): raise Fail("heard Work (Omega) while Home is the active computer")
+        # Only the active computer is watched. Home's Sigma needed a poll plus the 3 s batch; a watched Work would have been polled in the same time and its Omega taken off the list (and heard with it).
+        time.sleep(0.4)
+        if said("Omega", i, 0.1) or not work_fire: raise Fail("heard or polled Work (Omega) while Home is the active computer")
         j = mark(); bcast("--es", "start", "claude")
         heard_start("Switch to Work", j, 40); press("120")
         need("Work, listening", j, 15)
@@ -403,6 +462,47 @@ def idle_clicks_go_to_the_player():
 SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, screen_mirrors_menu, screen_tap_picks, practice_end_to_end,
              phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, chat_arrival_spoken, live_app_first_on_home, voice_speed_applied, rooms_go, rooms_waiting_on_home, rooms_done_spoken, computers_two, idle_clicks_go_to_the_player, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
 
+# ---- voice and pace per scenario ----
+# Default: the instant voice (debug stand-in for the TTS engine: same SAY/SPEAK/"speech started"/ended events, no audio) and quicker menu silences.
+# REAL_VOICE scenarios prove the real engine plays: its start event, its rate, a message read aloud. PACE scales only the silences of the menu
+# (gap between items, screen-tone gap) in the app; button timing (350 ms gap, 500 ms hold, click-then-hold, the 500 ms reaction grace) is never scaled.
+REAL_VOICE = {"wake_reads_home_menu", "click_picks", "voice_speed_applied", "chat_arrival_spoken"}
+PACE = 0.8          # a click must land after the 500 ms grace and before the next item starts: the item window stays ~1.2 s (0.6 left only ~200 ms of margin)
+PACE_LISTEN = 0.0   # scenarios that only listen and never click an item in a list
+LISTEN_ONLY = {"phone_list", "fake_incoming_call", "fake_chat_message", "rooms_done_spoken", "practice_end_to_end", "idle_clicks_go_to_the_player", "computers_two"}
+
+def set_mode(f):
+    real = f.__name__ in REAL_VOICE
+    pace = 1.0 if real else PACE_LISTEN if f.__name__ in LISTEN_ONLY else PACE
+    bcast("--es", "voice", "real" if real else "instant", "--ef", "pace", str(pace))
+    return real
+
+def phone_inputs():
+    """What a pass depends on besides the code of this file: the installed app and the phone build."""
+    path = adb("shell", "pm", "path", PKG).strip().replace("package:", "").splitlines()[:1]
+    apk = adb("shell", "sha256sum", path[0]).split()[0] if path else "none"
+    fp = adb("shell", "getprop", "ro.build.fingerprint").strip()
+    return hashlib.sha256(f"{apk}|{fp}".encode()).hexdigest()
+
+def code_hash():
+    """The helper part of this file (everything but the scenarios), the voice/pace block and the fake server."""
+    src = open(os.path.abspath(__file__)).read()
+    a = src.index("# ---- scenarios ----"); b = src.index("# ---- voice and pace per scenario ----")
+    fake = os.path.join(HERE, "..", "bridge", "fake_rooms.py")
+    return src[:a] + src[b:] + (open(fake).read() if os.path.exists(fake) else "")
+
+def scenario_key(f, phone, code):
+    return hashlib.sha256((phone + code + inspect.getsource(f)).encode()).hexdigest()
+
+def cache_load():
+    try: return json.load(open(CACHE))
+    except Exception: return {}
+
+def cache_save(c):
+    tmp = CACHE + ".tmp"
+    with open(tmp, "w") as fh: json.dump(c, fh, indent=1, sort_keys=True)
+    os.replace(tmp, CACHE)
+
 def main():
     args = sys.argv[1:]
     if "--list" in args: print("\n".join(f.__name__ for f in SCENARIOS)); return 0
@@ -411,27 +511,51 @@ def main():
         k = args.index("--only"); only = [x for a in args[k + 1:k + 2] for x in a.split(",")]
     chosen = [f for f in SCENARIOS if not only or any(o in f.__name__ for o in only)]
     if not SERIAL: sys.exit("no phone connected (adb mdns services; adb connect IP:PORT)")
+    use_cache = not only and "--all" not in args and not os.environ.get("NOCACHE")
+    cache = cache_load(); phone = phone_inputs(); code = code_hash(); keys = {f.__name__: scenario_key(f, phone, code) for f in chosen}
+    skipped = []
+    if use_cache:
+        for f in list(chosen):
+            c = cache.get(f.__name__)
+            if c and c.get("key") == keys[f.__name__]:
+                line = f"SKIP {f.__name__} (same as pass at {c['at']})"; print(line, flush=True); skipped.append(line); chosen.remove(f)
+    if not chosen:
+        print(f"all {len(skipped)} scenarios skipped (nothing changed since their last pass); NOCACHE=1 or --all runs them anyway"); return 0
     threading.Thread(target=reader, daemon=True).start()
     import atexit; atexit.register(lambda: LOGCAT and LOGCAT[0].terminate())
-    time.sleep(0.5)
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
     lines = []; fails = 0; t_all = time.time()
-    adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity"); time.sleep(0.8)
-    for f in chosen:
-        t0 = time.time()
-        try: detail = f(); ok = True
-        except Fail as e: detail = str(e); ok = False
-        except Exception as e: detail = repr(e); ok = False
-        fails += not ok
-        line = f"{'PASS' if ok else 'FAIL'} {f.__name__:<28} {time.time()-t0:5.1f}s  {detail}"
-        print(line, flush=True); lines.append(line)
-    try: reset()
-    except Fail: pass
+    adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity")
+    t0 = time.time()   # the log reader is attached and the app answers the hooks: ask until it does
+    while True:
+        i = mark(); bcast("--ez", "state", "true")
+        if wait(lambda t: t.startswith("state "), i, "E2E", 1.0): break
+        if time.time() - t0 > 20: sys.exit("the debug hooks do not answer (is the debug build installed? app/run.sh)")
+    sums = {"press": 0.0, "adb": 0.0, "real": 0.0}
+    try:
+        for f in chosen:
+            t0 = time.time(); T["adb"] = T["press"] = 0.0
+            real = set_mode(f)
+            try: detail = f(); ok = True
+            except Fail as e: detail = str(e); ok = False
+            except Exception as e: detail = repr(e); ok = False
+            fails += not ok
+            if ok: cache[f.__name__] = {"key": keys[f.__name__], "at": datetime.datetime.now().strftime("%H:%M")}; cache_save(cache)
+            elif f.__name__ in cache: del cache[f.__name__]; cache_save(cache)
+            dt = time.time() - t0
+            sums["press"] += T["press"]; sums["adb"] += T["adb"]; sums["real"] += dt if real else 0
+            line = f"{'PASS' if ok else 'FAIL'} {f.__name__:<28} {dt:5.1f}s (press {T['press']:.1f}s, adb {T['adb']:.1f}s{', real voice' if real else ''})  {detail}"
+            print(line, flush=True); lines.append(line)
+        try: reset()
+        except Fail: pass
+    finally:
+        bcast("--es", "voice", "real", "--ef", "pace", "1.0")   # leave the phone as a person uses it
+        time.sleep(0.2); SHELL.close()
     adb("shell", "input", "keyevent", "KEYCODE_HOME")
-    summary = f"{len(chosen)-fails}/{len(chosen)} passed in {time.time()-t_all:.0f}s"
+    summary = f"{len(chosen)-fails}/{len(chosen)} passed{f' [ran: ' + ', '.join(f.__name__ for f in chosen) + f'] ({len(skipped)} skipped, unchanged)' if skipped else ''} in {time.time()-t_all:.0f}s (button timing {sums['press']:.0f}s, hook sends {sums['adb']:.1f}s, real-voice scenarios {sums['real']:.0f}s)"
     print(summary)
     with open(LOG, "a") as fh:
-        fh.write(f"# {datetime.datetime.now():%Y-%m-%d %H:%M:%S} {summary}\n" + "\n".join(lines) + "\n")
+        fh.write(f"# {datetime.datetime.now():%Y-%m-%d %H:%M:%S} {summary}\n" + "\n".join(lines + skipped) + "\n")
     return 1 if fails else 0
 
 if __name__ == "__main__":
