@@ -1,5 +1,5 @@
 #!/bin/sh
-# Prints what to add to Claude Code settings and how to start the bridge. It changes NOTHING on your machine.
+# Easier: sh setup.sh does all of this. This only prints what to add to Claude Code settings and how to start the bridge. It changes NOTHING on your machine.
 DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOK="python3 $DIR/hook.py"
 cat <<TXT

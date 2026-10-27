@@ -9,14 +9,21 @@ The laptop is a shop. Claude Code is a worker who sometimes needs a yes or no. `
 - `hook.py`: Claude Code runs it at each permission, question, notification and stop. It sends a note and waits for your answer.
 - If the desk is closed, or you do not answer in 10 minutes, `hook.py` says nothing. Claude Code then asks in the terminal as always. Nothing breaks.
 
-## Set up (3 steps)
-1. Run `./install.sh`. It prints the text to add to `~/.claude/settings.json`. It changes nothing itself.
-2. Run `python3 server.py`. It prints the address, the token and one **pair code** line that starts with `invisible-pair:`. (The token is saved in `~/.config/invisible-bridge/token`; only you can read it. `python3 server.py --show-token` prints the token and the pair code again. `--name Work` sets the name the phone shows; the default is the computer's short name.)
-3. Copy the pair code line. On the phone, open the app home screen, "Computers", "Add a computer", paste it (or tap "Paste from clipboard"), check the name, Save. No typing of the address or the token. ("Enter by hand" is still there.)
+## Set up (the whole story in 3 lines)
+1. On the computer, as the Mac user to add, run `sh bridge/setup.sh` (optional `--name Work`, `--port 8766`). It adds the Claude Code hooks to that user's `~/.claude/settings.json` (backup kept), starts the bridge at login (launchd, no terminal left open), and prints a QR code and the pair code line. Run it again any time: it changes nothing that is already right.
+2. On the phone: scan the QR with the camera app (it opens Invisible OS and adds the computer), or open Computers, Add a computer, and tap Paste from clipboard (a copied code is found by itself: "Found Work. Add?", then Add).
+3. Switch computers with "Switch to Work" in the Laptop tool, or tap the computer under Computers. The first computer you add is listened to at once; later ones wait until you switch.
+
+The first bridge on a Mac uses the Mac's name and port 8765. A second Mac user gets the next free port and the name "<mac>-<user>". The pair code carries the name, address and token, so there is nothing to type. If the checkout is not readable by that user, setup says so in one line (copy it to `/Users/Shared/invisible-bridge`). Not built yet: scanning inside the app (no scanner library is in the offline Gradle cache); the camera app does the scan.
+
+## By hand (what setup.sh does for you)
+- `./install.sh` prints the hooks text and a launchd file; it changes nothing itself.
+- `python3 server.py` prints the address, the token and the pair code line (token in `~/.config/invisible-bridge/token`, mode 600; `--show-token` prints them again; `--name Work`, `--port 8766` or `INVISIBLE_BRIDGE_PORT`).
+- Phone: Computers, Add a computer, paste the pair code ("Enter by hand" still takes the address and token).
+- `hook.py` finds its bridge in `~/.config/invisible-bridge/url`, which `server.py` writes in that user's home, so each Mac user's hooks call their own port.
 
 ## More than one computer
-You use one computer at a time. Each computer (or each Mac user) runs its own `server.py`, with its own token. Two bridges on the same Mac need two ports: the first uses 8765, start the second with `python3 server.py --port 8766` (or `INVISIBLE_BRIDGE_PORT=8766`). Add each one the same way: start it, copy the pair code line, paste it on the phone.
-The phone listens to ONE computer, the active one. To switch: in the earbud menu, Laptop tool, pick "Switch to Work" (it says "Work, listening"); or in the app, "Computers", tap the computer. It does not hear the others until you switch.
+You use one computer at a time; each computer or Mac user runs its own bridge with its own token. The phone listens to ONE computer, the active one, and does not hear the others until you switch.
 
 The phone and the laptop must reach each other (same Wi-Fi, or Tailscale). Anyone with the token can answer for you, so keep it private.
 
@@ -31,4 +38,4 @@ The phone and the laptop must reach each other (same Wi-Fi, or Tailscale). Anyon
 - Settings: `INVISIBLE_BRIDGE_PORT` (server), `INVISIBLE_BRIDGE_URL`, `INVISIBLE_BRIDGE_TIMEOUT` (hook).
 
 ## Tests
-`python3 -m unittest -v` in this folder. It starts a server, a fake phone and the hook, and checks Allow, Deny, Always allow, questions, timeout and bridge down. `fake_phone.py URL TOKEN [choice]` plays the phone by hand.
+`python3 -m unittest -v` in this folder (also `test_setup.py`: setup.sh with a temp HOME and a fake launchctl; `test_qr.py`: the QR encoder, checked by a small decoder and by Apple's reader on a Mac). It starts a server, a fake phone and the hook, and checks Allow, Deny, Always allow, questions, timeout and bridge down. `fake_phone.py URL TOKEN [choice]` plays the phone by hand.

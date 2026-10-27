@@ -1,6 +1,7 @@
 package com.faka.invisible.claude
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -112,5 +113,29 @@ class ComputersTest {
     }
     @Test fun switchLabels() {
         assertEquals("Switch to Work", ClaudeVoice.switchTo("Work").text)
+    }
+    @Test fun qrFormWithSlashesParses() {
+        val c = Computer("Work", "http://h:8766", "tok")
+        val link = Computers.pairCode(c).replaceFirst("invisible-pair:", "invisible-pair://")
+        assertEquals(c, Computers.parsePair(link))
+        assertEquals(c, Computers.parsePair("Found: " + Computers.pairCode(c) + " ok"))
+        assertNull(Computers.parsePair("invisible-pair://!!!"))
+    }
+    @Test fun firstPairedComputerIsActiveTheNextIsNot() {
+        val a = Computers.addPaired(emptyList(), Computer("Mac", "http://h:1", "t1"))
+        assertTrue(a.active); assertEquals("Mac", a.name)
+        assertEquals("Added Mac. The phone listens to it.", Computers.addedSentence(a))
+        val b = Computers.addPaired(a.list, Computer("Work", "http://h:2", "t2"))
+        assertFalse(b.active); assertEquals(2, b.list.size)
+        assertEquals("Added Work. Switch to it from the Laptop tool or tap it.", Computers.addedSentence(b))
+    }
+    @Test fun pairedNameClashGetsANumberAndSameBridgeIsNotAddedTwice() {
+        val l = Computers.addPaired(emptyList(), Computer("Mac", "http://h:1", "t1")).list
+        val b = Computers.addPaired(l, Computer("mac", "http://h:2", "t2"))
+        assertEquals("mac 2", b.name)
+        val again = Computers.addPaired(b.list, Computer("Other", "http://h:2", "t2"))
+        assertTrue(again.already); assertEquals(b.list, again.list); assertEquals("mac 2", again.name)
+        assertEquals("Computer", Computers.addPaired(emptyList(), Computer("  ", "http://h:3", "t")).name)
+        assertEquals("My Mac", Computers.addPaired(emptyList(), Computer("x", "http://h:3", "t"), name = " My   Mac ").name)
     }
 }

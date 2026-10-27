@@ -15,7 +15,7 @@ import java.io.IOException
  * thread. Only UI Kit parts.
  */
 class ComputersPage(private val a: Activity, private val k: Kit, private val body: LinearLayout, private val redraw: () -> Unit, private val openRooms: (String) -> Unit) {
-    private enum class Mode { LIST, ADD, NAME, HAND, ONE, RENAME }
+    private enum class Mode { LIST, ADD, HAND, ONE, RENAME }
     private class Status(val ok: Boolean, val windows: Int)
 
     private var mode = Mode.LIST
@@ -24,6 +24,8 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
     private var checking = false
     private var error = ""
     private var paired: Computer? = null
+    private var notice = ""
+    private var skipClip = false
     private var gen = 0
     private fun tr(t: String) = Translations.label(t)
 
@@ -32,7 +34,7 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
     fun back() { mode = Mode.LIST; error = ""; redraw() }
 
     /** Opening the page: show the list and ask every computer once. */
-    fun start() { mode = Mode.LIST; error = ""; check() }
+    fun start() { mode = Mode.LIST; error = ""; notice = ""; check() }
 
     private fun check() {
         val list = Actions.computers(); val g = ++gen
@@ -61,7 +63,6 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
         when (mode) {
             Mode.LIST -> drawList()
             Mode.ADD -> drawPaste()
-            Mode.NAME -> drawName()
             Mode.HAND -> drawAdd()
             Mode.ONE -> Computers.find(Actions.computers(), selected.orEmpty())?.let { drawOne(it) } ?: back()
             Mode.RENAME -> drawRename()
@@ -70,50 +71,58 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
 
     private fun drawList() {
         val list = Actions.computers()
-        if (list.isEmpty()) body.addView(k.text(tr("No computer yet. Run bridge/server.py on your computer, copy the pair code line it prints, then add it here."), Type.BODY, Ui.soft))
+        if (notice.isNotEmpty()) body.addView(k.text(notice, Type.BODY, Ui.good), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = k.dp(Ui.S1) })
+        if (list.isEmpty()) body.addView(k.text(tr("No computer yet. On the computer run: sh bridge/setup.sh. Then add it here."), Type.BODY, Ui.soft))
         else {
-            k.group(body, null, tr("The phone listens to one computer at a time. Tap a computer to listen to it. Two Macs or two users: each runs its own bridge (the second with --port 8766).")) {
+            k.group(body, null, tr("1. On the computer, as the user to add, run: sh bridge/setup.sh. 2. Here: Add a computer, then scan the QR with the camera or paste the code. 3. Switch with the Laptop tool or tap a computer.")) {
                 list.forEach { c -> k.dotRow(this, dot(c), if (isActive(c)) c.name + " · " + tr("Listening") else c.name, summary(c)) { Actions.setActive(c.name); redraw() } }
             }
             list.forEach { c -> body.addView(k.quiet(tr("Rename or remove {0}").replace("{0}", c.name)) { selected = c.name; mode = Mode.ONE; error = ""; redraw() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) }) }
         }
-        body.addView(k.btn(tr("Add a computer"), true) { mode = Mode.ADD; error = ""; redraw() }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(Ui.S2) })
+        body.addView(k.btn(tr("Add a computer"), true) { mode = Mode.ADD; error = ""; notice = ""; paired = null; skipClip = false; redraw() }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(Ui.S2) })
     }
 
-    /** Step 1 of adding: one field for the pair code that bridge/server.py prints. */
+    private fun clip(): String {
+        val cm = a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        return try { cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(a)?.toString().orEmpty() } catch (_: RuntimeException) { "" }
+    }
+    private fun known(c: Computer) = Actions.computers().any { it.url.trim() == c.url.trim() && it.token == c.token }
+
+    /** One tap adds: the name is filled in, so "Add" is the only step. */
+    private fun addNow(c: Computer, name: String) {
+        val r = Computers.addPaired(Actions.computers(), c, name)
+        if (!r.already) Actions.setComputers(r.list)
+        notice = tr(Computers.addedSentence(r)); error = ""; paired = null; mode = Mode.LIST; check()
+    }
+
+    /** Adding: if the clipboard already holds a pair code it is offered at once ("Found Work. Add?"); otherwise paste it. */
     private fun drawPaste() {
-        val code = k.input(tr("Paste the pair code")).apply { minLines = 3; maxLines = 5; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE }
+        if (paired == null && !skipClip) Computers.parsePair(clip())?.takeIf { !known(it) }?.let { paired = it }
+        val found = paired
+        if (found != null) { drawFound(found); return }
+        val code = k.input(tr("Or paste the pair code here")).apply { minLines = 2; maxLines = 4; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE }
         val note = k.text(error, Type.CAPTION, Ui.bad)
-        fun next(text: String) {
+        fun take(text: String) {
             val c = Computers.parsePair(text)
             if (c == null) { note.text = tr("That is not a pair code. Copy the whole line that starts with invisible-pair:"); return }
-            paired = c; error = ""; mode = Mode.NAME; redraw()
+            paired = c; error = ""; redraw()
         }
-        k.card(body, tr("Add a computer"), tr("Run bridge/server.py on that computer, copy the line that starts with invisible-pair: and paste it here.")) {
-            addView(code, LinearLayout.LayoutParams(-1, -2))
-            addView(k.btn(tr("Next"), true) { next(code.text.toString()) }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
-            addView(k.btn(tr("Paste from clipboard")) {
-                val cm = a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                next(cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(a)?.toString().orEmpty())
-            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
+        k.card(body, tr("Add a computer"), tr("On that computer run: sh bridge/setup.sh. Scan the QR code it shows with this phone's camera app (it opens Invisible OS). Or copy the pair code line and paste it.")) {
+            addView(k.btn(tr("Paste from clipboard"), true) { take(clip()) }, LinearLayout.LayoutParams(-1, k.dp(52)))
+            addView(code, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
+            addView(k.btn(tr("Add this code")) { take(code.text.toString()) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
             addView(k.quiet(tr("Enter by hand")) { mode = Mode.HAND; error = ""; redraw() })
             addView(note)
         }
     }
 
-    /** Step 2 of adding: the name from the code, which you can change. */
-    private fun drawName() {
-        val c = paired ?: run { back(); return }
+    private fun drawFound(c: Computer) {
         val name = k.input(tr("Name")).apply { minLines = 1; maxLines = 1; setText(c.name) }
         val note = k.text(error, Type.CAPTION, Ui.bad)
-        k.card(body, tr("Add a computer"), c.url) {
+        k.card(body, tr("Found {0}. Add?").replace("{0}", c.name.ifEmpty { tr("a computer") }), c.url) {
             addView(name, LinearLayout.LayoutParams(-1, -2))
-            addView(k.btn(tr("Save"), true) {
-                val list = Actions.computers()
-                val p = Computers.problem(list, name.text.toString(), c.url, c.token)
-                if (p != null) note.text = tr(p)
-                else { Actions.setComputers(Computers.add(list, c.copy(name = name.text.toString()))); error = ""; paired = null; mode = Mode.LIST; check() }
-            }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+            addView(k.btn(tr("Add"), true) { addNow(c, name.text.toString()) }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+            addView(k.quiet(tr("Use another code")) { paired = null; skipClip = true; error = ""; redraw() })
             addView(note)
         }
     }

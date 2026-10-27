@@ -35,6 +35,15 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <activity android:name=".PairActivity" android:exported="true" android:label="Invisible OS"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" android:excludeFromRecents="true" android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="invisible-pair" />
+            </intent-filter>
+        </activity>
         <activity android:name=".HandsFreeActivity" android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:showWhenLocked="true" android:excludeFromRecents="true" android:noHistory="true">
