@@ -225,12 +225,12 @@ def live_app_first_on_home():
     """An ongoing notification with a chronometer and a Lap button comes first on home (before the groups); a static one does not; a click opens its actions."""
     reset(); bcast("--es", "fake", "static"); bcast("--es", "fake", "live"); time.sleep(1.5)
     i = mark(); press("900")
-    need("12:30 running", i, 20)
-    wait(lambda t: len(set(since(i, "SAY"))) >= 4, i, "SAY", 20)
+    heard_start("12:30 running", i, 20)
     h = list(dict.fromkeys(since(i, "SAY")))
     if "running" not in h[0] and "running" not in (h[1] if len(h) > 1 else ""): raise Fail("the live entry is not first: " + " | ".join(h[:4]))
     if any("Connected" in l for l in h): raise Fail("a static ongoing notification was offered: " + " | ".join(h))
-    press("120")   # a click right after hearing it picks it
+    time.sleep(1.3)   # a click in the first moments of an item is for the one before it (reaction grace)
+    press("120")
     j = mark(); need("Lap", j, 15); need("Dismiss", j, 15)
     wait_screen("NOTIF_ACTIONS")
     press("100,150,100,150,100"); wait_screen("HUB")   # triple click = back to home
