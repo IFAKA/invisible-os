@@ -68,6 +68,15 @@ class BridgeClient(base: String, private val token: String) {
         val a = json("/projects").optJSONArray("projects") ?: JSONArray()
         return (0 until a.length()).mapNotNull { i -> val p = a.getJSONObject(i); if (p.optString("path").isBlank()) null else Project(p.optString("name").ifBlank { p.optString("path").substringAfterLast('/') }, p.optString("path"), p.optInt("uses")) }
     }
+    /** GET /areas. */
+    @Throws(IOException::class)
+    fun areas(): List<Area> {
+        val a = json("/areas").optJSONArray("areas") ?: JSONArray()
+        return (0 until a.length()).mapNotNull { i -> val p = a.getJSONObject(i); if (p.optString("path").isBlank()) null else Area(p.optString("name").ifBlank { p.optString("path").substringAfterLast('/') }, p.optString("path"), p.optInt("uses")) }
+    }
+    /** POST /project/new: make the folder in [area] (a path from [areas]), git init, open claude there, type [ask] if not blank. */
+    @Throws(IOException::class) fun newProject(area: String, name: String, ask: String): Boolean =
+        json("/project/new", JSONObject().put("area", area).put("name", name).apply { if (ask.isNotBlank()) put("ask", ask) }.toString(), "POST", 15_000).optBoolean("ok")
     /** POST /project/open: a new tmux window with claude; mode is "continue" or "new". */
     @Throws(IOException::class) fun openProject(path: String, mode: String): Boolean = json("/project/open", JSONObject().put("path", path).put("mode", mode).toString(), "POST", 10_000).optBoolean("ok")
 

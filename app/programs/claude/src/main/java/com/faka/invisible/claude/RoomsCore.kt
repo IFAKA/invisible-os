@@ -11,6 +11,9 @@ data class Room(val id: String, val name: String, val project: String, val kind:
 /** A folder you can open a Claude chat in. */
 data class Project(val name: String, val path: String, val uses: Int)
 
+/** A parent folder where a new project may be made (GET /areas). */
+data class Area(val name: String, val path: String, val uses: Int)
+
 /** The server says a room turned to "needs" (an /events item of type room). */
 data class RoomEvent(val id: String, val name: String, val state: String)
 

@@ -252,6 +252,21 @@ object Actions {
     }
     private var backAfterEnd: (() -> Boolean)? = null
 
+    /** [count] Writes in a row. Nothing written in the first = back to the Laptop tool. After the last, [finish] runs off the main thread and its phrase is said. */
+    private fun writeChain(count: Int, got: List<String>, finish: (List<String>) -> Phrase) {
+        var text = ""
+        val p = WriteProgram(writeServices, { t -> text = t; true }, Frame())
+        startProgram(p)
+        backAfterEnd = {
+            val all = got + text
+            when {
+                got.isEmpty() && text.isEmpty() -> { handler.postDelayed({ Programs.byId("hub:claude")?.let { startProgramEntry(it) } }, BACK_DELAY_MS); true }
+                all.size < count -> { handler.postDelayed({ writeChain(count, all, finish) }, BACK_DELAY_MS); true }
+                else -> { Thread({ val said = finish(all); handler.post { say(said, true) } }, "rooms-finish").start(); false }
+            }
+        }
+    }
+
     /** Dev tool (AiTestReceiver): start Write into the field that has focus, as the hub item does. */
     /** Dev: connect to the music app's browser service and log its tree two levels deep. */
     fun browseMusicDev() = handler.post {
@@ -409,6 +424,9 @@ object Actions {
     val roomsPort = object : RoomsPort {
         override fun write(sendTo: (String) -> Boolean) {
             handler.post { launchWrite(sendTo, null) { Programs.byId("hub:claude")?.let { startProgramEntry(it) } } }
+        }
+        override fun writeSeq(count: Int, finish: (List<String>) -> Phrase) {
+            handler.post { writeChain(count, emptyList(), finish) }
         }
     }
     /** A question came while no program was running: tell the user with the Claude sound; if the menu is not in use, open the tool so the next click answers. */

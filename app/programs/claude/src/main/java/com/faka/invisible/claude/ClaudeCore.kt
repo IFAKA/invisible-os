@@ -35,6 +35,8 @@ sealed class Choice {
     object No : Choice()
     object Yes : Choice()
     data class ProjectPick(val project: Project) : Choice()
+    object NewProjectPick : Choice()
+    data class AreaPick(val area: Area) : Choice()
     object ContinueChat : Choice()
     object NewChat : Choice()
     data class Option(val text: String) : Choice()

@@ -24,6 +24,9 @@ object ClaudeSettings {
 interface RoomsPort {
     /** Leave this tool and open Write; [sendTo] gets the finished text (false = not sent). The OS comes back to this tool if nothing was written. */
     fun write(sendTo: (String) -> Boolean)
+    /** Leave this tool and open Write [count] times in a row (each text is "" when nothing was written). If the first is empty the OS comes
+     *  back to this tool; otherwise [finish] gets the texts, runs off the main thread, and the phrase it returns is spoken. */
+    fun writeSeq(count: Int, finish: (List<String>) -> Phrase)
 }
 
 /** Timers on the host's handler, one set per run. */
@@ -65,6 +68,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     private var room: Room? = null
     private var projects: List<Project> = emptyList()
     private var project: Project? = null
+    private var areas: List<Area> = emptyList()
     private var pending: RoomAction? = null
 
     private fun label(c: Choice): Phrase = when (c) {
@@ -79,6 +83,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         is Choice.ProjectPick -> Phrase.content(c.project.name, "en")
         Choice.ContinueChat -> ClaudeVoice.CONTINUE_CHAT
         Choice.NewChat -> ClaudeVoice.NEW_CHAT
+        Choice.NewProjectPick -> ClaudeVoice.NEW_PROJECT
+        is Choice.AreaPick -> Phrase.content(c.area.name, "en")
     }
 
     private val scanner: Scanner<Choice> by lazy {
@@ -229,7 +235,26 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
 
     private fun showProjects() {
         onBack = { loadRooms() }
-        showList(projects.map { Choice.ProjectPick(it) }, if (projects.isEmpty()) ClaudeVoice.NO_ROOMS else null)
+        showList(listOf<Choice>(Choice.NewProjectPick) + projects.map { Choice.ProjectPick(it) }, null)
+    }
+
+    private fun loadAreas() {
+        scanner.stop(); awaitItem = false; asking = false
+        phase = Phase.LOADING
+        bg({ client.areas() }) { list ->
+            if (list == null) unreachable { loadAreas() }
+            else { areas = list; onBack = { showProjects() }; showList(list.map { Choice.AreaPick(it) }, if (list.isEmpty()) ClaudeVoice.NO_AREAS else null) }
+        }
+    }
+
+    /** Ask for the name, then the first message, with Write; then make the project. */
+    private fun newProject(a: Area) {
+        val c = client
+        releaseQuietly()
+        port.writeSeq(2) { texts ->
+            val name = texts[0]
+            try { if (c.newProject(a.path, name, texts[1])) ClaudeVoice.started(name) else ClaudeVoice.FAILED } catch (_: IOException) { ClaudeVoice.NOT_REACHABLE }
+        }
     }
 
     private fun showModes(p: Project) {
@@ -270,6 +295,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
                 Choice.No -> room?.let { showActions(it, null) }
                 Choice.Yes -> { val r = room; val a = pending; if (r != null && a != null) act(r, a) }
                 is Choice.ProjectPick -> showModes(c.project)
+                Choice.NewProjectPick -> loadAreas()
+                is Choice.AreaPick -> newProject(c.area)
                 Choice.ContinueChat -> openProject("continue")
                 Choice.NewChat -> openProject("new")
                 else -> {}
