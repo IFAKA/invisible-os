@@ -250,7 +250,9 @@ class ControllerMode(
                 Phase.SCAN -> {   // one click chooses the option spoken last
                     val i = bind(firstPress) ?: return    // nothing spoken yet: ignore
                     noteReaction(i, firstPress)
-                    stopAll(); code = i + 1; pickMs = firstPress - scanStartedAt; list.items[i].run(); pickMs = -1
+                    stopAll(); code = i + 1; pickMs = firstPress - scanStartedAt
+                    com.faka.invisible.oskit.Trace.ev("item", "screen=${screen.name} item=${i + 1}/${list.items.size} text=${com.faka.invisible.voicekit.ScreenMirror.items.getOrNull(i) ?: "?"} reactionMs=$pickMs")
+                    list.items[i].run(); pickMs = -1
                 }
                 Phase.INTRO -> skipIntro()
                 Phase.WAIT -> { val n = waitNext; stopAll(); n?.invoke() }
@@ -264,7 +266,9 @@ class ControllerMode(
     fun pickAt(i: Int, text: String): Boolean {
         if (!active || finding || pending != null || phase != Phase.SCAN || i !in list.items.indices) return false
         if (com.faka.invisible.voicekit.ScreenMirror.items.getOrNull(i) != text) return false
-        stopAll(); code = i + 1; pickMs = -1; list.items[i].run()
+        stopAll(); code = i + 1; pickMs = -1
+        com.faka.invisible.oskit.Trace.ev("item", "screen=${screen.name} item=${i + 1}/${list.items.size} text=$text via=app-screen")
+        list.items[i].run()
         return true
     }
 
@@ -309,6 +313,7 @@ class ControllerMode(
         fromHub = false; speechOpen = false
         hintPending = learning()
         out.log("MODE enter")
+        com.faka.invisible.oskit.Trace.ev("wake", "menu on pausedMusic=$pausedByUs queue=${queue.size}")
         out.choice(if (queue.isEmpty()) "HUB" else if (queue[0] == null) "TIMER_DONE" else "MESSAGE", 0, "wake", queue.getOrNull(0)?.sender ?: "")
         showQueueItemOrHub()
     }
@@ -350,6 +355,7 @@ class ControllerMode(
         val s = notifGuard(s0)
         stopAll(); lookupId++
         screen = s; phase = Phase.INTRO
+        com.faka.invisible.oskit.Trace.ev("screen", "${s.name} title=${mirrorTitle(s)}")
         com.faka.invisible.voicekit.ScreenMirror.setTitle(mirrorTitle(s))
         if (!backNav) tn(tone(s)); backNav = false
         intro.clear()
@@ -1074,6 +1080,7 @@ class ControllerMode(
         com.faka.invisible.voicekit.ScreenMirror.clear()
         if (pausedByUs) { pausedByUs = false; out.resumeMusic() }
         out.log("MODE exit")
+        com.faka.invisible.oskit.Trace.ev("exit", "menu off from ${screen.name} tone=$withTone")
         if (withTone) tn(Tone.EXIT)
     }
 

@@ -24,7 +24,11 @@ object VoiceKit {
         if (ready) return
         app = ctx.applicationContext; this.handler = handler; this.watcher = watcher
         val tones = TonePlayer(app, handler)
-        val speech = TtsSpeech(app, handler, tones, rate, listener)
+        val traced = object : SpeechListener {
+            override fun started() { narrator.speechStarted(); listener.started() }
+            override fun ended() = listener.ended()
+        }
+        val speech = TtsSpeech(app, handler, tones, rate, traced)
         narrator = Narrator(speech, tones, handler)
         buttons = ButtonInput(handler, narrator, target)
         speech.start(); neural = speech.neural

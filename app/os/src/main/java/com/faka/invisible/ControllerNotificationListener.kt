@@ -113,9 +113,10 @@ class ControllerNotificationListener : NotificationListenerService() {
 
     override fun onListenerDisconnected() { live = null }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification) = take(sbn)
+    override fun onNotificationPosted(sbn: StatusBarNotification) { traceNotif("posted", sbn); take(sbn) }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        traceNotif("removed", sbn)
         if (sbn.key == ringing?.key || sbn.key == ongoingKey) {
             if (sbn.key == ringing?.key) ringing = null
             if (sbn.key == ongoingKey) ongoingKey = null

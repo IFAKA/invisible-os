@@ -179,6 +179,7 @@ object Actions {
             override fun suggest(candidates: Collection<String>, now: Long, others: Collection<String>, accept: (String, Double, Int) -> Boolean) = Suggester.top(choices.history(), candidates, now, tags = context, others = others, accept = accept)
             override fun setContext(tags: Set<String>) { context = tags }
             override fun choice(screen: String, code: Int, intent: String, sender: String, pickMs: Long) {
+                com.faka.invisible.oskit.Trace.ev("pick", "screen=$screen code=$code intent=$intent${if (sender.isNotBlank()) " sender=$sender" else ""} reactionMs=$pickMs")
                 choices.record(System.currentTimeMillis(), screen, code, intent, sender, context, pickMs)
             }
         },
@@ -364,6 +365,7 @@ object Actions {
     private fun startProgram(p: Program) {
         running?.stop()
         running = p
+        com.faka.invisible.oskit.Trace.ev("program", "start ${p.javaClass.simpleName}")
         p.start(object : ProgramHost {
             override val context get() = app
             override val handler get() = this@Actions.handler
@@ -375,7 +377,7 @@ object Actions {
             override fun resumeMusic() = resumeMusicNow()
             override fun log(line: String) { Log.d(TAG, line); EventLog.add(line) }
             override fun outputDevice() = outputDeviceKey()
-            override fun ended() { if (running === p) running = null; com.faka.invisible.voicekit.ScreenMirror.clear(); val back = backAfterEnd; backAfterEnd = null; if (back == null || !back()) gameEnded() }
+            override fun ended() { com.faka.invisible.oskit.Trace.ev("program", "end ${p.javaClass.simpleName}"); if (running === p) running = null; com.faka.invisible.voicekit.ScreenMirror.clear(); val back = backAfterEnd; backAfterEnd = null; if (back == null || !back()) gameEnded() }
         })
     }
 
@@ -681,10 +683,10 @@ object Actions {
 
     private fun pauseMusicNow(): Boolean {
         val c = otherSessions().firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
-        if (c == null) { Log.d(TAG, "MODE no music to pause"); return false }
+        if (c == null) { Log.d(TAG, "MODE no music to pause"); com.faka.invisible.oskit.Trace.ev("music", "pause: no playing session (others=${otherSessions().joinToString { it.packageName + ":" + it.playbackState?.state }})"); return false }
         c.transportControls.pause()
         pausedPkg = c.packageName
-        Log.d(TAG, "MODE pause music ${c.packageName}")
+        Log.d(TAG, "MODE pause music ${c.packageName}"); com.faka.invisible.oskit.Trace.ev("music", "pause sent pkg=${c.packageName}")
         return true
     }
 
@@ -693,11 +695,11 @@ object Actions {
         pausedPkg = null
         val all = otherSessions()
         val other = all.firstOrNull { it.packageName != pkg && it.playbackState?.state == PlaybackState.STATE_PLAYING }
-        if (other != null) { Log.d(TAG, "MODE resume skipped, ${other.packageName} is playing"); return }
+        if (other != null) { Log.d(TAG, "MODE resume skipped, ${other.packageName} is playing"); com.faka.invisible.oskit.Trace.ev("music", "resume skipped: ${other.packageName} is playing"); return }
         val c = all.firstOrNull { it.packageName == pkg }
-        if (c == null) { Log.d(TAG, "MODE resume skipped, $pkg session gone"); return }
+        if (c == null) { Log.d(TAG, "MODE resume skipped, $pkg session gone"); com.faka.invisible.oskit.Trace.ev("music", "resume skipped: $pkg session gone"); return }
         c.transportControls.play()
-        Log.d(TAG, "MODE resume music $pkg")
+        Log.d(TAG, "MODE resume music $pkg"); com.faka.invisible.oskit.Trace.ev("music", "resume sent pkg=$pkg")
     }
 
     private fun forwardToMusic(what: Forward) {
@@ -705,14 +707,14 @@ object Actions {
             val msm = app.getSystemService(MediaSessionManager::class.java)
             val c = msm.getActiveSessions(ComponentName(app, ControllerNotificationListener::class.java))
                 .firstOrNull { it.packageName != app.packageName }
-            if (c == null) { Log.d(TAG, "FORWARD none (no other media session)"); return }
+            if (c == null) { Log.d(TAG, "FORWARD none (no other media session)"); com.faka.invisible.oskit.Trace.ev("media", "replay ${what.name.lowercase()}: no other media session"); return }
             val t = c.transportControls
             when (what) {
                 Forward.PLAY_PAUSE -> if (c.playbackState?.state == PlaybackState.STATE_PLAYING) t.pause() else t.play()
                 Forward.NEXT -> t.skipToNext()
                 Forward.PREVIOUS -> t.skipToPrevious()
             }
-            Log.d(TAG, "FORWARD ${what.name.lowercase()} to ${c.packageName}")
+            Log.d(TAG, "FORWARD ${what.name.lowercase()} to ${c.packageName}"); com.faka.invisible.oskit.Trace.ev("media", "replay ${what.name.lowercase()} pkg=${c.packageName}")
         } catch (e: SecurityException) {
             Log.d(TAG, "FORWARD none (notification access is OFF)")
         }

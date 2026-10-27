@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
+import com.faka.invisible.oskit.Trace
 
 /**
  * ORGANISM. The one button. Takes every key from the engines (media session or accessibility), drops duplicates, hands the
@@ -41,7 +42,7 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
     private var rawUpAt = -1L                  // when the last press in a program ended
     private var rawLastLen = Long.MAX_VALUE    // how long that press was: only a click counts before the hold
     private var rawUpWall = 0L                 // rawUpAt on the uptime clock, for the assistant signal (it has no key times)
-    private val rawExit = Runnable { if (rawDownAt >= 0) { rawDownAt = -1; Log.d(TAG, "GESTURE click_hold in program: exit"); target.exitProgram() } }
+    private val rawExit = Runnable { if (rawDownAt >= 0) { rawDownAt = -1; Log.d(TAG, "GESTURE click_hold in program: exit"); Trace.ev("gesture", "click_hold in program: exit"); target.exitProgram() } }
     private val detector = GestureDetector(
         schedule = { delay, task -> val r = Runnable(task); gestureTimer = r; handler.postDelayed(r, delay) },
         cancel = { gestureTimer?.let { handler.removeCallbacks(it) }; gestureTimer = null },
@@ -52,7 +53,8 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
     override fun key(source: String, isDown: Boolean, repeat: Int, downTime: Long, time: Long) {
         if (repeat > 0) return
         lastKeyAt = SystemClock.uptimeMillis()
-        if (!deduper.accept(source, isDown, downTime)) { Log.d(TAG, "DEDUPE dropped $source down=$downTime"); return }
+        if (!deduper.accept(source, isDown, downTime)) { Log.d(TAG, "DEDUPE dropped $source down=$downTime"); Trace.ev("key", "$source ${if (isDown) "down" else "up"} dropped (duplicate)"); return }
+        Trace.ev("key", "$source ${if (isDown) "down" else "up"} menu=${target.menuActive} prog=${target.raw()?.javaClass?.simpleName ?: "-"}")
         target.raw()?.let { r -> if (isDown) rawDown(r, time) else rawUp(r, time); return }   // a program owns the raw button
         if (isDown && target.menuActive) narrator.beep(Tone.TAP)   // blind: every press is answered at once
         if (isDown) detector.down(time) else detector.up(time)
@@ -83,6 +85,7 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
      */
     fun assistHold() {
         Log.d(TAG, "ASSIST signal raw=${target.raw()?.javaClass?.simpleName} rawDownAt=$rawDownAt")
+        Trace.ev("key", "assist signal menu=${target.menuActive} prog=${target.raw()?.javaClass?.simpleName ?: "-"}")
         if (target.raw() != null) {   // a program: the signal without key events after a click is click then hold
             if (target.raw()?.exitOnClickHold != false && rawDownAt < 0 && rawLastLen < Pacing.HOLD_MS && SystemClock.uptimeMillis() - rawUpWall < CLICK_THEN_HOLD_MS) { Log.d(TAG, "ASSIST click_hold in program: exit"); target.exitProgram() }
             if (target.raw()?.exitOnClickHold == false && rawDownAt < 0) target.raw()?.assistHold()   // Write: the hold picks the right word
@@ -99,6 +102,9 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
         if (g == Gesture.HOLD || g == Gesture.CLICK_HOLD) lastHoldAt = SystemClock.uptimeMillis()
         if (g == Gesture.CLICK_HOLD) clickHolding = true else if (g == Gesture.CLICK_HOLD_END) clickHolding = false
         Log.d(TAG, "GESTURE ${g.name.lowercase()} dur=$dur")
+        Trace.ev("gesture", "${g.name.lowercase()} dur=$dur menu=${target.menuActive}")
+        val t0 = SystemClock.uptimeMillis()
         target.gesture(g, dur)
+        Trace.time("gesture ${g.name.lowercase()}", SystemClock.uptimeMillis() - t0)
     }
 }

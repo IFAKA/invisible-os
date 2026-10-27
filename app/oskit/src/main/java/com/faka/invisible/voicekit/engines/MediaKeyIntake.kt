@@ -14,6 +14,7 @@ import android.media.session.PlaybackState
 import android.os.Handler
 import android.util.Log
 import android.view.KeyEvent
+import com.faka.invisible.oskit.Trace
 
 /**
  * ENGINE. The only place that takes the earbud button from the system through a media session. It keeps the session
@@ -44,6 +45,7 @@ class MediaKeyIntake(
                 override fun onMediaButtonEvent(i: Intent): Boolean {
                     val e = i.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java) ?: return false
                     if (!ButtonInput.isButton(e)) return false
+                    Trace.ev("media", "key action=${e.action} code=${e.keyCode} repeat=${e.repeatCount}")
                     Log.d(tag, "KEY action=${e.action} repeat=${e.repeatCount} down=${e.downTime} t=${e.eventTime}")
                     port.key("media", e.action == KeyEvent.ACTION_DOWN, e.repeatCount, e.downTime, e.eventTime)
                     return true
@@ -69,6 +71,7 @@ class MediaKeyIntake(
         session.setPlaybackState(state(PlaybackState.STATE_PAUSED))
         session.setPlaybackState(state(PlaybackState.STATE_PLAYING))
         Log.d(tag, "RECLAIM media buttons")
+        Trace.ev("media", "reclaim buttons (another app played)")
     }
 
     /** When another app starts playing it steals the media buttons: reclaim them (debounced). */
@@ -80,6 +83,7 @@ class MediaKeyIntake(
                     if (watched.add(c.sessionToken.toString())) c.registerCallback(object : MediaController.Callback() {
                         override fun onPlaybackStateChanged(st: PlaybackState?) {
                             if (st?.state == PlaybackState.STATE_PLAYING) {
+                                Trace.ev("media", "other player playing pkg=${c.packageName}")
                                 handler.removeCallbacks(reclaimTask); handler.postDelayed(reclaimTask, 400)
                             }
                         }

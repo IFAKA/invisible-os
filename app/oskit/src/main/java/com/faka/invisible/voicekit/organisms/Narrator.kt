@@ -2,6 +2,8 @@
 package com.faka.invisible.voicekit
 
 import android.os.Handler
+import android.os.SystemClock
+import com.faka.invisible.oskit.Trace
 
 /**
  * ORGANISM. Everything a screen or a program can say or play: sentences, earcons, typing cues, and the stereo word pair
@@ -12,7 +14,18 @@ class Narrator(private val speech: SpeechPort, private val tones: TonePort, priv
     /** True = the first word of a pair plays on the right (these earbuds play the channels reversed). The app sets it from its option. */
     var swapEars: () -> Boolean = { true }
 
-    fun say(p: Phrase, queue: Boolean = false, fast: Boolean = false, slow: Boolean = false) = speech.speak(p, queue, fast, slow)
+    private var sayAt = 0L
+    fun say(p: Phrase, queue: Boolean = false, fast: Boolean = false, slow: Boolean = false) {
+        Trace.ev("say", "[${p.lang}]${if (queue) " queued" else ""}${if (fast) " fast" else ""} ${p.text}")
+        sayAt = SystemClock.uptimeMillis()
+        speech.speak(p, queue, fast, slow)
+    }
+    /** The engine began to sound the newest line: how long it took (a slow voice is a `slow` line). */
+    fun speechStarted() {
+        if (sayAt == 0L) return
+        val ms = SystemClock.uptimeMillis() - sayAt; sayAt = 0L
+        Trace.ev("say", "first audio +${ms}ms"); Trace.time("speech start", ms, 600)
+    }
     fun stopSpeech() = speech.stop()
     val speaking get() = speech.speaking
 
@@ -39,7 +52,7 @@ class Narrator(private val speech: SpeechPort, private val tones: TonePort, priv
                 val t = android.os.SystemClock.uptimeMillis() - t0
                 if (t >= Pacing.WAIT_MAX_MS) { waits -= token; android.util.Log.d("Invisible", "WAIT gave up t=$t"); return }
                 if (waits.first() === token && !speech.speaking) {   // only the oldest wait beats
-                    if (!said && t >= Pacing.WAIT_SAY_MS) { said = true; speech.speak(Voice.STILL_WORKING, false, false, false); android.util.Log.d("Invisible", "WAIT still working t=$t") }
+                    if (!said && t >= Pacing.WAIT_SAY_MS) { said = true; Trace.ev("say", "still working t=$t"); speech.speak(Voice.STILL_WORKING, false, false, false); android.util.Log.d("Invisible", "WAIT still working t=$t") }
                     else { tones.beep(Tone.WAIT); android.util.Log.d("Invisible", "WAIT beat t=$t") }
                 }
                 handler.postAtTime(this, t0 + Pacing.WAIT_DELAY_MS + ((t - Pacing.WAIT_DELAY_MS) / Pacing.WAIT_BEAT_MS + 1) * Pacing.WAIT_BEAT_MS)   // on the clock: a slow beep never drifts the beat
