@@ -250,13 +250,23 @@ def voice_speed_applied():
     finally:
         bcast("--ef", "rate", str(old)); reset()
 
+def test_host(real_url):
+    """The laptop address the phone can reach for the fake server: the one on the phone's own Wi-Fi network (the saved bridge address may be a Tailscale one the phone is not on now)."""
+    out = adb("shell", "ip", "-4", "addr", "show", "wlan0")
+    m = re.search(r"inet (\d+\.\d+\.\d+)\.\d+/", out if isinstance(out, str) else getattr(out, "stdout", "") or "")
+    if m:
+        for ifc in ("en0", "en1"):
+            ip = subprocess.run(["ipconfig", "getifaddr", ifc], capture_output=True, text=True).stdout.strip()
+            if ip.startswith(m.group(1) + "."): return ip
+    return re.sub(r"^https?://", "", real_url).split(":")[0].split("/")[0] or "0.0.0.0"
+
 def rooms_go():
     """Laptop tool against the fake Rooms server: hear the rooms, open the first, hear its need, click Go, the server got it."""
     sys.path.insert(0, os.path.join(HERE, "..", "bridge")); import fake_rooms
     home = os.path.expanduser("~/.config/invisible-bridge/")
     real_url = open(home + "url").read().strip() if os.path.exists(home + "url") else ""
     real_tok = open(home + "token").read().strip() if os.path.exists(home + "token") else ""
-    host = re.sub(r"^https?://", "", real_url).split(":")[0].split("/")[0] or "0.0.0.0"
+    host = test_host(real_url)
     srv = fake_rooms.start(host, 8799, "e2e-token")
     try:
         bcast("--es", "bridge", f"http://{host}:8799", "--es", "token", "e2e-token")
@@ -281,7 +291,7 @@ def rooms_done_spoken():
     home = os.path.expanduser("~/.config/invisible-bridge/")
     real_url = open(home + "url").read().strip() if os.path.exists(home + "url") else ""
     real_tok = open(home + "token").read().strip() if os.path.exists(home + "token") else ""
-    host = re.sub(r"^https?://", "", real_url).split(":")[0].split("/")[0] or "0.0.0.0"
+    host = test_host(real_url)
     srv = fake_rooms.start(host, 8798, "e2e-token")
     try:
         reset(); i = mark()
@@ -301,7 +311,7 @@ def rooms_new_project():
     home = os.path.expanduser("~/.config/invisible-bridge/")
     real_url = open(home + "url").read().strip() if os.path.exists(home + "url") else ""
     real_tok = open(home + "token").read().strip() if os.path.exists(home + "token") else ""
-    host = re.sub(r"^https?://", "", real_url).split(":")[0].split("/")[0] or "0.0.0.0"
+    host = test_host(real_url)
     srv = fake_rooms.start(host, 8799, "e2e-token")
     try:
         bcast("--es", "bridge", f"http://{host}:8799", "--es", "token", "e2e-token")
@@ -324,7 +334,7 @@ def computers_two():
     home = os.path.expanduser("~/.config/invisible-bridge/")
     real_url = open(home + "url").read().strip() if os.path.exists(home + "url") else ""
     real_tok = open(home + "token").read().strip() if os.path.exists(home + "token") else ""
-    host = re.sub(r"^https?://", "", real_url).split(":")[0].split("/")[0] or "0.0.0.0"
+    host = test_host(real_url)
     work_rooms = [{"id": "%5", "name": "Zeta", "project": "zeta-proj", "path": "/tmp/zeta", "kind": "claude", "state": "working",
                    "need": "", "options": [], "actions": ["stop", "readall", "screen", "write"]}]
     home_fire = []; work_fire = []
