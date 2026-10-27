@@ -36,11 +36,14 @@ class LiveAppsTest {
     }
     @Test fun privateSaysNoLineAndMaxThree() {
         assertEquals("", pick(workout.copy(hidden = true))[0].line)
-        val many = (1..5).map { LiveCandidate("p$it", "P$it", now - it, notifKey = "k$it", hasActions = true) }
+        val many = (1..5).map { LiveCandidate("p$it", "P$it", now - it, notifKey = "k$it", chronometer = true) }
         assertEquals(listOf("p1", "p2", "p3"), LiveApps.pick(many, now, "self", { false }).map { it.pkg })
     }
+    @Test fun anActionButtonAloneIsNotLive() {
+        assertEquals(0, pick(LiveCandidate("sync", "Sync", now - 5, notifKey = "k", hasActions = true)).size)
+    }
     @Test fun oneEntryPerApp() {
-        val a = LiveCandidate("x", "X", now - 10, notifKey = "k", hasActions = true)
+        val a = LiveCandidate("x", "X", now - 10, notifKey = "k", chronometer = true)
         val b = LiveCandidate("x", "X", now - 20, mediaPlaying = true)
         assertEquals(1, pick(a, b).size)
     }

@@ -17,7 +17,7 @@ data class LiveApp(val pkg: String, val app: String, val state: String, val line
 
 /**
  * Pure: which apps are "live" and go first on home. Live = a media session that plays or was paused in the last [PAUSED_MS], or an ongoing
- * notification that is not static: it has actions, a chronometer, a media style, or a category in [CATEGORIES].
+ * notification that is not static: it has a chronometer, a media style, or a category in [CATEGORIES].
  * Static ongoing ones (USB debugging, battery, "running in background", VPN) are not live. Most recently updated first (a workout
  * that ticks every second comes before music), one entry per app, at most [MAX].
  */
@@ -27,12 +27,13 @@ object LiveApps {
     const val LINE_MAX = 40
     val CATEGORIES = setOf("transport", "progress", "stopwatch", "navigation", "call", "workout")
 
-    fun notifIsLive(hasActions: Boolean, chronometer: Boolean, category: String, mediaStyle: Boolean) =
-        hasActions || chronometer || mediaStyle || category in CATEGORIES
+    /** An action button alone does not make it live: nearly every background service has a "Stop" button. */
+    fun notifIsLive(chronometer: Boolean, category: String, mediaStyle: Boolean) =
+        chronometer || mediaStyle || category in CATEGORIES
 
     private fun isLive(c: LiveCandidate, now: Long): Boolean =
         c.mediaPlaying || (c.mediaPaused && now - c.updatedAt <= PAUSED_MS) ||
-            (c.notifKey != null && notifIsLive(c.hasActions, c.chronometer, c.category, c.mediaStyle))
+            (c.notifKey != null && notifIsLive(c.chronometer, c.category, c.mediaStyle))
 
     fun pick(cands: List<LiveCandidate>, now: Long, self: String, muted: (String) -> Boolean, max: Int = MAX): List<LiveApp> =
         cands.filter { it.pkg != self && !muted(it.pkg) && isLive(it, now) }
@@ -40,7 +41,7 @@ object LiveApps {
             .map { (_, cs) ->
                 val c = cs.maxByOrNull { it.updatedAt }!!
                 val media = cs.firstOrNull { it.mediaPlaying || it.mediaPaused }
-                val note = cs.firstOrNull { it.notifKey != null && notifIsLive(it.hasActions, it.chronometer, it.category, it.mediaStyle) }
+                val note = cs.firstOrNull { it.notifKey != null && notifIsLive(it.chronometer, it.category, it.mediaStyle) }
                 val state = when { media?.mediaPlaying == true -> "playing"; media != null && note == null -> "paused"; else -> "live" }
                 val line = if (c.hidden || note?.hidden == true) "" else shortLine(note?.line.orEmpty(), c.app)
                 LiveApp(c.pkg, c.app, state, if (state == "playing") "" else line, note?.notifKey, cs.any { it.hidden }, c.updatedAt)
