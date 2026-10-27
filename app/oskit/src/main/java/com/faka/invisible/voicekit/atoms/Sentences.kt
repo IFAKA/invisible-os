@@ -83,6 +83,9 @@ object Voice {
     val TASK_ADDED get() = f("Task added")
     /** A private notification: the app only, never the content. */
     fun newNotification(app: String) = f("$app, new notification")
+    /** A laptop window finished while the phone was idle: its name only; the full message is read when the room is opened. */
+    fun roomDone(name: String) = f("$name, done")
+    fun roomsDone(name: String, more: Int) = f("$name, done. $more more windows done")
     val NOTIF_DONE get() = f("Done")
     val NOTIF_FAILED get() = f("It did not work")
     val APP_MUTED get() = f("App muted")
@@ -154,6 +157,9 @@ object Voice {
 object Menu {
     /** A group or OS program name in the tree (an English label, possibly with the unread count): said in the menu language. */
     fun treeName(label: String) = Phrase.mixed(label)
+    /** What the number after a name counts, in words ("WhatsApp, 2 notifications"): a bare number never says what it counts. */
+    fun countText(n: Int) = if (n == 1) "1 notification" else "$n notifications"
+    fun treeCount(label: String, n: Int) = Phrase.mixed("$label, ${countText(n)}")
     fun messages(unread: Int) = f("Messages, $unread unread")
     val DISMISS get() = f("Dismiss")
     val MUTE_APP get() = f("Mute this app")

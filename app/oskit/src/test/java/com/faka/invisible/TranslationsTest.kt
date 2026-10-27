@@ -65,7 +65,14 @@ class TranslationsTest {
         assertEquals("Siete", Menu.digit(7).text)
         assertEquals("Cinco minutos", Menu.minutes(5).text)
         assertEquals("Hablar", Menu.treeName("Talk").text)
-        assertEquals("WhatsApp, 2", Menu.treeName("WhatsApp, 2").text)
+        assertEquals("WhatsApp, 2 notificaciones", Menu.treeCount("WhatsApp", 2).text)
+        assertEquals("Hablar, 1 notificación", Menu.treeCount("Talk", 1).text)
+        assertEquals("site, listo", Voice.roomDone("site").text)
+        MenuLanguage.use("en")
+        assertEquals("WhatsApp, 2 notifications", Menu.treeCount("WhatsApp", 2).text)
+        assertEquals("WhatsApp, 1 notification", Menu.treeCount("WhatsApp", 1).text)
+        assertEquals("site, done. 2 more windows done", Voice.roomsDone("site", 2).text)
+        MenuLanguage.use("es")
     }
 
     @Test fun partsOfASentenceAreTranslated() {

@@ -19,6 +19,7 @@ data class RoomEvent(val id: String, val name: String, val state: String)
 
 object RoomState {
     const val NEEDS = "needs"
+    const val DONE = "done"
     /** The word the phone says after the room name. */
     fun word(state: String): String = when (state) {
         "needs" -> "needs you"

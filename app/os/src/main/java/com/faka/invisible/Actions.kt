@@ -420,11 +420,21 @@ object Actions {
         prefs().edit().putString(ClaudeSettings.URL_KEY, url.trim()).putString(ClaudeSettings.TOKEN_KEY, token.trim()).apply()
         claudeWatch.restart()
     }
-    private val claudeWatch by lazy { ClaudeWatch({ claudeUrl() to claudeToken() }, { e -> handler.post { claudeAsked(e) } }, { handler.post { roomNeeds() } }) }
+    private val claudeWatch by lazy { ClaudeWatch({ claudeUrl() to claudeToken() }, { e -> handler.post { claudeAsked(e) } }, { handler.post { roomNeeds() } }, { e -> handler.post { roomDone(e.name) } }) }
     /** A room of the laptop needs you: the Claude sound, unless muted until morning or a program is running. */
     private fun roomNeeds() {
         if (running != null || RoomMute.muted(prefs().getLong(RoomMute.KEY, 0L), System.currentTimeMillis())) return
         narrator.beep(Tone.CLAUDE)
+    }
+    private val doneNames = mutableListOf<String>()
+    /** A window finished: say its name when the OS is idle. Several in 3 s are one line: the first name, then how many more. */
+    private fun roomDone(name: String) {
+        if (running != null || RoomMute.muted(prefs().getLong(RoomMute.KEY, 0L), System.currentTimeMillis())) return
+        if (doneNames.isEmpty()) handler.postDelayed({
+            val n = doneNames.toList(); doneNames.clear()
+            say(if (n.size == 1) Voice.roomDone(n[0]) else Voice.roomsDone(n[0], n.size - 1), true)
+        }, 3000)
+        if (name !in doneNames) doneNames.add(name)
     }
     /** What the Laptop tool asks of the OS: the Write keyboard, and the way back to the tool when nothing was written. */
     val roomsPort = object : RoomsPort {

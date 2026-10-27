@@ -11,7 +11,7 @@ import java.io.IOException
  * that need an answer ([onAsk], called on this thread: the owner posts to the main thread). It does nothing when no address is set.
  * The Claude tool, once started, polls from the start itself and so gets the same open questions again.
  */
-class ClaudeWatch(private val settings: () -> Pair<String, String>, private val onAsk: (ClaudeEvent) -> Unit, private val onRoomNeeds: (RoomEvent) -> Unit = {}) {
+class ClaudeWatch(private val settings: () -> Pair<String, String>, private val onAsk: (ClaudeEvent) -> Unit, private val onRoomNeeds: (RoomEvent) -> Unit = {}, private val onRoomDone: (RoomEvent) -> Unit = {}) {
     @Volatile private var generation = 0
 
     /** (Re)starts with the saved address; a blank address stops it. */
@@ -30,7 +30,7 @@ class ClaudeWatch(private val settings: () -> Pair<String, String>, private val 
                 val r = client.poll(since, 25)
                 since = r.seq
                 for (e in r.events) if (e.needsAnswer && told.add(e.id) && g == generation) onAsk(e)
-                for (e in r.rooms) if (e.state == RoomState.NEEDS && g == generation) onRoomNeeds(e)
+                for (e in r.rooms) if (g == generation) when (e.state) { RoomState.NEEDS -> onRoomNeeds(e); RoomState.DONE -> onRoomDone(e) }
             } catch (e: IOException) {
                 try { Thread.sleep(10_000) } catch (_: InterruptedException) { return }
             }

@@ -160,14 +160,15 @@ def make_handler(store, token, rooms):
 
 
 def watch_rooms(rooms, store, stop, every=2.0):
-    """Poll the rooms; when one turns 'needs', push a room event to the phone through the store."""
+    """Poll the rooms; when one turns 'needs' or finishes (working to done), push a room event to the phone through the store."""
     prev = None
     while not stop.is_set():
         try:
             now = {r["id"]: r for r in rooms.rooms()}
             if prev is not None:
                 for pid, r in now.items():
-                    if r["state"] == "needs" and (pid not in prev or prev[pid]["state"] != "needs"):
+                    was = prev.get(pid, {}).get("state")
+                    if (r["state"] == "needs" and was != "needs") or (r["state"] == "done" and was == "working"):
                         store.add_room_event(r)
             prev = now
         except Exception as e:   # never let the watcher die
