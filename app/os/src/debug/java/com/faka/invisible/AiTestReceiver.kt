@@ -25,6 +25,7 @@ class AiTestReceiver : BroadcastReceiver() {
         i.getStringExtra("show")?.let { Actions.showDev(it); return }
         if (i.hasExtra("rate")) { Actions.rateDev(i.getFloatExtra("rate", 0.9f)); return }
         if (i.hasExtra("state")) { Actions.stateDev(); return }
+        i.getStringExtra("bridge")?.let { Actions.setClaudeBridge(it, i.getStringExtra("token") ?: ""); return }   // dev: set the Claude bridge address and token without typing
         i.getStringExtra("press")?.let { Actions.pressDev(it); return }   // dev: raw presses "down,up,down,..." in ms, through the real button path
         i.getStringExtra("start")?.let { Actions.startDev(it); return }   // dev: start a program: echo, guard, duel, compass, write
         i.getStringExtra("ctl")?.let { Actions.ctlDev(it); return }
