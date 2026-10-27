@@ -2,6 +2,7 @@
 """Invisible OS bridge server: the phone and the Claude Code hooks meet here. Python 3 stdlib only.
 
 Phone:  GET /events?since=N&wait=25   (long poll)      POST /answer {"id": "3", "choice": "Allow"}
+Tools:  GET /info /room/tools   POST /room/tool   (see ROOMS-API.md, tools.py)
 Rooms:  GET /rooms /room/last /room/screen /room/story /projects /areas   POST /room/act /room/send /project/open /project/new   (see ROOMS-API.md)
 Hooks:  POST /ask {kind, project, summary, options, wait}  (blocks until answered)      POST /notify {kind, project, summary}
 All calls need the header  Authorization: Bearer <token>.
@@ -23,7 +24,11 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core import Store  # noqa: E402
 from rooms import Rooms  # noqa: E402
+<<<<<<< HEAD
 import preview  # noqa: E402
+=======
+from tools import Tools, host_name  # noqa: E402
+>>>>>>> 00e7d04a (Bridge: work tools per window (Git, merge request, Jira, Commerce Cloud, Research) and GET /info profile suggestion)
 
 CONFIG_DIR = os.path.expanduser("~/.config/invisible-bridge")
 TOKEN_FILE = os.path.join(CONFIG_DIR, "token")
@@ -102,7 +107,13 @@ def mark_seen(path, headers, seen_file=None):
         return False
 
 
-def make_handler(store, token, rooms):
+def make_handler(store, token, rooms, tools=None):
+    tools = tools or Tools.for_rooms(rooms)
+
+    def room_path(pane):
+        row = rooms.room_row(pane)
+        return row["path"] if row else None
+
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -165,6 +176,14 @@ def make_handler(store, token, rooms):
                     self._send(404, {"error": "no such room"})
                 else:
                     self._send(200, got)
+            elif u.path == "/info":
+                self._send(200, {"suggest": tools.suggest([p["path"] for p in rooms.projects()]), "host": host_name()})
+            elif u.path == "/room/tools":
+                path = room_path(q.get("id", [""])[0])
+                if path is None:
+                    self._send(404, {"error": "no such room"})
+                else:
+                    self._send(200, tools.tool_list(path, q.get("profile", ["personal"])[0]))
             elif u.path == "/projects":
                 self._send(200, {"projects": rooms.projects()})
             elif u.path == "/areas":
@@ -200,6 +219,14 @@ def make_handler(store, token, rooms):
                     self._send(400, {"ok": False, "error": "unknown room or action"})
                 else:
                     self._send(200, {"ok": True, "said": said})
+            elif path == "/room/tool":
+                pane = str(b.get("id") or "")
+                rpath = room_path(pane)
+                if rpath is None:
+                    self._send(404, {"ok": False, "error": "no such room"})
+                else:
+                    prof = parse_qs(urlparse(self.path).query).get("profile", [b.get("profile", "personal")])[0]
+                    self._send(200, tools.call(pane, rpath, prof, b.get("tool"), b.get("arg")))
             elif path == "/room/send":
                 ok = rooms.send(b.get("id"), b.get("text"))
                 self._send(200 if ok else 400, {"ok": ok})
