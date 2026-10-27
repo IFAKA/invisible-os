@@ -598,8 +598,7 @@ class ControllerMode(
             Screen.RESET_ASK -> listOf(   // the safe answer is read first
                 Opt("reset:no", Menu.EMERGENCY_NO) { pick("reset:no"); show(Screen.FIND) },
                 Opt("reset:yes", Menu.RESET_YES) { pick("reset:yes"); out.resetLearning(resetPkg); treeKey = null; treeCache = null; resetPkg = null; resetName = null; resetting = false; say(Voice.RESET_DONE); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } })
-            Screen.PHONE -> listOf(   // Emergency is always first and cannot be switched off; then Call a contact
-                Opt("phone:emergency", Menu.EMERGENCY) { pick("phone:emergency"); show(Screen.EMERGENCY) },
+            Screen.PHONE -> listOf(   // Call a contact first; Emergency is always last (one triple click back puts you on it) and cannot be switched off
                 Opt("phone:call", Menu.CALL_CONTACT) { pick("phone:call"); out.background({ contacts = out.callContacts() }, { if (contacts.isEmpty()) outro(if (out.lacks("contacts")) { out.needed("contacts"); Voice.NEED_CONTACTS } else Voice.NO_CONTACTS) else show(Screen.CONTACTS) }) }
             ) + settings.phone.mapNotNull { k -> when (k) {
                 "status" -> Opt("phone:status", Menu.STATUS) { pick("phone:status"); outro(Voice.status(out.status(), unread().size)) }
@@ -608,7 +607,7 @@ class ControllerMode(
                 "dnd" -> if (out.dndAllowed()) Opt("phone:dnd", Menu.DND) { pick("phone:dnd"); out.runAction("Do not disturb"); afterSpeech { beginScan() } } else null
                 "find" -> if (!out.wiredConnected()) Opt("phone:find", Voice.FIND_PHONE) { pick("phone:find"); find() } else null
                 else -> null
-            } }
+            } } + Opt("phone:emergency", Menu.EMERGENCY) { pick("phone:emergency"); show(Screen.EMERGENCY) }
             Screen.GAMES -> programOpts("games:").toList()   // every game lives here, in the order of the registry (Programs.kt); a new game is one more line there
             Screen.CALC -> calcOptions()
             Screen.ALARM_HOUR -> ALARM_HOURS.map { h -> Opt("alarm:h$h", Menu.hour(h)) { pick("alarm:h$h"); alarmHour = h; show(Screen.ALARM_MIN) } }
