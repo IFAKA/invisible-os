@@ -12,6 +12,7 @@ import android.media.session.MediaSession
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
+import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
 import com.faka.invisible.oskit.Trace
@@ -33,6 +34,7 @@ class MediaKeyIntake(
     @Volatile private var stopped = false
     private val retrySilence = Runnable { if (!stopped && track == null) startSilence() }
     private val watched = HashSet<String>()
+    private var lastTraced = 0L
     private val reclaimTask = Runnable { reclaim() }
 
     private fun state(st: Int) = PlaybackState.Builder()
@@ -83,7 +85,7 @@ class MediaKeyIntake(
                     if (watched.add(c.sessionToken.toString())) c.registerCallback(object : MediaController.Callback() {
                         override fun onPlaybackStateChanged(st: PlaybackState?) {
                             if (st?.state == PlaybackState.STATE_PLAYING) {
-                                Trace.ev("media", "other player playing pkg=${c.packageName}")
+                                if (SystemClock.uptimeMillis() - lastTraced > 2000) { lastTraced = SystemClock.uptimeMillis(); Trace.ev("media", "other player playing pkg=${c.packageName}") }
                                 handler.removeCallbacks(reclaimTask); handler.postDelayed(reclaimTask, 400)
                             }
                         }
