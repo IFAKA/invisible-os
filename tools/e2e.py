@@ -210,6 +210,17 @@ def fake_chat_message():
     if len(h) < 3: raise Fail("message read but no options: " + " | ".join(h))
     return " | ".join(h[:5])
 
+def chat_arrival_spoken():
+    """A chat message arrives with the OS idle: after the tone the phone says who wrote, then the text (twice in a burst = once)."""
+    reset(); i = mark(); bcast("--es", "fake", "chat")
+    need("E2E Friend", i, 15); need("dinner", i, 15)
+    lines = list(dict.fromkeys(since(i, "SAY")))
+    first = next((l for l in lines if "E2E Friend" in l), "")
+    if "," not in first: raise Fail("the sender line should name the app first: " + first)
+    time.sleep(2.5)
+    if sum(1 for l in since(i, "SAY") if "dinner" in l) != 1: raise Fail("the text was read more than once: " + " | ".join(since(i, "SAY")))
+    return " | ".join(lines[:3])
+
 def voice_speed_applied():
     old = float(state()["rate"])
     try:
@@ -326,7 +337,7 @@ def computers_two():
         except Fail: pass
 
 SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, screen_mirrors_menu, screen_tap_picks, practice_end_to_end,
-             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, voice_speed_applied, rooms_go, rooms_done_spoken, computers_two, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
+             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, chat_arrival_spoken, voice_speed_applied, rooms_go, rooms_done_spoken, computers_two, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
 
 def main():
     args = sys.argv[1:]

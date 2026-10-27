@@ -24,7 +24,7 @@ class ControllerNotificationListener : NotificationListenerService() {
         val store get() = chat.store
         /** What the adapters may ask of the OS. */
         private val adapterHost = object : NotificationHost {
-            override fun arrival(sender: String) = Actions.arrival(sender)
+            override fun arrival(pkg: String, sender: String, text: String, lang: String, visibility: Int) = Actions.arrival(pkg, sender, text, lang, visibility)
             override fun detectLanguage(text: String) = detector.detect(text)
         }
         /** The mailbox: every app's notifications (not ongoing, not group summaries), see [NotificationStore]. */
@@ -42,6 +42,8 @@ class ControllerNotificationListener : NotificationListenerService() {
         @Volatile var ringing: Call? = null
             private set
         @Volatile private var ongoingKey: String? = null
+        /** A call rings or runs. */
+        val inCall get() = ringing != null || ongoingKey != null
         private val callHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
         /** Presses the dialer's own Answer or Decline button; used when the phone permission is not given. */

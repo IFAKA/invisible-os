@@ -88,14 +88,16 @@ class ChatAppsModule : NotificationModule {
         val isNew = old == null || old.text != t
         val who = sbn.packageName + "|" + MessageLogic.stableName(sender!!)
         store.upsert(Msg(key, sender!!, t, convLang.get(who), if (isNew) sbn.postTime else old!!.at))
-        if (isNew && loaded) host?.arrival(sender)
+        val fresh = isNew && loaded
+        val vis = n.visibility
         // One language per person, Spanish unless English (or another) clearly wins the votes; detect only until settled.
         if (!convLang.settled(who)) worker.execute { try {
             val clean = MessageLogic.stripLinks(t)
             // very short texts ("ok", "jaja") and WhatsApp's own media text are too weak to vote
             if (MessageLogic.hasWords(t) && clean.words().size >= 3) convLang.learn(who, host?.detectLanguage(clean) ?: "")
             store.setLang(key, t, convLang.get(who))
-        } catch (e: Exception) { Log.e("Invisible", "LANG failed", e) } }
+        } catch (e: Exception) { Log.e("Invisible", "LANG failed", e) } finally { if (fresh) host?.arrival(sbn.packageName, sender!!, t, convLang.get(who), vis) } }
+        else if (fresh) host?.arrival(sbn.packageName, sender!!, t, convLang.get(who), vis)
         Log.d("Invisible", "MSG ${sbn.packageName} from $sender reply=${reply != null}")
     }
 }

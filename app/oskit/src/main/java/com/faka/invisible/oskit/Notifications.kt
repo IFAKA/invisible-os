@@ -19,8 +19,11 @@ data class Notif(
 
 /** What the OS offers an adapter (a module for one outside app). The adapter never reaches into the OS. */
 interface NotificationHost {
-    /** A new chat message arrived from [sender]: the OS plays its arrival tone. */
-    fun arrival(sender: String)
+    /**
+     * A new chat message arrived from [sender] in app [pkg], with [text] in language [lang] and the notification's
+     * [visibility]: the OS plays its arrival tone, then reads who wrote and what (see ArrivalPlan).
+     */
+    fun arrival(pkg: String, sender: String, text: String, lang: String, visibility: Int)
     /** Blocking, off the main thread: the language code of [text] ("und" if unknown). */
     fun detectLanguage(text: String): String
 }

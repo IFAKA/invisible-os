@@ -480,10 +480,37 @@ object Actions {
         if (!mode.active) Programs.byId("hub:claude")?.let { startProgramEntry(it) }
     }
 
-    /** New chat message arrived: short earcon, no speech. Favourite senders get a different tone. */
-    fun arrival(sender: String) {
+    private val arrivalBurst = ArrivalBurst<Arriving>()
+    private class Arriving(val pkg: String, val sender: String, val text: String, val lang: String, val hidden: Boolean)
+
+    /**
+     * New chat message arrived: the tone (once per burst), then, 1.5 s later, "<App>, <Sender>" and the latest text of that chat
+     * in its own language. A private message says only "<App>, new message". Not during a call or in a program (tone only).
+     * An open menu is not cut: the reading is queued after the current phrase.
+     */
+    fun arrival(pkg: String, sender: String, text: String, lang: String, visibility: Int) {
         if (!::app.isInitialized) return
-        handler.post { narrator.beep(if (sender in choices.favourites()) Tone.ARRIVE_FAV else Tone.ARRIVE) }
+        val locked = app.getSystemService(android.app.KeyguardManager::class.java)?.isDeviceLocked ?: true
+        val hidden = NotifPrivacy.mustHide(pkg, visibility, locked, false)
+        handler.post {
+            val key = "$pkg|$sender"
+            if (arrivalBurst.add(key, Arriving(pkg, sender, text, lang, hidden), System.currentTimeMillis())) {
+                narrator.beep(if (sender in choices.favourites()) Tone.ARRIVE_FAV else Tone.ARRIVE)
+                handler.postDelayed({ arrivalBurst.take(key)?.let { readArrival(it) } }, arrivalBurst.windowMs)
+            }
+        }
+    }
+
+    private fun readArrival(a: Arriving) {
+        if (!ArrivalPlan.mayRead(ControllerNotificationListener.inCall, running != null)) { Log.d(TAG, "ARRIVAL not read (call or program)"); return }
+        val label = try { app.packageManager.getApplicationLabel(app.packageManager.getApplicationInfo(a.pkg, 0)).toString() } catch (e: Exception) { a.pkg.substringAfterLast('.') }
+        val lines = ArrivalPlan.lines(label, a.sender, a.text, a.lang, a.hidden)
+        val duck = !mode.active && pauseMusicNow()   // an open menu already handles the music
+        lines.forEach { say(it, true) }
+        if (duck) {
+            fun waitEnd(n: Int) { handler.postDelayed({ if (narrator.speaking && n < 200) waitEnd(n + 1) else resumeMusicNow() }, 400) }
+            waitEnd(0)
+        }
     }
 
     /** A screen of the app speaks with the app's own voice (the setup steps, the lost-access warning). */

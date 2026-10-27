@@ -83,6 +83,10 @@ object Voice {
     val TASK_ADDED get() = f("Task added")
     /** A private notification: the app only, never the content. */
     fun newNotification(app: String) = f("$app, new notification")
+    /** A private chat message: the app only, never the content. */
+    fun newMessage(app: String) = f("$app, new message")
+    /** A chat message arrives: who wrote, in which app (the text is read after it, in its own language). */
+    fun arrivalFrom(app: String, sender: String) = Phrase.mixed("$app, $sender")
     /** A laptop window finished while the phone was idle: its name only; the full message is read when the room is opened. */
     fun roomDone(name: String) = f("$name, done")
     fun roomsDone(name: String, more: Int) = f("$name, done. $more more windows done")
