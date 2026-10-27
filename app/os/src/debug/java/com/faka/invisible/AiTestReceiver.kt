@@ -46,7 +46,7 @@ class AiTestReceiver : BroadcastReceiver() {
         if (what == "clear") { nm.cancel(7001); nm.cancel(7002); return }
         nm.createNotificationChannel(android.app.NotificationChannel("e2e", "e2e", android.app.NotificationManager.IMPORTANCE_HIGH))
         fun pi(flag: Int) = android.app.PendingIntent.getBroadcast(c, 0, Intent("com.faka.invisible.E2E_NOOP").setPackage(c.packageName), flag or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
-        val b = android.app.Notification.Builder(c, "e2e").setSmallIcon(android.R.drawable.sym_def_app_icon).addExtras(android.os.Bundle().apply { putBoolean("e2e", true) })
+        val b = android.app.Notification.Builder(c, "e2e").setSmallIcon(android.R.drawable.sym_def_app_icon).setVisibility(android.app.Notification.VISIBILITY_PUBLIC).addExtras(android.os.Bundle().apply { putBoolean("e2e", true) })
         if (what == "call") {
             b.setContentTitle("E2E Caller").setContentText("Incoming call").setCategory(android.app.Notification.CATEGORY_CALL)
                 .addAction(android.app.Notification.Action.Builder(null, "Answer", pi(android.app.PendingIntent.FLAG_IMMUTABLE)).build())
