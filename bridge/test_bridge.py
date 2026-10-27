@@ -209,6 +209,36 @@ class NeedLineTest(unittest.TestCase):
         self.assertEqual(rooms_mod.last_sentences("One. Two! Three? Four."), "Three? Four.")
 
 
+class OrderLearningTest(unittest.TestCase):
+    BASE = ["option:ship it"] + rooms_mod.CLAUDE_ACTIONS
+
+    def test_no_picks_keeps_fixed_order(self):
+        self.assertEqual(rooms_mod.learned_order(self.BASE, {}), self.BASE)
+
+    def test_picks_move_up_but_options_and_pinned_stay(self):
+        out = rooms_mod.learned_order(self.BASE, {"research": 20.0})
+        self.assertEqual(out[0], "option:ship it")
+        self.assertEqual(out[1], "research")
+        for a in ("stop", "readall", "screen", "write"):
+            self.assertEqual(out.index(a), self.BASE.index(a))
+        self.assertEqual(sorted(out), sorted(self.BASE))
+
+    def test_push_needs_much_more_than_go(self):
+        self.assertEqual(rooms_mod.learned_order(self.BASE, {"push": 2.0})[1], "go")
+        self.assertEqual(rooms_mod.learned_order(self.BASE, {"go": 1.0, "push": 4.5})[1], "push")
+        self.assertLess(rooms_mod.learned_order(self.BASE, {"clear": 5.0}).index("clear"), self.BASE.index("clear"))
+
+    def test_recency_weights(self):
+        day = 86400.0
+        w = rooms_mod.weighted_picks([(1000 * day, "go"), (1000 * day - 14 * day, "go"), (1000 * day + 5, "yes")], 1000 * day)
+        self.assertAlmostEqual(w["go"], 1.5)
+        self.assertAlmostEqual(w["yes"], 1.0)
+
+    def test_shell_actions(self):
+        base = ["again", "make:test", "make:build", "stop", "screen", "write"]
+        self.assertEqual(rooms_mod.learned_order(base, {"make:build": 2.0}), ["again", "make:build", "make:test", "stop", "screen", "write"])
+
+
 class RoomsTmuxTest(unittest.TestCase):
     """Private tmux server (-L roomstest) with `cat` panes. The owner's tmux is never touched."""
 
@@ -430,6 +460,21 @@ class RoomsTmuxTest(unittest.TestCase):
         self.assertIsNone(r.open_project(proj_a, "bad"))
         time.sleep(0.3)
         self.assertEqual(self.by_id(self.make().rooms(), pane)["project"], "proj-a")
+
+    def test_picks_reorder_actions(self):
+        c, win = self.cl
+        self.set_status(win, "0 0 0 0 0 0 0")
+        r = self.make()
+        before = self.by_id(r.rooms(), c)["actions"]
+        self.assertEqual(before, rooms_mod.CLAUDE_ACTIONS)
+        os.makedirs(self.cfg, exist_ok=True)
+        now = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(os.path.join(self.cfg, "sends.log"), "a") as f:
+            for _ in range(8):
+                f.write("%s\t%%99\tresearch\t\"x\"\t%s\n" % (now, self.work))   # other pane, same project path
+        after = self.by_id(self.make().rooms(), c)["actions"]
+        self.assertEqual(after[0], "research")
+        self.assertEqual(sorted(after), sorted(before))
 
     def test_areas_and_new_project(self):
         area_a, area_b = os.path.join(self.tmp, "areaA"), os.path.join(self.tmp, "areaB")

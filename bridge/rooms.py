@@ -37,6 +37,33 @@ ACTION_TEXT = {
 CLAUDE_ACTIONS = ["go", "yes", "commit", "push", "compact", "explain", "recommend", "research", "progress", "hold", "stop",
                   "clear", "readall", "screen", "write"]
 
+PINNED = {"stop", "readall", "screen", "write"}   # keep their place in the list; learning only reorders the others
+HALF_LIFE_DAYS = 14.0
+LEARN = 1.0   # one fresh pick is worth one place in the fixed order
+
+
+def learned_order(base, picks, learn=LEARN):
+    """Pure. Reorder the fixed actions in `base` by score = (len - rank) + learn * picks[action].
+    Quoted options (option:*) stay first, in order. Pinned actions (stop, readall, screen, write) keep their place; the others
+    are sorted into the places the movable ones had. Ties keep the fixed order, so with no picks the list is unchanged.
+    picks: {action id: recency-weighted count}."""
+    base = list(base)
+    movable = [(i, a) for i, a in enumerate(base) if a not in PINNED and not a.startswith("option:")]
+    n = len(base)
+    ranked = sorted(movable, key=lambda ia: -((n - ia[0]) + learn * picks.get(ia[1], 0.0)))   # sorted() is stable
+    out = list(base)
+    for (slot, _), (_, a) in zip(movable, ranked):
+        out[slot] = a
+    return out
+
+
+def weighted_picks(entries, now, half_life=HALF_LIFE_DAYS):
+    """Pure. entries = [(epoch seconds, action id)] -> {action id: sum of 0.5 ** (age_days / half_life)}. Future entries count 1."""
+    out = collections.Counter()
+    for t, a in entries:
+        out[a] += 0.5 ** (max(0.0, now - t) / 86400.0 / half_life)
+    return dict(out)
+
 
 # ---------- pure text helpers ----------
 
@@ -235,6 +262,7 @@ class Rooms:
         self._msg_cache = {}      # transcript path -> (mtime, size, text)
         self._zsh_cache = (0.0, {})
         self._proj_cache = (0.0, [])
+        self._picks_cache = (-1.0, [])
 
     @classmethod
     def from_env(cls, pending=None):
@@ -380,8 +408,10 @@ class Rooms:
 
     def _actions(self, room):
         if room["kind"] == "claude":
-            return ["option:" + o for o in room["options"]] + CLAUDE_ACTIONS
-        return ["again"] + ["make:" + t for t in self._make_targets(room["path"])] + ["stop", "screen", "write"]
+            base = ["option:" + o for o in room["options"]] + CLAUDE_ACTIONS
+        else:
+            base = ["again"] + ["make:" + t for t in self._make_targets(room["path"])] + ["stop", "screen", "write"]
+        return learned_order(base, self.picks_for(room["id"], room["path"]))
 
     # -- all rooms --
     def rooms(self, max_age=0.0):
@@ -420,13 +450,43 @@ class Rooms:
         return "\n".join(self.screen_lines(pane, 60))
 
     # -- typing --
-    def _log(self, pane, action, text):
+    def _log(self, pane, action, text, path=""):
         try:
             os.makedirs(self.config_dir, mode=0o700, exist_ok=True)
             with open(os.path.join(self.config_dir, "sends.log"), "a") as f:
-                f.write("%s\t%s\t%s\t%s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), pane, action, json.dumps(text, ensure_ascii=False)))
+                f.write("%s\t%s\t%s\t%s\t%s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), pane, action, json.dumps(text, ensure_ascii=False), path or ""))
+            self._picks_cache = (-1.0, [])
         except OSError:
             pass
+
+    def _log_entries(self):
+        """[(epoch, pane, action, path)] from sends.log (old lines have no path). Cached by the file's mtime and size."""
+        p = os.path.join(self.config_dir, "sends.log")
+        try:
+            st = os.stat(p)
+            if self._picks_cache[0] == (st.st_mtime, st.st_size):
+                return self._picks_cache[1]
+            with open(p, errors="ignore") as f:
+                lines = f.read().splitlines()[-5000:]
+        except OSError:
+            return []
+        rows = []
+        for line in lines:
+            f = line.split("\t")
+            if len(f) < 3:
+                continue
+            try:
+                rows.append((time.mktime(time.strptime(f[0], "%Y-%m-%d %H:%M:%S")), f[1], f[2], f[4] if len(f) > 4 else ""))
+            except (ValueError, OverflowError):
+                continue
+        self._picks_cache = ((st.st_mtime, st.st_size), rows)
+        return rows
+
+    def picks_for(self, pane, path):
+        """Recency-weighted action picks of one room: log lines with the same project path (or, when the line has no path, the same pane)."""
+        here = os.path.realpath(path or "/nonexistent-room")
+        entries = [(t, a) for t, p, a, pp in self._log_entries() if (os.path.realpath(pp) == here if pp else p == pane)]
+        return weighted_picks(entries, self.clock())
 
     def _type(self, pane, text):
         self.tmux("send-keys", "-t", pane, "-l", "--", text)
@@ -436,9 +496,10 @@ class Rooms:
     def send(self, pane, text):
         """Type free text + Enter. Returns False when the room does not exist or the text is empty."""
         text = str(text or "")
-        if not text.strip() or not self.room_row(pane):
+        row = self.room_row(pane)
+        if not text.strip() or not row:
             return False
-        self._log(pane, "send", text)
+        self._log(pane, "send", text, row["path"])
         self._type(pane, text)
         return True
 
@@ -450,11 +511,11 @@ class Rooms:
         claude = self.is_claude(row["cmd"])
         if action == "stop":
             key = "Escape" if claude else "C-c"
-            self._log(pane, action, key)
+            self._log(pane, action, key, row["path"])
             self.tmux("send-keys", "-t", pane, key)
             return key
         if action == "again" and not claude:
-            self._log(pane, action, "Up Enter")
+            self._log(pane, action, "Up Enter", row["path"])
             self.tmux("send-keys", "-t", pane, "Up")
             time.sleep(0.15)
             self.tmux("send-keys", "-t", pane, "Enter")
@@ -470,7 +531,7 @@ class Rooms:
                 text = "make " + target
         if not text:
             return None
-        self._log(pane, action, text)
+        self._log(pane, action, text, row["path"])
         self._type(pane, text)
         return text
 

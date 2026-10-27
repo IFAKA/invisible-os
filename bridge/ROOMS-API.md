@@ -34,4 +34,5 @@ Claude room: option:<text> (send that text), go, yes, commit, push*, compact (/c
 recommend ("what do you recommend?"), research ("research online first, then recommend"), progress ("where are we? what is done and what is left?"),
 hold ("hold on, dont make changes yet"), stop (Escape key), clear* (/clear), readall, screen, write.
 Shell room: again (Up then Enter), make:<target> (top Makefile targets of that folder, ordered by ~/.zsh_history counts, max 3), stop (Ctrl-C), screen, write.
+Order: option:* first; then the fixed actions in the order above, re-sorted per room by your past picks (sends.log, same project path, weight 0.5^(age_days/14), one fresh pick = one place). stop, readall, screen, write keep their place. `sends.log` lines are `time, pane, action, text, path`.
 * = the phone asks "No, go back" / "Yes" before sending. readall, screen, write are handled on the phone (no POST /room/act).
