@@ -59,7 +59,7 @@ export default function LaptopDemo() {
   return (
     <section ref={root} id="laptop" className="relative h-[440svh]">
       <div className="sticky top-0 flex h-svh flex-col items-center justify-center overflow-hidden px-5 pb-[56px] pt-[56px] text-center">
-        <div className="relative h-[27svh] w-full max-w-[760px] shrink-0">
+        <div className="relative h-[27svh] w-full max-w-[760px] shrink-0 max-sm:h-[22svh]">
           {BEATS.map((b, i) => (
             <div key={b.h} className="absolute inset-0 flex flex-col items-center justify-center transition-[opacity,transform] duration-300" style={{ opacity: s.beat === i ? 1 : 0, transform: s.beat === i ? "none" : "translateY(10px)", transitionDelay: s.beat === i ? "250ms" : "0ms" }}>
               <h2 className="whitespace-pre-line text-[clamp(28px,min(6.2svh,8.4vw),60px)] font-semibold leading-[1.07] tracking-[-0.03em] [text-wrap:balance]">{b.h}</h2>
@@ -68,7 +68,7 @@ export default function LaptopDemo() {
           ))}
         </div>
 
-        <div aria-hidden className="grid w-full max-w-[860px] shrink-0 grid-cols-1 gap-4 sm:grid-cols-[1.25fr_1fr] sm:items-stretch">
+        <div aria-hidden className="grid w-full max-w-[860px] shrink-0 grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-[1.25fr_1fr] sm:items-stretch">
           <div className="rounded-[20px] border border-line bg-card p-[clamp(12px,2.4svh,22px)] text-left">
             <p className="mb-[1.6svh] text-[clamp(11px,1.8svh,13px)] uppercase tracking-[0.08em] text-mute">Your laptop</p>
             <ul className="space-y-[1.2svh]">
@@ -94,7 +94,7 @@ export default function LaptopDemo() {
                 <span className={`size-1/3 rounded-full ${s.beat === 3 ? "bg-blue" : "bg-paper/30"}`} />
               </span>
             </div>
-            <p className="mt-[2svh] min-h-[3em] text-[clamp(16px,2.8svh,24px)] font-semibold leading-snug tracking-[-0.02em] [text-wrap:balance]">{SAID[s.beat]}</p>
+            <p className="mt-[1.5svh] min-h-[2.6em] text-[clamp(16px,2.8svh,24px)] font-semibold leading-snug tracking-[-0.02em] [text-wrap:balance]">{SAID[s.beat]}</p>
           </div>
         </div>
 

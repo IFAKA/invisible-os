@@ -77,7 +77,7 @@ export default function Story() {
           ))}
         </div>
 
-        <div className="relative h-[min(44svh,400px)] w-full max-w-[860px] shrink-0">
+        <div className="relative h-[min(44svh,400px)] w-full max-sm:h-[240px] max-w-[860px] shrink-0">
           <div aria-hidden className="mx-auto grid h-full grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-0.5 sm:gap-4">
             <Node label="You click" on={s.beat === 3}>
               <div key={s.burst} className={`relative grid size-[min(17vw,16svh,140px)] place-items-center rounded-full border bg-card transition-[transform,border-color] duration-150 ${s.pick ? "scale-90 border-blue" : "border-line"}`}>
