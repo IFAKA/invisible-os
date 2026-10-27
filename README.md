@@ -78,7 +78,7 @@ No QR? Open this link on your phone: <https://github.com/IFAKA/invisible-os/rele
 
 Android will warn about installing from outside the Play Store: that is normal for open-source apps. Needs Android 10 or newer.
 
-On some phones (Xiaomi / HyperOS and others) also allow the app to run in the background and turn off battery optimization for it, or the system may stop it when the screen is off. The app shows a checklist for the other settings (Notification access, Assistant).
+On some phones (Xiaomi / HyperOS and others) also allow the app to run in the background and turn off battery optimization for it, or the system may stop it when the screen is off. At first the app asks only for Button access. Other permissions are asked when a feature first needs them. The Assistant (hold on the lock screen) is offered on the app screen after the first practice.
 
 ### Build from source
 
