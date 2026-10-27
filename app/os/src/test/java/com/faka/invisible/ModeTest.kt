@@ -17,7 +17,7 @@ import org.junit.Test
 private val OLD_HUB = LauncherSettings.DEFAULT_HUB - "alarm" - "calculator" - "write" - "compass" - "whereami" - "claude" - "sum" - "reset"
 
 class ModeTest {
-    private class Rig(ranker: OptionRanker = OptionRanker.DEFAULT, gap: Long? = 800, reactionText: String = "") {
+    internal class Rig(ranker: OptionRanker = OptionRanker.DEFAULT, gap: Long? = 800, reactionText: String = "") {
         val log = ArrayList<String>()
         var playing = false
         var msgs = listOf<Msg>()
@@ -44,6 +44,7 @@ class ModeTest {
         var weatherAnswer: String? = null     // null = the answer has not come yet
         var pendingWeather: ((Phrase) -> Unit)? = null
         var accessOff = false
+        var live = listOf<LiveApp>(); val liveNotifs = HashMap<String, Notif>(); var rooms = 0; var caller: String? = "Mama"; var extraPrograms = listOf<Pair<String, String>>()   // for the flow tests
         var codes = 100          // experienced by default; learning tests set 0
         private val timers = HashMap<String, Pair<Long, () -> Unit>>()
         /** Platform speech: starts 50 ms after the call, ends 500 ms after it. */
@@ -57,7 +58,7 @@ class ModeTest {
             }
             override fun stopSpeech() { log.add("stopspeech"); timers.remove("tts"); timers.remove("tts-start") }
             override fun tone(kind: Tone) { log.add("tone $kind") }
-            override fun programs() = listOf("games:duel" to "Duel", "games:echo" to "Echo", "games:guard" to "Guard", "games:howto" to "How to play", "hub:compass" to "Compass", "hub:write" to "Write", "hub:sum" to "Sum prices").map { (id, title) -> ProgramEntry(id, Phrase.content(title)) { error("not started in this test") } }
+            override fun programs() = listOf("games:duel" to "Duel", "games:echo" to "Echo", "games:guard" to "Guard", "games:howto" to "How to play", "hub:compass" to "Compass", "hub:write" to "Write", "hub:sum" to "Sum prices").plus(extraPrograms).map { (id, title) -> ProgramEntry(id, Phrase.content(title)) { error("not started in this test") } }
             override fun startProgram(id: String) { log.add(when (id) { "games:duel" -> "startGame false"; "games:howto" -> "startGame true"; else -> "start" + id.substringAfter(':').replaceFirstChar { it.uppercase() } }) }
             override fun runAction(name: String) { log.add("run $name"); speech() }
             override fun forward(what: Forward) { log.add("fwd $what") }
@@ -76,7 +77,10 @@ class ModeTest {
             override fun installedApps() = installed
             override fun pickCount(intent: String) = picksOf[intent] ?: 0
             override fun appMuted(pkg: String) = pkg in mutedPkgs
-            override fun callCaller() = "Mama"
+            override fun callCaller() = caller
+            override fun liveApps() = live
+            override fun liveNotif(key: String) = liveNotifs[key]
+            override fun roomsWaiting() = rooms
             override fun answerCall(): Boolean { log.add("answer"); return true }
             override fun endCall(): Boolean { log.add("endcall"); return true }
             override fun emergency(): Boolean { log.add("emergency"); return true }

@@ -40,6 +40,7 @@ android {
         }
     }
     buildFeatures { buildConfig = true }
+    testOptions { unitTests { isIncludeAndroidResources = true; isReturnDefaultValues = true } }   // Robolectric: the real ButtonInput and Handler in the flow tests
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17"; freeCompilerArgs += "-Xskip-metadata-version-check" }   // litertlm is built with Kotlin 2.4
 }
@@ -62,4 +63,5 @@ dependencies {
     // Unpacks the downloaded model archives (.tar.bz2). Jars are from the Gradle distribution (Apache-2.0).
     implementation(files("../libs/commons-compress-1.26.1.jar", "../libs/commons-io-2.15.1.jar", "../libs/commons-lang3-3.14.0.jar"))
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16")
 }
