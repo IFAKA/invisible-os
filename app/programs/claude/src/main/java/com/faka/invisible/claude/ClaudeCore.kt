@@ -38,6 +38,8 @@ sealed class Choice {
     data class ActPick(val action: RoomAction) : Choice()
     object No : Choice()
     object Yes : Choice()
+    data class Approve(val opt: Approval.Opt) : Choice()
+    object Details : Choice()
     data class ProjectPick(val project: Project) : Choice()
     object NewProjectPick : Choice()
     data class AreaPick(val area: Area) : Choice()

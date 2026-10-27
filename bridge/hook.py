@@ -49,7 +49,7 @@ def post(path, body, timeout):
         return json.loads(r.read())
 
 
-def ask(kind, project, summary, options):
+def ask(kind, project, summary, options, detail=""):
     """Send to the phone and block. Returns (item id, choice or None)."""
     wait = timeout_s()
     ref = uuid.uuid4().hex
@@ -61,7 +61,7 @@ def ask(kind, project, summary, options):
         sys.exit(0)
     signal.signal(signal.SIGTERM, bye)
     try:
-        r = post("/ask", {"kind": kind, "project": project, "summary": summary, "options": options, "wait": wait, "ref": ref,
+        r = post("/ask", {"kind": kind, "project": project, "summary": summary, "options": options, "wait": wait, "ref": ref, "detail": detail,
                                "pane": os.environ.get("TMUX_PANE") or None}, wait + 10)
         return r.get("id"), r.get("answer")
     except (urllib.error.URLError, OSError, ValueError):
@@ -83,7 +83,8 @@ def handle(inp):
     if event == "PermissionRequest":
         if tool == "AskUserQuestion":
             return None   # the PreToolUse hook answers questions
-        _, choice = ask("permission", project, core.summarize(tool, inp.get("tool_input")), core.PERMISSION_OPTIONS)
+        _, choice = ask("permission", project, core.summarize(tool, inp.get("tool_input")), core.PERMISSION_OPTIONS,
+                        core.detail(tool, inp.get("tool_input")))
         return core.permission_output(choice, inp) if choice else None
     if event == "PreToolUse" and tool == "AskUserQuestion":
         tin = inp.get("tool_input") or {}

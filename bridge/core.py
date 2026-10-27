@@ -1,4 +1,5 @@
 """Pure parts of the bridge (no network, no files): summaries, hook answers, the item store. Python 3 stdlib only."""
+import json
 import os
 import threading
 import time
@@ -38,6 +39,19 @@ def summarize(tool, tool_input):
     if tool.startswith("mcp__"):
         return shorten("use " + tool.split("__")[-1].replace("_", " "), 12)
     return shorten("use " + tool, 12)
+
+
+def detail(tool, tool_input, limit=200):
+    """The exact thing a permission ask is about, as plain text, cut at `limit` characters: the command (Bash), or the tool word and
+    the file / address / query. Never reworded."""
+    ti = tool_input or {}
+    if tool == "Bash":
+        text = ti.get("command", "")
+    else:
+        verb = {"Write": "write", "Read": "read", "WebFetch": "fetch", "WebSearch": "search"}.get(tool, "edit" if tool in ("Edit", "MultiEdit", "NotebookEdit") else tool)
+        arg = ti.get("file_path") or ti.get("notebook_path") or ti.get("url") or ti.get("query") or (json.dumps(ti, ensure_ascii=False, sort_keys=True) if ti else "")
+        text = "%s %s" % (verb, arg)
+    return " ".join(str(text).split())[:limit]
 
 
 def permission_output(choice, hook_input):
@@ -93,10 +107,10 @@ class Store:
     def phone_online(self):
         return self.last_poll is not None and self.clock() - self.last_poll <= self.PHONE_ONLINE_SECONDS
 
-    def _add(self, kind, project, summary, options, ref=None, pane=None, room=None):
+    def _add(self, kind, project, summary, options, ref=None, pane=None, room=None, detail=""):
         self.seq += 1
         item = {"id": str(self.seq), "seq": self.seq, "kind": kind, "project": project,
-                "summary": summary, "options": list(options), "ref": ref, "pane": pane, "room": room,
+                "summary": summary, "options": list(options), "ref": ref, "pane": pane, "room": room, "detail": detail,
                 "answer": None, "cancelled": False, "at": self.clock()}
         self.items[item["id"]] = item
         self._trim()
@@ -108,9 +122,9 @@ class Store:
         for k in [k for k, v in self.items.items() if v["at"] < cutoff and (v["answer"] is not None or v["cancelled"] or not v["options"])]:
             del self.items[k]
 
-    def add(self, kind, project, summary, options=(), ref=None, pane=None):
+    def add(self, kind, project, summary, options=(), ref=None, pane=None, detail=""):
         with self.cv:
-            return self._add(kind, project, summary, options, ref, pane)
+            return self._add(kind, project, summary, options, ref, pane, detail=detail)
 
     def add_room_event(self, room):
         """A room turned 'needs': an /events item {"type":"room","id":<pane id>,"name":...,"state":...}."""
@@ -124,6 +138,17 @@ class Store:
         with self.cv:
             return {v["pane"]: v["summary"] for v in self.items.values()
                     if v["pane"] and v["options"] and v["answer"] is None and not v["cancelled"]}
+
+    def pending_asks(self):
+        """{tmux pane id: {"id", "kind": "permission", "what", "options"}} of open permission asks that came from a tmux pane.
+        `what` is the exact command or file (the hook's detail), else the short summary."""
+        with self.cv:
+            out = {}
+            for v in sorted(self.items.values(), key=lambda v: v["seq"]):
+                if v["pane"] and v["kind"] == "permission" and v["options"] and v["answer"] is None and not v["cancelled"]:
+                    out[v["pane"]] = {"id": v["id"], "kind": "permission", "what": (v.get("detail") or v["summary"])[:200],
+                                      "options": list(v["options"])}
+            return out
 
     def answer(self, item_id, choice):
         """choice: option text or index. Returns True if accepted."""

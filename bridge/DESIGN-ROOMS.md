@@ -59,6 +59,12 @@ Always the same walk: Home > Laptop > windows > one window > its options > an op
 5. Buttons are the OS list buttons: click = pick the item just heard, two clicks = the one before, three clicks = back one level (from the windows: leave), hold = fast scroll (release reads the item in full), hold 3 s = leave. The app screen shows the whole list, the read item marked; a tap on a row picks it.
 6. Laptop not reachable: "Laptop not reachable." (a Tailscale 100.x address adds "Is Tailscale on?"). A click or tap says "Trying again" at once, then the result; a failed retry speaks again.
 
+## Approvals (a window with an open permission ask)
+Claude Code asks permission to run a command or edit a file; the hook (`hook.py`) blocks and the bridge keeps the ask. `/rooms` gives that window `ask` (ROOMS-API.md).
+Entering it speaks "Wants to: <the exact command or file>", then "That means: <plain line>" (model, never reassures; left out if empty), then:
+Hear it again, No, Yes, Yes and do not ask again (only if the hook offered it), Read the details (the whole `what`). No is always read before Yes. Write is not offered.
+A click on Yes needs no second confirm. It sends POST /answer with the hook's own label, says "Sent to <window>", and goes back to the windows list. Too late (409): "Too late. Answered on the laptop."
+
 ## Room states (from agent-status files and hooks; no model)
 needs you (permission, question, or a status block that asks something) > failed (shell) > done (not visited since) > working > idle.
 

@@ -175,7 +175,7 @@ def make_handler(store, token, rooms):
             elif path == "/ask":
                 if not store.phone_online():   # no phone listening: answer at once so the terminal prompt shows without delay
                     self._send(200, {"id": None, "answer": None, "offline": True}); return
-                item = store.add(b.get("kind", "permission"), b.get("project", "Claude"), b.get("summary", ""), b.get("options") or [], b.get("ref"), b.get("pane"))
+                item = store.add(b.get("kind", "permission"), b.get("project", "Claude"), b.get("summary", ""), b.get("options") or [], b.get("ref"), b.get("pane"), str(b.get("detail") or "")[:200])
                 choice = store.wait_answer(item["id"], float(b.get("wait", 600)))
                 self._send(200, {"id": item["id"], "answer": choice})
             elif path == "/notify":
@@ -223,7 +223,7 @@ def watch_rooms(rooms, store, stop, every=2.0):
 
 
 def make_server(host, port, store, token, rooms=None):
-    rooms = rooms or Rooms.from_env(pending=store.pending_panes)
+    rooms = rooms or Rooms.from_env(pending=store.pending_panes, asks=store.pending_asks)
     return ThreadingHTTPServer((host, port), make_handler(store, token, rooms))
 
 
@@ -242,7 +242,7 @@ def main():
         print(pair_code(name, "http://%s:%d" % (host, a.port), token))
         return
     store = Store()
-    rooms = Rooms.from_env(pending=store.pending_panes)
+    rooms = Rooms.from_env(pending=store.pending_panes, asks=store.pending_asks)
     srv = make_server(host, a.port, store, token, rooms)
     threading.Thread(target=watch_rooms, args=(rooms, store, threading.Event()), daemon=True).start()
     print("Bridge listening on http://%s:%d" % (host, a.port))

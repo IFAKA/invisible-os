@@ -35,6 +35,14 @@ object ClaudeVoice {
     val MUTED = f("Quiet until morning.")
     val NO_BACK = f("No, go back")
     val YES = f("Yes")
+    val NO = f("No")
+    val YES_ALWAYS = f("Yes and do not ask again")
+    val DETAILS = f("Read the details")
+    private val WANTS = f("Wants to:")
+    private val MEANS = f("That means:")
+    /** What an approval says first: "Wants to: <command or file>", then "That means: <plain>" if the laptop has one. */
+    fun wants(what: String, plain: String): Phrase =
+        Phrase.join(listOf(WANTS, Phrase.content(what, "en")) + if (plain.isBlank()) emptyList() else listOf(MEANS, Phrase.content(plain.squash(), "en")))
     val CONTINUE_CHAT = f("Continue last chat")
     val NEW_CHAT = f("New chat")
     val NEW_PROJECT = f("New project")

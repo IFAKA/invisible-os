@@ -9,7 +9,41 @@ import java.util.TimeZone
 data class Room(val id: String, val name: String, val project: String, val kind: String, val state: String,
                 val need: String, val options: List<String>, val actions: List<String>,
                 /** The short story (what it was doing, what happened, what it wants) and what a plain "go" approves; "" when the server has none yet. */
-                val story: String = "", val go: String = "")
+                val story: String = "", val go: String = "",
+                /** An open permission ask of this window (state "needs"): Claude Code wants to run a command or edit a file. */
+                val ask: RoomAsk? = null)
+
+/** A permission ask (bridge/ROOMS-API.md, room.ask): [id] for the answer, [what] the exact command or file, [plain] a one-line meaning from the laptop's model ("" if none), [options] the hook's labels in its order. */
+data class RoomAsk(val id: String, val what: String, val plain: String, val options: List<String>)
+
+/** Maps the hook's option labels to what the phone offers: No, Yes, "Yes and do not ask again", in that order; a kind the hook did not offer is never offered. */
+object Approval {
+    enum class Kind { NO, YES, ALWAYS }
+    data class Opt(val kind: Kind, val label: String)
+
+    private val denyWords = setOf("no", "deny", "denied", "reject", "refuse", "block", "decline", "cancel", "never")
+    private val allowWords = setOf("yes", "allow", "approve", "accept", "ok", "okay", "proceed", "run", "continue")
+    private val alwaysWords = setOf("always", "remember", "persist")
+
+    /** The kind of one label: a denial word wins (so "Always deny" is No), then always, then allow; null when it means none of them. */
+    fun classify(label: String): Kind? {
+        val w = label.lowercase().split(Regex("[^a-z]+")).filter { it.isNotEmpty() }
+        val text = w.joinToString(" ")
+        return when {
+            w.any { it in denyWords } -> Kind.NO
+            w.any { it in alwaysWords } || "do not ask" in text || "dont ask" in text || "don t ask" in text || "not ask again" in text -> Kind.ALWAYS
+            w.any { it in allowWords } -> Kind.YES
+            else -> null
+        }
+    }
+
+    /** The options to offer, always in the order No, Yes, Always; the first label of each kind that the hook gave. */
+    fun options(labels: List<String>): List<Opt> {
+        val byKind = LinkedHashMap<Kind, String>()
+        for (l in labels) { val k = classify(l) ?: continue; if (k !in byKind) byKind[k] = l }
+        return Kind.values().mapNotNull { k -> byKind[k]?.let { Opt(k, it) } }
+    }
+}
 
 /** A folder you can open a Claude chat in. */
 data class Project(val name: String, val path: String, val uses: Int)

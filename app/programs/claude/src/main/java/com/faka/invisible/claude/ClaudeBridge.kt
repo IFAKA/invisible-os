@@ -51,7 +51,7 @@ class BridgeClient(base: String, private val token: String) {
         return (0 until a.length()).mapNotNull { i ->
             val r = a.getJSONObject(i)
             val id = r.optString("id")
-            if (id.isBlank()) null else Room(id, r.optString("name"), r.optString("project"), r.optString("kind"), r.optString("state"), r.optString("need"), strings(r.optJSONArray("options")), strings(r.optJSONArray("actions")), r.optString("story"), r.optString("go"))
+            if (id.isBlank()) null else Room(id, r.optString("name"), r.optString("project"), r.optString("kind"), r.optString("state"), r.optString("need"), strings(r.optJSONArray("options")), strings(r.optJSONArray("actions")), r.optString("story"), r.optString("go"), r.optJSONObject("ask")?.let { ak -> RoomAsk(ak.optString("id"), ak.optString("what"), ak.optString("plain"), strings(ak.optJSONArray("options"))) }?.takeIf { it.id.isNotBlank() })
         }
     }
     /** GET /room/last: Claude's whole last message. */

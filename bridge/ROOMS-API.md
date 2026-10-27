@@ -16,8 +16,18 @@ ROOM = {
   "options": ["go"],                quoted replies found in the need line (max 3)
   "actions": ["option:go","go","yes","commit",...]   ordered action ids for this room (see below)
   "story": "Tests ran, 3 of 12 failed. Fixed one. Commit the fix?",  the short story (see /room/story); "" until it is made, always "" for working rooms
-  "go": "commit the fix"            at most 5 words: what a plain "go" or "yes" approves; "" if unclear
+  "go": "commit the fix",           at most 5 words: what a plain "go" or "yes" approves; "" if unclear
+  "ask": {...}                      ONLY while the hook has an open permission ask for this pane (then state is "needs"), see below
 }
+ASK = {
+  "id": "7",                        the ask id, for POST /answer
+  "kind": "permission",
+  "what": "rm -rf build/cache",     the exact command (Bash) or "edit|write|read|fetch <file or address>", white space squashed, cut at 200 chars; never rewritten by a model (the hook sends it as `detail` in POST /ask)
+  "plain": "Deletes the build cache folder",   one line from the local model (same Ollama call, cache and 6 s limit as stories; max 12 words; it must not reassure (safe, harmless, fine, ok...) nor name anything not in `what`); "" until made and on any failure. /rooms never waits for it.
+  "options": ["Allow","Deny","Always allow"]   the hook's option labels, in its order
+}
+Answer an ask: POST /answer {"id": "<ask.id>", "choice": "<one of ask.options, exactly>"} -> 200 {"ok":true}; 409 {"ok":false} = too late (answered on the laptop, cancelled or timed out).
+The hook then allows, denies or allows-and-remembers as before (hooks are not changed). The phone offers No, Yes, Yes and do not ask again (only if offered) by the meaning of the labels, No first.
 
 ## GET /room/last?id=%3   -> {"text": "..."}   Claude's whole last message, markdown stripped (for "Read all")
 ## GET /room/story?id=%3 -> {"story": "...", "go": "..."}   may wait up to 6 s for the local model; then the fallback

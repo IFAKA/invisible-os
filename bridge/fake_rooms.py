@@ -21,6 +21,11 @@ ROOMS = [
     {"id": "%3", "name": "Gamma", "project": "gamma-proj", "path": "/tmp/gamma", "kind": "shell", "state": "done",
      "need": "build finished", "options": [], "actions": ["again", "make:test", "stop", "screen", "write"], "story": "", "go": ""},
 ]
+# A window with an open permission ask (ROOMS-API.md room.ask). Not in ROOMS (the e2e scenarios count those); a test passes it with start(rooms=...).
+ASK_ROOM = {"id": "%4", "name": "Delta", "project": "delta-proj", "path": "/tmp/delta", "kind": "claude", "state": "needs",
+            "need": "waiting for your permission", "options": [], "actions": ["stop", "readall", "screen", "write"], "story": "", "go": "",
+            "ask": {"id": "7", "kind": "permission", "what": "rm -rf build/cache", "plain": "Deletes the build cache folder",
+                    "options": ["Allow", "Deny", "Always allow"]}}
 PROJECTS = [{"name": "alpha-proj", "path": "/tmp/alpha", "uses": 10}, {"name": "beta-proj", "path": "/tmp/beta", "uses": 5}]
 
 class H(BaseHTTPRequestHandler):

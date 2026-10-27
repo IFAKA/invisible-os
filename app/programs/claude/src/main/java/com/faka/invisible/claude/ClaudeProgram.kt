@@ -92,6 +92,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         is Choice.ActPick -> ClaudeVoice.label(c.action, room?.go.orEmpty())
         Choice.No -> ClaudeVoice.NO_BACK
         Choice.Yes -> ClaudeVoice.YES
+        is Choice.Approve -> when (c.opt.kind) { Approval.Kind.NO -> ClaudeVoice.NO; Approval.Kind.YES -> ClaudeVoice.YES; Approval.Kind.ALWAYS -> ClaudeVoice.YES_ALWAYS }
+        Choice.Details -> ClaudeVoice.DETAILS
         is Choice.ProjectPick -> Phrase.content(c.project.name, "en")
         Choice.ContinueChat -> ClaudeVoice.CONTINUE_CHAT
         Choice.NewChat -> ClaudeVoice.NEW_CHAT
@@ -212,15 +214,19 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         val r = if (r0.story.isBlank() && old != null && old.id == r0.id) r0.copy(story = old.story, go = old.go) else r0   // keep the story fetched on entry
         room = r; pending = null
         onBack = { loadRooms() }
-        showList(RoomAction.earbudList(r).map { Choice.ActPick(it) }, intro)
+        val ask = r.ask
+        val items: List<Choice> = if (ask == null) RoomAction.earbudList(r).map { Choice.ActPick(it) }
+            else listOf<Choice>(Choice.ActPick(RoomAction(RoomAction.HEAR))) + Approval.options(ask.options).map { Choice.Approve(it) } + Choice.Details   // No is always read before Yes; no Write here
+        showList(items, intro)
     }
 
     /** What is said first in a window: its story, else its need line, else what it is about. */
     private fun intro(r: Room): Phrase =
-        r.story.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: r.need.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: ClaudeVoice.window(r)
+        r.ask?.let { ClaudeVoice.wants(it.what, it.plain) } ?: r.story.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: r.need.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: ClaudeVoice.window(r)
 
     /** A window: its story first (asked from the laptop once if the list had none), then its options. */
     private fun openRoom(r: Room) {
+        if (r.ask != null) { storyIntro = intro(r); showActions(r, storyIntro); return }
         if (r.story.isNotBlank()) { storyIntro = intro(r); showActions(r, storyIntro); return }
         scanner.stop(); awaitItem = false; host.stopSpeech()
         phase = Phase.LOADING
@@ -249,6 +255,27 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
             else if (ok == null) unreachable { showActions(r, null) }
             else { reopen = { showActions(r, null) }; phase = Phase.STUCK; say(ClaudeVoice.FAILED) }
         }
+    }
+
+    /** Send the pick of an approval through the bridge (POST /answer); then "Sent to <window>" and the windows list. */
+    private fun approve(r: Room, o: Approval.Opt) {
+        val ask = r.ask ?: return
+        scanner.stop(); awaitItem = false; host.stopSpeech()
+        phase = Phase.SENDING
+        bg({ client.answer(ask.id, o.label) }) { code ->
+            when (code) {
+                200 -> { phase = Phase.SENT; say(ClaudeVoice.sentTo(RoomState.nameOf(r))) }
+                null -> unreachable { showActions(r, null) }
+                else -> { reopen = { loadRooms() }; phase = Phase.STUCK; say(ClaudeVoice.TOO_LATE) }
+            }
+        }
+    }
+
+    private fun readDetails(r: Room) {
+        val what = r.ask?.what.orEmpty()
+        scanner.stop(); awaitItem = false; host.stopSpeech()
+        phase = Phase.READING
+        say(Phrase.content(what, "en"))
     }
 
     private fun readAll(r: Room) {
@@ -334,6 +361,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
             Choice.MutePick -> mute()
             Choice.TestDonePick -> port.testDone()
             is Choice.ActPick -> doAction(c.action)
+            is Choice.Approve -> room?.let { approve(it, c.opt) }
+            Choice.Details -> room?.let { readDetails(it) }
             Choice.No -> room?.let { showActions(it, null) }
             Choice.Yes -> { val r = room; val a = pending; if (r != null && a != null) act(r, a) }
             is Choice.ProjectPick -> showModes(c.project)

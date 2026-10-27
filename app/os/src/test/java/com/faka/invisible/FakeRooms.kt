@@ -77,6 +77,11 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
         fun room(id: String, name: String, project: String, kind: String, state: String, need: String, actions: List<String>, story: String = "", go: String = "") =
             JSONObject().put("id", id).put("name", name).put("project", project).put("path", "/tmp/$name").put("kind", kind).put("state", state)
                 .put("need", need).put("options", JSONArray()).put("actions", JSONArray(actions)).put("story", story).put("go", go)
+        /** A window with an open permission ask (ROOMS-API.md room.ask); the answer is POST /answer {id, choice}, recorded in [posts]. */
+        fun askRoom(options: List<String> = listOf("Allow", "Deny", "Always allow")) =
+            room("%4", "Delta", "delta-proj", "claude", "needs", "waiting for your permission", listOf("stop", "readall", "screen", "write"))
+                .put("ask", JSONObject().put("id", "7").put("kind", "permission").put("what", "rm -rf build/cache")
+                    .put("plain", "Deletes the build cache folder").put("options", JSONArray(options)))
         val DEFAULT_ROOMS = listOf(
             room("%1", "Alpha", "alpha-proj", "claude", "needs", "The design doc is ready.", ACTIONS, "Wrote the design doc. It is ready. Say go to start building.", "start building"),
             room("%2", "Beta", "beta-proj", "claude", "working", "", listOf("stop", "readall", "screen", "write")),

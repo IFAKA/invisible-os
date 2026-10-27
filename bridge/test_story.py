@@ -133,5 +133,48 @@ class CacheTest(unittest.TestCase):
         self.assertEqual(c.peek("%1", "claude", "", "", "waiting"), {"story": "waiting", "go": ""})
 
 
+class PlainTest(unittest.TestCase):
+    WHAT = "rm -rf build/cache"
+
+    def model(self, line):
+        return lambda prompt: json.dumps({"plain": line})
+
+    def test_good_line(self):
+        self.assertEqual(story.make_plain(self.WHAT, self.model("Deletes the folder build/cache")), "Deletes the folder build/cache")
+
+    def test_reassurance_is_refused(self):
+        for bad in ["Deletes a cache folder, it is safe", "A harmless cleanup", "Normal cleanup of files", "This is fine to run", "Deletes files, risky"]:
+            self.assertEqual(story.make_plain(self.WHAT, self.model(bad)), "", bad)
+
+    def test_too_long_or_invented_or_empty(self):
+        self.assertEqual(story.make_plain(self.WHAT, self.model("Deletes " + "the old " * 6 + "folder")), "")
+        self.assertEqual(story.make_plain(self.WHAT, self.model("Deletes the file notes.md")), "")
+        self.assertEqual(story.make_plain(self.WHAT, self.model("")), "")
+        self.assertEqual(story.make_plain(self.WHAT, lambda p: "not json"), "")
+        self.assertEqual(story.make_plain(self.WHAT, None), "")
+
+    def test_failure_is_empty(self):
+        def boom(p):
+            raise OSError("down")
+        self.assertEqual(story.make_plain(self.WHAT, boom), "")
+
+    def test_cache_never_waits_and_fills_later(self):
+        calls = []
+        def model(p):
+            calls.append(1)
+            return json.dumps({"plain": "Deletes the folder build/cache"})
+        c = story.StoryCache(model)
+        c.plain(self.WHAT)
+        for _ in range(100):
+            if c.plain(self.WHAT):
+                break
+            time.sleep(0.02)
+        self.assertEqual(c.plain(self.WHAT), "Deletes the folder build/cache")
+        self.assertEqual(len(calls), 1)
+
+    def test_no_model_is_empty(self):
+        self.assertEqual(story.StoryCache(None).plain(self.WHAT), "")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -157,6 +157,54 @@ def make_story(kind, source, context, fallback, model):
     return story, check_go(go, source, context), True
 
 
+PLAIN_WORDS = 12
+# Never reassure: the line may say what the action does, not that it is fine.
+REASSURE_RE = re.compile(r"\b(safe\w*|harmless\w*|secure\w*|fine|ok|okay|trust\w*|no risk|risk[- ]free|nothing bad|normal|routine|standard|"
+                         r"common|typical|innocent|benign|good|legit\w*|unsafe|dangerous|risky)\b", re.I)
+
+
+def build_plain_prompt(what):
+    return ("A coding assistant asks permission to do this on the user's computer:\n---\n%s\n---\n"
+            "Write what it does, for a blind listener, as JSON: {\"plain\": \"...\"}.\n"
+            "plain: one line, at most %d words, plain words, starting with a verb (example: \"Deletes the build folder\"). "
+            "Say only what it does. Never say whether it is safe, harmless, fine or risky. Use only names that are in the text.\n"
+            "Output only the JSON." % (str(what)[:1500], PLAIN_WORDS))
+
+
+def parse_plain(text):
+    """Pure. The plain line from the model's reply, or ""."""
+    m = re.search(r"\{.*\}", str(text or ""), re.S)
+    if not m:
+        return ""
+    try:
+        o = json.loads(m.group(0))
+    except ValueError:
+        return ""
+    v = o.get("plain") if isinstance(o, dict) else ""
+    return re.sub(r"(\*\*|__|`|^#+\s*)", "", squash(v if isinstance(v, str) else ""))
+
+
+def check_plain(plain, what):
+    """Pure. The cleaned line, or "" when empty, longer than PLAIN_WORDS, reassuring, or naming something that is not in `what`."""
+    plain = squash(plain)
+    if not plain or len(_words(plain)) > PLAIN_WORDS or REASSURE_RE.search(plain):
+        return ""
+    hay = str(what).lower()
+    if any(not _in_source(t, hay) for t in risky_tokens(plain)):
+        return ""
+    return plain
+
+
+def make_plain(what, model):
+    """Pure given `model`. The one-line meaning of an ask, or "" (no model, failure, or the guard)."""
+    if model is None or not squash(what):
+        return ""
+    try:
+        return check_plain(parse_plain(model(build_plain_prompt(what))), what)
+    except Exception:
+        return ""
+
+
 def ollama_model(url="http://127.0.0.1:11434/api/generate", model="gemma3:4b", timeout=TIMEOUT):
     def call(prompt):
         body = json.dumps({"model": model, "prompt": prompt, "stream": False, "format": "json", "keep_alive": "30m",
@@ -176,6 +224,8 @@ class StoryCache:
         self.lock = threading.Lock()
         self.done = collections.OrderedDict()   # key -> (result dict, time, from_model)
         self.pending = {}                        # key -> threading.Event
+        self.plains = {}                         # what -> (plain line, time); "" = failed, tried again after RETRY_AFTER
+        self.plain_busy = set()
 
     @staticmethod
     def key(pane, source):
@@ -246,3 +296,26 @@ class StoryCache:
         with self.lock:
             r = self._fresh(key)
         return dict(r) if r is not None else {"story": squash(fallback) or first_sentence(source), "go": ""}
+
+    def plain(self, what):
+        """The one-line meaning of an ask (see check_plain), from the cache. Never waits: the model runs in a background thread
+        (same model, same timeout as stories) and the line shows in a later /rooms; "" until then and on failure."""
+        what = squash(what)
+        if self.model is None or not what:
+            return ""
+        with self.lock:
+            e = self.plains.get(what)
+            if e and (e[0] or self.clock() - e[1] < RETRY_AFTER):
+                return e[0]
+            if what not in self.plain_busy:
+                self.plain_busy.add(what)
+                threading.Thread(target=self._plain_work, args=(what,), daemon=True).start()
+            return ""
+
+    def _plain_work(self, what):
+        line = make_plain(what, self.model)
+        with self.lock:
+            self.plains[what] = (line, self.clock())
+            self.plain_busy.discard(what)
+            while len(self.plains) > MAX_ENTRIES:
+                self.plains.pop(next(iter(self.plains)))

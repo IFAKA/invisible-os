@@ -370,6 +370,40 @@ class RoomsTmuxTest(unittest.TestCase):
         st.add("permission", "p", "run ls", core.PERMISSION_OPTIONS, pane="%99")
         self.assertEqual(st.pending_panes(), {"%99": "run ls"})
 
+    def test_open_permission_ask_in_rooms(self):
+        c2, c2win = self.cat2
+        self.transcript(c2, "s3b", "All done.\n**What needs me:** nothing.")
+        self.set_status(c2win, "0 0 0 0 0 0 0")
+        st = core.Store()
+        st.add("permission", "p", "run npm test", core.PERMISSION_OPTIONS, pane=c2, detail="npm test -- --watch=false")
+        fake = lambda prompt: json.dumps({"plain": "Runs the project tests"})
+        r = self.make(pending=st.pending_panes, asks=st.pending_asks, story_model=fake)
+        room = self.by_id(r.rooms(), c2)
+        self.assertEqual(room["state"], "needs")
+        self.assertEqual((room["ask"]["kind"], room["ask"]["what"], room["ask"]["options"]),
+                         ("permission", "npm test -- --watch=false", ["Allow", "Deny", "Always allow"]))
+        self.assertEqual(room["ask"]["plain"], "")   # the model runs in the background; /rooms never waits
+        for _ in range(100):
+            if r.stories.plain("npm test -- --watch=false"):
+                break
+            time.sleep(0.02)
+        r.snap = (0.0, [])
+        self.assertEqual(self.by_id(r.rooms(), c2)["ask"]["plain"], "Runs the project tests")
+        # the phone answers through the existing /answer
+        self.assertTrue(st.answer(room["ask"]["id"], "Deny"))
+        r.snap = (0.0, [])
+        self.assertNotIn("ask", self.by_id(r.rooms(), c2))
+
+    def test_ask_detail_is_exact_and_cut(self):
+        self.assertEqual(core.detail("Bash", {"command": "git  push\norigin main"}), "git push origin main")
+        self.assertEqual(len(core.detail("Bash", {"command": "x" * 500})), 200)
+        self.assertEqual(core.detail("Edit", {"file_path": "/a/b.py"}), "edit /a/b.py")
+        st = core.Store()
+        st.add("permission", "p", "short", core.PERMISSION_OPTIONS, pane="%5")
+        self.assertEqual(st.pending_asks()["%5"]["what"], "short")   # no detail: the summary
+        st.add("question", "p", "which?", ["a", "b"], pane="%6")
+        self.assertNotIn("%6", st.pending_asks())
+
     def test_no_status_block_uses_last_sentences(self):
         c2, c2win = self.cat2
         self.transcript(c2, "s4", "First. Second. Third.")

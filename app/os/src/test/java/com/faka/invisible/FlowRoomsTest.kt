@@ -73,6 +73,53 @@ class FlowRoomsTest {
         assertEquals(1, s.gets.count { it.startsWith("/room/story?id=") })
     }
 
+    // ---- rooms_approval ----
+    /** Opens the ask window; returns the mark taken just before the click, so [RoboRig.said] from it holds what the window says. */
+    private fun enterAsk(rig: RoboRig, s: FakeRooms): Int {
+        start(rig, Port(listOf(Computer("Home", s.url, s.token)), Computer("Home", s.url, s.token)))
+        val i = rig.mark(); rig.needLive("delta-proj, Delta, needs you", i); rig.advance(60)
+        val j = rig.mark(); rig.press("120")
+        return j
+    }
+
+    @Test fun rooms_approval_reads_what_it_wants_no_before_yes_and_yes_is_sent() {
+        val s = server(rooms = listOf(FakeRooms.askRoom())); val rig = RoboRig()
+        val j = enterAsk(rig, s)
+        rig.needLive("Wants to: rm -rf build/cache", j)
+        rig.needLive("That means: Deletes the build cache folder", j)
+        rig.needLive("Yes", j)   // the item Yes has just started: a click picks it
+        val h = rig.said.drop(j)
+        val wants = h.indexOfFirst { it.contains("Wants to: rm -rf build/cache") }
+        val hear = h.indexOfFirst { it.contains("Hear it again") }
+        val no = h.indexOfFirst { it == "No" }
+        val yes = h.indexOfFirst { it == "Yes" }
+        assertTrue("order wants, hear, No, Yes: $h", wants in 0 until hear && hear < no && no < yes)
+        s.posts.clear()
+        rig.press("120")
+        rig.needLive("Sent to Delta", j)
+        assertTrue("answer posted: ${s.posts}", s.posts.any { (path, b) -> path == "/answer" && b.optString("id") == "7" && b.optString("choice") == "Allow" })
+        assertTrue("nothing else was sent: ${s.posts}", s.posts.none { (path, _) -> path == "/room/act" || path == "/room/send" })
+    }
+
+    @Test fun rooms_approval_list_order_and_no_write() {
+        val s = server(rooms = listOf(FakeRooms.askRoom())); val rig = RoboRig()
+        val j = enterAsk(rig, s)
+        rig.needLive("Read the details", j)
+        val h = rig.said.drop(j)
+        val at = listOf("Hear it again", "No", "Yes", "Yes and do not ask again", "Read the details").map { w -> h.indexOfFirst { it == w || (w == "Hear it again" && it.contains(w)) } }
+        assertTrue("all heard, in order: $at $h", at.all { it >= 0 } && at == at.sorted())
+        assertFalse("Write is not offered", h.any { it == "Write" })
+    }
+
+    @Test fun rooms_approval_has_no_always_when_the_hook_did_not_offer_it() {
+        val s = server(rooms = listOf(FakeRooms.askRoom(listOf("Allow", "Deny")))); val rig = RoboRig()
+        val j = enterAsk(rig, s)
+        rig.needLive("Read the details", j)
+        val h = rig.said.drop(j)
+        assertTrue("No and Yes are offered: $h", h.contains("No") && h.contains("Yes"))
+        assertFalse("no always option: $h", h.any { it.contains("do not ask again") })
+    }
+
     // ---- rooms_hear_again ----
     @Test fun rooms_hear_again_replays_the_story() {
         val s = server(); val rig = RoboRig()

@@ -245,7 +245,7 @@ class Rooms:
              "#{pane_current_path}\t#{window_name}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{window_activity}"
 
     def __init__(self, tmux=None, status_dir=None, panes_dir=None, claude_dir=None, config_dir=None, history=None,
-                 zsh_history=None, llm=None, story_model=None, claude_cmd="claude", pending=None, clock=time.time):
+                 zsh_history=None, llm=None, story_model=None, claude_cmd="claude", pending=None, asks=None, clock=time.time):
         self.tmux_cmd = shlex.split(tmux or _default_tmux())
         self.status_dir = status_dir or os.path.join(os.environ.get("TMUX_TMPDIR", "/tmp"), "agent-status-%d" % os.getuid())
         self.panes_dir = panes_dir or os.path.expanduser("~/.local/state/claude-panes")
@@ -255,6 +255,7 @@ class Rooms:
         self.zsh_history = zsh_history or os.path.expanduser("~/.zsh_history")
         self.claude_cmd = claude_cmd
         self.pending = pending or (lambda: {})   # () -> {pane id: summary} of open bridge asks
+        self.asks = asks or (lambda: {})   # () -> {pane id: {id, kind, what, options}} of open permission asks
         self.clock = clock
         self.ask_delay = 4.0
         self.summarizer = Summarizer(llm)
@@ -267,14 +268,14 @@ class Rooms:
         self._picks_cache = (-1.0, [])
 
     @classmethod
-    def from_env(cls, pending=None):
+    def from_env(cls, pending=None, asks=None):
         e = os.environ.get
         off = e("INVISIBLE_OLLAMA", "1") == "0"
         llm = None if off else ollama_llm()
         return cls(tmux=e("INVISIBLE_TMUX"), status_dir=e("INVISIBLE_AGENT_STATUS_DIR"), panes_dir=e("CLAUDE_PANES_DIR"),
                    claude_dir=e("INVISIBLE_CLAUDE_DIR"), config_dir=e("INVISIBLE_CONFIG_DIR"), llm=llm,
                    story_model=None if off else ollama_model(),
-                   zsh_history=e("INVISIBLE_ZSH_HISTORY"), claude_cmd=e("INVISIBLE_CLAUDE_CMD", "claude"), pending=pending)
+                   zsh_history=e("INVISIBLE_ZSH_HISTORY"), claude_cmd=e("INVISIBLE_CLAUDE_CMD", "claude"), pending=pending, asks=asks)
 
     # -- tmux --
     def tmux(self, *args, timeout=5):
@@ -358,10 +359,23 @@ class Rooms:
         else:
             self._shell_state(room, row)
         room["actions"] = self._actions(room)
+        self._add_ask(room)
         source = room.get("_src", "")
         if room["state"] != "working":
             room.update(self.stories.peek(row["id"], room["kind"], source, self._story_context(room), self._story_fallback(room, source)))
         return room
+
+    def _add_ask(self, room):
+        """An open permission ask of this pane: the room needs you, and `ask` says what it wants (exact) and what it means (model, may be "")."""
+        try:
+            ask = (self.asks() or {}).get(room["id"])
+        except Exception:
+            ask = None
+        if not ask or room["kind"] != "claude":
+            return
+        room["state"] = "needs"
+        room["ask"] = {"id": ask["id"], "kind": ask.get("kind", "permission"), "what": str(ask["what"])[:200],
+                       "plain": self.stories.plain(ask["what"]), "options": list(ask["options"])}
 
     @staticmethod
     def _story_context(room):
