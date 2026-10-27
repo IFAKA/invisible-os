@@ -7,6 +7,7 @@ Hooks:  POST /ask {kind, project, summary, options, wait}  (blocks until answere
 All calls need the header  Authorization: Bearer <token>.
 """
 import argparse
+import base64
 import hmac
 import json
 import os
@@ -25,6 +26,18 @@ from rooms import Rooms  # noqa: E402
 CONFIG_DIR = os.path.expanduser("~/.config/invisible-bridge")
 TOKEN_FILE = os.path.join(CONFIG_DIR, "token")
 URL_FILE = os.path.join(CONFIG_DIR, "url")   # read by hook.py, so the hook calls the address the server really listens on
+
+
+def default_name():
+    """The Mac's short host name, or the user name."""
+    n = socket.gethostname().split(".")[0].strip()
+    return n or os.environ.get("USER", "") or "Computer"
+
+
+def pair_code(name, url, token):
+    """One line the phone can paste: invisible-pair:<base64url of JSON {"n","u","t"}>."""
+    raw = json.dumps({"n": name, "u": url, "t": token}, separators=(",", ":"), ensure_ascii=False).encode()
+    return "invisible-pair:" + base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
 def load_token(path=TOKEN_FILE):
@@ -185,13 +198,16 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--host", default=None, help="address to listen on (default: Tailscale or LAN address)")
     ap.add_argument("--port", type=int, default=int(os.environ.get("INVISIBLE_BRIDGE_PORT", "8765")))
-    ap.add_argument("--show-token", action="store_true", help="print the token and exit")
+    ap.add_argument("--name", default=None, help="the name shown on the phone (default: this computer's short name)")
+    ap.add_argument("--show-token", action="store_true", help="print the token and the pair code, then exit")
     a = ap.parse_args()
     token = load_token()
+    host = a.host or default_host()
+    name = a.name or default_name()
     if a.show_token:
         print(token)
+        print(pair_code(name, "http://%s:%d" % (host, a.port), token))
         return
-    host = a.host or default_host()
     store = Store()
     rooms = Rooms.from_env(pending=store.pending_panes)
     srv = make_server(host, a.port, store, token, rooms)
@@ -200,8 +216,9 @@ def main():
     os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(URL_FILE, "w") as f:
         f.write("http://%s:%d\n" % (host, a.port))
-    print("Paste this address and the token into the phone app (home screen, Computers, Add a computer).")
     print("Token (also in %s):\n  %s" % (TOKEN_FILE, token))
+    print("Copy this line and paste it in the phone app (home screen, Computers, Add a computer):")
+    print(pair_code(name, "http://%s:%d" % (host, a.port), token))
     sys.stdout.flush()
     try:
         srv.serve_forever()

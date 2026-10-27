@@ -11,6 +11,7 @@ import com.faka.invisible.voicekit.ScanOut
 import com.faka.invisible.voicekit.Scanner
 import com.faka.invisible.voicekit.Timers
 import com.faka.invisible.voicekit.Tone
+import com.faka.invisible.voicekit.Voice
 import com.faka.invisible.voicekit.VoiceKit
 import java.io.IOException
 
@@ -18,8 +19,10 @@ import java.io.IOException
 interface RoomsPort {
     /** The computers you added in the app (each has its own bridge). */
     fun computers(): List<Computer>
-    /** The name of the computer that just asked for you (the OS opened this tool because of it); read once, then forgotten. Null = none. */
-    fun takeTarget(): String?
+    /** The one computer the phone listens to; null = none set. */
+    fun active(): Computer?
+    /** Make [name] the computer the phone listens to (the OS stops the other watcher and starts this one). */
+    fun switchTo(name: String)
     /** Leave this tool and open Write; [sendTo] gets the finished text (false = not sent). The OS comes back to this tool if nothing was written. */
     fun write(sendTo: (String) -> Boolean)
     /** Leave this tool and open Write [count] times in a row (each text is "" when nothing was written). If the first is empty the OS comes
@@ -51,7 +54,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     private lateinit var timers: Timers
     private lateinit var client: BridgeClient
     private var computers: List<Computer> = emptyList()
-    private val many get() = computers.size > 1
+    private var switchIntro: Phrase? = null
+    private lateinit var listenTo: Computer
     @Volatile private var gen = 0
     private var queue = ClaudeQueue()
     private var current: ClaudeEvent? = null
@@ -77,7 +81,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     private fun label(c: Choice): Phrase = when (c) {
         is Choice.Option -> Phrase.content(c.text, "en")
         Choice.Again -> ClaudeVoice.READ_AGAIN
-        is Choice.ComputerPick -> if (c.needs) ClaudeVoice.computerNeeds(c.computer.name) else Phrase.content(c.computer.name, "en")
+        is Choice.SwitchPick -> ClaudeVoice.switchTo(c.computer.name)
+        Choice.SwitchMenu -> ClaudeVoice.SWITCH_COMPUTER
         is Choice.RoomPick -> ClaudeVoice.room(RoomState.nameOf(c.room), c.room.state)
         Choice.ProjectsPick -> ClaudeVoice.PROJECTS
         Choice.MutePick -> ClaudeVoice.MUTE
@@ -107,19 +112,19 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         if (running) return
         this.host = host
         computers = port.computers().filter { it.url.isNotBlank() && it.token.isNotBlank() }
-        if (computers.isEmpty()) { host.speak(ClaudeVoice.NOT_SET); host.ended(); return }
+        val active = port.active()?.takeIf { it.url.isNotBlank() && it.token.isNotBlank() }
+        if (active == null) { host.speak(ClaudeVoice.NOT_SET); host.ended(); return }
         timers = HandlerTimers(host.handler)
         running = true
         host.pauseMusic()
         phase = Phase.LOADING
         stopWaiting = host.waiting()
-        val target = port.takeTarget()?.let { Computers.find(computers, it) }
-        val only = if (computers.size == 1) computers[0] else target
-        if (only != null) connect(only) else loadComputers()
+        connect(active)
     }
 
     /** Work with one computer: forget the last one's questions, then poll this one. */
     private fun connect(c: Computer) {
+        listenTo = c
         client = BridgeClient(c.url, c.token)
         queue = ClaudeQueue(); current = null; asking = false
         phase = Phase.LOADING
@@ -128,24 +133,19 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         Thread({ pollLoop(g, cl) }, "claude-poll").apply { isDaemon = true }.start()
     }
 
-    /** Two or more computers: the first list. Each is asked once for its rooms, so the ones that need you can say so. */
-    private fun loadComputers() {
-        gen++   // no poll thread is running while you choose
-        scanner.stop(); awaitItem = false; asking = false
-        phase = Phase.LOADING
-        val all = computers
-        bg({
-            val needs = arrayOfNulls<Boolean>(all.size)
-            val ts = all.mapIndexed { i, c -> Thread({
-                needs[i] = try { BridgeClient(c.url, c.token).rooms().any { it.state == RoomState.NEEDS } } catch (_: IOException) { false }
-            }, "claude-computer").apply { isDaemon = true; start() } }
-            ts.forEach { it.join(8000) }
-            needs.map { it == true }
-        }) { n ->
-            onBack = { shutdown() }
-            showList(all.mapIndexed { i, c -> Choice.ComputerPick(c, n?.getOrNull(i) == true) }, null)
-            reopen = { loadComputers() }
-        }
+    /** The list of the other computers (3 or more computers): pick one to listen to. */
+    private fun showSwitchList() {
+        onBack = { loadRooms() }
+        showList(Computers.others(computers, listenTo).map { Choice.SwitchPick(it) }, null)
+    }
+
+    /** Listen to [c] from now on: the OS moves its watcher, this tool polls it, and its rooms open with "<name>, listening". */
+    private fun switchTo(c: Computer) {
+        host.stopSpeech(); scanner.stop(); awaitItem = false
+        port.switchTo(c.name)
+        endWaiting(); stopWaiting = host.waiting()
+        connect(c)
+        switchIntro = Voice.listening(c.name)
     }
 
     override fun stop() = shutdown()
@@ -213,9 +213,13 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     }
 
     private fun showRooms(list: List<Room>) {
-        onBack = { if (many) loadComputers() else shutdown() }
-        val picks = list.take(MAX_ROOMS).map { Choice.RoomPick(it) } + Choice.ProjectsPick + Choice.MutePick + Choice.TestDonePick
-        showList(picks, if (list.isEmpty()) ClaudeVoice.NO_ROOMS else null)
+        onBack = { shutdown() }
+        val others = Computers.others(computers, listenTo)
+        val switch: List<Choice> = when (others.size) { 0 -> emptyList(); 1 -> listOf(Choice.SwitchPick(others[0])); else -> listOf(Choice.SwitchMenu) }
+        val picks = list.take(MAX_ROOMS).map { Choice.RoomPick(it) } + Choice.ProjectsPick + switch + Choice.MutePick + Choice.TestDonePick
+        val intro = switchIntro ?: if (list.isEmpty()) ClaudeVoice.NO_ROOMS else null
+        switchIntro = null
+        showList(picks, intro)
     }
 
     private fun showActions(r: Room, intro: Phrase?) {
@@ -324,7 +328,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
             phase == Phase.INTRO -> { host.stopSpeech(); phase = Phase.ITEM; scanner.speakItem(0) }
             n == 2 -> { host.stopSpeech(); awaitItem = false; phase = Phase.ITEM; scanner.prevIn(0) }
             else -> when (val c = scanner.list.current) {
-                is Choice.ComputerPick -> { host.stopSpeech(); connect(c.computer) }
+                is Choice.SwitchPick -> switchTo(c.computer)
+                Choice.SwitchMenu -> showSwitchList()
                 is Choice.RoomPick -> openRoom(c.room)
                 Choice.ProjectsPick -> loadProjects()
                 Choice.MutePick -> mute()

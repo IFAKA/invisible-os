@@ -420,38 +420,47 @@ object Actions {
     /** No call is left. */
     fun callOver() { if (::app.isInitialized) handler.post { mode.callEnded() } }
 
-    /** The computers (each runs its own bridge), set on the app's Computers page; one watcher per computer listens while the OS is idle. */
+    /** The computers (each runs its own bridge), set on the app's Computers page; one watcher listens to the active one while the OS is idle. */
     fun computers(): List<Computer> = Computers.load(prefs())
+    /** The one computer the phone listens to (prefs `claude_active`; the first if unset or gone). */
+    fun activeComputer(): Computer? = Computers.active(computers(), prefs().getString(Computers.ACTIVE_KEY, null))
     fun setComputers(list: List<Computer>) {
+        val before = computers(); val active = prefs().getString(Computers.ACTIVE_KEY, null)
         Computers.save(prefs(), list)
+        val keep = Computers.activeAfter(before, list, active)
+        prefs().edit().apply { if (keep == null) remove(Computers.ACTIVE_KEY) else putString(Computers.ACTIVE_KEY, keep) }.apply()
+        claudeWatch.restart()
+    }
+    /** Listen to this computer only: save it, move the watcher. */
+    fun setActive(name: String) {
+        val c = Computers.find(computers(), name) ?: return
+        prefs().edit().putString(Computers.ACTIVE_KEY, c.name).apply()
         claudeWatch.restart()
     }
     /** Dev hook: one address replaces the whole list (a blank address clears it). */
     fun setClaudeBridge(url: String, token: String) = setComputers(Computers.single(url, token))
     private val claudeWatch by lazy {
-        ClaudeWatch({ computers() },
-            { c, e -> handler.post { claudeAsked(c, e) } },
-            { c -> handler.post { roomNeeds(c) } },
-            { c, e -> handler.post { roomDone(c, e.name) } })
+        ClaudeWatch({ activeComputer() },
+            { e -> handler.post { claudeAsked(e) } },
+            { handler.post { roomNeeds() } },
+            { e -> handler.post { roomDone(e.name) } })
     }
-    /** A room of the laptop needs you: the Claude sound (and with 2 or more computers, "<computer>, needs you"), unless muted until morning or a program is running. */
-    private fun roomNeeds(computer: String) {
+    /** A room of the laptop needs you: the Claude sound unless muted until morning or a program is running. */
+    private fun roomNeeds() {
         if (running != null || RoomMute.muted(prefs().getLong(RoomMute.KEY, 0L), System.currentTimeMillis())) return
         narrator.beep(Tone.CLAUDE)
-        if (computers().size > 1) say(Voice.computerNeeds(computer), true)
     }
     private val doneBatch = DoneBatch()
     /** A window finished: say its name when the OS is idle. Several in 3 s are one line: the first name, then how many more. */
-    private fun roomDone(computer: String, name: String) {
+    private fun roomDone(name: String) {
         if (running != null || RoomMute.muted(prefs().getLong(RoomMute.KEY, 0L), System.currentTimeMillis())) return
-        if (doneBatch.add(computer, name)) handler.postDelayed({ doneBatch.take(computers().size > 1)?.let { say(it, true) } }, 3000)
+        if (doneBatch.add(name)) handler.postDelayed({ doneBatch.take()?.let { say(it, true) } }, 3000)
     }
-    /** The computer that asked; the Laptop tool reads it once when it starts, so it opens at that computer. */
-    @Volatile private var claudeTarget: String? = null
     /** What the Laptop tool asks of the OS: the Write keyboard, and the way back to the tool when nothing was written. */
     val roomsPort = object : RoomsPort {
         override fun computers() = this@Actions.computers()
-        override fun takeTarget(): String? = claudeTarget.also { claudeTarget = null }
+        override fun active() = activeComputer()
+        override fun switchTo(name: String) = setActive(name)
         override fun testDone() { handler.post { say(Voice.roomDone("Test"), false) } }
         override fun write(sendTo: (String) -> Boolean) {
             handler.post { launchWrite(sendTo, null) { Programs.byId("hub:claude")?.let { startProgramEntry(it) } } }
@@ -461,10 +470,10 @@ object Actions {
         }
     }
     /** A question came while no program was running: tell the user with the Claude sound; if the menu is not in use, open the tool so the next click answers. */
-    private fun claudeAsked(computer: String, e: ClaudeEvent) {
+    private fun claudeAsked(e: ClaudeEvent) {
         if (running != null) return
         narrator.beep(Tone.CLAUDE)
-        if (!mode.active) Programs.byId("hub:claude")?.let { claudeTarget = computer; startProgramEntry(it) }
+        if (!mode.active) Programs.byId("hub:claude")?.let { startProgramEntry(it) }
     }
 
     /** New chat message arrived: short earcon, no speech. Favourite senders get a different tone. */

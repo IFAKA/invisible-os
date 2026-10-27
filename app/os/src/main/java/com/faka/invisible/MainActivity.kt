@@ -98,7 +98,7 @@ class MainActivity : Activity() {
     private var page = Page.HOME
 
     private val laptop by lazy { LaptopPage(this, k, body) { render() } }
-    private val computersPage by lazy { ComputersPage(this, k, body, { render() }) { name -> page = Page.LAPTOP; laptop.startAt(name); render() } }
+    private val computersPage by lazy { ComputersPage(this, k, body, { render() }) { name -> Actions.setActive(name); page = Page.LAPTOP; laptop.start(); render() } }
 
     private fun open(p: Page) { page = p; if (p == Page.LAPTOP) laptop.start(); if (p == Page.COMPUTERS) computersPage.start(); render(); (body.parent as? ScrollView)?.scrollTo(0, 0); k.enter(body) }
 

@@ -28,7 +28,8 @@ data class ClaudeEvent(val id: String, val kind: String, val project: String, va
 
 /** What a click in the answer list can pick: one of the laptop's options, or "Read again". */
 sealed class Choice {
-    data class ComputerPick(val computer: Computer, val needs: Boolean) : Choice()
+    data class SwitchPick(val computer: Computer) : Choice()
+    object SwitchMenu : Choice()
     data class RoomPick(val room: Room) : Choice()
     object ProjectsPick : Choice()
     object MutePick : Choice()

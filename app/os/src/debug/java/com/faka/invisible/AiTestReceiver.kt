@@ -25,6 +25,7 @@ class AiTestReceiver : BroadcastReceiver() {
         i.getStringExtra("show")?.let { Actions.showDev(it); return }
         if (i.hasExtra("rate")) { Actions.rateDev(i.getFloatExtra("rate", 0.9f)); return }
         if (i.hasExtra("state")) { Actions.stateDev(); return }
+        i.getStringExtra("active")?.let { Actions.setActive(it); return }   // dev: listen to this computer only
         i.getStringExtra("computers")?.let { Actions.setComputers(com.faka.invisible.claude.Computers.parse(it)); return }   // dev: set the list of computers "name|url|token;name|url|token"
         i.getStringExtra("bridge")?.let { Actions.setClaudeBridge(it, i.getStringExtra("token") ?: ""); return }   // dev: set the Claude bridge address and token without typing
         i.getStringExtra("tap")?.let { n -> val k = n.toInt(); Actions.tapItem(k, com.faka.invisible.voicekit.ScreenMirror.items.getOrElse(k) { "" }); return }   // dev: tap item k of the app screen mirror

@@ -167,6 +167,28 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class PairCodeTest(unittest.TestCase):
+    def test_pair_code_round_trip(self):
+        import base64
+        code = server.pair_code("Home é", "http://100.64.0.5:8765", "tok_en-1")
+        self.assertTrue(code.startswith("invisible-pair:"))
+        b = code.split(":", 1)[1]
+        d = json.loads(base64.urlsafe_b64decode(b + "=" * (-len(b) % 4)).decode())
+        self.assertEqual(d, {"n": "Home é", "u": "http://100.64.0.5:8765", "t": "tok_en-1"})
+        self.assertNotIn("\n", code)
+
+    def test_default_name_not_empty(self):
+        n = server.default_name()
+        self.assertTrue(n and "." not in n)
+
+    def test_show_token_prints_code(self):
+        r = subprocess.run([sys.executable, os.path.join(HERE, "server.py"), "--show-token", "--host", "1.2.3.4", "--name", "Work", "--port", "9"],
+                           capture_output=True, text=True, env=dict(os.environ, HOME=tempfile.mkdtemp()))
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(len(r.stdout.strip().splitlines()), 2)
+        self.assertTrue(r.stdout.strip().splitlines()[1].startswith("invisible-pair:"))
+
+
 class PhoneOnlineTest(unittest.TestCase):
     def test_online_only_after_a_recent_poll(self):
         now = [1000.0]

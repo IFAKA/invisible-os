@@ -55,23 +55,62 @@ class ComputersTest {
         assertEquals(listOf(Computer("A", "http://h:1", "t1"), Computer("B b", "http://h:2", "t2")), Computers.parse("A|http://h:1|t1; B  b |http://h:2|t2"))
     }
 
-    @Test fun doneLineHasNoNameWithOneComputer() {
+    @Test fun doneLineIsTheWindowName() {
         val b = DoneBatch()
-        assertTrue(b.add("Laptop", "site")); assertTrue(!b.add("Laptop", "site"))
-        assertEquals("site, done", b.take(false)?.text)
-        assertNull(b.take(false))
+        assertTrue(b.add("site")); assertTrue(!b.add("site"))
+        assertEquals("site, done", b.take()?.text)
+        assertNull(b.take())
     }
-    @Test fun doneLineNamesTheComputerWithTwoOrMore() {
-        val b = DoneBatch(); b.add("Work", "site")
-        assertEquals("Work, site, done", b.take(true)?.text)
+    @Test fun doneBatchCountsTheOthers() {
+        val b = DoneBatch(); b.add("site"); b.add("site"); b.add("api"); b.add("web")
+        assertEquals("site, done. 2 more windows done", b.take()?.text)
     }
-    @Test fun doneBatchAcrossComputers() {
-        val b = DoneBatch(); b.add("Work", "site"); b.add("Home", "site"); b.add("Home", "api")
-        assertEquals("Work, site, done. 2 more windows done", b.take(true)?.text)
-        b.add("Home", "a"); b.add("Home", "b")
-        assertEquals("a, done. 1 more windows done", b.take(false)?.text)
+
+    @Test fun activeIsTheNamedOneOrTheFirst() {
+        val l = listOf(home, work)
+        assertEquals("Work", Computers.active(l, " work ".trim())?.name)
+        assertEquals("Home", Computers.active(l, null)?.name)
+        assertEquals("Home", Computers.active(l, "Gone")?.name)
+        assertNull(Computers.active(emptyList(), "Home"))
+        assertEquals(listOf("Work"), Computers.others(l, home).map { it.name })
+        assertEquals(listOf("Home", "Work"), Computers.others(l, null).map { it.name })
     }
-    @Test fun computerListLabels() {
-        assertEquals("Work, needs you", ClaudeVoice.computerNeeds("Work").text)
+    @Test fun removingTheActiveOneMovesToTheNext() {
+        val c = Computer("Cloud", "u", "t"); val l = listOf(home, work, c)
+        assertEquals("Work", Computers.activeAfter(l, Computers.remove(l, "Home"), "Home"))
+        assertEquals("Home", Computers.activeAfter(l, Computers.remove(l, "Cloud"), "Cloud"))
+        assertEquals("Cloud", Computers.activeAfter(l, Computers.remove(l, "Work"), "Cloud"))
+        assertEquals("Work", Computers.activeAfter(l, Computers.remove(l, "Home"), "Work"))
+        assertEquals("Home", Computers.activeAfter(l, l, null))
+        assertNull(Computers.activeAfter(l, emptyList(), "Home"))
+        assertEquals("Home", Computers.activeAfter(emptyList(), listOf(home), null))
+    }
+
+    @Test fun pairCodeRoundTrip() {
+        val c = Computer("Ana's \"Mac\" é", "http://100.64.0.5:8765", "tok_en-1\\x")
+        val code = Computers.pairCode(c)
+        assertTrue(code.startsWith("invisible-pair:"))
+        assertEquals(c, Computers.parsePair(code))
+        assertEquals(c, Computers.parsePair("  here you go:\n$code \nthanks"))
+    }
+    @Test fun pairCodeFromThePythonBridge() {
+        // made by bridge/server.py pair_code("Home", "http://100.64.0.5:8765", "abc")
+        val json = "{\"n\":\"Home\",\"u\":\"http://100.64.0.5:8765\",\"t\":\"abc\"}"
+        val code = "invisible-pair:" + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(json.toByteArray())
+        assertEquals(Computer("Home", "http://100.64.0.5:8765", "abc"), Computers.parsePair(code))
+    }
+    @Test fun badPairCodesGiveNullAndNeverThrow() {
+        fun b64(s: String) = "invisible-pair:" + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(s.toByteArray())
+        for (s in listOf("", "hello", "invisible-pair:", "invisible-pair:!!!", "invisible-pair:@@@@", b64("not json"), b64("[1]"), b64("{"),
+            b64("{\"n\":\"A\",\"u\":\"ftp://x\",\"t\":\"k\"}"), b64("{\"n\":\"A\",\"u\":\"http://x\",\"t\":\"\"}"),
+            b64("{\"n\":\"A\",\"u\":\"http://x\"}"), b64("{\"n\":1,\"u\":\"http://x\",\"t\":\"k\"}")))
+            assertNull(s, Computers.parsePair(s))
+    }
+    @Test fun pairCodeWithoutNameStillParsesSoTheNameCanBeTyped() {
+        val c = Computers.parsePair(Computers.pairCode(Computer("", "http://x:1", "k")))
+        assertEquals("", c?.name)
+    }
+    @Test fun switchLabels() {
+        assertEquals("Switch to Work", ClaudeVoice.switchTo("Work").text)
     }
 }

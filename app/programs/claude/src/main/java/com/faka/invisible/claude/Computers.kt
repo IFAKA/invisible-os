@@ -11,6 +11,8 @@ data class Computer(val name: String, val url: String, val token: String)
 /** The stored list of computers (JSON in prefs), the checks on names, and the one-time move from the old single address. */
 object Computers {
     const val KEY = "claude_computers"
+    /** The name of the one computer the phone listens to. */
+    const val ACTIVE_KEY = "claude_active"
     /** The name of the computer made from the old single address and token. */
     const val DEFAULT_NAME = "Laptop"
     private const val OLD_URL = "claude_url"
@@ -35,12 +37,27 @@ object Computers {
         append('"')
     }
 
-    /** The list from [json]; anything it cannot read is skipped (never throws). */
-    fun decode(json: String): List<Computer> {
-        val out = ArrayList<Computer>()
+    /** The text fields of one flat JSON object like {"n":"Home","u":"http://..","t":"x"}; null if it is not one. Numbers and other values are not allowed. */
+    fun flatObject(json: String): Map<String, String>? {
+        val r = Reader(json.trim())
+        if (!r.eat('{')) return null
+        val out = HashMap<String, String>()
+        if (r.eat('}')) return out
+        while (true) {
+            val k = r.str() ?: return null
+            if (!r.eat(':')) return null
+            out[k] = r.str() ?: return null
+            if (r.eat(',')) continue
+            return if (r.eat('}')) out else null
+        }
+    }
+
+    private class Reader(val json: String) {
         var i = 0
-        fun skipWs() { while (i < json.length && json[i].isWhitespace()) i++ }
+        fun ws() { while (i < json.length && json[i].isWhitespace()) i++ }
+        fun eat(c: Char): Boolean { ws(); return if (i < json.length && json[i] == c) { i++; true } else false }
         fun str(): String? {
+            ws()
             if (i >= json.length || json[i] != '"') return null
             i++
             val sb = StringBuilder()
@@ -59,24 +76,43 @@ object Computers {
             i++
             return sb.toString()
         }
-        skipWs()
-        if (i >= json.length || json[i] != '[') return out
-        i++
-        while (i < json.length) {
-            skipWs()
-            if (i >= json.length || json[i] == ']') break
-            if (json[i] == ',') { i++; continue }
-            if (json[i] != '{') break
-            i++
+    }
+
+    // --- the pair code: one line printed by bridge/server.py ---
+
+    private const val PAIR_PREFIX = "invisible-pair:"
+
+    fun pairCode(c: Computer): String =
+        PAIR_PREFIX + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString("{\"n\":${q(c.name)},\"u\":${q(c.url)},\"t\":${q(c.token)}}".toByteArray(Charsets.UTF_8))
+
+    /** The computer in a pasted pair code (extra words around the code are ignored); null if there is no usable code. Never throws. */
+    fun parsePair(text: String): Computer? {
+        val at = text.indexOf(PAIR_PREFIX)
+        if (at < 0) return null
+        val b64 = text.substring(at + PAIR_PREFIX.length).takeWhile { !it.isWhitespace() }
+        val json = try { String(java.util.Base64.getUrlDecoder().decode(b64), Charsets.UTF_8) } catch (_: IllegalArgumentException) { return null }
+        val f = flatObject(json) ?: return null
+        val url = f["u"].orEmpty().trim(); val token = f["t"].orEmpty().trim()
+        if (!(url.startsWith("http://") || url.startsWith("https://")) || token.isEmpty()) return null
+        return Computer(clean(f["n"].orEmpty()), url, token)
+    }
+
+    /** The list from [json]; anything it cannot read is skipped (never throws). */
+    fun decode(json: String): List<Computer> {
+        val out = ArrayList<Computer>()
+        val r = Reader(json)
+        if (!r.eat('[')) return out
+        while (true) {
+            if (r.eat(']')) break
+            if (r.eat(',')) continue
+            if (!r.eat('{')) break
             val f = HashMap<String, String>()
-            while (i < json.length) {
-                skipWs()
-                if (i < json.length && json[i] == '}') { i++; break }
-                if (i < json.length && json[i] == ',') { i++; continue }
-                val k = str() ?: return out
-                skipWs(); if (i >= json.length || json[i] != ':') return out
-                i++; skipWs()
-                f[k] = str() ?: return out
+            while (true) {
+                if (r.eat('}')) break
+                if (r.eat(',')) continue
+                val k = r.str() ?: return out
+                if (!r.eat(':')) return out
+                f[k] = r.str() ?: return out
             }
             val name = clean(f["name"].orEmpty())
             if (name.isNotEmpty() && out.none { it.name.equals(name, true) }) out.add(Computer(name, f["url"].orEmpty().trim(), f["token"].orEmpty().trim()))
@@ -121,6 +157,20 @@ object Computers {
     fun remove(list: List<Computer>, name: String): List<Computer> = list.filter { !it.name.equals(name, true) }
     fun find(list: List<Computer>, name: String): Computer? = list.firstOrNull { it.name.equals(clean(name), true) }
 
+    // --- the one active computer ---
+
+    /** The computer to listen to: the one named [name] if it exists, otherwise the first; null if there are none. */
+    fun active(list: List<Computer>, name: String?): Computer? = (name?.let { find(list, it) }) ?: list.firstOrNull()
+    /** The other computers, in list order. */
+    fun others(list: List<Computer>, active: Computer?): List<Computer> = list.filter { !it.name.equals(active?.name, true) }
+    /** The active name once the list changed from [before] to [after]: the same computer if it is still there, otherwise the next one that is (the list wraps), otherwise the first; null if none are left. */
+    fun activeAfter(before: List<Computer>, after: List<Computer>, active: String?): String? {
+        val was = active(before, active) ?: return after.firstOrNull()?.name
+        find(after, was.name)?.let { return it.name }
+        val at = before.indexOfFirst { it.name.equals(was.name, true) }
+        return (before.drop(at + 1) + before.take(at)).firstOrNull { find(after, it.name) != null }?.name ?: after.firstOrNull()?.name
+    }
+
     /** The old dev hook: one address replaces the whole list; a blank address clears it. */
     fun single(url: String, token: String): List<Computer> =
         if (url.isBlank() || token.isBlank()) emptyList() else listOf(Computer(DEFAULT_NAME, url.trim(), token.trim()))
@@ -131,26 +181,21 @@ object Computers {
     }
 }
 
-/** Laptop windows that finished close together are one spoken line. Pure: the OS adds names and asks for the line after its 3 s wait. */
+/** Laptop windows that finished close together are one spoken line. Pure: the OS asks for the line after its 3 s wait. */
 class DoneBatch {
-    private data class Item(val computer: String, val window: String)
-    private val items = ArrayList<Item>()
+    private val windows = ArrayList<String>()
 
-    /** True if this is the first item (the OS starts its wait now). The same window twice counts once. */
-    fun add(computer: String, window: String): Boolean {
-        val first = items.isEmpty()
-        if (items.none { it.computer == computer && it.window == window }) items.add(Item(computer, window))
+    /** True if this is the first window (the OS starts its wait now). The same window twice counts once. */
+    fun add(window: String): Boolean {
+        val first = windows.isEmpty()
+        if (window !in windows) windows.add(window)
         return first
     }
 
-    /** The line for what was collected, then empty. The computer is named only when [many] (2 or more computers exist). Null if nothing. */
-    fun take(many: Boolean): Phrase? {
-        val n = items.toList(); items.clear()
+    /** The line for what was collected, then empty. Null if nothing. */
+    fun take(): Phrase? {
+        val n = windows.toList(); windows.clear()
         val a = n.firstOrNull() ?: return null
-        return when {
-            n.size == 1 -> if (many) Voice.roomDoneOn(a.computer, a.window) else Voice.roomDone(a.window)
-            many -> Voice.roomsDoneOn(a.computer, a.window, n.size - 1)
-            else -> Voice.roomsDone(a.window, n.size - 1)
-        }
+        return if (n.size == 1) Voice.roomDone(a) else Voice.roomsDone(a, n.size - 1)
     }
 }

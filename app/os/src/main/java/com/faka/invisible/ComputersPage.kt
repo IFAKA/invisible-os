@@ -15,7 +15,7 @@ import java.io.IOException
  * thread. Only UI Kit parts.
  */
 class ComputersPage(private val a: Activity, private val k: Kit, private val body: LinearLayout, private val redraw: () -> Unit, private val openRooms: (String) -> Unit) {
-    private enum class Mode { LIST, ADD, ONE, RENAME }
+    private enum class Mode { LIST, ADD, NAME, HAND, ONE, RENAME }
     private class Status(val ok: Boolean, val windows: Int)
 
     private var mode = Mode.LIST
@@ -23,6 +23,7 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
     private var status = HashMap<String, Status>()
     private var checking = false
     private var error = ""
+    private var paired: Computer? = null
     private var gen = 0
     private fun tr(t: String) = Translations.label(t)
 
@@ -51,14 +52,18 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
             st.windows == 1 -> tr("1 window")
             else -> tr("{0} windows").replace("{0}", "${st.windows}")
         }
-        return c.url + if (state.isEmpty()) "" else " · $state"
+        val listening = if (isActive(c)) tr("Listening") + " · " else ""
+        return listening + c.url + if (state.isEmpty()) "" else " · $state"
     }
+    private fun isActive(c: Computer) = Actions.activeComputer()?.name.equals(c.name, true)
     private fun dot(c: Computer) = when (status[c.name]?.ok) { true -> Ui.good; false -> Ui.edge; null -> Ui.edge }
 
     fun draw() {
         when (mode) {
             Mode.LIST -> drawList()
-            Mode.ADD -> drawAdd()
+            Mode.ADD -> drawPaste()
+            Mode.NAME -> drawName()
+            Mode.HAND -> drawAdd()
             Mode.ONE -> Computers.find(Actions.computers(), selected.orEmpty())?.let { drawOne(it) } ?: back()
             Mode.RENAME -> drawRename()
         }
@@ -66,11 +71,52 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
 
     private fun drawList() {
         val list = Actions.computers()
-        if (list.isEmpty()) body.addView(k.text(tr("No computer yet. Run bridge/server.py on your computer, then add its address and token here."), Type.BODY, Ui.soft))
-        else k.group(body, null, tr("Each computer runs its own bridge. A second user on the same Mac needs another port: python3 server.py --port 8766.")) {
-            list.forEach { c -> k.dotRow(this, dot(c), c.name, summary(c)) { selected = c.name; mode = Mode.ONE; error = ""; redraw() } }
+        if (list.isEmpty()) body.addView(k.text(tr("No computer yet. Run bridge/server.py on your computer, copy the pair code line it prints, then add it here."), Type.BODY, Ui.soft))
+        else {
+            k.group(body, null, tr("The phone listens to one computer at a time. Tap a computer to listen to it. Two Macs or two users: each runs its own bridge (the second with --port 8766).")) {
+                list.forEach { c -> k.dotRow(this, dot(c), if (isActive(c)) c.name + " · " + tr("Listening") else c.name, summary(c)) { Actions.setActive(c.name); redraw() } }
+            }
+            list.forEach { c -> body.addView(k.quiet(tr("Rename or remove {0}").replace("{0}", c.name)) { selected = c.name; mode = Mode.ONE; error = ""; redraw() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) }) }
         }
         body.addView(k.btn(tr("Add a computer"), true) { mode = Mode.ADD; error = ""; redraw() }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(Ui.S2) })
+    }
+
+    /** Step 1 of adding: one field for the pair code that bridge/server.py prints. */
+    private fun drawPaste() {
+        val code = k.input(tr("Paste the pair code")).apply { minLines = 3; maxLines = 5; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE }
+        val note = k.text(error, Type.CAPTION, Ui.bad)
+        fun next(text: String) {
+            val c = Computers.parsePair(text)
+            if (c == null) { note.text = tr("That is not a pair code. Copy the whole line that starts with invisible-pair:"); return }
+            paired = c; error = ""; mode = Mode.NAME; redraw()
+        }
+        k.card(body, tr("Add a computer"), tr("Run bridge/server.py on that computer, copy the line that starts with invisible-pair: and paste it here.")) {
+            addView(code, LinearLayout.LayoutParams(-1, -2))
+            addView(k.btn(tr("Next"), true) { next(code.text.toString()) }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+            addView(k.btn(tr("Paste from clipboard")) {
+                val cm = a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                next(cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(a)?.toString().orEmpty())
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
+            addView(k.quiet(tr("Enter by hand")) { mode = Mode.HAND; error = ""; redraw() })
+            addView(note)
+        }
+    }
+
+    /** Step 2 of adding: the name from the code, which you can change. */
+    private fun drawName() {
+        val c = paired ?: run { back(); return }
+        val name = k.input(tr("Name")).apply { minLines = 1; maxLines = 1; setText(c.name) }
+        val note = k.text(error, Type.CAPTION, Ui.bad)
+        k.card(body, tr("Add a computer"), c.url) {
+            addView(name, LinearLayout.LayoutParams(-1, -2))
+            addView(k.btn(tr("Save"), true) {
+                val list = Actions.computers()
+                val p = Computers.problem(list, name.text.toString(), c.url, c.token)
+                if (p != null) note.text = tr(p)
+                else { Actions.setComputers(Computers.add(list, c.copy(name = name.text.toString()))); error = ""; paired = null; mode = Mode.LIST; check() }
+            }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+            addView(note)
+        }
     }
 
     private fun drawAdd() {
@@ -78,7 +124,7 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
         val url = k.input(tr("Address, e.g. http://100.64.0.5:8765")).apply { minLines = 1; maxLines = 1; inputType = InputType.TYPE_TEXT_VARIATION_URI }
         val tok = k.input(tr("Token")).apply { minLines = 1; maxLines = 1; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
         val note = k.text(error, Type.CAPTION, Ui.bad)
-        k.card(body, tr("Add a computer"), tr("Run bridge/server.py on that computer, then type the address it prints and the token.")) {
+        k.card(body, tr("Enter by hand"), tr("Run bridge/server.py on that computer, then type the address it prints and the token.")) {
             addView(name, LinearLayout.LayoutParams(-1, -2))
             addView(url, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
             addView(tok, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
@@ -95,7 +141,7 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
     private fun drawOne(c: Computer) {
         body.addView(k.text(c.name, Type.TITLE))
         body.addView(k.text(summary(c), Type.SMALL, Ui.soft), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
-        body.addView(k.btn(tr("Open rooms"), true) { openRooms(c.name) }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(Ui.S2) })
+        body.addView(k.btn(tr(if (isActive(c)) "Open rooms" else "Listen and open rooms"), true) { openRooms(c.name) }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(Ui.S2) })
         body.addView(k.btn(tr("Rename")) { mode = Mode.RENAME; error = ""; redraw() }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(Ui.S1) })
         body.addView(k.quiet(tr("Remove"), Ui.bad) {
             k.confirm(tr("Remove {0}?").replace("{0}", c.name), tr("Remove")) { Actions.setComputers(Computers.remove(Actions.computers(), c.name)); mode = Mode.LIST; check() }
@@ -112,7 +158,7 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
                 val list = Actions.computers(); val c = Computers.find(list, old)
                 val p = if (c == null) "Write a name." else Computers.problem(list, name.text.toString(), c.url, c.token, renaming = old)
                 if (p != null) note.text = tr(p)
-                else { Actions.setComputers(Computers.rename(list, old, name.text.toString())); selected = Computers.clean(name.text.toString()); mode = Mode.LIST; check() }
+                else { val wasActive = c != null && isActive(c); Actions.setComputers(Computers.rename(list, old, name.text.toString())); if (wasActive) Actions.setActive(name.text.toString()); selected = Computers.clean(name.text.toString()); mode = Mode.LIST; check() }
             }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
             addView(note)
         }

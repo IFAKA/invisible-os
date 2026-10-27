@@ -27,10 +27,11 @@ If the bridge is not on this laptop's 127.0.0.1:8765, set INVISIBLE_BRIDGE_URL i
 == 2. Start the server (keep it running) ==
   python3 $DIR/server.py            # listens on your Tailscale or Wi-Fi address, port 8765
   python3 $DIR/server.py --show-token   # print the token again
-Type the address and the token into the phone app: home screen, "Computers", "Add a computer".
+Copy the "invisible-pair:" line it prints and paste it in the phone app: home screen, "Computers", "Add a computer".
 More than one computer (or a second user on the same Mac): each one runs its own bridge, and the second needs another port:
   python3 $DIR/server.py --port 8766        # or: INVISIBLE_BRIDGE_PORT=8766 python3 $DIR/server.py
-Add each one in the app under "Computers" with its own name (Home, Work) and its own token.
+Add each one the same way (start it, copy the pair code line, paste it on the phone). The phone listens to one computer at a time:
+switch with "Switch to Work" in the Laptop tool, or by tapping it in the app under "Computers".
 
 == 3. Optional: start it at login with launchd (this only prints the file; save it yourself) ==
 Save as ~/Library/LaunchAgents/com.invisible.bridge.plist, then run:

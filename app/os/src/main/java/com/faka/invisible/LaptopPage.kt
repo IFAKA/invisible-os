@@ -3,13 +3,10 @@ package com.faka.invisible
 import android.app.Activity
 import android.widget.LinearLayout
 import com.faka.invisible.claude.BridgeClient
-import com.faka.invisible.claude.Computer
-import com.faka.invisible.claude.Computers
 import com.faka.invisible.claude.Room
 import com.faka.invisible.claude.RoomAction
 import com.faka.invisible.claude.RoomState
 import com.faka.invisible.claude.RoomText
-import com.faka.invisible.voicekit.Translations
 import java.io.IOException
 
 /**
@@ -25,30 +22,16 @@ class LaptopPage(private val a: Activity, private val k: com.faka.invisible.Kit,
     private var screen = ""
     private var note = ""
 
-    /** The computer whose rooms are shown. With one computer it is that one; with 2 or more you pick it first. */
-    private var chosen: Computer? = null
-    private fun all() = Actions.computers()
-    private fun pickNeeded() = chosen == null && all().size > 1
-
-    /** True when the back link goes one step up (out of a room, or out of a computer). */
-    val inRoom get() = room != null || (chosen != null && all().size > 1)
-    fun title() = room?.let { RoomState.nameOf(it) } ?: chosen?.name ?: "Laptop"
-    fun backLabel() = if (room != null) "Rooms" else "Computers"
-    fun leaveRoom() {
-        if (room != null) { room = null; note = ""; redraw(); load() } else { chosen = null; rooms = null; down = false; redraw() }
-    }
-
     private fun client(): BridgeClient? {
-        val c = chosen ?: all().firstOrNull() ?: return null
+        val c = Actions.activeComputer() ?: return null
         return if (c.url.isBlank() || c.token.isBlank()) null else BridgeClient(c.url, c.token)
     }
 
-    /** Opens the page at [name] (a computer of the Computers page), or at the list of computers / the only computer when null. */
-    fun startAt(name: String?) {
-        chosen = name?.let { Computers.find(all(), it) }
-        room = null; note = ""; rooms = null; down = false
-        if (!pickNeeded()) load()
-    }
+    /** True when the back link goes out of a room. */
+    val inRoom get() = room != null
+    fun title() = room?.let { RoomState.nameOf(it) } ?: Actions.activeComputer()?.name ?: "Laptop"
+    fun backLabel() = "Rooms"
+    fun leaveRoom() { room = null; note = ""; redraw(); load() }
 
     /** Runs [work] off the main thread, then [done] on it. A null result means the laptop did not answer. */
     private fun <T> bg(work: (BridgeClient) -> T, done: (T?) -> Unit) {
@@ -60,8 +43,8 @@ class LaptopPage(private val a: Activity, private val k: com.faka.invisible.Kit,
         }, "laptop-page").start()
     }
 
-    /** Opening the page: forget the room and load the list. */
-    fun start() = startAt(null)
+    /** Opening the page: forget the room and load the rooms of the active computer. */
+    fun start() { room = null; note = ""; rooms = null; down = false; load() }
 
     fun load() {
         loading = true; redraw()
@@ -91,10 +74,6 @@ class LaptopPage(private val a: Activity, private val k: com.faka.invisible.Kit,
     }
 
     private fun drawRooms() {
-        if (pickNeeded()) {
-            k.group(body, Translations.label("Computers")) { all().forEach { c -> k.navRow(this, c.name, c.url) { chosen = c; rooms = null; down = false; redraw(); load() } } }
-            return
-        }
         val list = rooms
         when {
             loading && list == null -> body.addView(k.text("Loading...", Type.BODY, Ui.soft))
