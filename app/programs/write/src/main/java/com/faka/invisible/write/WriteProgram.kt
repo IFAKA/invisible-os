@@ -63,6 +63,7 @@ private class HandlerTimers(private val handler: android.os.Handler) : Timers {
 private class WriteOut(val host: ProgramHost) : TypeOut {
     override fun pair(left: String, right: String?) { VoiceKit.narrator.pair(left, right) }
     override fun hush() { VoiceKit.narrator.hush() }
+    override fun screen(rows: List<String>, mark: Int) { ScreenMirror.show(rows, mark) }
     override fun silence() { VoiceKit.narrator.stopSpeech() }
     override fun prefetch(words: List<String>) { VoiceKit.narrator.prefetch(words) }
     override fun say(text: Phrase) { VoiceKit.narrator.say(text, true) }

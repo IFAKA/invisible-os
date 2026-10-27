@@ -22,6 +22,8 @@ interface TypeOut {
     fun cue(c: TypeCue)
     /** One line for the usage file (event, then fields); lets the layout be tuned from real use. */
     fun log(event: String, vararg fields: Any?) {}
+    /** The picture on the app screen, kept the same as what the player hears: [rows] top to bottom, [mark] is the row being read now. Default: none. */
+    fun screen(rows: List<String>, mark: Int) {}
     fun finished(text: String)   // the written text; "" = nothing written
     /** Ask the big model (slow, in the background) for ways to finish [text]; call [then] with them when ready. Default: none. */
     fun phrases(text: String, then: (List<String>) -> Unit) {}
@@ -148,9 +150,22 @@ class TypeProgram(
         recap = false   // every letter pair, replays too: you always hear what you have so far
         out.prefetch(items.drop(page * 2 + 2).take(4) )
         out.pair(l, r)
+        showScreen(l, r)
         out.log("pair", l, r, page, if (phraseMode) "phrases" else if (letters) "letters" else "words", prefix, written.size)
         pressedSinceShow = false
         timers.set("t:replay", REPLAY_MS) { if (active && replays < MAX_REPLAYS) { replays++; show(true) } else if (active && replays == MAX_REPLAYS) { replays++; out.say(TypeVoice.STILL_HERE) } }   // then silence, so say where you are once
+    }
+
+    /** The same words the player hears, on the app screen: the text so far, the letters being spelled, and the pair on offer. */
+    private fun showScreen(l: String, r: String?) {
+        val mode = if (phraseMode) "Phrases" else if (letters) "Letters" else "Words"
+        val rows = ArrayList<String>()
+        rows.add(text().ifEmpty { "Nothing written yet" })
+        if (prefix.isNotEmpty()) rows.add("Spelling: $prefix")
+        val mark = rows.size
+        rows.add("$mode, left: $l")
+        if (r != null) rows.add("$mode, right: $r")
+        out.screen(rows, mark)
     }
 
     // ---- the raw button ----
@@ -289,7 +304,7 @@ class TypeProgram(
             waiting = false
             when (r) {
                 is Translation.Same -> send(t)
-                is Translation.Done -> { pending = r.text; out.readBack(r.text); out.say(TypeVoice.CONFIRM) }
+                is Translation.Done -> { pending = r.text; out.screen(listOf(r.text, "Click to send, hold to edit"), 0); out.readBack(r.text); out.say(TypeVoice.CONFIRM) }
                 is Translation.Failed -> { out.say(r.say); show() }   // nothing is sent; the text is kept and you can try again
             }
         }
