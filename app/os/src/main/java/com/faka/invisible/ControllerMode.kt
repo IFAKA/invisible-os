@@ -80,6 +80,7 @@ interface ModeOutput {
     fun choice(screen: String, code: Int, intent: String, sender: String, pickMs: Long = -1)   // pickMs = time from the start of the list to the press (-1 = not a list pick); choice log; code 0 = wake, else the position of the option in the list
     fun codeCount(): Int             // successful code actions so far (persisted); learning mode while < 15
     fun setCodeCount(n: Int)
+    fun waiting(): () -> Unit = {}   // a heartbeat while the person waits; call the result when done
     fun background(work: () -> Unit, done: () -> Unit) { work(); done() }   // heavy work off the main thread; [done] runs on the main thread
     fun findHintSeen(): Boolean = true   // "Find. Pick the first letter." is said only once
     fun setFindHintSeen() {}
@@ -602,7 +603,7 @@ class ControllerMode(
                 Opt("reset:no", Menu.EMERGENCY_NO) { pick("reset:no"); show(Screen.FIND) },
                 Opt("reset:yes", Menu.RESET_YES) { pick("reset:yes"); out.resetLearning(resetPkg); treeKey = null; treeCache = null; resetPkg = null; resetName = null; resetting = false; say(Voice.RESET_DONE); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } })
             Screen.PHONE -> listOf(   // Call a contact first; Emergency is always last (one triple click back puts you on it) and cannot be switched off
-                Opt("phone:call", Menu.CALL_CONTACT) { pick("phone:call"); out.background({ contacts = out.callContacts() }, { if (contacts.isEmpty()) outro(if (out.lacks("contacts")) { out.needed("contacts"); Voice.NEED_CONTACTS } else Voice.NO_CONTACTS) else show(Screen.CONTACTS) }) }
+                Opt("phone:call", Menu.CALL_CONTACT) { pick("phone:call"); val w = out.waiting(); out.background({ contacts = out.callContacts() }, { w(); if (contacts.isEmpty()) outro(if (out.lacks("contacts")) { out.needed("contacts"); Voice.NEED_CONTACTS } else Voice.NO_CONTACTS) else show(Screen.CONTACTS) }) }
             ) + settings.phone.mapNotNull { k -> when (k) {
                 "status" -> Opt("phone:status", Menu.STATUS) { pick("phone:status"); outro(Voice.status(out.status(), unread().size)) }
                 "volume" -> Opt("phone:volume", Menu.VOLUME) { pick("phone:volume"); show(Screen.VOLUME) }

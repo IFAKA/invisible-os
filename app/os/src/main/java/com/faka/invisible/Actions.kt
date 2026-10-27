@@ -175,6 +175,7 @@ object Actions {
             override fun dial(c: com.faka.invisible.logickit.Contact) = PhoneCalls.place(app, c.number)
             override fun emergency() = PhoneCalls.emergency(app, emergencyContact())
             override fun dndAllowed() = this@Actions.dndAllowed()
+            override fun waiting() = narrator.waiting()
             override fun background(work: () -> Unit, done: () -> Unit) { Thread { work(); handler.post { done() } }.start() }
             override fun findHintSeen() = prefs().getBoolean("find_hint_seen", false)
             override fun setFindHintSeen() { prefs().edit().putBoolean("find_hint_seen", true).apply() }
@@ -286,7 +287,7 @@ object Actions {
             when {
                 got.isEmpty() && text.isEmpty() -> { handler.postDelayed({ Programs.byId("hub:claude")?.let { startProgramEntry(it) } }, BACK_DELAY_MS); true }
                 all.size < count -> { handler.postDelayed({ writeChain(cues, all, finish) }, BACK_DELAY_MS); true }
-                else -> { Thread({ val said = finish(all); handler.post { say(said, true) } }, "rooms-finish").start(); false }
+                else -> { val w = narrator.waiting(); Thread({ val said = try { finish(all) } finally { handler.post { w() } }; handler.post { say(said, true) } }, "rooms-finish").start(); false }
             }
         }
     }

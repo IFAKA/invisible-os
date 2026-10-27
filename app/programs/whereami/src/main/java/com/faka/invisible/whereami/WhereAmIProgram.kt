@@ -40,9 +40,10 @@ class WhereAmIProgram(private val services: WhereServices) : Program {
             ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (!ok) { say(emptyList(), turn, WhereVoice.NEED_LOCATION); return }
         host.speak(WhereVoice.WAIT)
+        val w = host.waiting()
         pool.execute {
             val place = try { lookup() } catch (e: Exception) { host.log("WHERE lookup failed: $e"); null }
-            host.handler.post { if (running) say(WhereAmI.lines(place, turn), turn, WhereVoice.NOT_FOUND) }
+            host.handler.post { w(); if (running) say(WhereAmI.lines(place, turn), turn, WhereVoice.NOT_FOUND) }
         }
     }
 
