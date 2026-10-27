@@ -17,9 +17,9 @@ data class SetupStep(val id: String, val title: String, val reason: String, val 
 object Setup {
     fun steps(s: SetupState): List<SetupStep> = buildList {
         add(SetupStep("button", "Button access", "So the app can hear your earbud button.", s.button, false))
-        add(SetupStep("test", "Test your button", "Press your earbud button once. This screen will say when it hears you.", s.buttonTested, false))
-        add(SetupStep("notif", "Notification access", "So it can read your new messages to you.", s.notifications, false))
-        add(SetupStep("assist", "Assistant", "So a long press works on the lock screen.", s.assistant, false))
+        add(SetupStep("test", "Hold your earbud button", "Hold your earbud button. This screen will say when it hears you.", s.buttonTested, false))
+        add(SetupStep("notif", "Notification access", "So it can read your new messages to you.", s.notifications, true))
+        add(SetupStep("assist", "Assistant", "So a long press works on the lock screen.", s.assistant, true))
         if (s.sdk >= 33) add(SetupStep("post", "Show notifications", "So the app can show that it is listening.", s.postNotifications, true))
         add(SetupStep("calendar", "Calendar", "So it can tell you your next event.", s.calendar, true))
         add(SetupStep("location", "Location", "So it can tell you the weather where you are.", s.location, true))
@@ -30,8 +30,20 @@ object Setup {
         add(SetupStep("usage", "Usage access", "Better order of apps: the ones you use most come first.", s.usage, true))
     }.map { it.copy(skipped = !it.done && it.optional && it.id in s.skipped) }
 
+    /** First run: ONLY the required steps (Button access, then holding the button). Every other permission is asked when a feature first needs it. */
+    fun firstRun(steps: List<SetupStep>) = steps.filter { !it.optional }
+
     /** Index of the step to do now, or -1 when all are passed. */
     fun current(steps: List<SetupStep>) = steps.indexOfFirst { !it.passed }
+
+    /**
+     * The one optional step offered on the app screen once the user is ready (never blocks): the Assistant after the practice
+     * was heard, then Usage access. A skipped or done step is not offered again. Null = nothing to offer.
+     */
+    fun later(steps: List<SetupStep>, practiceDone: Boolean): SetupStep? {
+        val order = if (practiceDone) listOf("assist", "usage") else emptyList()
+        return order.mapNotNull { id -> steps.firstOrNull { it.id == id } }.firstOrNull { !it.passed }
+    }
 
     fun label(index: Int, total: Int) = "Step ${index + 1} of $total"
 

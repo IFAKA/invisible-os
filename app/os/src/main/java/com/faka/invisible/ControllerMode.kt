@@ -90,6 +90,8 @@ interface ModeOutput {
     fun answerCall(): Boolean = false
     fun rejectCall(): Boolean = false
     fun endCall(): Boolean = false
+    fun lacks(need: String): Boolean = false   // a permission the feature needs is off (Needs ids: notif, contacts, calls)
+    fun needed(need: String) {}                // remember it: the app screen then shows one card with the button to the right Settings page
     fun callContacts(): List<Contact> = emptyList()   // starred and most called first; slow: call it inside [background]
     fun dial(c: Contact): Boolean = false             // start a call to this contact
     fun emergency(): Boolean = false                  // call the emergency number of the phone's country and text the emergency contact (if set)   // ring loudly on the alarm stream (on) or stop (off)
@@ -475,6 +477,7 @@ class ControllerMode(
                 val n = unread().size
                 for (k in settings.hub) when (k) {
                     "messages" -> if (n > 0) all["hub:messages"] = Opt("hub:messages", Menu.messages(n)) { readUnread("hub:messages") }
+                        else if (out.lacks("notif")) all["hub:messages"] = Opt("hub:messages", Menu.MESSAGES) { pick("hub:messages"); out.needed("notif"); outro(Voice.NEED_NOTIFICATIONS) }   // no access yet: say why, the app shows the button
                     "music" -> if (out.nowPlaying() != null || out.hasMusicApp()) all["hub:music"] = Opt("hub:music", Menu.MUSIC) { pick("hub:music"); musicBack = Screen.HUB; show(Screen.MUSIC) }   // the Music page: what is playing, pause, next, play something
                     "tasks" -> out.tasks().let { ts -> all["hub:tasks"] = Opt("hub:tasks", Menu.tasks(ts.size)) {
                         pick("hub:tasks"); taskList = ts; taskIdx = 0
@@ -543,13 +546,13 @@ class ControllerMode(
                 Opt("call:answer", Menu.ANSWER) { pick("call:answer"); if (out.answerCall()) show(Screen.CALL_ACTIVE) else callFailed() },
                 Opt("call:reject", Menu.REJECT) { pick("call:reject"); if (out.rejectCall()) exit(false) else callFailed() })
             Screen.CALL_ACTIVE -> listOf(Opt("call:end", Menu.END_CALL) { pick("call:end"); out.endCall(); exit(false) })
-            Screen.CONTACTS -> contacts.map { c -> Opt("call:contact", Phrase.content(c.name, null)) { pick("call:contact"); exit(false); if (out.dial(c)) out.speak(Voice.calling(c.name)) else out.speak(Voice.CALL_FAILED) } }
+            Screen.CONTACTS -> contacts.map { c -> Opt("call:contact", Phrase.content(c.name, null)) { pick("call:contact"); exit(false); if (out.dial(c)) out.speak(Voice.calling(c.name)) else out.speak(callFailure()) } }
             Screen.EMERGENCY -> listOf(   // the safe answer is read first: a click right after hearing it picks it
                 Opt("emergency:no", Menu.EMERGENCY_NO) { pick("emergency:no"); show(Screen.PHONE) },
-                Opt("emergency:yes", Menu.EMERGENCY_YES) { pick("emergency:yes"); exit(false); out.speak(if (out.emergency()) Voice.EMERGENCY_CALLING else Voice.CALL_FAILED) })
+                Opt("emergency:yes", Menu.EMERGENCY_YES) { pick("emergency:yes"); exit(false); out.speak(if (out.emergency()) Voice.EMERGENCY_CALLING else callFailure()) })
             Screen.PHONE -> listOf(   // Emergency is always first and cannot be switched off; then Call a contact
                 Opt("phone:emergency", Menu.EMERGENCY) { pick("phone:emergency"); show(Screen.EMERGENCY) },
-                Opt("phone:call", Menu.CALL_CONTACT) { pick("phone:call"); out.background({ contacts = out.callContacts() }, { if (contacts.isEmpty()) outro(Voice.NO_CONTACTS) else show(Screen.CONTACTS) }) }
+                Opt("phone:call", Menu.CALL_CONTACT) { pick("phone:call"); out.background({ contacts = out.callContacts() }, { if (contacts.isEmpty()) outro(if (out.lacks("contacts")) { out.needed("contacts"); Voice.NEED_CONTACTS } else Voice.NO_CONTACTS) else show(Screen.CONTACTS) }) }
             ) + settings.phone.mapNotNull { k -> when (k) {
                 "status" -> Opt("phone:status", Menu.STATUS) { pick("phone:status"); outro(Voice.status(out.status(), unread().size)) }
                 "volume" -> Opt("phone:volume", Menu.VOLUME) { pick("phone:volume"); show(Screen.VOLUME) }
@@ -928,6 +931,7 @@ class ControllerMode(
         finding = false; timers.clear("find"); out.findPhone(false); exit(true)
     }
 
+    private fun callFailure(): Phrase = if (out.lacks("calls")) { out.needed("calls"); Voice.NEED_CALLS } else Voice.CALL_FAILED
     private fun outro(text: Phrase) { phase = Phase.OUTRO; say(text) }
 
     // ---- back one level ----

@@ -67,7 +67,7 @@ object Agenda {
 /** Android side of the two lookups. Both run off the main thread and call [done] on that same worker thread. */
 object PhoneInfo {
     fun weather(ctx: Context, done: (Phrase) -> Unit) {
-        if (ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) { done(Voice.NEED_LOCATION); return }
+        if (ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) { Needs.record(ctx, "location"); done(Voice.NEED_LOCATION); return }
         Thread {
             done(try {
                 val lm = ctx.getSystemService(LocationManager::class.java)
@@ -82,7 +82,7 @@ object PhoneInfo {
     }
 
     fun nextEvent(ctx: Context, done: (Phrase) -> Unit) {
-        if (ctx.checkSelfPermission(Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) { done(Voice.NEED_CALENDAR); return }
+        if (ctx.checkSelfPermission(Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) { Needs.record(ctx, "calendar"); done(Voice.NEED_CALENDAR); return }
         Thread {
             done(try {
                 val now = System.currentTimeMillis()

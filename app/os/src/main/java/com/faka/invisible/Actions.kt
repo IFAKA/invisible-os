@@ -158,6 +158,8 @@ object Actions {
             override fun rejectCall() = PhoneCalls.end(app) || ControllerNotificationListener.fireCall(app, answer = false)
             override fun endCall() = PhoneCalls.end(app) || ControllerNotificationListener.fireCall(app, answer = false)
             override fun callContacts() = PhoneCalls.contacts(app)
+            override fun lacks(need: String) = Needs.missing(app, need)
+            override fun needed(need: String) = Needs.record(app, need)
             override fun dial(c: com.faka.invisible.logickit.Contact) = PhoneCalls.place(app, c.number)
             override fun emergency() = PhoneCalls.emergency(app, emergencyContact())
             override fun dndAllowed() = this@Actions.dndAllowed()

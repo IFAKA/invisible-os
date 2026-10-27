@@ -76,6 +76,8 @@ class MainActivity : Activity() {
     override fun onNewIntent(i: Intent) {   // for screenshots: --es page voice on the running app
         super.onNewIntent(i); setIntent(i)
         i.getStringExtra("page")?.let { n -> Page.values().firstOrNull { it.name.equals(n, true) }?.let { open(it) } }
+        if (i.hasExtra("fresh")) { freshPreview = i.getBooleanExtra("fresh", false); lastStep = ""; render() }   // screenshots/e2e: pretend a new install (nothing is changed on the phone)
+        if (i.hasExtra("need")) { previewNeed = i.getStringExtra("need")?.takeIf { it.isNotEmpty() }; render() }   // screenshots: show the card of a missing permission
     }
 
     override fun onResume() {
@@ -173,7 +175,7 @@ class MainActivity : Activity() {
         when (id) {
             "button" -> if (sp.getBoolean("a11y_agreed", false)) startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) else { disclosure = true; render() }
             "notif" -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            "assist" -> startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
+            "assist" -> try { startActivity(Intent("android.speech.action.VOICE_SEARCH_HANDS_FREE")) } catch (e: Exception) { startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)) }   // shows "Complete action using": tap Invisible, then Always
             "post" -> ask(Manifest.permission.POST_NOTIFICATIONS)
             "calendar" -> ask(Manifest.permission.READ_CALENDAR)
             "contacts" -> ask(Manifest.permission.READ_CONTACTS)
@@ -201,18 +203,21 @@ class MainActivity : Activity() {
     }
 
     private var lastStep = ""
+    private var freshPreview = false
+    private var previewNeed: String? = null
     private var previewReady = false   // for screenshots: --ez ready true shows the home after setup
 
     private fun home() {
         if (disclosure) { disclosureCard(); return }
         val notif = (Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: "").contains(packageName)
         val assist = (Settings.Secure.getString(contentResolver, "assistant") ?: "").contains(packageName)
-        val a11y = Actions.accessibilityConnected
+        val a11y = Actions.accessibilityConnected && !freshPreview
         if (a11y && EventLog.lastGesture != null) sp.edit().putBoolean("button_tested", true).apply()
-        val tested = a11y && sp.getBoolean("button_tested", false)
-        val steps = Setup.steps(SetupState(a11y, tested, notif, assist, granted(Manifest.permission.POST_NOTIFICATIONS), granted(Manifest.permission.READ_CALENDAR),
+        val tested = a11y && sp.getBoolean("button_tested", false) && !freshPreview
+        val allSteps = Setup.steps(SetupState(a11y, tested, notif, assist, granted(Manifest.permission.POST_NOTIFICATIONS), granted(Manifest.permission.READ_CALENDAR),
             granted(Manifest.permission.ACCESS_COARSE_LOCATION), usageOn(), android.os.Build.VERSION.SDK_INT, sp.getStringSet("setup_skipped", emptySet()) ?: emptySet(),
             contacts = granted(Manifest.permission.READ_CONTACTS), calls = granted(Manifest.permission.CALL_PHONE) && granted(Manifest.permission.ANSWER_PHONE_CALLS), sms = granted(Manifest.permission.SEND_SMS), callLog = granted(Manifest.permission.READ_CALL_LOG)))
+        val steps = Setup.firstRun(allSteps)   // a new user is asked ONLY for these; every other permission is asked when a feature first needs it
         val next = if (previewReady) -1 else Setup.current(steps)
         val stepKey = if (next >= 0) steps[next].id else if (!EventLog.running) "stopped" else "ready"
         val changed = stepKey != lastStep
@@ -254,7 +259,7 @@ class MainActivity : Activity() {
                 addView(k.primary(tr("Start")) { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) })
             }
         } else {
-            k.status(fixed, tr("Ready"), tr("Turn the screen off. Hold your earbud button to hear the menu."), Ui.good, Ui.S1) {
+            k.status(fixed, tr("Ready"), tr("You are ready. More features ask for permission when you first use them."), Ui.good, Ui.S1) {
                 addView(k.primary(tr("Wake the menu")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) })
             }
         }
@@ -262,6 +267,16 @@ class MainActivity : Activity() {
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         fixed.addView(ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(list) }, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = k.dp(Ui.S2) })
         root.removeAllViews(); root.addView(fixed); cardParent = list
+        val need = Needs.pending(previewNeed ?: sp.getString(Needs.PREF, null)) { previewNeed != null || Needs.missing(this, it) }
+        if (need == null && previewNeed == null && sp.contains(Needs.PREF)) sp.edit().remove(Needs.PREF).apply()   // it was met: forget it
+        val offer = if (need == null) Setup.later(allSteps, sp.getBoolean(com.faka.invisible.practice.PracticeProgram.DONE_KEY, false)) else null   // skipped steps are already "passed"
+        if (need != null) k.status(list, tr(need.title), tr(need.reason), Ui.bad, Ui.S1) {
+            addView(k.primary(tr(need.action)) { doStep(need.id) })
+            if (previewNeed == null) addView(k.quiet(tr("Not now"), Ui.soft) { sp.edit().remove(Needs.PREF).apply(); render() })
+        } else if (offer != null) k.status(list, tr(offer.title) + " \u00B7 " + tr("Optional"), tr(offer.reason) + if (offer.id == "assist") " " + tr("Tap Invisible, then Always.") else "", Ui.accent, Ui.S1) {
+            addView(k.primary(tr(if (offer.id == "assist") "Choose Invisible" else "Turn on")) { doStep(offer.id) })
+            addView(k.quiet(tr("Not now"), Ui.soft) { sp.edit().putStringSet("setup_skipped", (sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + offer.id).apply(); render() })
+        }
         val n = Actions.tasks().size
         k.group(list) {
             k.navRow(this, tr("Tasks"), if (n == 0) tr("None yet") else tr("{0} to do").replace("{0}", "$n")) { open(Page.TASKS) }

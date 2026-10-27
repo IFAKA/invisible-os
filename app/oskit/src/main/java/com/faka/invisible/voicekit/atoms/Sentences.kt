@@ -116,14 +116,17 @@ object Voice {
     // ---- setup (said when a step appears; the screen shows the same words) ----
     /** "Step 2 of 12. Notification access. Double tap Turn on." [action] = the button of the step, or null when the step only waits for the button. */
     fun setupStep(n: Int, total: Int, title: String, action: String?) =
-        f("Step $n of $total. $title. " + if (action != null) "Double tap $action." else "Press your earbud button once.")
+        f("Step $n of $total. $title. " + if (action != null) "Double tap $action." else "Hold it for one second.")
     val BUTTON_ACCESS_OFF get() = f("Button access is off.")
 
     // ---- weather, calendar, find my phone ----
-    val NEED_LOCATION get() = f("Open the app and allow location.")
+    val NEED_LOCATION get() = f("Weather needs location. Open the app.")
     val WEATHER_FAILED get() = f("No weather now.")
     val STILL_WORKING get() = f("Still working.")   // said once by Narrator.waiting after 10 s
-    val NEED_CALENDAR get() = f("Open the app and allow the calendar.")
+    val NEED_CALENDAR get() = f("Today needs the calendar. Open the app.")
+    val NEED_NOTIFICATIONS get() = f("Messages needs notification access. Open the app.")
+    val NEED_CONTACTS get() = f("Phone needs contacts access. Open the app.")
+    val NEED_CALLS get() = f("Phone needs call access. Open the app.")
     val CALENDAR_FAILED get() = f("Cannot read the calendar.")
     val NO_EVENTS get() = f("No events today.")
     val EVENT_UNNAMED = "Event"   // the title of an event that has none (content, spoken inside eventNow/eventLater)
@@ -162,6 +165,7 @@ object Menu {
     /** What the number after a name counts, in words ("WhatsApp, 2 notifications"): a bare number never says what it counts. */
     fun countText(n: Int) = if (n == 1) "1 notification" else "$n notifications"
     fun treeCount(label: String, n: Int) = Phrase.mixed("$label, ${countText(n)}")
+    val MESSAGES get() = f("Messages")
     fun messages(unread: Int) = f("Messages, $unread unread")
     val DISMISS get() = f("Dismiss")
     val MUTE_APP get() = f("Mute this app")
