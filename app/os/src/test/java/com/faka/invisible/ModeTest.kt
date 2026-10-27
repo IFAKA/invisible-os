@@ -1255,7 +1255,8 @@ class ModeTest {
         val order = r.spoken().map { it.removePrefix("say ") }.dropWhile { it != "Clear all from this app" }
         assertEquals("Clear all from this app", order.first()); assertTrue(order.contains("Boss. Call me"))
         r.pick("Clear all from this app"); r.advance(3000)
-        assertTrue(r.has("nclear com.mail")); assertEquals(ControllerMode.Screen.HUB, r.m.screen)
+        assertTrue(r.has("nclear com.mail")); assertEquals(ControllerMode.Screen.NOTIF_APPS, r.m.screen)   // back to the apps list; Mail is gone from it
+        assertFalse(r.spoken().takeLast(6).any { it == "say Mail, 2 notifications" })
     }
 
     @Test fun appWithOneNotificationSkipsTheListAndReadsItThenItsActions() {

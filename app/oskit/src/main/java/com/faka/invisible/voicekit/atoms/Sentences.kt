@@ -96,6 +96,7 @@ object Voice {
     /** After "Clear all": the number comes with what it counts. */
     fun cleared(n: Int) = f(if (n == 1) "1 notification cleared" else "$n notifications cleared")
     val NOTIF_FAILED get() = f("It did not work")
+    val CANT_CLEAR get() = f("These cannot be cleared")
     val APP_MUTED get() = f("App muted")
     val APPS_UNMUTED get() = f("Apps unmuted")
     val TASK_STARTERS get() = listOf("Buy groceries", "Call someone", "Pay a bill", "Send an email", "Clean up")   // stored as tasks, not spoken here

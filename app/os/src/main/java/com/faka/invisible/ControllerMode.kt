@@ -838,7 +838,7 @@ class ControllerMode(
     private fun notifAppsOptions(): List<Opt> {
         val byApp = out.notifGroups().filter { it.items.isNotEmpty() }.groupBy { it.pkg }
         val apps = byApp.map { (pkg, gs) -> Triple(pkg, gs.first().app, gs.flatMap { it.items }) }.sortedByDescending { t -> t.third.maxOf { it.at } }
-        return listOf(Opt("notifs:clearall", Menu.CLEAR_ALL) { pick("notifs:clearall"); clearedAll(out.notifDismissAll(null)) }) + apps.map { (pkg, name, items) ->
+        return listOf(Opt("notifs:clearall", Menu.CLEAR_ALL) { pick("notifs:clearall"); clearedAll(out.notifDismissAll(null)) { show(Screen.NOTIF_APPS) } }) + apps.map { (pkg, name, items) ->
             val lang = NameLang.voice(pkg, name)
             val label = if (lang == null) Menu.treeCount(name, items.size) else Phrase.content(name + ", " + Menu.countText(items.size), lang)
             Opt("notifs:app", label) { pick("notifs:app"); notifPkg = pkg; notifFromAll = true; show(Screen.NOTIF_LIST) }   // one notification: the guard skips the list
@@ -846,12 +846,13 @@ class ControllerMode(
     }
 
     /** The notifications of one app (it has 2 or more here; one goes straight to its actions): "Clear all from this app" first. */
-    private fun notifListOptions(): List<Opt> = listOf(Opt("notif:clearapp", Menu.CLEAR_APP) { pick("notif:clearapp"); clearedAll(out.notifDismissAll(notifPkg)) }) +
+    private fun notifListOptions(): List<Opt> = listOf(Opt("notif:clearapp", Menu.CLEAR_APP) { pick("notif:clearapp"); clearedAll(out.notifDismissAll(notifPkg)) { appUp() } }) +
         openItems().take(MAX_NOTIFS).map { n ->
             Opt("notif:item", notifLine(n, MAX_SPOKEN, false)) { pick("notif:item"); notifKey = n.key; show(Screen.NOTIF_ACTIONS) }
         }
 
-    private fun clearedAll(n: Int) { say(if (n > 0) Voice.cleared(n) else Voice.NOTIF_FAILED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } }
+    /** Says how many went, then goes back one level ([back]): the cleared ones are gone from that list. Ones the app keeps (cannot be swiped) stay in it. */
+    private fun clearedAll(n: Int, back: () -> Unit) { say(if (n > 0) Voice.cleared(n) else Voice.CANT_CLEAR); phase = Phase.WAIT; waitNext = back }
 
     private fun notifActionOptions(): List<Opt> {
         val n = openNotif() ?: return emptyList()

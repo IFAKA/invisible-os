@@ -105,6 +105,7 @@ class ControllerNotificationListener : NotificationListenerService() {
         /** Swipes the notification away, as the user would. */
         fun dismiss(key: String): Boolean {
             val l = live ?: return false
+            if (l.activeNotifications?.firstOrNull { it.key == key }?.isClearable == false) return false   // the app keeps it: swiping does nothing, so do not say it went
             return try { l.cancelNotification(key); notifs.remove(key); true } catch (e: Exception) { Log.e("Invisible", "DISMISS failed", e); false }
         }
     }

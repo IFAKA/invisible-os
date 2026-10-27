@@ -48,6 +48,7 @@ private val SPOKEN_ES = mapOf(
     "{0}, {1} notifications" to "{0}, {1} notificaciones",
     "Done" to "Listo",
     "It did not work" to "No funcionó",
+    "These cannot be cleared" to "No se pueden borrar",
     "App muted" to "App silenciada",
     "Apps unmuted" to "Apps con sonido",
     "No unread messages" to "No hay mensajes sin leer",
