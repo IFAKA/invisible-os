@@ -149,11 +149,11 @@ class ModeTest {
         fun spoken() = log.filter { it.startsWith("say") }
         fun count(s: String) = log.count { it == s }
         fun has(prefix: String) = log.any { it.startsWith(prefix) }
-        /** Wait until the option is spoken, press 700 ms later (while its speech or pause runs), then clear the log. */
+        /** Wait until the option is spoken, press 150 ms later (while its speech or pause runs), then clear the log. */
         fun pick(label: String) {
             val re = Regex("say(\\[..\\])? " + Regex.escape(label))
             repeat(600) {
-                if (log.any { re.matches(it) }) { advance(700); clearLog(); click(); return }
+                if (log.any { re.matches(it) }) { advance(150); clearLog(); click(); return }
                 advance(50)
             }
             throw AssertionError("never spoken: $label; log=$log")
@@ -340,14 +340,12 @@ class ModeTest {
         assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
     }
 
-    @Test fun clickWithin500msOfNextItemPicksThePrevious() {
-        val r = Rig(); r.wake(); r.advance(1900)   // Phone started at 1750 (150 ms ago): the user meant Timer
+    @Test fun clickAfterNextItemStartsPicksIt() {
+        val r = Rig(); r.wake(); r.advance(1900)   // Phone started at 1750 (150 ms ago): its sound has started, so a click means Phone
         r.click()
-        assertEquals(ControllerMode.Screen.TIMER_PICK, r.m.screen)
-        val q = Rig(); q.wake(); q.advance(2250)   // exactly 500 ms after the start: still the previous
+        assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
+        val q = Rig(); q.wake(); q.advance(1700)   // Phone has not started yet: a click means Timer
         q.click(); assertEquals(ControllerMode.Screen.TIMER_PICK, q.m.screen)
-        val w = Rig(); w.wake(); w.advance(2260)   // 510 ms: Phone
-        w.click(); assertEquals(ControllerMode.Screen.PHONE, w.m.screen)
     }
 
     @Test fun clickOnTheFirstItemHasNoPreviousToFallBackTo() {
@@ -1003,9 +1001,9 @@ class ModeTest {
         r.click(); assertEquals(ControllerMode.Screen.PHONE, r.m.screen)
     }
 
-    @Test fun defaultGapGraceStillPicksThePreviousJustAfterNextStarts() {
+    @Test fun defaultGapClickJustAfterNextStartsPicksIt() {
         val r = Rig(gap = ControllerMode.ITEM_GAP_MS); r.wake(); r.advance(2400 + 50 + 100)   // Phone started at 2450, 100 ms ago
-        r.click(); assertEquals(ControllerMode.Screen.TIMER_PICK, r.m.screen)
+        r.click(); assertEquals(ControllerMode.Screen.PHONE, r.m.screen)   // once the sound of an item starts, a click picks it
     }
 
     @Test fun defaultGapTwoSilentLoopsLeave() {

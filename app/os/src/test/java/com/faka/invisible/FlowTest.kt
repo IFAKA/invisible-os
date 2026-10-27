@@ -8,7 +8,7 @@ import org.junit.Test
 
 /*
  * LAPTOP TWIN OF tools/e2e.py (no phone, fake time, about a second in all). Each test is one phone scenario: same presses,
- * same lines heard, same screens. Real button timing in fake time (350 ms gap, 500 ms hold, 1300 ms click-then-hold, 500 ms grace).
+ * same lines heard, same screens. Real button timing in fake time (350 ms gap, 500 ms hold, 1300 ms click-then-hold,).
  * The phone script stays: only the phone checks the real Bluetooth / media key path, the real TTS engine making sound, real
  * permissions, and other apps' notifications.
  *
@@ -49,7 +49,6 @@ class FlowTest {
     @Test fun click_picks() {
         val f = flow(); f.m.devShow("PHONE"); val i = f.mark()
         f.heardStart("Emergency", i)
-        f.advance(600)   // past the 500 ms grace after the item starts, so the click is for Emergency
         f.press("120")   // a click right after hearing an item picks it
         f.need("Call the emergency number", i)
         assertEquals(ControllerMode.Screen.EMERGENCY, f.screen())
@@ -85,13 +84,8 @@ class FlowTest {
     // ---- mark_matches_click ----
     @Test fun mark_matches_click() {
         val f = flow(); f.m.devShow("PHONE"); val i = f.mark(); f.heardStart("Emergency", i)
-        f.advance(600)
-        val e = ScreenMirror.index
-        assertEquals("Emergency", ScreenMirror.items[e])
-        val n = (e + 1) % ScreenMirror.items.size; val next = ScreenMirror.items[n]; val j = f.mark()
-        f.need(next, j); f.advance(100)   // the next item has just started: a click still means Emergency
-        assertEquals("the mark is ahead of what a click picks", e, ScreenMirror.index)
-        f.advance(600)   // past the grace: a click means the next one
+        val e = ScreenMirror.items.indexOf("Emergency"); val n = (e + 1) % ScreenMirror.items.size
+        val j = f.mark(); f.need(ScreenMirror.items[n], j); f.advance(600)   // the next item has started: a click means it, and the mark is on it
         assertEquals(n, ScreenMirror.index)
     }
 
@@ -155,7 +149,7 @@ class FlowTest {
         val h = f.heard(i).distinct()
         assertTrue("the live entry is not first: $h", "running" in h[0] || "running" in h.getOrElse(1) { "" })
         assertTrue("a static ongoing notification was offered: $h", h.none { "Connected" in it })
-        f.advance(1300)   // a click in the first moments of an item is for the one before it (reaction grace)
+        f.advance(1300)
         f.press("120"); val j = f.mark()
         f.need("Lap", j); f.need("Dismiss", j)
         assertEquals(ControllerMode.Screen.NOTIF_ACTIONS, f.screen())

@@ -143,7 +143,7 @@ class ControllerMode(
     private val pauseMs: Long? = null,  // silence after an option, measured from the END of its speech
     private val tickLeadMs: Long = 200,
     private val restartLeadMs: Long = 450,     // the rising start-over sound begins this long before item 1        // tick this long before the next option starts
-    private val graceMs: Long = 500,           // a click this soon after an item started means the item before
+    private val graceMs: Long = 0,             // a click this soon after an item started means the item before (0: a click picks the item whose sound has started)
     private val silentLoopsOverride: Int? = null,          // full loops without a click, then leave
     private val undoMsOverride: Long? = null,
     private val waitCapMs: Long = 4000,        // never wait longer than this for speech we did not start
@@ -290,7 +290,7 @@ class ControllerMode(
         var k = -1
         for (j in history.indices) if (history[j].second <= pressAt) k = j
         if (k < 0) return null
-        if (k > 0 && pressAt - history[k].second <= graceMs) k--
+        if (k > 0 && pressAt - history[k].second < graceMs) k--
         return history[k].first
     }
 
@@ -458,7 +458,7 @@ class ControllerMode(
         if (awaitStart < 0) return
         history.add(awaitStart to clock()); awaitStart = -1
         if (history.size > 8) history.removeAt(0)
-        markPick(); timers.set("markpick", graceMs + 1) { markPick() }
+        markPick(); if (graceMs > 0) timers.set("markpick", graceMs + 1) { markPick() }
     }
 
     /** The app screen marks the option a click would choose now (see [bind]), not the one just starting: they differ for [graceMs] after an item starts. */

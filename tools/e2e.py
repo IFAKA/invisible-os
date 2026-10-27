@@ -23,7 +23,7 @@ import subprocess, sys, time, re, threading, os, datetime, hashlib, json, inspec
 
 PKG = "com.faka.invisible"
 GAP_S = 0.35     # Pacing.GAP_MS: the gesture is counted this long after its last press
-GRACE_S = 0.5    # ControllerMode graceMs: a click in the first 500 ms of an item is for the one before
+GRACE_S = 0.0    # ControllerMode graceMs: a click picks the item whose sound has started
 RECV = f"{PKG}/.AiTestReceiver"
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOG = os.path.join(HERE, "..", "app", "logs", "e2e.log")
