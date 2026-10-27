@@ -228,6 +228,7 @@ class Rooms:
         self.claude_cmd = claude_cmd
         self.pending = pending or (lambda: {})   # () -> {pane id: summary} of open bridge asks
         self.clock = clock
+        self.ask_delay = 4.0
         self.summarizer = Summarizer(llm)
         self.lock = threading.Lock()
         self.snap = (0.0, [])
@@ -496,9 +497,16 @@ class Rooms:
         self._proj_cache = (self.clock(), out)
         return out
 
-    def open_project(self, path, mode):
-        if not isinstance(path, str) or not os.path.isdir(path) or mode not in ("continue", "new"):
-            return None
+    def areas(self):
+        """Parent folders of the known projects, ranked by summed uses, max 8: where a new project may be made."""
+        sums = collections.Counter()
+        for p in self.projects():
+            parent = os.path.dirname(p["path"].rstrip("/"))
+            if parent and parent != "/" and os.path.isdir(parent):
+                sums[parent] += p["uses"]
+        return [{"name": os.path.basename(a) or a, "path": a, "uses": n} for a, n in sums.most_common(8)]
+
+    def _pick_session(self):
         session = None
         code, out = self.tmux("list-clients", "-F", "#{client_activity}\t#{client_session}")
         best = -1
@@ -509,12 +517,58 @@ class Rooms:
         if not session:
             code, out = self.tmux("list-sessions", "-F", "#{session_name}")
             session = out.splitlines()[0] if code == 0 and out.strip() else None
+        return session
+
+    def _new_window(self, path, cmd):
+        session = self._pick_session()
         if not session:
             return None
-        cmd = self.claude_cmd + (" --continue || " + self.claude_cmd if mode == "continue" else "")
         code, out = self.tmux("new-window", "-P", "-F", "#{pane_id}", "-t", session + ":", "-c", path, cmd)
         pane = out.strip()
-        if code != 0 or not PANE_RE.match(pane):
+        return pane if code == 0 and PANE_RE.match(pane) else None
+
+    def open_project(self, path, mode):
+        if not isinstance(path, str) or not os.path.isdir(path) or mode not in ("continue", "new"):
             return None
-        self._log(pane, "open", "%s %s" % (mode, path))
+        cmd = self.claude_cmd + (" --continue || " + self.claude_cmd if mode == "continue" else "")
+        pane = self._new_window(path, cmd)
+        if pane:
+            self._log(pane, "open", "%s %s" % (mode, path))
         return pane
+
+    @staticmethod
+    def slug(name):
+        s = re.sub(r"[^a-z0-9]+", "-", str(name or "").lower()).strip("-")[:40].strip("-")
+        return s
+
+    def new_project(self, area, name, ask=None):
+        """Make <area>/<slug(name)>, git init, open claude there, type `ask` once claude is up. {pane, path} or None.
+        `area` must be one of areas(): a raw path from the phone is never trusted."""
+        if not isinstance(area, str) or area.rstrip("/") not in [a["path"] for a in self.areas()]:
+            return None
+        slug = self.slug(name)
+        path = os.path.join(area.rstrip("/"), slug)
+        if not slug or os.path.exists(path):
+            return None
+        try:
+            os.mkdir(path)
+        except OSError:
+            return None
+        try:
+            subprocess.run(["git", "init", "-q"], cwd=path, capture_output=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        pane = self._new_window(path, self.claude_cmd)
+        if not pane:
+            return None
+        self._log(pane, "new", path)
+        text = str(ask or "").strip()
+        if text:
+            threading.Thread(target=self._ask_later, args=(pane, text), daemon=True).start()
+        return {"pane": pane, "path": path}
+
+    def _ask_later(self, pane, text):
+        time.sleep(self.ask_delay)   # claude needs a moment to show its prompt
+        if self.room_row(pane):
+            self._log(pane, "send", text)
+            self._type(pane, text)

@@ -431,6 +431,32 @@ class RoomsTmuxTest(unittest.TestCase):
         time.sleep(0.3)
         self.assertEqual(self.by_id(self.make().rooms(), pane)["project"], "proj-a")
 
+    def test_areas_and_new_project(self):
+        area_a, area_b = os.path.join(self.tmp, "areaA"), os.path.join(self.tmp, "areaB")
+        projs = [os.path.join(area_a, "p1"), os.path.join(area_a, "p2"), os.path.join(area_b, "q1")]
+        for p in projs:
+            os.makedirs(p)
+        with open(os.path.join(self.claude, "history.jsonl"), "w") as f:
+            for p, n in zip(projs, (2, 3, 4)):
+                for _ in range(n):
+                    f.write(_json.dumps({"display": "x", "project": p}) + "\n")
+        r = self.make()
+        self.assertEqual([(a["name"], a["uses"]) for a in r.areas()], [("areaA", 5), ("areaB", 4)])
+        self.assertEqual(rooms_mod.Rooms.slug("  My Great Game!! "), "my-great-game")
+        self.assertEqual(rooms_mod.Rooms.slug("x" * 60), "x" * 40)
+        self.assertEqual(rooms_mod.Rooms.slug("!!!"), "")
+        self.assertIsNone(r.new_project("/tmp", "evil"))                       # not an area
+        self.assertIsNone(r.new_project(area_a + "/../areaB", "evil"))
+        self.assertIsNone(r.new_project(area_a, "!!!"))                        # empty slug
+        self.assertIsNone(r.new_project(area_a, "p1"))                         # exists
+        r.ask_delay = 0.5
+        made = r.new_project(area_a, "My New Game", "hello first")
+        self.assertEqual(made["path"], os.path.join(area_a, "my-new-game"))
+        self.assertRegex(made["pane"], r"^%\d+$")
+        self.assertTrue(os.path.isdir(os.path.join(made["path"], ".git")))
+        self.assertTrue(self.wait_screen(made["pane"], "hello first", 5))
+        self.assertIn("\tnew\t", open(os.path.join(self.cfg, "sends.log")).read())
+
     def test_http_endpoints_and_auth(self):
         c2, c2win = self.cat2
         self.transcript(c2, "s6", "Hello **there**.\n**What needs me:** say \"go\".")
@@ -453,6 +479,9 @@ class RoomsTmuxTest(unittest.TestCase):
             self.assertEqual(fake_phone.call(url, "tok", "/room/send", {"id": c2, "text": "via http"}), {"ok": True})
             self.assertTrue(self.wait_screen(c2, "via http"))
             self.assertIsInstance(fake_phone.call(url, "tok", "/projects")["projects"], list)
+            self.assertIsInstance(fake_phone.call(url, "tok", "/areas")["areas"], list)
+            with self.assertRaises(Exception):
+                fake_phone.call(url, "tok", "/project/new", {"area": "/tmp", "name": "x"})
             with self.assertRaises(Exception):
                 fake_phone.call(url, "tok", "/room/act", {"id": c2, "action": "bogus"})
             # a room turning 'needs' reaches /events

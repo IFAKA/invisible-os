@@ -23,6 +23,10 @@ ROOM = {
 ## POST /room/send {"id":"%3","text":"free text"}       -> {"ok":true}            types text + Enter (from Write)
 ## GET /projects -> {"projects":[{"name":"console-core","path":"...","uses":2355}, ...]}  top 20, folders that exist
 ## POST /project/open {"path":"...","mode":"continue"|"new"} -> {"ok":true,"id":"%9"}  new tmux window running claude
+## GET /areas -> {"areas":[{"name":"hardware","path":"/Users/.../code/projects/hardware","uses":4000}, ...]}  parent folders of the known projects, ranked by summed uses, max 8
+## POST /project/new {"area":"<a path from /areas>","name":"My game","ask":"optional first message"} -> {"ok":true,"pane":"%9","path":".../my-game"}
+  Makes folder slug(name) (lowercase a-z0-9 and "-", max 40) in the area, `git init`, opens a tmux window running claude, and types `ask` + Enter about 4 s later.
+  400 {"ok":false} when the area is not in /areas, the name gives an empty slug, or the folder exists.
 ## /events (exists) also delivers {"type":"room","id":"%3","name":"...","state":"needs"} when a room turns "needs".
 
 ## Action ids

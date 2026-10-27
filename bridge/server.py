@@ -2,7 +2,7 @@
 """Invisible OS bridge server: the phone and the Claude Code hooks meet here. Python 3 stdlib only.
 
 Phone:  GET /events?since=N&wait=25   (long poll)      POST /answer {"id": "3", "choice": "Allow"}
-Rooms:  GET /rooms /room/last /room/screen /projects   POST /room/act /room/send /project/open   (see ROOMS-API.md)
+Rooms:  GET /rooms /room/last /room/screen /projects /areas   POST /room/act /room/send /project/open /project/new   (see ROOMS-API.md)
 Hooks:  POST /ask {kind, project, summary, options, wait}  (blocks until answered)      POST /notify {kind, project, summary}
 All calls need the header  Authorization: Bearer <token>.
 """
@@ -113,6 +113,8 @@ def make_handler(store, token, rooms):
                     self._send(200, {"text": text})
             elif u.path == "/projects":
                 self._send(200, {"projects": rooms.projects()})
+            elif u.path == "/areas":
+                self._send(200, {"areas": rooms.areas()})
             else:
                 self._send(404, {"error": "not found"})
 
@@ -148,6 +150,9 @@ def make_handler(store, token, rooms):
             elif path == "/project/open":
                 pane = rooms.open_project(b.get("path"), b.get("mode", "continue"))
                 self._send(200 if pane else 400, {"ok": bool(pane), "id": pane})
+            elif path == "/project/new":
+                made = rooms.new_project(b.get("area"), b.get("name"), b.get("ask"))
+                self._send(200 if made else 400, dict(made or {}, ok=bool(made)))
             else:
                 self._send(404, {"error": "not found"})
 
