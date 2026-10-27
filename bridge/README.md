@@ -1,5 +1,13 @@
 # Invisible bridge
 
+## Quick start
+```
+invisible pair        # checks your Mac, sets it up, shows a QR code
+```
+Scan the QR code with the phone camera. Done. (First time only: run `sh bridge/setup.sh` once in this folder; it also gives you the `invisible` command.)
+
+To take it all away again: `invisible uninstall` (asks once, then removes the hooks it added, the launchd service, the log and the settings folder). Other commands: `invisible status`, `invisible logs`; run `invisible` alone to see them all.
+
 Answer Claude Code from your earbud. Claude asks to run a command, or asks you a question: the phone speaks it, you click to choose.
 
 ## How it works (a small picture)
@@ -38,4 +46,4 @@ The phone and the laptop must reach each other (same Wi-Fi, or Tailscale). Anyon
 - Settings: `INVISIBLE_BRIDGE_PORT` (server), `INVISIBLE_BRIDGE_URL`, `INVISIBLE_BRIDGE_TIMEOUT` (hook).
 
 ## Tests
-`python3 -m unittest -v` in this folder (also `test_setup.py`: setup.sh with a temp HOME and a fake launchctl; `test_qr.py`: the QR encoder, checked by a small decoder and by Apple's reader on a Mac). It starts a server, a fake phone and the hook, and checks Allow, Deny, Always allow, questions, timeout and bridge down. `fake_phone.py URL TOKEN [choice]` plays the phone by hand.
+`python3 -m unittest -v` in this folder (also `test_cli.py`: the `invisible` command with a temp HOME and fake launchctl, tmux and pbcopy, including the paired marker and uninstall;  `test_setup.py`: setup.sh with a temp HOME and a fake launchctl; `test_qr.py`: the QR encoder, checked by a small decoder and by Apple's reader on a Mac). It starts a server, a fake phone and the hook, and checks Allow, Deny, Always allow, questions, timeout and bridge down. `fake_phone.py URL TOKEN [choice]` plays the phone by hand.

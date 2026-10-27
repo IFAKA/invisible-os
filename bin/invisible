@@ -1,0 +1,557 @@
+#!/usr/bin/env python3
+"""invisible: one command for Invisible OS. Python 3 standard library only. Works from any folder:
+it finds its checkout from its own real path (so a link in ~/.local/bin is fine)."""
+import json
+import os
+import queue
+import shutil
+import socket
+import subprocess
+import sys
+import threading
+import time
+import urllib.request
+
+ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+BRIDGE = os.path.join(ROOT, "bridge")
+sys.path.insert(0, BRIDGE)
+import setup_tools  # noqa: E402
+
+LABEL = "com.invisible.bridge"
+COMMANDS = [
+    ("pair", "Connect your phone to this computer (checks, setup, QR code)."),
+    ("status", "One screen: is the bridge running, is the phone seen, are the hooks in."),
+    ("logs", "Follow the bridge log."),
+    ("uninstall", "Remove everything `pair` added (asks first; --yes to skip)."),
+    ("new NAME", "Make a new program from the starter (NAME: lowercase letters)."),
+    ("sim NAME", "Play a program on this computer, no phone (space bar = the button)."),
+    ("install NAME", "Build the app with the program and put it on the phone."),
+]
+
+
+def cfg():
+    return os.path.expanduser("~/.config/invisible-bridge")
+
+
+def tty():
+    return sys.stdout.isatty()
+
+
+def c(code, text):
+    return "\033[%sm%s\033[0m" % (code, text) if tty() else text
+
+
+def ok_mark():
+    return c("32", "✓")
+
+
+def bad_mark():
+    return c("31", "✗")
+
+
+def out(text=""):
+    print(text, flush=True)
+
+
+def help_text():
+    lines = ["invisible: use your phone with one earbud button", "", "Commands:"]
+    for name, what in COMMANDS:
+        lines.append("  invisible %-13s %s" % (name, what))
+    lines += ["", "Start here:  invisible pair", "Then on the phone: scan the QR code with the camera. Done."]
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------- bridge facts
+
+def read_json(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def read_text(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def plist_path():
+    return os.path.expanduser("~/Library/LaunchAgents/%s.plist" % LABEL)
+
+
+def log_path():
+    return os.path.expanduser("~/Library/Logs/invisible-bridge.log")
+
+
+def hook_command():
+    return "python3 %s" % os.path.join(BRIDGE, "hook.py")
+
+
+def call_bridge(path, timeout=2):
+    """GET a path of this user's bridge as the CLI (so it does not count as the phone). Returns parsed JSON or None."""
+    url, tok = read_text(os.path.join(cfg(), "url")), read_text(os.path.join(cfg(), "token"))
+    if not url or not tok:
+        return None
+    req = urllib.request.Request(url + path, headers={"Authorization": "Bearer " + tok, "X-Invisible-Client": "cli"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read() or b"{}")
+    except (OSError, ValueError):
+        return None
+
+
+def phone_seen():
+    d = read_json(os.path.join(cfg(), "phone_seen"))
+    return d if isinstance(d, dict) and isinstance(d.get("t"), (int, float)) else None
+
+
+def hooks_found(settings):
+    """How many Claude Code events call our hook.py."""
+    d = read_json(settings)
+    n = 0
+    hooks = d.get("hooks") if isinstance(d, dict) else None
+    if isinstance(hooks, dict):
+        cmd = hook_command()
+        for lst in hooks.values():
+            if isinstance(lst, list) and any(isinstance(e, dict) and any(isinstance(h, dict) and h.get("command") == cmd for h in e.get("hooks", [])) for e in lst):
+                n += 1
+    return n
+
+
+def ago(sec):
+    sec = int(sec)
+    if sec < 90:
+        return "%d s ago" % sec
+    if sec < 5400:
+        return "%d min ago" % (sec // 60)
+    if sec < 172800:
+        return "%d h ago" % (sec // 3600)
+    return "%d days ago" % (sec // 86400)
+
+
+# ---------------------------------------------------------------- pair
+
+def lan_address():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))   # no packet is sent; this only picks the interface
+        a = s.getsockname()[0]
+        return a if a and not a.startswith("127.") else ""
+    except OSError:
+        return ""
+    finally:
+        s.close()
+
+
+def tailscale_address():
+    ts = shutil.which("tailscale")
+    if not ts:
+        return ""
+    try:
+        r = subprocess.run([ts, "ip", "-4"], capture_output=True, text=True, timeout=5)
+        return r.stdout.split()[0] if r.returncode == 0 and r.stdout.split() else ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def checkout_readable():
+    files = ("server.py", "hook.py", "core.py", "rooms.py")
+    if not all(os.access(os.path.join(BRIDGE, f), os.R_OK) for f in files):
+        return False
+    p = BRIDGE
+    while p != "/":
+        if not os.access(p, os.X_OK):
+            return False
+        p = os.path.dirname(p)
+    return True
+
+
+def run_checks():
+    """A list of (ok, text, fix, hard). A hard failure stops `pair`; the others only warn."""
+    res = []
+    py = shutil.which("python3")
+    res.append((bool(py), "python3" + (" (%s)" % py if py else ""), "Install it: xcode-select --install", True))
+    res.append((checkout_readable(), "The invisible-os folder is readable by this user",
+                "Fix: sudo cp -R \"%s\" /Users/Shared/invisible-os && /Users/Shared/invisible-os/bin/invisible pair" % ROOT, True))
+    tm = shutil.which("tmux")
+    res.append((bool(tm), "tmux" + (" (%s)" % tm if tm else ""), "Install it: brew install tmux   (needed to hear your Claude windows)", False))
+    cl = shutil.which("claude")
+    res.append((bool(cl), "Claude Code (claude)" + (" (%s)" % cl if cl else ""), "Install it: npm install -g @anthropic-ai/claude-code", False))
+    ts, lan = tailscale_address(), lan_address()
+    net = "Tailscale %s" % ts if ts else ("Wi-Fi/LAN address %s (phone must be on the same Wi-Fi)" % lan if lan else "")
+    res.append((bool(net), net or "A network address the phone can reach",
+                "Connect this computer to Wi-Fi, or install Tailscale on the computer and the phone.", False))
+    return res
+
+
+def cmd_pair(args):
+    wait_sec, extra, i = 180, [], 0
+    do_wait = True
+    while i < len(args):
+        a = args[i]
+        if a == "--no-wait":
+            do_wait = False
+        elif a == "--wait" and i + 1 < len(args):
+            wait_sec = float(args[i + 1]); i += 1
+        elif a in ("--name", "--port") and i + 1 < len(args):
+            extra += [a, args[i + 1]]; i += 1
+        else:
+            out("Usage: invisible pair [--name NAME] [--port PORT] [--no-wait]")
+            return 2
+        i += 1
+    out(c("1", "Checking this computer"))
+    stop = False
+    for good, text, fix, hard in run_checks():
+        out("  %s %s" % (ok_mark() if good else bad_mark(), text))
+        if not good:
+            out("      %s" % fix)
+            stop = stop or hard
+    if stop:
+        out("\nFix the line above and run `invisible pair` again.")
+        return 1
+    out("\n" + c("1", "Setting up the bridge"))
+    start = time.time()
+    rc = subprocess.call(["sh", os.path.join(BRIDGE, "setup.sh")] + extra)
+    if rc != 0:
+        return rc
+    if not do_wait:
+        return 0
+    return wait_for_phone(start, wait_sec)
+
+
+def wait_for_phone(start, wait_sec, sleep=time.sleep, clock=time.time):
+    out("\n" + c("1", "Waiting for your phone") + " (scan the QR code above with the phone camera)")
+    end = clock() + wait_sec
+    while clock() < end:
+        seen = phone_seen()
+        if seen and seen["t"] >= start:
+            name = seen.get("name") or "your phone"
+            if tty():
+                sys.stdout.write("\r\033[K")
+            out("%s Paired with %s" % (ok_mark(), name))
+            return 0
+        if tty():
+            left = int(end - clock())
+            sys.stdout.write("\r  %d:%02d left " % (left // 60, left % 60)); sys.stdout.flush()
+        sleep(1 if wait_sec > 5 else 0.1)
+    if tty():
+        sys.stdout.write("\r\033[K")
+    out("No phone yet. You can paste the code instead:")
+    out("  On the phone: Computers, Add a computer, Paste from clipboard.")
+    out("  The code is on this computer's clipboard. `invisible pair` shows it again.")
+    return 0
+
+
+# ---------------------------------------------------------------- status
+
+def cmd_status(args):
+    out(c("1", "Invisible bridge"))
+    name, port = setup_tools.plist_get(plist_path(), "--name"), setup_tools.plist_get(plist_path(), "--port")
+    url = read_text(os.path.join(cfg(), "url"))
+    up = call_bridge("/ping") is not None
+    if up:
+        out("  %s Bridge running at %s (name: %s, port %s)" % (ok_mark(), url, name or "?", port or "?"))
+    elif os.path.exists(plist_path()):
+        out("  %s Bridge not answering (set up as \"%s\", port %s). See: invisible logs" % (bad_mark(), name or "?", port or "?"))
+    else:
+        out("  %s Not set up yet. Run: invisible pair" % bad_mark())
+    seen = phone_seen()
+    if seen:
+        out("  %s Phone last seen %s%s" % (ok_mark(), ago(max(0, time.time() - seen["t"])), " (%s)" % seen["name"] if seen.get("name") else ""))
+    else:
+        out("  %s Phone not seen yet. Scan the QR code from: invisible pair" % bad_mark())
+    n = hooks_found(os.path.expanduser("~/.claude/settings.json"))
+    if n:
+        out("  %s Claude Code hooks installed (%d events)" % (ok_mark(), n))
+    else:
+        out("  %s Claude Code hooks not installed. Run: invisible pair" % bad_mark())
+    rooms = call_bridge("/rooms") if up else None
+    if rooms is not None:
+        k = len(rooms.get("rooms", []))
+        out("  %s %d Claude window%s seen now" % (ok_mark(), k, "" if k == 1 else "s"))
+    else:
+        out("  - Windows seen now: unknown (bridge not answering)")
+    return 0
+
+
+# ---------------------------------------------------------------- logs
+
+def cmd_logs(args):
+    p = log_path()
+    if not os.path.exists(p):
+        out("No log yet (%s). Run: invisible pair" % p)
+        return 1
+    follow = "--no-follow" not in args
+    os.execvp("tail", ["tail", "-n", "50"] + (["-f"] if follow else []) + [p])
+
+
+# ---------------------------------------------------------------- uninstall
+
+def cmd_uninstall(args):
+    yes = "--yes" in args or "-y" in args
+    m = read_json(os.path.join(cfg(), "installed.json"))
+    if not isinstance(m, dict):
+        out("Nothing to remove: %s is missing, so `invisible pair` never ran here." % os.path.join(cfg(), "installed.json"))
+        return 0
+    hk = m.get("hooks") or {}
+    plan = [("the bridge service (launchd %s)" % m.get("launchd_label", LABEL), "stop"),
+            ("the launchd file %s" % m.get("plist", ""), "plist"),
+            ("our Claude Code hooks in %s" % hk.get("settings", ""), "hooks"),
+            ("the log %s" % m.get("log", ""), "log")]
+    if m.get("link"):
+        plan.append(("the command link %s" % m["link"], "link"))
+    plan.append(("the settings folder %s (token, address)" % m.get("config_dir", cfg()), "cfg"))
+    out("This will remove:")
+    for text, _ in plan:
+        out("  - " + text)
+    if not yes:
+        try:
+            ans = input("Remove all of this? [y/N] ").strip().lower()
+        except EOFError:
+            ans = ""
+        if ans not in ("y", "yes"):
+            out("Nothing removed.")
+            return 1
+    uid = str(os.getuid())
+    for _, what in plan:
+        if what == "stop":
+            label = m.get("launchd_label", LABEL)
+            r = subprocess.run(["launchctl", "bootout", "gui/%s/%s" % (uid, label)], capture_output=True)
+            if r.returncode != 0 and m.get("plist"):
+                subprocess.run(["launchctl", "unload", m["plist"]], capture_output=True)
+            out("Stopped the bridge service (%s)" % label)
+        elif what == "plist":
+            if m.get("plist") and os.path.exists(m["plist"]):
+                os.remove(m["plist"])
+            out("Removed %s" % m.get("plist"))
+        elif what == "hooks":
+            try:
+                ev = setup_tools.remove_hooks(hk.get("settings", ""), hk.get("command", ""))
+            except (OSError, ValueError) as e:
+                out("Could not edit %s (%s); left as it was" % (hk.get("settings"), e))
+                continue
+            out("Removed our hooks from %s (%d events; backup: settings.json.bak)" % (hk.get("settings"), len(ev)) if ev
+                else "Our hooks were not in %s" % hk.get("settings"))
+        elif what == "log":
+            if m.get("log") and os.path.exists(m["log"]):
+                os.remove(m["log"])
+            out("Removed %s" % m.get("log"))
+        elif what == "link":
+            lk = m["link"]
+            if os.path.islink(lk) and os.path.realpath(lk) == os.path.realpath(__file__):
+                os.remove(lk)
+                out("Removed %s" % lk)
+            else:
+                out("Left %s (not our link)" % lk)
+        elif what == "cfg":
+            shutil.rmtree(m.get("config_dir", cfg()), ignore_errors=True)
+            out("Removed %s" % m.get("config_dir", cfg()))
+    out("Done. The checkout (%s) is still there; delete it yourself if you want." % ROOT)
+    return 0
+
+
+# ---------------------------------------------------------------- new / install / sim
+
+def valid_name(n):
+    return n.isalpha() and n.islower() and n.isascii() and 2 <= len(n) <= 20
+
+
+def need_name(args, what):
+    if not args or not valid_name(args[0]):
+        out("Usage: invisible %s NAME   (NAME: 2 to 20 lowercase letters, for example dice)" % what)
+        return None
+    return args[0]
+
+
+def cmd_new(args):
+    name = need_name(args, "new")
+    if not name:
+        return 2
+    rc = subprocess.call(["bash", os.path.join(ROOT, "sdk", "new-program.sh"), name] + args[1:])
+    if rc == 0:
+        out("Next: invisible sim %s   (play it here)    invisible install %s   (put it on the phone)" % (name, name))
+    return rc
+
+
+def cmd_install(args):
+    name = need_name(args, "install")
+    if not name:
+        return 2
+    if not os.path.isdir(os.path.join(ROOT, "app", "programs", name)):
+        out("No program \"%s\". Make it first: invisible new %s" % (name, name))
+        return 1
+    out("Building and installing on the phone (needs the phone lease; one session at a time)...")
+    rc = subprocess.call(["sh", os.path.join(ROOT, "app", "run.sh")])
+    if rc != 0:
+        out("Not installed. If it says BLOCKED, another session holds the phone (or master has newer commits): ask it to release, then run this again.")
+    return rc
+
+
+def sim_classpath(name):
+    """Ask Gradle (offline) for the java home and class path of the program; returns (java, classpath) or None."""
+    env_cp = os.environ.get("INVISIBLE_SIM_CP")
+    if env_cp:
+        return os.environ.get("INVISIBLE_SIM_JAVA", "java"), env_cp
+    app = os.path.join(ROOT, "app")
+    mod = os.path.join(app, "programs", name)
+    if not os.path.isdir(mod):
+        out("No program \"%s\". Make it first: invisible new %s" % (name, name))
+        return None
+    out("Building %s (first time takes a minute)..." % name)
+    r = subprocess.run(["./gradlew", ":programs:%s:simClasspath" % name, "--offline", "-q", "--console=plain"], cwd=app)
+    f = os.path.join(mod, "build", "sim-classpath.txt")
+    if r.returncode != 0 or not os.path.exists(f):
+        out("The build failed (see above).")
+        return None
+    home, cp = open(f).read().split("\n")[:2]
+    java = os.path.join(home, "bin", "java")
+    return (java if os.path.exists(java) else "java"), cp
+
+
+class Speaker:
+    """Speaks lines one after the other with macOS `say` (or $INVISIBLE_SAY); stop() cuts the current one."""
+
+    def __init__(self):
+        self.cmd = os.environ.get("INVISIBLE_SAY", "say")
+        self.q = queue.Queue()
+        self.cur = None
+        self.lock = threading.Lock()
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def _loop(self):
+        while True:
+            text = self.q.get()
+            if text is None:
+                return
+            try:
+                p = subprocess.Popen([self.cmd, text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except OSError:
+                continue
+            with self.lock:
+                self.cur = p
+            p.wait()
+
+    def say(self, text):
+        self.q.put(text)
+
+    def stop(self):
+        try:
+            while True:
+                self.q.get_nowait()
+        except queue.Empty:
+            pass
+        with self.lock:
+            if self.cur and self.cur.poll() is None:
+                self.cur.terminate()
+
+
+def cmd_sim(args):
+    name = need_name(args, "sim")
+    if not name:
+        return 2
+    cp = sim_classpath(name)
+    if not cp:
+        return 1
+    java, classpath = cp
+    p = subprocess.Popen([java, "-cp", classpath, "com.faka.invisible.oskit.testing.SimMain", name],
+                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+    spk = Speaker()
+    done = threading.Event()
+    lock = threading.Lock()
+
+    def show(line):
+        with lock:
+            out(line)
+
+    def reader():
+        for line in p.stdout:
+            line = line.rstrip("\n")
+            kind, _, rest = line.partition(" ")
+            if kind == "say":
+                show("  says: " + rest); spk.say(rest)
+            elif kind == "stop":
+                spk.stop()
+            elif kind == "sound":
+                show("  [%s]" % rest)
+            elif kind == "log":
+                show("  (log) " + rest)
+            elif kind == "ended":
+                show("  [close sound] The program ended.")
+                done.set()
+        done.set()
+
+    threading.Thread(target=reader, daemon=True).start()
+
+    def send(word):
+        try:
+            p.stdin.write(word + "\n"); p.stdin.flush()
+        except (OSError, ValueError):
+            done.set()
+
+    out("Playing \"%s\" here. Space or Enter = one click. h = hold the button down; press h again to let go." % name)
+    out("(A terminal cannot see when a key is released, so a key press is a click of 80 ms and h is a hold.) q = quit.")
+    held = [False]
+    fd = sys.stdin.fileno()
+    old = None
+    if os.isatty(fd):
+        import termios
+        import tty as ttymod
+        old = termios.tcgetattr(fd)
+        ttymod.setcbreak(fd)
+    try:
+        import select
+        while not done.is_set():
+            if not select.select([fd], [], [], 0.05)[0]:
+                continue
+            ch = os.read(fd, 1)
+            if not ch:
+                time.sleep(0.3)   # input closed: let the program finish what it is saying
+                break
+            if ch in (b" ", b"\n", b"\r"):
+                if held[0]:
+                    continue
+                send("down")
+                threading.Timer(0.08, send, ["up"]).start()
+            elif ch in (b"h", b"H"):
+                held[0] = not held[0]
+                send("down" if held[0] else "up")
+                show("  [button %s]" % ("down" if held[0] else "up"))
+            elif ch in (b"q", b"Q", b"\x03", b"\x04"):
+                break
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if old is not None:
+            import termios
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        send("quit")
+        spk.stop()
+        try:
+            p.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            p.kill()
+    return 0
+
+
+# ---------------------------------------------------------------- main
+
+def main(argv):
+    if len(argv) < 2 or argv[1] in ("-h", "--help", "help"):
+        out(help_text())
+        return 0
+    cmds = {"pair": cmd_pair, "status": cmd_status, "logs": cmd_logs, "uninstall": cmd_uninstall,
+            "new": cmd_new, "sim": cmd_sim, "install": cmd_install}
+    f = cmds.get(argv[1])
+    if not f:
+        out("Unknown command \"%s\".\n" % argv[1])
+        out(help_text())
+        return 2
+    return f(argv[2:]) or 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

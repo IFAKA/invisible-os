@@ -16,6 +16,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -25,6 +26,7 @@ from rooms import Rooms  # noqa: E402
 
 CONFIG_DIR = os.path.expanduser("~/.config/invisible-bridge")
 TOKEN_FILE = os.path.join(CONFIG_DIR, "token")
+SEEN_FILE = os.path.join(CONFIG_DIR, "phone_seen")   # {"t": unix time, "name": ...}: the last call from the phone (`invisible pair` and `status` read it)
 URL_FILE = os.path.join(CONFIG_DIR, "url")   # read by hook.py, so the hook calls the address the server really listens on
 
 
@@ -75,6 +77,30 @@ def default_host():
         s.close()
 
 
+# Calls that only the laptop itself makes (the hook, setup, the CLI) do not count as "the phone is here".
+NOT_PHONE = ("/ping", "/ask", "/notify", "/cancel")
+_seen_last = [0.0]
+
+
+def mark_seen(path, headers, seen_file=None):
+    """Remember that the phone called (at most one write per 2 s). Returns True if it wrote."""
+    if path in NOT_PHONE or headers.get("X-Invisible-Client") == "cli":
+        return False
+    now = time.time()
+    if now - _seen_last[0] < 2:
+        return False
+    _seen_last[0] = now
+    f = seen_file or SEEN_FILE
+    try:
+        os.makedirs(os.path.dirname(f), exist_ok=True)
+        with open(f + ".tmp", "w") as fh:
+            json.dump({"t": now, "name": headers.get("X-Phone", "")[:60]}, fh)
+        os.replace(f + ".tmp", f)
+        return True
+    except OSError:
+        return False
+
+
 def make_handler(store, token, rooms):
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -93,6 +119,7 @@ def make_handler(store, token, rooms):
         def _auth(self):
             got = self.headers.get("Authorization", "")
             if hmac.compare_digest(got.encode(), ("Bearer " + token).encode()):
+                mark_seen(urlparse(self.path).path, self.headers)
                 return True
             self._send(401, {"error": "bad token"})
             return False

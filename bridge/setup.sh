@@ -69,6 +69,11 @@ else
   else say "launchd could not start the bridge. Try by hand: python3 $DIR/server.py --name $NAME --port $PORT"; exit 1; fi
 fi
 
+# (c2) the `invisible` command, and the list of what was added (for `invisible uninstall`)
+LINK=""
+[ -f "$DIR/../bin/invisible" ] && LINK="$("$PY" "$TOOLS" link "$DIR/../bin/invisible")"
+"$PY" "$TOOLS" manifest "$PLIST" "$LOG" "python3 $DIR/hook.py" "$LINK"
+
 # (d) wait, then the pair code and the QR
 URL="$("$PY" "$TOOLS" wait "$CFG" 20)" || { say "The bridge did not answer in 20 s. See $LOG"; exit 1; }
 CODE="$("$PY" "$DIR/server.py" --name "$NAME" --port "$PORT" --show-token | tail -n 1)"
@@ -77,4 +82,5 @@ case "$HOOKS" in added*) say "Claude Code hooks added to ~/.claude/settings.json
 if "$PY" "$DIR/qr.py" "invisible-pair://${CODE#invisible-pair:}" 2>/dev/null; then QRSAY="QR code above."; else QRSAY="No QR code (text too long)."; fi
 say "$CODE"
 if command -v pbcopy >/dev/null 2>&1 && printf '%s' "$CODE" | pbcopy 2>/dev/null; then say "$QRSAY The pair code line is also copied to this Mac's clipboard."; else say "$QRSAY"; fi
+[ -n "$LINK" ] && say "The command \`invisible\` is ready ($LINK). Try: invisible status"
 say "On the phone: scan the QR with the camera (it opens Invisible OS), or Computers, Add a computer, Paste."

@@ -53,6 +53,7 @@ class SetupTest(unittest.TestCase):
             open(p, "w").write(body); os.chmod(p, 0o755)
         self.env = dict(os.environ, HOME=self.home, PATH=self.bin + os.pathsep + os.environ["PATH"])
         self.env.pop("INVISIBLE_BRIDGE_URL", None)
+        self.env["INVISIBLE_BIN_DIR"] = os.path.join(self.home, "bin")
 
     def tearDown(self):
         try:

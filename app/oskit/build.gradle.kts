@@ -10,6 +10,7 @@ android {
     defaultConfig { minSdk = 29 }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     publishing { singleVariant("release") { withSourcesJar() } }
+    testOptions { unitTests.isReturnDefaultValues = true }   // SimRunnerTest creates a stub Handler
     kotlinOptions { jvmTarget = "17"; freeCompilerArgs += "-Xskip-metadata-version-check" }
 }
 dependencies {

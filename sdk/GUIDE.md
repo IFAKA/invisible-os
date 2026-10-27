@@ -1,5 +1,13 @@
 # Make a program for the Invisible OS
 
+## Quick start (three commands)
+```
+invisible new dice       # makes a program called dice from the starter
+invisible sim dice       # play it on this computer: space bar = the button, the Mac says the words
+invisible install dice   # build the app and put it on the phone
+```
+`invisible sim` has no phone and no sound files: a key press is a click, `h` holds the button down (press `h` again to let go), `q` quits. You get the first command by running `sh bridge/setup.sh` once (see bridge/README.md), or `brew install` the formula in `packaging/homebrew`.
+
 ## What this is
 
 Invisible is an Android app. You control the phone with **one earbud button**. The screen is off.
