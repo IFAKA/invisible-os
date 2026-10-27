@@ -18,8 +18,15 @@ RECV = f"{PKG}/.AiTestReceiver"
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOG = os.path.join(HERE, "..", "app", "logs", "e2e.log")
 
+def _serial():
+    """The real phone: another session may have an emulator attached too."""
+    devs = [l.split()[0] for l in subprocess.run(["adb", "devices"], capture_output=True, text=True).stdout.splitlines()[1:] if l.strip().endswith("device")]
+    real = [d for d in devs if not d.startswith("emulator-")]
+    return (os.environ.get("ANDROID_SERIAL") or (real or devs or [""])[0])
+SERIAL = _serial()
+
 def adb(*a, timeout=20):
-    return subprocess.run(["adb", *a], capture_output=True, text=True, timeout=timeout).stdout
+    return subprocess.run(["adb", "-s", SERIAL, *a], capture_output=True, text=True, timeout=timeout).stdout
 
 def bcast(*extra):
     adb("shell", "am", "broadcast", "-n", RECV, *extra)
@@ -30,7 +37,7 @@ lock = threading.Lock()
 LINE = re.compile(r"^\s*([\d.]+)\s+\d+\s+\d+\s+D\s+(SAY|E2E|Invisible)\s*:\s*(.*)$")
 
 def reader():
-    p = subprocess.Popen(["adb", "logcat", "-T", "1", "-v", "epoch", "-s", "SAY:D", "E2E:D", "Invisible:D"], stdout=subprocess.PIPE, text=True, bufsize=1)
+    p = subprocess.Popen(["adb", "-s", SERIAL, "logcat", "-T", "1", "-v", "epoch", "-s", "SAY:D", "E2E:D", "Invisible:D"], stdout=subprocess.PIPE, text=True, bufsize=1)
     for line in p.stdout:
         m = LINE.match(line.rstrip("\n"))
         if not m: continue
@@ -196,7 +203,7 @@ def main():
     if "--only" in args:
         k = args.index("--only"); only = [x for a in args[k + 1:k + 2] for x in a.split(",")]
     chosen = [f for f in SCENARIOS if not only or any(o in f.__name__ for o in only)]
-    if "device" not in adb("devices"): sys.exit("no phone connected (adb mdns services; adb connect IP:PORT)")
+    if not SERIAL: sys.exit("no phone connected (adb mdns services; adb connect IP:PORT)")
     threading.Thread(target=reader, daemon=True).start()
     time.sleep(0.5)
     os.makedirs(os.path.dirname(LOG), exist_ok=True)

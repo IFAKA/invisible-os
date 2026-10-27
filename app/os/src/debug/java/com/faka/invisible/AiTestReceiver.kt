@@ -9,6 +9,7 @@ import android.util.Log
 /** Dev tool: `adb shell am broadcast -n com.faka.invisible/.AiTestReceiver --es msg "Ana: ¿Vienes a cenar?" --es lang es` then read logcat tag INVISIBLE_AI. */
 class AiTestReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
+        Actions.init(c.applicationContext)   // a cold process (the system killed the app) has no OS yet; the hooks need it
         i.getStringExtra("dl")?.let { l -> Thread { MlKitTranslator.download(l); android.util.Log.d("Invisible", "translate models requested for en+$l") }.start(); return }
         i.getStringExtra("sayes")?.let { com.faka.invisible.voicekit.VoiceKit.narrator.say(com.faka.invisible.voicekit.Phrase.content(it, "es"), false, false, false); return }   // dev: speak a text with the Spanish voice
         if (i.hasExtra("pairtest")) { Actions.pairTest(); return }
