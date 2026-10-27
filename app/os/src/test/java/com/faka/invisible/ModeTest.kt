@@ -608,7 +608,7 @@ class ModeTest {
     @Test fun moreTasksPagesByFive() {
         val r = Rig().withTasks(); for (i in 1..6) r.taskStore.add("task $i")
         r.wake(); r.pick("Tasks, 6"); r.pick("More tasks"); r.advance(3500)
-        assertTrue(r.log.contains("say[es] task 6"))
+        assertTrue(r.log.contains("say[en] task 6"))
     }
 
     @Test fun clickingDuringTheCancelWindowKeepsTheTask() {
@@ -620,7 +620,7 @@ class ModeTest {
 
     @Test fun longTasksAreCutAndDuplicatesAreSkipped() {
         val r = Rig().withTasks(); r.taskStore.add("x".repeat(400)); r.wake(); r.pick("Tasks, 1"); r.advance(3500)
-        assertTrue(r.log.any { it.startsWith("say[es] x") && it.endsWith("y más") && it.length < 200 })
+        assertTrue(r.log.toString(), r.log.any { it.matches(Regex("say(\\[en])? x.*and more")) && it.length < 200 })
         val s = TaskStore(); assertEquals(1, s.addAll("[ ] Buy milk\n[ ] buy MILK")); assertEquals(0, s.addAll("[ ] Buy milk"))
     }
 

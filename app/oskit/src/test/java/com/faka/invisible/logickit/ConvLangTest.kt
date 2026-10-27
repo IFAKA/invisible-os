@@ -8,17 +8,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConvLangTest {
-    @Test fun spanishDefaultEnglishNeedsClearLead() {
+    @Test fun englishDefaultSpanishNeedsClearLead() {
         val saved = ArrayList<Map<String, String>>()
         val c = ConvLang { saved.add(it) }
-        assertEquals("es", c.get("a")); assertEquals("es", c.learn("a", ""))
-        assertEquals("es", c.learn("a", "en"))        // one English vote is not enough
-        assertEquals("en", c.learn("a", "en"))        // two more than Spanish
-        c.learn("a", "es"); assertEquals("es", c.get("a"))
-        c.learn("a", "en"); c.learn("a", "en"); assertEquals("en", c.get("a"))
+        assertEquals("en", c.get("a")); assertEquals("en", c.learn("a", ""))
+        assertEquals("en", c.learn("a", "es"))        // one Spanish vote is not enough
+        assertEquals("es", c.learn("a", "es"))        // two more than English
+        c.learn("a", "en"); assertEquals("en", c.get("a"))
+        c.learn("a", "es"); c.learn("a", "es"); assertEquals("es", c.get("a"))
         assertTrue(c.settled("a"))
-        c.learn("a", "es"); c.learn("a", "es"); assertEquals("en", c.get("a"))   // settled: no more votes
-        assertEquals("en", ConvLang(saved.last()).get("a"))
+        c.learn("a", "en"); c.learn("a", "en"); assertEquals("es", c.get("a"))   // settled: no more votes
+        assertEquals("es", ConvLang(saved.last()).get("a"))
         assertFalse(c.settled("b"))
     }
     @Test fun placeholdersAndGroupNames() {

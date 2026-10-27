@@ -30,7 +30,7 @@ class MessageStore(private val max: Int = 20) {
  * Once one language has [SETTLED] votes it is final (detection stops). `save` persists "lang:votes,lang:votes" per person.
  */
 class ConvLang(initial: Map<String, String> = emptyMap(), private val save: (Map<String, String>) -> Unit = {}) {
-    companion object { const val SETTLED = 3; const val LEAD = 2; const val DEFAULT = "es" }
+    companion object { const val SETTLED = 3; const val LEAD = 2; const val DEFAULT = "en" }
     private val votes = HashMap<String, HashMap<String, Int>>()
 
     init {
@@ -39,7 +39,7 @@ class ConvLang(initial: Map<String, String> = emptyMap(), private val save: (Map
         }
     }
 
-    /** Spanish unless another language has clearly more votes (at least [LEAD] more than Spanish). */
+    /** English unless another language has clearly more votes (at least [LEAD] more than English). */
     @Synchronized fun get(who: String): String {
         val m = votes[who] ?: return DEFAULT
         val top = m.filterKeys { it != DEFAULT }.maxByOrNull { it.value } ?: return DEFAULT

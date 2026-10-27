@@ -46,13 +46,11 @@ class TranslationsTest {
         assertEquals(emptyList<String>(), missing)
     }
 
-    @Test fun phoneLanguageIsTheDefaultWhenSupported() {
-        assertEquals("es", MenuLanguage.resolve(MenuLanguage.AUTO, "es"))
-        assertEquals("en", MenuLanguage.resolve(MenuLanguage.AUTO, "de"))
-        assertEquals("en", MenuLanguage.resolve(null, null))
-        assertEquals("en", MenuLanguage.resolve("en", "es"))
-        assertEquals("es", MenuLanguage.resolve("es", "de"))
-        assertEquals("en", MenuLanguage.resolve("xx", "de"))
+    @Test fun menuIsEnglishUnlessTheOwnerChoosesAnother() {
+        assertEquals("en", MenuLanguage.resolve(MenuLanguage.AUTO))
+        assertEquals("en", MenuLanguage.resolve(null))
+        assertEquals("es", MenuLanguage.resolve("es"))
+        assertEquals("en", MenuLanguage.resolve("xx"))
     }
 
     @Test fun englishIsUntouchedAndSpanishIsTaggedForTheVoice() {

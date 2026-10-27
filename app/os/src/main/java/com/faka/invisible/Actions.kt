@@ -206,8 +206,8 @@ object Actions {
 
     fun saveSettings(s: LauncherSettings) { mode.settings = s; SettingsStore.save(prefs(), s); applyLanguage(s) }
 
-    /** The menu language follows the setting; "auto" follows the phone. */
-    private fun applyLanguage(s: LauncherSettings) = com.faka.invisible.voicekit.MenuLanguage.apply(s.menuLanguage, java.util.Locale.getDefault().language)
+    /** The menu is English; it changes only when the owner picks another language. */
+    private fun applyLanguage(s: LauncherSettings) = com.faka.invisible.voicekit.MenuLanguage.apply(s.menuLanguage)
 
     private fun prefs() = app.getSharedPreferences("invisible", Context.MODE_PRIVATE)
 

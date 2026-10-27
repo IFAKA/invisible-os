@@ -61,11 +61,11 @@ class ControllerNotificationListener : NotificationListenerService() {
         fun ongoingNow(): List<Ongoing> = ongoing.values.filter { !mutes.isMuted(it.notif.pkg) }
         /** One ongoing notification by key (for its actions screen). */
         fun ongoingNotif(key: String): Notif? = ongoing[key]?.notif?.takeIf { !mutes.isMuted(it.pkg) }
-        /** Voice for a song name: English only when the detector clearly says English, otherwise Spanish (same rule as messages). */
+        /** Voice for a song name: Spanish only when the detector clearly says Spanish, otherwise English (same rule as messages). */
         fun voiceFor(text: String): String {
             val d = try { detector.detect(text) } catch (e: Exception) { "" }
             Log.d("Invisible", "SONG lang detect=$d for $text")
-            return if (d == "en") "en" else "es"
+            return if (d == "es") "es" else "en"
         }
         val detector: LangDetector by lazy { MlKitLangDetector() }
 

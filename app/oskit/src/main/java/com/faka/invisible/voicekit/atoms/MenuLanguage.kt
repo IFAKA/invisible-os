@@ -12,14 +12,12 @@ object MenuLanguage {
 
     @Volatile var code: String = "en"; private set
 
-    /** [setting] is [AUTO] or a code; [phone] is the phone's language code ("es", "en", "de"...). Unsupported phone language -> English. */
-    fun resolve(setting: String?, phone: String?): String {
+    /** [setting] is a code the owner chose. [AUTO] or nothing -> English (the phone's language is not used). */
+    fun resolve(setting: String?): String {
         val s = setting?.lowercase()
-        if (s != null && s != AUTO && s in supported) return s
-        val p = phone?.lowercase()?.take(2)
-        return if (p != null && p in supported) p else "en"
+        return if (s != null && s != AUTO && s in supported) s else "en"
     }
 
-    fun apply(setting: String?, phone: String?) { code = resolve(setting, phone) }
+    fun apply(setting: String?) { code = resolve(setting) }
     fun use(code: String) { this.code = if (code in supported) code else "en" }
 }

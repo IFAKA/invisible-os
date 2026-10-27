@@ -555,7 +555,7 @@ class ControllerMode(
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)
                 val opts = ArrayList<Opt>()
                 opts += Opt("task:add", Menu.ADD_TASK) { pick("task:add"); show(Screen.TASK_ADD) }
-                for (t in page) opts += Opt("task:done", Voice.cut(t.text, MAX_SPOKEN, t.lang != "en", t.lang.ifEmpty { out.songLang(t.text) ?: "es" })) {
+                for (t in page) opts += Opt("task:done", Voice.cut(t.text, MAX_SPOKEN, t.lang == "es", t.lang.ifEmpty { out.songLang(t.text) ?: "en" })) {
                     pick("task:done")
                     startPending(Voice.TASK_DONE_UNDO, { out.completeTask(t.id); true }, onCancel = { show(Screen.TASK) }, after = {
                         taskList = taskList - t

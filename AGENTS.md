@@ -4,7 +4,7 @@ Android app: control the phone with one earbud button, screen off. The phone spe
 
 ## Rules
 - **No microphone. Ever.** Do not request RECORD_AUDIO, do not use SpeechRecognizer, do not add voice input or dictation. Input is only the button (click counts, hold) and, for text, the app screen or Share. Reason: the owner does not want the app to listen.
-- Menu is English; message text is read in its own language (Spanish default).
+- Menu is English (it changes only when the owner picks another language); message text is read in its own language (English default; Spanish only when detected clearly).
 - **The phone is on Wi-Fi debugging** (no cable). Run `adb devices`: a line `adb-...-tls-connect... device` means it is connected. Do not ask the owner to plug it in or turn debugging on; if it is missing, say so and ask them to turn Wireless debugging on. For a bug report ("it jumps"), take the lease, read `adb logcat -d -s Invisible` and run `tools/e2e.py` yourself before asking questions.
 - **The phone is shared.** `app/run.sh` checks the phone lease (`~/.claude/bin/phone take MIN WHY` / `release`) and that your tree has everything on master. Do not bypass it: a stale install removes other sessions' dev hooks.
 - Checks (from `app/`, all three must pass): `./gradlew testDebugUnitTest --offline -q` (every module), `./gradlew checkVoiceKit --offline -q` (kit rules and module borders, every module), `./gradlew assembleDebug --offline -q`. Install on the phone: `app/run.sh`.
