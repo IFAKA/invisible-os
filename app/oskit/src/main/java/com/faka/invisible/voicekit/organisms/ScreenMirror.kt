@@ -37,6 +37,9 @@ object ScreenMirror {
     /** A program starts: its name, and no list (the menu list it was picked from is no longer being read). */
     fun program(title: String) = update { it.copy(active = true, title = title, items = emptyList(), index = 0) }
 
+    /** A line spoken outside a list (a message, a call, a level, a hint): the last few lines, the newest marked, so the screen shows what is said. */
+    fun said(line: String) = update { val l = (it.items + line).takeLast(4); it.copy(active = true, items = l, index = l.size - 1) }
+
     fun setTitle(title: String) = update { it.copy(active = true, title = title) }
 
     /** A button gesture, by its plain name ("click", "2 clicks", "hold"). */

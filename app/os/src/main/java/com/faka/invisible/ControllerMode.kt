@@ -267,6 +267,7 @@ class ControllerMode(
 
     /** The app screen was tapped on item [i] named [text]: choose it as if it had just been spoken and the button clicked. False if the list moved on. */
     fun pickAt(i: Int, text: String): Boolean {
+        if (active && screen == Screen.VOLUME_DIAL && i in 1..2 && com.faka.invisible.voicekit.ScreenMirror.items.getOrNull(i) == text) { dial(if (i == 1) Gesture.SINGLE else Gesture.DOUBLE); return true }
         if (!active || finding || pending != null || phase != Phase.SCAN || i !in list.items.indices) return false
         if (com.faka.invisible.voicekit.ScreenMirror.items.getOrNull(i) != text) return false
         stopAll(); code = i + 1; pickMs = -1
@@ -368,6 +369,7 @@ class ControllerMode(
         screen = s; phase = Phase.INTRO; prebuilt = null; timers.clear("prebuild")
         com.faka.invisible.oskit.Trace.ev("screen", "${s.name} title=${mirrorTitle(s)}")
         com.faka.invisible.voicekit.ScreenMirror.setTitle(mirrorTitle(s))
+        com.faka.invisible.voicekit.ScreenMirror.show(emptyList(), 0)   // the list of the last screen is gone: what is said now fills the picture
         if (!backNav) tn(tone(s)); backNav = false
         intro.clear()
         if (accessWarn) { accessWarn = false; com.faka.invisible.oskit.Trace.ev("wake", "notification access off: warned"); intro += Intro(Voice.NOTIF_ACCESS_OFF, null) }
@@ -383,7 +385,7 @@ class ControllerMode(
         if (s == Screen.NOTIF_ACTIONS) openNotif()?.let { intro += Intro(notifRead(it), null) }
         curIntro = null
         if (s == Screen.VOLUME_DIAL) {   // no list: the song plays on and the button is the dial
-            phase = Phase.WAIT; waitNext = null
+            phase = Phase.WAIT; waitNext = null; dialScreen()
             timers.set("scan", toneGapMs) { say(Voice.level(out.volumeLevel())); timers.set("scan", 900) { say(Voice.DIAL_HINT) } }   // the level, then what to do
             return
         }
@@ -399,6 +401,7 @@ class ControllerMode(
         curIntro = i
         if (i == null) { beginScan(); return }
         i.msgId?.let { handled.add(it) }
+        if (!i.hint && screen in setOf(Screen.MESSAGE, Screen.CALL_IN, Screen.CALL_ACTIVE, Screen.NOTIF_ACTIONS)) com.faka.invisible.voicekit.ScreenMirror.setTitle(i.text.text.take(90))   // who calls, what the message says: stays on screen above the options
         say(i.text)
     }
 
@@ -418,6 +421,7 @@ class ControllerMode(
         Voice.cut(MessageLogic.spoken(m.text, m.lang).squash(), MAX_SPOKEN, isEs(m), null).text
 
     private fun say(text: Phrase, fast: Boolean = false) {
+        if (phase != Phase.SCAN && screen != Screen.VOLUME_DIAL) com.faka.invisible.voicekit.ScreenMirror.said(text.text)
         speechOpen = true
         timers.set("dog", speechCapMs) { onSpeechDone() }
         out.speak(text, false, fast)
@@ -913,6 +917,12 @@ class ControllerMode(
         out.volume(up)
         val n = out.volumeLevel()
         if (n == before) tn(Tone.CANCEL) else say(Voice.level(n))
+        dialScreen()
+    }
+
+    /** The volume dial has no list: the app screen shows the level and the two things the button does; a tap does the same. */
+    private fun dialScreen() {
+        com.faka.invisible.voicekit.ScreenMirror.show(listOf("Volume ${out.volumeLevel()} of ${out.volumeMax()}", "Louder (1 click)", "Quieter (2 clicks)"), 0)
     }
 
     private fun dialDown() {
@@ -920,7 +930,7 @@ class ControllerMode(
         val before = out.volumeLevel()
         out.volume(false)
         if (out.volumeLevel() == before) { dialHolding = false; tn(Tone.CANCEL); say(Voice.level(out.volumeLevel())); return }   // the bottom: stop and say where
-        tn(levelTone(out.volumeLevel()))
+        tn(levelTone(out.volumeLevel())); dialScreen()
         timers.set("dial", DIAL_STEP_MS) { dialDown() }
     }
 
@@ -929,7 +939,7 @@ class ControllerMode(
 
     private fun stopDial() {
         stopAll(); timers.clear("dial"); dialHolding = false
-        say(Voice.level(out.volumeLevel()))
+        say(Voice.level(out.volumeLevel())); dialScreen()
     }
 
     /** Speak only the new volume level as a word, then keep scanning the volume list. */
