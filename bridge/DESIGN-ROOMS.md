@@ -1,6 +1,6 @@
 # Rooms: your laptop workflow from the earbud
 
-Status: design, not built yet. Version 2, 2026-10-27, rewritten from the owner's full records (version 1 guessed too much).
+Status: built (2026-10-27): rooms, actions, quoted options, screen view, Projects, New project, order learning. Checked on the real phone (e2e `rooms_go`, `rooms_new_project`; a real send into a scratch tmux window). Version 2, 2026-10-27, rewritten from the owner's full records (version 1 guessed too much).
 Scripts that produce every number: `bridge/research/` (rerun: `python3 bridge/research/extract.py`, then `analyze.py`, `coverage.py`, `draft.py gemma3:4b 40 0.5`; they read `~/.claude` and write `/tmp/wf/`).
 
 ## The problem
@@ -79,7 +79,8 @@ Option, off by default: quiet hours where the earcon does not play (rooms still 
 3. `/room/ID/send` (text, Enter, Escape, Ctrl-C), queue-safe. Check: a test pane running `cat` shows the text.
 4. Quoted-option parsing. Check: replay on the 580 blocks: options found vs your real reply (today 184 match).
 5. Summaries for messages without a block, and shell rooms (`gemma3:4b`). Check: on the replay set, the summary keeps the line that your reply answered (scored by `research/draft.py`-style similarity).
-6. Order learning per room. Check: replay, top-3 hit rate beats the fixed order.
+6. Order learning per room. Check: replay, top-3 hit rate beats the fixed order. Result (`research/order_replay.py`, 645 replies that map to an action): fixed 75.2%, learned 80.6% (top-1: 32.4% to 37.2%).
+7. New project: area (parent folders of your projects), name and first ask with Write; the laptop makes the folder, `git init`, starts Claude, types the ask.
 
 ## How we know it works
 - Replay: share of your replies sendable by one click. Today's honest number: 14% exact (fixed list + quoted options), 20% with the intent menu, 25% with Stop.

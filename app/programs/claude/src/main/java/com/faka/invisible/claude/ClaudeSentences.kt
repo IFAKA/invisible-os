@@ -32,6 +32,8 @@ object ClaudeVoice {
     val NEW_CHAT = f("New chat")
     val NEW_PROJECT = f("New project")
     val NO_AREAS = f("No places for a new project.")
+    val WRITE_NAME = f("Write the project name.")
+    val WRITE_ASK = f("Write the first ask, or Done.")
     fun started(name: String) = f("Started $name.")
     val NOTHING_TO_READ = f("Nothing to read.")
     fun room(name: String, state: String) = f("$name, ${RoomState.word(state)}")

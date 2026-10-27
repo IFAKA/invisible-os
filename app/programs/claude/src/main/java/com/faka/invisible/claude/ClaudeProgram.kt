@@ -26,7 +26,7 @@ interface RoomsPort {
     fun write(sendTo: (String) -> Boolean)
     /** Leave this tool and open Write [count] times in a row (each text is "" when nothing was written). If the first is empty the OS comes
      *  back to this tool; otherwise [finish] gets the texts, runs off the main thread, and the phrase it returns is spoken. */
-    fun writeSeq(count: Int, finish: (List<String>) -> Phrase)
+    fun writeSeq(cues: List<Phrase>, finish: (List<String>) -> Phrase)
 }
 
 /** Timers on the host's handler, one set per run. */
@@ -251,7 +251,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     private fun newProject(a: Area) {
         val c = client
         releaseQuietly()
-        port.writeSeq(2) { texts ->
+        port.writeSeq(listOf(ClaudeVoice.WRITE_NAME, ClaudeVoice.WRITE_ASK)) { texts ->
             val name = texts[0]
             try { if (c.newProject(a.path, name, texts[1])) ClaudeVoice.started(name) else ClaudeVoice.FAILED } catch (_: IOException) { ClaudeVoice.NOT_REACHABLE }
         }

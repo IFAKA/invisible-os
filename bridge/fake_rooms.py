@@ -36,6 +36,7 @@ class H(BaseHTTPRequestHandler):
         elif u.path == "/room/last": self._json({"text": "Alpha last message. The design doc is ready."})
         elif u.path == "/room/screen": self._json({"text": "$ claude\n> working on the design doc\n  done"})
         elif u.path == "/projects": self._json({"projects": PROJECTS})
+        elif u.path == "/areas": self._json({"areas": [{"name": "hardware", "path": "/tmp/fake/hardware", "uses": 9}]})
         elif u.path == "/events":
             time.sleep(min(float(q.get("wait", ["0"])[0]), 2.0)); self._json({"seq": 1, "items": []})
         else: self._json({"error": "not found"}, 404)

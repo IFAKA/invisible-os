@@ -252,8 +252,14 @@ object Actions {
     }
     private var backAfterEnd: (() -> Boolean)? = null
 
-    /** [count] Writes in a row. Nothing written in the first = back to the Laptop tool. After the last, [finish] runs off the main thread and its phrase is said. */
-    private fun writeChain(count: Int, got: List<String>, finish: (List<String>) -> Phrase) {
+    /** One Write per cue in [cues] (the cue is said first). Nothing written in the first = back to the Laptop tool. After the last, [finish] runs off the main thread and its phrase is said. */
+    private fun writeChain(cues: List<Phrase>, got: List<String>, finish: (List<String>) -> Phrase) {
+        val cue = cues[got.size]
+        say(cue, false)
+        handler.postDelayed({ writeStep(cues, got, finish) }, 600L + 250L * cue.text.split(' ').size)
+    }
+    private fun writeStep(cues: List<Phrase>, got: List<String>, finish: (List<String>) -> Phrase) {
+        val count = cues.size
         var text = ""
         val p = WriteProgram(writeServices, { t -> text = t; true }, Frame())
         startProgram(p)
@@ -261,7 +267,7 @@ object Actions {
             val all = got + text
             when {
                 got.isEmpty() && text.isEmpty() -> { handler.postDelayed({ Programs.byId("hub:claude")?.let { startProgramEntry(it) } }, BACK_DELAY_MS); true }
-                all.size < count -> { handler.postDelayed({ writeChain(count, all, finish) }, BACK_DELAY_MS); true }
+                all.size < count -> { handler.postDelayed({ writeChain(cues, all, finish) }, BACK_DELAY_MS); true }
                 else -> { Thread({ val said = finish(all); handler.post { say(said, true) } }, "rooms-finish").start(); false }
             }
         }
@@ -425,8 +431,8 @@ object Actions {
         override fun write(sendTo: (String) -> Boolean) {
             handler.post { launchWrite(sendTo, null) { Programs.byId("hub:claude")?.let { startProgramEntry(it) } } }
         }
-        override fun writeSeq(count: Int, finish: (List<String>) -> Phrase) {
-            handler.post { writeChain(count, emptyList(), finish) }
+        override fun writeSeq(cues: List<Phrase>, finish: (List<String>) -> Phrase) {
+            handler.post { writeChain(cues, emptyList(), finish) }
         }
     }
     /** A question came while no program was running: tell the user with the Claude sound; if the menu is not in use, open the tool so the next click answers. */

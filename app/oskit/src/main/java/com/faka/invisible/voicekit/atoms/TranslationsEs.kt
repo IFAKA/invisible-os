@@ -228,6 +228,8 @@ private val SPOKEN_ES = mapOf(
     "Quiet until morning." to "Silencio hasta la mañana.",
     "Yes" to "Sí",
     "New project" to "Proyecto nuevo",
+    "Write the project name." to "Escribe el nombre del proyecto.",
+    "Write the first ask, or Done." to "Escribe el primer pedido, o Listo.",
     "No places for a new project." to "No hay lugares para un proyecto nuevo.",
     "Continue last chat" to "Seguir el último chat",
     "New chat" to "Chat nuevo",
