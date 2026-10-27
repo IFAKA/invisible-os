@@ -344,7 +344,7 @@ object Actions {
         backAfterEnd = null
         running?.stop(); running = null
         mode.exit(false); com.faka.invisible.voicekit.ScreenMirror.clear(); narrator.stopSpeech()
-        prefs().edit().putBoolean(PracticeProgram.DONE_KEY, practiceDone).apply()
+        prefs().edit().putBoolean(PracticeProgram.DONE_KEY, practiceDone).remove(RoomMute.KEY).apply()   // known state: the rooms are not muted
         Log.d("E2E", "reset done")
     }
     /** Dev (e2e): swap the speech engine for the instant stand-in (debug builds only; the class exists only there). */

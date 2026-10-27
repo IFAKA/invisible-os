@@ -20,7 +20,7 @@ class AiTestReceiver : BroadcastReceiver() {
         if (i.hasExtra("playmusic")) { Actions.playMusicDev(); return }   // dev: what the Music item does with no song
         if (i.hasExtra("browse")) { Actions.browseMusicDev(); return }
         i.getStringExtra("gesture")?.let { Actions.gestureDev(it); return }   // dev: a button gesture by name
-        i.getStringExtra("voice")?.let { v -> Actions.voiceDev(v == "instant"); return }   // dev (e2e): "instant" = a stand-in voice that speaks nothing and ends at once; "real" = the engine
+        i.getStringExtra("voice")?.let { v -> Actions.voiceDev(v == "instant"); if (!i.hasExtra("pace")) return }   // dev (e2e): "instant" = a stand-in voice that speaks nothing and ends at once; "real" = the engine; voice and pace may come in one broadcast: both apply
         if (i.hasExtra("pace")) { Actions.paceDev(i.getFloatExtra("pace", 1f)); return }   // dev (e2e): scale the menu's silences (item gap, screen-tone gap); button timing is never scaled
         i.getStringExtra("fake")?.let { fake(c, it); return }   // dev (e2e): post a fake "call" / "chat" notification, or "clear" them
         if (i.hasExtra("replaydry")) { Actions.replayDry = i.getBooleanExtra("replaydry", true); Log.d("E2E", "replaydry ${Actions.replayDry}"); return }

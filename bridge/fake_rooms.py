@@ -40,15 +40,17 @@ class H(BaseHTTPRequestHandler):
         elif u.path == "/projects": self._json({"projects": PROJECTS})
         elif u.path == "/areas": self._json({"areas": [{"name": "hardware", "path": "/tmp/fake/hardware", "uses": 9}]})
         elif u.path == "/events":
+            # Like the real bridge: events are numbered and every poller gets those after its `since`, so a stale poller (an old watcher thread of the phone) cannot take one away.
             fire = getattr(self.server, "fire", FIRE_DONE)
-            t_end = time.time() + min(float(q.get("wait", ["0"])[0]), 2.0)
-            while not fire and time.time() < t_end: time.sleep(0.03)   # a long poll answers the moment a window finishes
-            if fire:
-                name = fire.pop(0)
-                self._json({"seq": 2, "items": [{"type": "room", "kind": "room", "id": "%7", "name": name, "state": "done",
-                                                 "project": "p", "summary": "", "options": [], "seq": 2}]})
-            else:
-                self._json({"seq": 1, "items": []})
+            log = self.server.__dict__.setdefault("log", [])   # (seq, name) of every window that finished
+            since = int(q.get("since", ["0"])[0]); t_end = time.time() + min(float(q.get("wait", ["0"])[0]), 2.0)
+            while True:
+                while fire: log.append((len(log) + 2, fire.pop(0)))
+                new = [(n, nm) for n, nm in log if n > since]
+                if new or time.time() >= t_end: break
+                time.sleep(0.03)
+            if new: self._json({"seq": new[-1][0], "items": [{"type": "room", "kind": "room", "id": "%7", "name": nm, "state": "done", "project": "p", "summary": "", "options": [], "seq": n} for n, nm in new]})
+            else: self._json({"seq": max(1, since), "items": []})
         else: self._json({"error": "not found"}, 404)
     def do_POST(self):
         if not self._ok(): return

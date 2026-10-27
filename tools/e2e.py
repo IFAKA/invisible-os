@@ -115,6 +115,8 @@ def press(ms):
     bcast("--es", "press", ms)
     PRESS_END[0] = time.time() + sum(parts) / 1000 + GAP_S + 0.05   # the gesture gap too: a press nearer than that would join this one (a click then a hold)
 def reset(practice_done=True):
+    d = PRESS_END[0] - time.time()
+    if d > 0: time.sleep(d)   # the last scenario's presses are over: a button still going down would join the next scenario
     i = mark(); bcast("--ez", "reset", "true" if practice_done else "false")
     if not wait(lambda t: t == "reset done", i, "E2E", 20): raise Fail("reset hook did not answer (is the debug build installed?)")
 LAST = 99   # show(screen, at=LAST): the list starts at its last item
@@ -136,7 +138,7 @@ def wait_closed(timeout=8.0):
     t0 = time.time(); s = {}
     while time.time() - t0 < timeout:
         s = state()
-        if s.get("active") == "false": return s
+        if s.get("active") == "false" and s.get("running") == "false": return s   # no menu and no program
     raise Fail(f"menu still open: {s}")
 def need(text, i, timeout=15.0):
     r = said(text, i, timeout)
@@ -229,9 +231,9 @@ def practice_end_to_end():
     return "practice done, home says " + h[0]
 
 def phone_list():
-    reset(); show("PHONE"); i = mark()
+    reset(); i = mark(); show("PHONE")   # mark first: at pace 0 the first item is spoken before the show answer arrives
     need("Call a contact", i); need("Emergency", i, 30)
-    h = since(i, "SAY")
+    h = since(i, "SAY"); h = h[:h.index("Emergency") + 1]   # the first loop (at pace 0 the list may start over before we look)
     if h[0] != "Call a contact" or h[-1] != "Emergency": raise Fail(f"order is {h!r}, want Call a contact first and Emergency last")
     return "Call a contact first, Emergency last"
 
@@ -260,6 +262,8 @@ def fake_chat_message():
     wait(lambda t: len(set(since(i, "SAY"))) >= 3, i, "SAY", 15)
     h = list(dict.fromkeys(since(i, "SAY")))
     if len(h) < 3: raise Fail("message read but no options: " + " | ".join(h))
+    # the app also says the arrival line for this message about 1.5 s after it was posted; let it finish so it is not heard in the next scenario
+    wait(lambda t: t.startswith("Invisible OS, E2E Friend"), i, "SAY", 4)
     return " | ".join(h[:5])
 
 def chat_arrival_spoken():
@@ -468,13 +472,14 @@ SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_ho
 # REAL_VOICE scenarios prove the real engine plays: its start event, its rate, a message read aloud. PACE scales only the silences of the menu
 # (gap between items, screen-tone gap) in the app; button timing (350 ms gap, 500 ms hold, click-then-hold, the 500 ms reaction grace) is never scaled.
 REAL_VOICE = {"wake_reads_home_menu", "click_picks", "voice_speed_applied", "chat_arrival_spoken"}
-PACE = 0.8          # a click must land after the 500 ms grace and before the next item starts: the item window stays ~1.2 s (0.6 left only ~200 ms of margin)
+PACE = 1.0          # scenarios that click an item: window = item gap 1500 ms; the click lands about 1060 ms after the item starts (500 ms grace + 120 press + 350 gap + sends), so 1.0 leaves ~440 ms of margin; 0.8 left ~140 ms, less than a late log line costs
 PACE_LISTEN = 0.0   # scenarios that only listen and never click an item in a list
+PACE_OF = {"fake_incoming_call": 0.3}   # the call menu has 2 items and leaves after its silent loops: at 0 it would be gone before the state is read
 LISTEN_ONLY = {"phone_list", "fake_incoming_call", "fake_chat_message", "rooms_done_spoken", "practice_end_to_end", "idle_clicks_go_to_the_player", "computers_two"}
 
 def set_mode(f):
     real = f.__name__ in REAL_VOICE
-    pace = 1.0 if real else PACE_LISTEN if f.__name__ in LISTEN_ONLY else PACE
+    pace = 1.0 if real else PACE_OF.get(f.__name__, PACE_LISTEN if f.__name__ in LISTEN_ONLY else PACE)
     bcast("--es", "voice", "real" if real else "instant", "--ef", "pace", str(pace))
     return real
 
