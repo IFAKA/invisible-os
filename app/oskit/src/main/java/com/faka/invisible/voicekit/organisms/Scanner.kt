@@ -9,6 +9,8 @@ interface ScanOut {
     fun tone(t: Tone)
     /** The silent loops are used up: leave. */
     fun leave()
+    /** A list with a title starts over: speak [title]; the owner calls [Scanner.itemDone] when it is spoken, and the first item follows. */
+    fun sayTitle(title: Phrase) {}
 }
 
 /**
@@ -46,10 +48,24 @@ class Scanner<T>(
 
     val isEmpty get() = list.isEmpty
 
-    fun load(items: List<T>) { list = ScanList(items) }
+    /** The title of the list (null = none): read again each time the list starts over after its last item. */
+    private var title: Phrase? = null
+    private var readingTitle = false
+
+    fun load(items: List<T>, title: Phrase? = null) { list = ScanList(items); this.title = title; readingTitle = false }
+
+    /** The loop restart: the title first if the list has one, then the first item. */
+    private fun startOver() {
+        val t = title
+        if (t == null) { speakItem(0); return }
+        readingTitle = true
+        ScreenMirror.show(list.items.map { label(it).text }, 0)
+        out.sayTitle(t)
+    }
 
     /** Item [i] starts now. */
     fun speakItem(i: Int) {
+        readingTitle = false
         list.moveTo(i)
         val o = list.items[i]
         ScreenMirror.show(list.items.map { label(it).text }, i)
@@ -61,6 +77,7 @@ class Scanner<T>(
 
     /** The speech of the current item is over: wait, then the next item, or the end of the list. */
     fun itemDone() {
+        if (readingTitle) { readingTitle = false; speakItemIn(cadence.pauseMs(), 0); return }
         val pause = cadence.pauseMs()
         if (!list.isLast) {
             if (cadence.ceremony) timers.set(tickKey, maxOf(0L, pause - cadence.tickLeadMs)) { out.tone(Tone.TICK) }
@@ -71,8 +88,8 @@ class Scanner<T>(
                 if (cadence.ceremony) timers.set(scanKey, pause) { out.leave() } else out.leave()
             } else if (cadence.ceremony) {
                 timers.set(tickKey, maxOf(0L, pause - cadence.restartLeadMs)) { out.tone(Tone.RESTART) }   // rises: it starts over
-                speakItemIn(pause, 0)
-            } else speakItem(0)
+                timers.set(scanKey, pause) { startOver() }
+            } else startOver()
         }
     }
 
@@ -88,7 +105,7 @@ class Scanner<T>(
     /** The current item again, after [delayMs] (where fast scroll stopped). */
     fun resumeIn(delayMs: Long) { list.resetLoops(); speakItemIn(delayMs, list.index) }
 
-    fun stop() { timers.clear(scanKey); timers.clear(tickKey); timers.clear(fastKey) }
+    fun stop() { readingTitle = false; timers.clear(scanKey); timers.clear(tickKey); timers.clear(fastKey) }
 
     // ---- fast scroll: click, then hold ----
     fun startFast() { fasting = true; fastTick() }

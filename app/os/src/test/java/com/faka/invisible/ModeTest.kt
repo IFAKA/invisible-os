@@ -1127,7 +1127,7 @@ class ModeTest {
         val order = r.spoken().map { it.removePrefix("say ") }
         assertTrue(order.indexOf("Maps") < order.indexOf("Mail, 2 notifications") || order.indexOf("Maps") > order.indexOf("Mail, 2 notifications"))   // all apps are there, equal weights keep a stable order
         val b = mail(); b.groups = emptyList(); b.wake(); b.advance(12000)
-        assertEquals(r.spoken().map { it.substringBefore(",") }, b.spoken().map { it.substringBefore(",") })
+        assertEquals(r.spoken().map { it.substringBefore(",") }.filter { it != "say Notifications" }.take(7), b.spoken().map { it.substringBefore(",") }.take(7))   // the Notifications entry is the only difference
     }
 
     @Test fun morePickedAppMovesUpOnTheNextHomeList() {
@@ -1226,17 +1226,69 @@ class ModeTest {
         assertTrue(d.has("ndismiss k1"))
     }
 
-    @Test fun clearAllFromAppSpeaksCountAndGoesHome() {
-        val r = mail(); r.wake(); r.pick("Mail, 2 notifications"); r.pick("Clear all from this app"); r.advance(3000)
-        assertTrue(r.has("nclear com.mail"))
-        assertTrue(r.spoken().any { it.contains("notifications cleared") })
+    @Test fun notificationsEntryAppearsOnlyWithNotificationsAndCountsThem() {
+        val r = mail(); r.wake(); r.advance(12000)
+        val order = r.spoken().map { it.removePrefix("say ") }
+        assertTrue(order.toString(), "Notifications, 3" in order)
+        val e = mail(); e.groups = emptyList(); e.wake(); e.advance(12000)
+        assertFalse(e.spoken().any { it.startsWith("say Notifications") })
+    }
+
+    @Test fun notificationsListHasClearAllFirstThenOnlyAppsWithNotifications() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.advance(6000)
+        assertEquals(ControllerMode.Screen.NOTIF_APPS, r.m.screen)
+        val order = r.spoken().map { it.removePrefix("say ") }.dropWhile { it != "Clear all" }
+        assertEquals(listOf("Clear all", "Mail, 2 notifications", "whatsapp, 1 notification"), order.take(3).sortedBy { listOf("Clear all", "Mail, 2 notifications", "whatsapp, 1 notification").indexOf(it) })
+        assertEquals("Clear all", order.first()); assertFalse(order.any { it == "Maps" })
+    }
+
+    @Test fun clearAllInNotificationsListClearsEveryAppSpeaksCountAndGoesHome() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Clear all"); r.advance(3000)
+        assertTrue(r.has("nclear all"))
+        assertTrue(r.spoken().contains("say 3 notifications cleared"))
         assertEquals(ControllerMode.Screen.HUB, r.m.screen)
     }
 
-    @Test fun clearAllAppsClearsEverything() {
-        val r = mail(); r.wake(); r.pick("Mail, 2 notifications"); r.pick("Clear all apps"); r.advance(3000)
-        assertTrue(r.has("nclear all"))
+    @Test fun appWithTwoNotificationsListsThemWithClearAllFromThisAppFirst() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Mail, 2 notifications"); r.advance(6000)
+        assertEquals(ControllerMode.Screen.NOTIF_LIST, r.m.screen)
+        val order = r.spoken().map { it.removePrefix("say ") }.dropWhile { it != "Clear all from this app" }
+        assertEquals("Clear all from this app", order.first()); assertTrue(order.contains("Boss. Call me"))
+        r.pick("Clear all from this app"); r.advance(3000)
+        assertTrue(r.has("nclear com.mail")); assertEquals(ControllerMode.Screen.HUB, r.m.screen)
+    }
+
+    @Test fun appWithOneNotificationSkipsTheListAndReadsItThenItsActions() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("whatsapp, 1 notification"); r.advance(3000)
+        assertEquals(ControllerMode.Screen.NOTIF_ACTIONS, r.m.screen)
+        assertTrue(r.spoken().contains("say t. m")); assertTrue(r.spoken().contains("say Dismiss"))
+        assertFalse(r.spoken().contains("say Clear all from this app"))
+    }
+
+    @Test fun singleNotificationIsReadAgainWhenItsOptionsLoop() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("whatsapp, 1 notification"); r.advance(40000)
+        val said = r.spoken()
+        val i = said.indexOf("say Open app")
+        assertTrue(said.toString(), i >= 0 && said.drop(i + 1).contains("say t. m"))   // after the last action: the title again
+    }
+
+    @Test fun backFromSingleNotificationGoesToNotificationsListThenHome() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("whatsapp, 1 notification"); r.advance(3000)
+        r.m.onGesture(Gesture.TRIPLE); r.advance(300)
+        assertEquals(ControllerMode.Screen.NOTIF_APPS, r.m.screen)
+        r.m.onGesture(Gesture.TRIPLE); r.advance(300)
         assertEquals(ControllerMode.Screen.HUB, r.m.screen)
+    }
+
+    @Test fun backFromAppListGoesToNotificationsListAndFromTreeGoesToTree() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Mail, 2 notifications"); r.advance(3000)
+        r.m.onGesture(Gesture.TRIPLE); r.advance(300)
+        assertEquals(ControllerMode.Screen.NOTIF_APPS, r.m.screen)
+        val t = mail(); t.wake(); t.pick("Mail, 2 notifications"); t.pick("Boss. Call me"); t.advance(3000)
+        t.m.onGesture(Gesture.TRIPLE); t.advance(300)
+        assertEquals(ControllerMode.Screen.NOTIF_LIST, t.m.screen)
+        t.m.onGesture(Gesture.TRIPLE); t.advance(300)
+        assertEquals(ControllerMode.Screen.HUB, t.m.screen)   // this tree is flat: the app was on home
     }
 
     @Test fun muteThisAppGoesHomeWithoutIt() {

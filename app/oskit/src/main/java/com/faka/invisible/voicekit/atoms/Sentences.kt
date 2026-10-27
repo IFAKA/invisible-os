@@ -178,7 +178,9 @@ object Menu {
     fun messages(unread: Int) = f("Messages, $unread unread")
     val DISMISS get() = f("Dismiss")
     val CLEAR_APP get() = f("Clear all from this app")
-    val CLEAR_ALL get() = f("Clear all apps")
+    val CLEAR_ALL get() = f("Clear all")
+    /** The home entry for all apps' notifications, with how many. */
+    fun notifications(n: Int) = f("Notifications, $n")
     val MUTE_APP get() = f("Mute this app")
     val UNMUTE_ALL get() = f("Unmute all apps")
     val MUSIC get() = f("Music")

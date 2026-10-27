@@ -149,7 +149,7 @@ class ControllerMode(
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL, CALL_IN, CALL_ACTIVE, CONTACTS, EMERGENCY }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_APPS, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL, CALL_IN, CALL_ACTIVE, CONTACTS, EMERGENCY }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: Phrase, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: Phrase, val run: () -> Unit)
@@ -175,6 +175,7 @@ class ControllerMode(
     private val treePath = ArrayList<TreeNode>()   // the groups walked down from home; the last one is the list shown in TREE
     private var hubOpts: Map<String, Opt> = emptyMap()   // the built-in programs of the OS, as options (leaves of the tree)
     private var notifKey: String? = null     // the notification open in NOTIF_ACTIONS
+    private var notifFromAll = false          // the app's notifications were reached from the Notifications list (back goes there), not from the tree
     private var taskIdx = 0   // first task of the page being read
     private val TASK_PAGE = 5
     private val handled = HashSet<String>()   // wake queue: text spoken, answered or skipped (id = key + arrival time)
@@ -193,6 +194,7 @@ class ControllerMode(
         override fun sayFast(word: Phrase) { speechOpen = true; out.speak(word, false, false) }
         override fun tone(t: Tone) { tn(t) }
         override fun leave() { leaveSilent() }
+        override fun sayTitle(title: Phrase) { history.clear(); awaitStart = -1; say(title) }   // a click while the title is read picks nothing
     }
     private val ALARM_HOURS = listOf(7, 6, 8, 9, 5, 10, 4, 11) + (0..23).filter { it !in listOf(7, 6, 8, 9, 5, 10, 4, 11) }
     private val ALARM_MINUTES = listOf(0, 30, 15, 45, 10, 20, 40, 50, 5, 25, 35, 55)
@@ -354,7 +356,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY, Screen.CONTACTS -> Tone.MORE; Screen.CALL_IN, Screen.CALL_ACTIVE, Screen.EMERGENCY -> Tone.TIMER; Screen.VOLUME, Screen.VOLUME_DIAL -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_APPS, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY, Screen.CONTACTS -> Tone.MORE; Screen.CALL_IN, Screen.CALL_ACTIVE, Screen.EMERGENCY -> Tone.TIMER; Screen.VOLUME, Screen.VOLUME_DIAL -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -435,12 +437,15 @@ class ControllerMode(
         history.clear(); itemEnds.clear()
         scanStartedAt = clock()
         wmark("beginScan"); val opts = prebuilt?.takeIf { screen == Screen.HUB } ?: buildOptions(); prebuilt = null; wmark("buildOptions")
-        scanner.load(opts)
+        scanner.load(opts, listTitle())
         if (scanner.isEmpty) { leaveSilent(); return }
         val first = firstKey?.let { k -> opts.indexOfFirst { it.key == k } }?.takeIf { it > 0 } ?: 0
         firstKey = null
         scanner.speakItem(first); wmark("speakItem called"); wakeT0 = 0
     }
+
+    /** The title of the list on screen, read again each time the list starts over: a single notification is its own title. */
+    private fun listTitle(): Phrase? = if (screen == Screen.NOTIF_ACTIONS) openNotif()?.let { notifRead(it) } else null
 
     private fun recordStart() {
         if (awaitStart < 0) return
@@ -542,7 +547,9 @@ class ControllerMode(
                 val playing = if (out.nowPlaying() != null && "hub:music" !in liveKeys) all["hub:music"] else null   // something is playing and is not already a live entry: its controls come first
                 val front = (if (playing == null) sug else listOf(playing) + sug.filter { it.key != playing.key }).filter { it.key !in liveKeys }
                 suggestedKeys = front.map { it.key }
-                liveOpts + front + treeOptions(root) + unmuteOption()   // the home list is the tree's top; only the small Suggested slot in front adapts
+                val notifs = out.notifGroups().sumOf { it.items.size }
+                val notifOpt = if (notifs > 0) listOf(Opt("notifs:all", Menu.notifications(notifs)) { pick("notifs:all"); show(Screen.NOTIF_APPS) }) else emptyList()   // all waiting notifications, right after the live apps
+                liveOpts + notifOpt + front + treeOptions(root) + unmuteOption()   // the home list is the tree's top; only the small Suggested slot in front adapts
             }
             Screen.TASK -> {   // "Add task" first, then this page of tasks (a click right after hearing one = done), then "More tasks"
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)
@@ -623,6 +630,7 @@ class ControllerMode(
             Screen.MUSIC -> musicOptions()
             Screen.MUSIC_PLAY -> musicPlayOptions()
             Screen.VOLUME_DIAL -> emptyList()
+            Screen.NOTIF_APPS -> notifAppsOptions()
             Screen.NOTIF_LIST -> notifListOptions()
             Screen.NOTIF_ACTIONS -> notifActionOptions()
         }
@@ -637,7 +645,7 @@ class ControllerMode(
     private fun liveLabel(l: LiveApp): Phrase =
         if (l.line.isNotEmpty()) Phrase.content(l.app + ", " + l.line, out.songLang(l.line)) else Menu.liveState(l.app, l.state)
     private fun liveOption(l: LiveApp) = Opt("live:${l.pkg}", liveLabel(l)) {
-        pick("app:${l.pkg}"); notifPkg = l.pkg
+        pick("app:${l.pkg}"); notifPkg = l.pkg; notifFromAll = false
         val key = l.notifKey
         when {
             out.isMusicApp(l.pkg) -> { musicBack = Screen.HUB; show(Screen.MUSIC) }
@@ -649,11 +657,16 @@ class ControllerMode(
     /** A screen whose app or notification is gone (dismissed, removed by the app) falls back one level (an empty app: home, which is rebuilt). */
     private fun notifGuard(s: Screen): Screen = when {
         s == Screen.NOTIF_ACTIONS && openNotif() == null -> notifGuard(Screen.NOTIF_LIST)
-        s == Screen.NOTIF_LIST && openItems().isEmpty() -> Screen.HUB
+        s == Screen.NOTIF_LIST && openItems().isEmpty() -> if (notifFromAll) notifGuard(Screen.NOTIF_APPS) else Screen.HUB
+        s == Screen.NOTIF_LIST && openItems().size == 1 -> { notifKey = openItems().first().key; Screen.NOTIF_ACTIONS }   // one notification: no list, read it
+        s == Screen.NOTIF_APPS && out.notifGroups().none { it.items.isNotEmpty() } -> Screen.HUB
         else -> s
     }
 
     /** The list one level above the app: the group it was picked in, or home. */
+    /** One level above an app's notifications: the Notifications list it was picked in, or the tree. */
+    private fun appUp() = if (notifFromAll) show(Screen.NOTIF_APPS) else treeUp()
+
     private fun treeUp() = show(if (treePath.isEmpty()) Screen.HUB else Screen.TREE)
 
     /**
@@ -754,7 +767,7 @@ class ControllerMode(
         }
     }
 
-    private fun treeAppOption(c: TreeNode): Opt { val a = c.app!!; return Opt("app:${a.pkg}", treeLabel(c)) { pick("app:${a.pkg}"); notifPkg = a.pkg; show(if (c.unread > 0 && !isMusic(c)) Screen.NOTIF_LIST else Screen.APP_OPEN) } }
+    private fun treeAppOption(c: TreeNode): Opt { val a = c.app!!; return Opt("app:${a.pkg}", treeLabel(c)) { pick("app:${a.pkg}"); notifPkg = a.pkg; notifFromAll = false; show(if (c.unread > 0 && !isMusic(c)) Screen.NOTIF_LIST else Screen.APP_OPEN) } }
     /** A music app's only notification is its player: it never opens the notification list, it opens the Music page. */
     private fun isMusic(c: TreeNode) = c.app?.pkg?.let { out.isMusicApp(it) } == true
 
@@ -821,11 +834,22 @@ class ControllerMode(
 
     private fun openApp() { val p = notifPkg ?: return; pausedByUs = false; exit(false); out.openApp(p) }
 
-    private fun notifListOptions(): List<Opt> = openItems().take(MAX_NOTIFS).map { n ->
-        Opt("notif:item", notifLine(n, MAX_SPOKEN, false)) { pick("notif:item"); notifKey = n.key; show(Screen.NOTIF_ACTIONS) }
-    } + (if (openItems().size >= 2) listOf(
-        Opt("notif:clearapp", Menu.CLEAR_APP) { pick("notif:clearall"); clearedAll(out.notifDismissAll(notifPkg)) },
-        Opt("notif:clearall", Menu.CLEAR_ALL) { pick("notif:clearall"); clearedAll(out.notifDismissAll(null)) }) else emptyList())
+    /** Every app that has notifications ("WhatsApp, 3 notifications"), newest first; "Clear all" comes first. */
+    private fun notifAppsOptions(): List<Opt> {
+        val byApp = out.notifGroups().filter { it.items.isNotEmpty() }.groupBy { it.pkg }
+        val apps = byApp.map { (pkg, gs) -> Triple(pkg, gs.first().app, gs.flatMap { it.items }) }.sortedByDescending { t -> t.third.maxOf { it.at } }
+        return listOf(Opt("notifs:clearall", Menu.CLEAR_ALL) { pick("notifs:clearall"); clearedAll(out.notifDismissAll(null)) }) + apps.map { (pkg, name, items) ->
+            val lang = NameLang.voice(pkg, name)
+            val label = if (lang == null) Menu.treeCount(name, items.size) else Phrase.content(name + ", " + Menu.countText(items.size), lang)
+            Opt("notifs:app", label) { pick("notifs:app"); notifPkg = pkg; notifFromAll = true; show(Screen.NOTIF_LIST) }   // one notification: the guard skips the list
+        }
+    }
+
+    /** The notifications of one app (it has 2 or more here; one goes straight to its actions): "Clear all from this app" first. */
+    private fun notifListOptions(): List<Opt> = listOf(Opt("notif:clearapp", Menu.CLEAR_APP) { pick("notif:clearapp"); clearedAll(out.notifDismissAll(notifPkg)) }) +
+        openItems().take(MAX_NOTIFS).map { n ->
+            Opt("notif:item", notifLine(n, MAX_SPOKEN, false)) { pick("notif:item"); notifKey = n.key; show(Screen.NOTIF_ACTIONS) }
+        }
 
     private fun clearedAll(n: Int) { say(if (n > 0) Voice.cleared(n) else Voice.NOTIF_FAILED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } }
 
@@ -1002,8 +1026,10 @@ class ControllerMode(
             Screen.MORE_MSG -> show(Screen.MESSAGE)
             Screen.COMPOSE, Screen.MSG_TASK -> show(Screen.MORE_MSG)
             Screen.VOLUME -> show(Screen.PHONE)
-            Screen.NOTIF_ACTIONS -> if (liveOpen()) show(Screen.HUB) else show(Screen.NOTIF_LIST)
-            Screen.NOTIF_LIST, Screen.APP_OPEN -> treeUp()
+            Screen.NOTIF_ACTIONS -> if (liveOpen()) show(Screen.HUB) else if (openItems().size >= 2) show(Screen.NOTIF_LIST) else appUp()   // a lone notification has no list above it
+            Screen.NOTIF_LIST -> appUp()
+            Screen.NOTIF_APPS -> show(Screen.HUB)
+            Screen.APP_OPEN -> treeUp()
             Screen.MUSIC -> show(musicBack)
             Screen.MUSIC_PLAY, Screen.VOLUME_DIAL -> show(Screen.MUSIC)
             Screen.TREE -> { treePath.removeLastOrNull(); treeUp() }

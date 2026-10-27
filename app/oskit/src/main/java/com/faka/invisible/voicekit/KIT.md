@@ -30,7 +30,7 @@ Rules are checked two ways:
 | engines/GameAudio.kt | engine | A game's low-latency stereo stream (used by all game programs) and latency estimate. |
 | organisms/Narrator.kt | organism | Say, beep, play (a program's own sound), stereo word pair, `waiting()` (the heartbeat for slow work). What screens call to be heard. |
 | organisms/ButtonInput.kt | organism | The one button: dedupe, raw button for programs, tap tone, gestures. |
-| organisms/Scanner.kt | organism | The spoken list: pauses, ticks, loops then leave, fast scroll. Used by the menu and the Write menu. |
+| organisms/Scanner.kt | organism | The spoken list: pauses, ticks, loops then leave, fast scroll. `load(items, title)`: a list with a title reads it again each time it starts over after its last item (a click while the title is read picks nothing; `ScanOut.sayTitle`). Used by the menu and the Write menu. |
 | VoiceKit.kt | facade | `init` once from the OS; `narrator`, `buttons`, `mediaKeys()`. |
 
 Add a sentence: put it in `Sentences.kt`. Add a sound: `Earcons.kt` and a `Tone`. Add a list: use `Scanner`. Add a program: it gets `RawButton` and speaks through `Narrator`.

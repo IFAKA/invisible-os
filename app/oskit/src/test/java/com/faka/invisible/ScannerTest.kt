@@ -20,6 +20,7 @@ class ScannerTest {
                 override fun sayFast(word: Phrase) { log.add("fast ${word.text}") }
                 override fun tone(t: Tone) { log.add("tone $t") }
                 override fun leave() { log.add("leave") }
+                override fun sayTitle(title: Phrase) { log.add("title ${title.text}"); if (!ceremony) sc.itemDone() }
             }, ScanCadence(pauseMs = { 100 }, loops = { loops }, ceremony = ceremony))
             sc.load(listOf("a b", "c"))
         }
@@ -45,6 +46,13 @@ class ScannerTest {
         r.sc.itemDone(); r.advance(100)   // after the last item: ding, then leave one pause later
         r.advance(100)
         assertEquals(listOf("say a b", "tone TICK", "say c", "tone DING", "leave"), r.log)
+    }
+
+    @Test fun aTitleIsReadAgainWhenTheListStartsOverButNotTheFirstTime() {
+        val r = Rig(ceremony = false, loops = 3)
+        r.sc.load(listOf("a b", "c"), Phrase.content("T"))
+        r.sc.speakItem(0); r.advance(1000)
+        assertEquals(listOf("say a b", "say c", "title T", "say a b", "say c", "title T", "say a b", "say c", "leave"), r.log)
     }
 
     @Test fun fastScrollSaysFirstWordsWithTicksAndWraps() {
