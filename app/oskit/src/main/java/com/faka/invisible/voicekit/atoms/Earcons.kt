@@ -28,6 +28,7 @@ object Earcons {
     private fun one(name: String, ms: Int, g: Double, v: V = V.MALLET) = run(listOf(name), 0, ms, g, v)
 
     private val page = one("G5", 180, .22)   // a new screen: one quiet note; the speech names the place
+    // The old synth recipes: now only the fallback in [load] and the base of [level].
     private val spec: Map<Tone, List<N>> = mapOf(
         Tone.TAP to one("C6", 20, .14, V.WOOD),
         Tone.TICK to one("G5", 25, .25, V.WOOD),
@@ -67,7 +68,15 @@ object Earcons {
     private val cache = HashMap<Tone, ShortArray>()
 
     /** PCM for [t]. */
-    fun pcm(t: Tone): ShortArray = synchronized(cache) { cache.getOrPut(t) { render(spec.getValue(t), reverb = t != Tone.TAP && t != Tone.TICK, peakDb = LEVEL.getValue(t)) } }
+    fun pcm(t: Tone): ShortArray = synchronized(cache) { cache.getOrPut(t) { load(t) } }
+
+    /** The OS sounds are recorded from `sound/door/gen_set.py` (the XMB mood: glass bells, deep pads, long quiet room) into `resources/earcons/<tone>.wav`, mono 16-bit at [SR]. */
+    private fun load(t: Tone): ShortArray {
+        val b = Earcons::class.java.getResourceAsStream("/earcons/${t.name.lowercase()}.wav")?.use { it.readBytes() }
+            ?: return render(spec.getValue(t), reverb = t != Tone.TAP && t != Tone.TICK, peakDb = LEVEL.getValue(t))   // missing file: the old synth
+        val bb = java.nio.ByteBuffer.wrap(b, 44, b.size - 44).order(java.nio.ByteOrder.LITTLE_ENDIAN)   // plain 44-byte WAV header
+        return ShortArray((b.size - 44) / 2) { bb.short }
+    }
 
     /** One note for volume level 1..4: the level is a position on the chord (C5 E5 G5 C6). */
     fun level(n: Int): ShortArray = render(one(listOf("C5", "E5", "G5", "C6")[(n - 1).coerceIn(0, 3)], 350, .40), true, -16.0)
