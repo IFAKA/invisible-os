@@ -311,17 +311,22 @@ class ControllerMode(
 
     private var accessWarn = false   // said once, before the first screen of this wake
 
+    private var wakeT0 = 0L
+    /** Wake timing marks (trace kind `wake`): ms since the wake started, for every step. */
+    private fun wmark(step: String) { if (wakeT0 > 0) com.faka.invisible.oskit.Trace.ev("wake", "t+${System.currentTimeMillis() - wakeT0}ms $step") }
+
     private fun wake() {
+        wakeT0 = System.currentTimeMillis(); wmark("start")
         active = true
-        pausedByUs = out.pauseMusic()
-        queue = buildQueue(); qi = 0
+        pausedByUs = out.pauseMusic(); wmark("pauseMusic")
+        queue = buildQueue(); qi = 0; wmark("buildQueue")
         fromHub = false; speechOpen = false
-        hintPending = learning()
-        accessWarn = out.notifAccessOff()
+        hintPending = learning(); wmark("learning")
+        accessWarn = out.notifAccessOff(); wmark("notifAccessOff")
         out.log("MODE enter")
         com.faka.invisible.oskit.Trace.ev("wake", "menu on pausedMusic=$pausedByUs queue=${queue.size}")
         out.choice(if (queue.isEmpty()) "HUB" else if (queue[0] == null) "TIMER_DONE" else "MESSAGE", 0, "wake", queue.getOrNull(0)?.sender ?: "")
-        showQueueItemOrHub()
+        showQueueItemOrHub(); wmark("shown")
     }
 
     /** Wake opens the hub. Only urgent things go first: a finished timer, then a message that arrived in the last 2 min.
@@ -360,7 +365,7 @@ class ControllerMode(
     private fun show(s0: Screen) {
         val s = notifGuard(s0)
         stopAll(); lookupId++
-        screen = s; phase = Phase.INTRO
+        screen = s; phase = Phase.INTRO; prebuilt = null; timers.clear("prebuild")
         com.faka.invisible.oskit.Trace.ev("screen", "${s.name} title=${mirrorTitle(s)}")
         com.faka.invisible.voicekit.ScreenMirror.setTitle(mirrorTitle(s))
         if (!backNav) tn(tone(s)); backNav = false
@@ -383,7 +388,11 @@ class ControllerMode(
             return
         }
         timers.set("scan", toneGapMs) { nextIntro() }
+        if (s == Screen.HUB) { val me = lookupId; timers.set("prebuild", 15) { if (screen == Screen.HUB && lookupId == me && prebuilt == null) prebuilt = buildOptions() } }   // the home list is built while the screen tone plays, not after it
     }
+
+    /** The home list built during the screen tone (see [show]); [beginScan] takes it once. */
+    private var prebuilt: List<Opt>? = null
 
     private fun nextIntro() {
         val i = intro.removeFirstOrNull()
@@ -420,11 +429,12 @@ class ControllerMode(
         phase = Phase.SCAN; curIntro = null
         history.clear(); itemEnds.clear()
         scanStartedAt = clock()
-        scanner.load(buildOptions())
+        wmark("beginScan"); val opts = prebuilt?.takeIf { screen == Screen.HUB } ?: buildOptions(); prebuilt = null; wmark("buildOptions")
+        scanner.load(opts)
         if (scanner.isEmpty) { leaveSilent(); return }
-        val first = firstKey?.let { k -> buildOptions().indexOfFirst { it.key == k } }?.takeIf { it > 0 } ?: 0
+        val first = firstKey?.let { k -> opts.indexOfFirst { it.key == k } }?.takeIf { it > 0 } ?: 0
         firstKey = null
-        scanner.speakItem(first)
+        scanner.speakItem(first); wmark("speakItem called"); wakeT0 = 0
     }
 
     private fun recordStart() {
@@ -509,18 +519,18 @@ class ControllerMode(
                 }
                 suggestedKeys = emptyList()
                 out.setContext(buildSet { if (n > 0) add("unread"); if (out.nowPlaying() != null) add("playing"); if (out.navigation() != null) add("navigating"); if (out.wiredConnected()) add("wired") })
-                hubOpts = all
-                val leaves = treeLeaves(all)
+                hubOpts = all; wmark("hub items+context")
+                val leaves = treeLeaves(all); wmark("treeLeaves")
                 val live = out.liveApps().filter { l -> l.pkg == AppWeights.SELF || leaves.any { it.pkg == l.pkg } }   // a live app must be a leaf (installed, not hidden or muted); this app's own is only the e2e fake
                 homeLeaves = leaves.map { if (live.any { l -> l.pkg == it.pkg }) it.copy(live = true) else it }
-                planFind()
-                val root = cachedTree(homeLeaves); treeRoot = root; treePath.clear()
-                val deep = deepOptions()
+                wmark("liveApps"); planFind(); wmark("planFind")
+                val root = cachedTree(homeLeaves); treeRoot = root; treePath.clear(); wmark("cachedTree")
+                val deep = deepOptions(); wmark("deepOptions")
                 val far = suggestableLeaves(root)   // apps and programs that are not direct entries of home: offered too, when worth it
                 val home = root.children.map { c -> c.app?.let { leafKey(it.pkg) } ?: "group:${c.label}" }
                 val cost = far.mapValues { it.value.second }
                 val sug = out.suggest(deep.keys + far.keys, clock(), home) { key, share, pos -> key !in cost || SuggestGate.worth(share, cost.getValue(key), pos) }
-                    .mapNotNull { deep[it] ?: far[it]?.first }
+                    .mapNotNull { deep[it] ?: far[it]?.first }; wmark("suggest")
                 com.faka.invisible.oskit.Trace.ev("live", "home live=" + live.joinToString(",") { "${it.pkg}:${it.state}" })
                 val liveOpts = live.map { liveOption(it) }   // live apps (playing music, a running workout) come first, most recently updated first
                 val liveKeys = live.map { "app:${it.pkg}" }.toSet() + (if (live.any { out.isMusicApp(it.pkg) }) setOf("hub:music") else emptySet())

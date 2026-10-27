@@ -132,8 +132,8 @@ object Actions {
             override fun notifDismiss(key: String) = ControllerNotificationListener.dismiss(key)
             override fun notifMute(pkg: String) = ControllerNotificationListener.mute(pkg)
             override fun notifAppHint(pkg: String) = try { app.packageManager.getApplicationInfo(pkg, 0).category } catch (e: Exception) { -1 }
-            override fun installedApps() = DeviceApps.installed(app)
-            override fun appUse() = DeviceApps.use(app)
+            override fun installedApps() = DeviceApps.installedNow(app)
+            override fun appUse() = DeviceApps.useNow(app)
             override fun appMuted(pkg: String) = ControllerNotificationListener.mutes.isMuted(pkg)
             override fun openApp(pkg: String) = DeviceApps.open(app, pkg)
             override fun notifMutedCount() = ControllerNotificationListener.mutes.all().size

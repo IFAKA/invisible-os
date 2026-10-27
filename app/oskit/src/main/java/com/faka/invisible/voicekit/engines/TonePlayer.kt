@@ -28,9 +28,12 @@ class TonePlayer(private val app: Context, private val handler: Handler) : ToneP
     } catch (e: Exception) { Log.e(tag, "play failed", e); onDone?.invoke(); null }
 
     /** Earcons: see SOUND-DESIGN.md. */
-    override fun beep(k: Tone, vol: Float) { play(Earcons.pcm(k), vol = vol) }
+    /** Building an AudioTrack took about 80 ms on the main thread (the wake tone held up the gesture): sounds start on one background thread, in order. */
+    private val soundThread = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "tones").apply { isDaemon = true } }
 
-    override fun playPcm(pcm: ShortArray) { play(pcm) }
+    override fun beep(k: Tone, vol: Float) { soundThread.execute { play(Earcons.pcm(k), vol = vol) } }
+
+    override fun playPcm(pcm: ShortArray) { soundThread.execute { play(pcm) } }
 
     override fun playStereo(pcm: ShortArray, rate: Int) {
         stopStereo()

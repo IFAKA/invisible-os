@@ -56,7 +56,8 @@ class TtsSpeech(
                 if (startTries++ < 20) handler.postDelayed({ start() }, 3000)
             } else {
                 startTries = 0
-                tts?.language = Locale.US; ready = true
+                tts?.language = Locale.US; appliedLang = "?"; bestVoices.clear(); ready = true
+                setVoice("es"); setVoice(null)   // look the voices up now, once, not on the first wake
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) { if (id == lastUtt) handler.post { listener.started() } }
                     override fun onDone(id: String?) { if (id?.startsWith("wc_") == true) words.made(id) else if (id?.startsWith("sy_") == true) spearconMade(id.removePrefix("sy_")) else ended(id) }
@@ -72,15 +73,21 @@ class TtsSpeech(
     /** Only the newest utterance counts: older ones were flushed. Tells the listener the speech is over. */
     private fun ended(id: String?) { if (id == lastUtt) handler.post { listener.ended() } }
 
-    /** Sets the voice language for the next utterance; falls back to the default locale if the voice is missing. */
+    private var appliedLang: String? = "?"   // the language the engine is set to now ("?" = unknown); setting it again costs binder calls on the main thread
+    private val bestVoices = HashMap<String?, android.speech.tts.Voice?>()
+
+    /** Sets the voice language for the next utterance; falls back to the default locale if the voice is missing. Asked again for the same language it does nothing: the engine calls and the voice list took about 200 ms on the main thread at every wake. */
     private fun setVoice(lang: String?) {
         val t = tts ?: return
+        if (appliedLang == lang) return
         val want = if (lang == null) Locale.US else Locale(lang)
         val r = t.isLanguageAvailable(want)
         if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) {
             Log.d(tag, "TTS voice $lang missing, default"); t.language = Locale.getDefault()
         } else t.language = want
-        bestVoice(t, want)?.let { if (t.voice?.name != it.name) { Log.d(tag, "TTS voice ${it.name} q=${it.quality}"); t.voice = it } }
+        val best = bestVoices.getOrPut(lang) { bestVoice(t, want) }
+        best?.let { if (t.voice?.name != it.name) { Log.d(tag, "TTS voice ${it.name} q=${it.quality}"); t.voice = it } }
+        appliedLang = lang
     }
 
     /** The best voice installed for the language: highest quality, then lowest latency; never one that needs the network (it would stall). */

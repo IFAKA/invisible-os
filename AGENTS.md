@@ -14,6 +14,7 @@ Android app: control the phone with one earbud button, screen off. The phone spe
 ## Trace log
 - The app writes one line per thing a person did or the phone answered to `files/trace/trace-YYYY-MM-DD.log` (7 days kept; code in `oskit/.../oskit/Trace.kt`). Line: `HH:mm:ss.SSS kind detail`; kinds: gesture, key, screen, say, pick, item, notif, music, media, wake, exit, program, error, slow. Crashes are written too.
 - Read it: `tools/trace.py --since 10m [--grep TEXT] [--day YYYY-MM-DD] [--summary]` (pulls from the phone, copy in `app/logs/trace/`). `--summary` shows errors, slow steps, gestures per screen, likely wrong picks, picks that led nowhere, repeated speech. After any bug report, read it before asking questions.
+- Wake speed: `wake` lines `t+Nms step` give the time of each wake step (gesture to `speakItem called`); `say first audio +Nms` follows. Rules: nothing slow on the main thread in a gesture (sounds start on the `tones` thread; `TtsSpeech.setVoice` is cached per language; `DeviceApps.installedNow/useNow` return the last answer and renew in a background thread, so a new app or launch shows one wake later; the home list is built in the 400 ms screen-tone gap, `ControllerMode.prebuilt`). Wake to first audio is about 450 ms, 400 of it the tone gap.
 - Every new behaviour a person would notice logs through `Trace.ev(kind, detail)` (errors: `Trace.err`; timings: `Trace.time`). Spoken lines and buttons are already traced by the kit.
 
 ## Design kits (enforced by `KitRulesTest` and the build task `checkVoiceKit`)
