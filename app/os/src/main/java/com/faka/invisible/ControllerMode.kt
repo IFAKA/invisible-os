@@ -35,6 +35,7 @@ interface ModeOutput {
     fun messages(): List<Msg>        // latest unread messages, newest first
     fun reply(key: String, text: String): Boolean   // true if the reply was sent
     fun notifGroups(): List<NotifGroup> = emptyList()   // the mailbox: every app's notifications, grouped, muted apps left out
+    fun roomsWaiting(): Int = 0                   // Claude windows on the computer that wait for you (the last answer; renewed in the background)
     fun liveApps(): List<LiveApp> = emptyList()   // apps that are live now (playing, a workout...), most recently updated first, for the front of home
     fun liveNotif(key: String): Notif? = null     // an ongoing notification by key (live entries open it)
     fun notifRead(n: Notif): String = GenericModule.read(n)         // what is read in full (the app's module decides)
@@ -527,7 +528,7 @@ class ControllerMode(
                     "alarm" -> all["hub:alarm"] = Opt("hub:alarm", Menu.SET_ALARM) { pick("hub:alarm"); show(Screen.ALARM_HOUR) }
                     "calculator" -> all["hub:calculator"] = Opt("hub:calculator", Menu.CALCULATOR) { pick("hub:calculator"); calc.clear(); show(Screen.CALC) }
                     "games" -> all["hub:games"] = Opt("hub:games", Menu.GAMES) { pick("hub:games"); show(Screen.GAMES) }
-                    else -> out.programs().firstOrNull { it.id == "hub:$k" }?.let { e -> all[e.id] = Opt(e.id, e.title) { pick(e.id); pausedByUs = false; exit(false); out.startProgram(e.id) } }   // a tool program of the registry; its place in the tree comes from its tag in AppCategories
+                    else -> out.programs().firstOrNull { it.id == "hub:$k" }?.let { e -> all[e.id] = Opt(e.id, if (k == "claude") out.roomsWaiting().let { w -> if (w > 0) Menu.roomsNeed(e.title.text, w) else e.title } else e.title) { pick(e.id); pausedByUs = false; exit(false); out.startProgram(e.id) } }   // a tool program of the registry; its place in the tree comes from its tag in AppCategories
                 }
                 suggestedKeys = emptyList()
                 out.setContext(buildSet { if (n > 0) add("unread"); if (out.nowPlaying() != null) add("playing"); if (out.navigation() != null) add("navigating"); if (out.wiredConnected()) add("wired") })

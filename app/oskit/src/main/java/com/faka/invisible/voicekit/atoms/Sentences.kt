@@ -179,6 +179,8 @@ object Menu {
     fun treeCount(label: String, n: Int) = Phrase.mixed("$label, ${countText(n)}")
     /** A live app at the front of home: "Music, playing", "Music, paused", "Workout, live". */
     fun liveState(app: String, state: String) = Phrase.mixed("$app, $state")
+    /** The Laptop tool on home while Claude windows wait: "Claude, 2 need you". */
+    fun roomsNeed(name: String, n: Int) = Phrase.mixed(if (n == 1) "$name, 1 needs you" else "$name, $n need you")
     val MESSAGES get() = f("Messages")
     fun messages(unread: Int) = f("Messages, $unread unread")
     val DISMISS get() = f("Dismiss")

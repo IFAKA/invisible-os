@@ -72,7 +72,7 @@ object SettingsStore {
     fun load(p: SharedPreferences): LauncherSettings {
         val d = LauncherSettings()
         return LauncherSettings(
-            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withWhere(p, withSum(p, withWriteCompass(p, withCalcAlarm(p, withApps(p, withNoMore(p, withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it)))))))))))))) } ?: d.hub,
+            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withClaude(p, withWhere(p, withSum(p, withWriteCompass(p, withCalcAlarm(p, withApps(p, withNoMore(p, withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it))))))))))))))) } ?: d.hub,
             info = p.getString("s_info", null)?.split(',')?.let { LauncherSettings.cleanInfo(it) } ?: d.info,
             phone = p.getString("s_phone", null)?.split(',')?.let { LauncherSettings.cleanPhone(withStatus(p, it)) } ?: d.phone,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
@@ -103,6 +103,14 @@ object SettingsStore {
         if (p.getBoolean("s_write_compass_saved", false)) return keys
         val moved = keys + listOf("write", "compass").filter { it !in keys }
         p.edit().putBoolean("s_write_compass_saved", true).putString("s_hub", moved.joinToString(",")).apply()
+        return moved
+    }
+
+    /** Once: a saved menu gets the Claude (Laptop) tool at the end; the tree then pins it first on home. */
+    private fun withClaude(p: SharedPreferences, keys: List<String>): List<String> {
+        if (p.getBoolean("s_claude_saved", false)) return keys
+        val moved = keys + listOf("claude").filter { it !in keys }
+        p.edit().putBoolean("s_claude_saved", true).putString("s_hub", moved.joinToString(",")).apply()
         return moved
     }
 

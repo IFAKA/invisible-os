@@ -285,6 +285,28 @@ def rooms_go():
         try: reset()
         except Fail: pass
 
+def rooms_waiting_on_home():
+    """Windows wait on the laptop: home says "<Tool>, N need you" as its first entry (the count is renewed at a wake, so it shows from the second wake)."""
+    sys.path.insert(0, os.path.join(HERE, "..", "bridge")); import fake_rooms
+    home = os.path.expanduser("~/.config/invisible-bridge/")
+    real_url = open(home + "url").read().strip() if os.path.exists(home + "url") else ""
+    real_tok = open(home + "token").read().strip() if os.path.exists(home + "token") else ""
+    host = test_host(real_url)
+    srv = fake_rooms.start(host, 8797, "e2e-token")
+    try:
+        bcast("--es", "bridge", f"http://{host}:8797", "--es", "token", "e2e-token")
+        press("900"); time.sleep(3); press("100,150,900"); time.sleep(2)   # no reset: it would drop the Claude tool from the home list
+        i = mark(); press("900")
+        heard_start("needs you", i, 20)
+        h = list(dict.fromkeys(since(i, "SAY")))
+        if not any("needs you" in x for x in h[:5]): raise Fail("the waiting entry is not first: " + " | ".join(h[:4]))
+        return " | ".join(h[:2])
+    finally:
+        srv.shutdown()
+        bcast("--es", "bridge", real_url, "--es", "token", real_tok)
+        try: reset()
+        except Fail: pass
+
 def rooms_done_spoken():
     """A laptop window finishes while the phone is idle: the earbud says "<name>, done"."""
     sys.path.insert(0, os.path.join(HERE, "..", "bridge")); import fake_rooms
@@ -378,7 +400,7 @@ def idle_clicks_go_to_the_player():
         bcast("--ez", "replaydry", "false")
 
 SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, screen_mirrors_menu, screen_tap_picks, practice_end_to_end,
-             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, chat_arrival_spoken, live_app_first_on_home, voice_speed_applied, rooms_go, rooms_done_spoken, computers_two, idle_clicks_go_to_the_player, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
+             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, chat_arrival_spoken, live_app_first_on_home, voice_speed_applied, rooms_go, rooms_waiting_on_home, rooms_done_spoken, computers_two, idle_clicks_go_to_the_player, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
 
 def main():
     args = sys.argv[1:]

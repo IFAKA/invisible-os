@@ -125,6 +125,7 @@ object Actions {
             override fun reply(key: String, text: String) = ControllerNotificationListener.sendReply(key, text, app)
             override fun notifGroups() = ControllerNotificationListener.notifs.groups { ControllerNotificationListener.modules.forNotif(it).groupKey(it) }
             override fun liveApps() = liveAppsNow()
+            override fun roomsWaiting() = roomsWaitingNow()
             override fun liveNotif(key: String) = ControllerNotificationListener.ongoingNotif(key)
             override fun notifRead(n: Notif) = ControllerNotificationListener.modules.forNotif(n).read(n)
             override fun notifSummary(n: Notif) = ControllerNotificationListener.modules.forNotif(n).summary(n)
@@ -471,8 +472,20 @@ object Actions {
     private val claudeWatch by lazy {
         ClaudeWatch({ activeComputer() },
             { e -> handler.post { claudeAsked(e) } },
-            { handler.post { roomNeeds() } },
-            { e -> handler.post { roomDone(e.name) } })
+            { roomsWaitingNow(); handler.post { roomNeeds() } },
+            { e -> roomsWaitingNow(); handler.post { roomDone(e.name) } })
+    }
+    @Volatile private var waitingRooms = 0
+    private val waitingBusy = java.util.concurrent.atomic.AtomicBoolean(false)
+    /** Windows of the active computer that wait for you: the last answer now, renewed in a background thread (a change shows one wake later). */
+    private fun roomsWaitingNow(): Int {
+        val c = activeComputer() ?: return 0
+        if (c.url.isBlank() || c.token.isBlank()) return 0
+        if (waitingBusy.compareAndSet(false, true)) Thread({
+            waitingRooms = try { com.faka.invisible.claude.BridgeClient(c.url, c.token).rooms().count { it.state == "needs" } } catch (e: Exception) { 0 }
+            waitingBusy.set(false)
+        }, "rooms-waiting").apply { isDaemon = true }.start()
+        return waitingRooms
     }
     /** A room of the laptop needs you: the Claude sound unless muted until morning or a program is running. */
     private fun roomNeeds() {
