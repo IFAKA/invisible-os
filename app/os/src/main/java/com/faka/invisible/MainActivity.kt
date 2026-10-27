@@ -176,6 +176,9 @@ class MainActivity : Activity() {
 
     private val sp get() = getSharedPreferences("invisible", MODE_PRIVATE)
     private fun granted(p: String) = checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    private fun handsFreeIsOurs() = try {
+        packageManager.resolveActivity(Intent("android.speech.action.VOICE_SEARCH_HANDS_FREE"), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == packageName
+    } catch (e: Exception) { false }
     private fun usageOn(): Boolean {
         val ops = getSystemService(android.app.AppOpsManager::class.java)
         return ops.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName) == android.app.AppOpsManager.MODE_ALLOWED
@@ -222,7 +225,7 @@ class MainActivity : Activity() {
     private fun home() {
         if (disclosure) { disclosureCard(); return }
         val notif = (Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: "").contains(packageName)
-        val assist = (Settings.Secure.getString(contentResolver, "assistant") ?: "").contains(packageName)
+        val assist = (Settings.Secure.getString(contentResolver, "assistant") ?: "").contains(packageName) || handsFreeIsOurs()   // "Always" in the chooser sets the hands-free app, not the assistant setting
         val a11y = Actions.accessibilityConnected && !freshPreview
         if (a11y && EventLog.lastGesture != null) sp.edit().putBoolean("button_tested", true).apply()
         val tested = a11y && sp.getBoolean("button_tested", false) && !freshPreview
@@ -271,8 +274,8 @@ class MainActivity : Activity() {
                 addView(k.primary(tr("Start")) { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) })
             }
         } else {
-            k.status(fixed, tr("Ready"), tr("You are ready. More features ask for permission when you first use them."), Ui.good, Ui.S1) {
-                addView(k.primary(tr("Wake the menu")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) })
+            k.status(fixed, tr("Ready"), tr("Hold your earbud button to open the menu."), Ui.good, Ui.S1) {
+                addView(k.primary(tr("Open the menu")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) })
             }
         }
         if (mir.active && settingsOpen) fixed.addView(k.quiet("\u2039 " + tr("Back to the menu")) { settingsOpen = false; render() })
