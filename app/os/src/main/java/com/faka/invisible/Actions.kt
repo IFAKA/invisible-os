@@ -303,7 +303,7 @@ object Actions {
     }
 
     /** The app screen was tapped: item [i] named [text] is chosen, the same as a click on it; the voice goes on from there. */
-    fun tapItem(i: Int, text: String) = handler.post { if (mode.pickAt(i, text)) EventLog.pressed(com.faka.invisible.voicekit.Gesture.SINGLE) }
+    fun tapItem(i: Int, text: String) = handler.post { val p = running; if (p != null) p.tap(i) else if (mode.pickAt(i, text)) EventLog.pressed(com.faka.invisible.voicekit.Gesture.SINGLE) }
     /** An on-screen button does what the earbud button does (Back = 3 clicks, Close = click then hold, Wake = hold). */
     fun screenPress(g: com.faka.invisible.voicekit.Gesture) = handler.post { buttonTarget.gesture(g, 0) }
 
@@ -365,16 +365,27 @@ object Actions {
     /** Starts a program of the registry. The host is what it may ask of the OS; when it ends, the OS plays the close sound. */
     private fun startProgramEntry(e: ProgramEntry) { com.faka.invisible.voicekit.ScreenMirror.program(e.title.text); startProgram(e.create()) }
 
+    /** A program that draws no picture of its own: the app screen shows the last lines it said, so a sighted person sees what is going on. */
+    private var ownScreen = false
+    private val spoken = ArrayList<String>()
+    private fun mirrorSaid(t: String) {
+        if (ownScreen || running == null || t.isBlank()) return
+        spoken.add(t); while (spoken.size > 5) spoken.removeAt(0)
+        com.faka.invisible.voicekit.ScreenMirror.show(spoken.toList(), spoken.size - 1)
+    }
+
     private fun startProgram(p: Program) {
         running?.stop()
         running = p
+        ownScreen = false; spoken.clear()
         com.faka.invisible.oskit.Trace.ev("program", "start ${p.javaClass.simpleName}")
         p.start(object : ProgramHost {
             override val context get() = app
             override val handler get() = this@Actions.handler
             override val prefs get() = prefs()
             override fun waiting() = narrator.waiting()
-            override fun speak(text: Phrase, slow: Boolean) = say(text, false, slow = slow)
+            override fun speak(text: Phrase, slow: Boolean) { mirrorSaid(text.text); say(text, false, slow = slow) }
+            override fun screen(rows: List<String>, mark: Int) { ownScreen = true; com.faka.invisible.voicekit.ScreenMirror.show(rows, mark) }
             override fun stopSpeech() = narrator.stopSpeech()
             override fun pauseMusic() { pauseMusicNow() }
             override fun resumeMusic() = resumeMusicNow()

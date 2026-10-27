@@ -19,6 +19,8 @@ interface Program : RawButton {
     fun stop()
     /** The phone finished speaking. Programs that wait for the voice use it. */
     fun speechDone() {}
+    /** The person tapped row [row] of the picture the program put on the app screen ([ProgramHost.screen]): do what the button would do for it. */
+    fun tap(row: Int) {}
 }
 
 /** What the OS gives a running program. */
@@ -34,6 +36,8 @@ interface ProgramHost {
     /** Starts the OS wait sound (a soft heartbeat while sounds are built); call the result when ready. */
     fun waiting(): () -> Unit
     fun speak(text: Phrase, slow: Boolean = false)
+    /** The picture of the program on the app screen: [rows] top to bottom, [mark] the row being read. Without it the screen shows the last lines spoken. */
+    fun screen(rows: List<String>, mark: Int) {}
     fun stopSpeech()
     fun pauseMusic()
     fun resumeMusic()

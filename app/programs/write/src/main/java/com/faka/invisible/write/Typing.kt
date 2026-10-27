@@ -157,14 +157,22 @@ class TypeProgram(
     }
 
     /** The same words the player hears, on the app screen: the text so far, the letters being spelled, and the pair on offer. */
+    private var leftRow = -1; private var rightRow = -1   // the rows of the pair on the app screen; -1 = not showing a pair
+    /** A tap on the app screen: the left or right word of the pair, as the click or the hold would pick it. */
+    fun tapRow(row: Int) {
+        if (!active || waiting || pending != null || menu) return
+        timers.clear("t:gap"); timers.clear("t:hold"); out.silence(); out.hush()
+        if (row == leftRow) choose(true) else if (row == rightRow) choose(false)
+    }
+
     private fun showScreen(l: String, r: String?) {
         val mode = if (phraseMode) "Phrases" else if (letters) "Letters" else "Words"
         val rows = ArrayList<String>()
         rows.add(text().ifEmpty { "Nothing written yet" })
         if (prefix.isNotEmpty()) rows.add("Spelling: $prefix")
         val mark = rows.size
-        rows.add("$mode, left: $l")
-        if (r != null) rows.add("$mode, right: $r")
+        leftRow = rows.size; rows.add("$mode, left: $l")
+        rightRow = if (r != null) rows.size else -1; if (r != null) rows.add("$mode, right: $r")
         out.screen(rows, mark)
     }
 
@@ -258,7 +266,7 @@ class TypeProgram(
         if (candidates().take(2) != items.drop(page * 2).take(2)) show()
     }
 
-    private fun openMenu() { menu = true; menuScan.load(menuLabels()); timers.clear("t:replay"); out.cue(TypeCue.MENU); menuScan.speakItem(0) }
+    private fun openMenu() { leftRow = -1; rightRow = -1; menu = true; menuScan.load(menuLabels()); timers.clear("t:replay"); out.cue(TypeCue.MENU); menuScan.speakItem(0) }
 
     private fun closeMenu() { menu = false; menuScan.stop(); out.cue(TypeCue.NEXT); show() }
 
@@ -304,7 +312,7 @@ class TypeProgram(
             waiting = false
             when (r) {
                 is Translation.Same -> send(t)
-                is Translation.Done -> { pending = r.text; out.screen(listOf(r.text, "Click to send, hold to edit"), 0); out.readBack(r.text); out.say(TypeVoice.CONFIRM) }
+                is Translation.Done -> { pending = r.text; leftRow = -1; rightRow = -1; out.screen(listOf(r.text, "Click to send, hold to edit"), 0); out.readBack(r.text); out.say(TypeVoice.CONFIRM) }
                 is Translation.Failed -> { out.say(r.say); show() }   // nothing is sent; the text is kept and you can try again
             }
         }
