@@ -226,6 +226,26 @@ def rooms_go():
         try: reset()
         except Fail: pass
 
+def rooms_done_spoken():
+    """A laptop window finishes while the phone is idle: the earbud says "<name>, done"."""
+    sys.path.insert(0, os.path.join(HERE, "..", "bridge")); import fake_rooms
+    home = os.path.expanduser("~/.config/invisible-bridge/")
+    real_url = open(home + "url").read().strip() if os.path.exists(home + "url") else ""
+    real_tok = open(home + "token").read().strip() if os.path.exists(home + "token") else ""
+    host = re.sub(r"^https?://", "", real_url).split(":")[0].split("/")[0] or "0.0.0.0"
+    srv = fake_rooms.start(host, 8798, "e2e-token")
+    try:
+        reset(); i = mark()
+        bcast("--es", "bridge", f"http://{host}:8798", "--es", "token", "e2e-token")
+        fake_rooms.FIRE_DONE.append("Delta")
+        need("Delta, done", i, 20)
+        return "idle phone said: Delta, done"
+    finally:
+        srv.shutdown()
+        bcast("--es", "bridge", real_url, "--es", "token", real_tok)
+        try: reset()
+        except Fail: pass
+
 def rooms_new_project():
     """Laptop tool against the fake server: Projects, New project, an area, then the cue for the name (Write starts)."""
     sys.path.insert(0, os.path.join(HERE, "..", "bridge")); import fake_rooms
@@ -249,7 +269,7 @@ def rooms_new_project():
         except Fail: pass
 
 SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, practice_end_to_end,
-             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, voice_speed_applied, rooms_go, rooms_new_project]
+             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, voice_speed_applied, rooms_go, rooms_done_spoken, rooms_new_project]
 
 def main():
     args = sys.argv[1:]

@@ -7,6 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 TOKEN = "fake-token"
+FIRE_DONE = []   # append a name: the next /events says that window finished
 POSTS = []   # (path, parsed json body)
 
 ACTIONS = ["go", "yes", "commit", "push", "readall", "screen", "write", "stop"]
@@ -38,7 +39,12 @@ class H(BaseHTTPRequestHandler):
         elif u.path == "/projects": self._json({"projects": PROJECTS})
         elif u.path == "/areas": self._json({"areas": [{"name": "hardware", "path": "/tmp/fake/hardware", "uses": 9}]})
         elif u.path == "/events":
-            time.sleep(min(float(q.get("wait", ["0"])[0]), 2.0)); self._json({"seq": 1, "items": []})
+            if FIRE_DONE:
+                name = FIRE_DONE.pop(0)
+                self._json({"seq": 2, "items": [{"type": "room", "kind": "room", "id": "%7", "name": name, "state": "done",
+                                                 "project": "p", "summary": "", "options": [], "seq": 2}]})
+            else:
+                time.sleep(min(float(q.get("wait", ["0"])[0]), 2.0)); self._json({"seq": 1, "items": []})
         else: self._json({"error": "not found"}, 404)
     def do_POST(self):
         if not self._ok(): return
