@@ -68,7 +68,7 @@ class NotificationStoreTest {
         assertFalse(NotifPrivacy.mustHide("com.x", NotifPrivacy.VISIBILITY_PRIVATE, false, false))
         assertFalse(NotifPrivacy.mustHide("com.x", 1, true, false))
         assertTrue(NotifPrivacy.mustHide("com.x", 1, false, true))
-        assertTrue(NotifPrivacy.mustHide("com.bancosantander.app", 1, false, false))
+        assertTrue(NotifPrivacy.mustHide("com.chase.sig.android", 1, false, false))
         assertTrue(NotifPrivacy.mustHide("com.x.bitwarden.mobile", 1, false, false))
         assertFalse(NotifPrivacy.sensitivePackage("com.whatsapp"))
     }

@@ -9,7 +9,7 @@ class ChatAppsModuleTest {
         val m = ChatAppsModule()
         listOf("org.telegram.messenger", "org.thoughtcrime.securesms", "com.google.android.apps.messaging", "com.google.android.gm",
             "com.Slack", "com.discord", "com.facebook.orca", "com.instagram.android", "com.samsung.android.messaging").forEach { assertTrue(it, m.matches(it)) }
-        assertFalse(m.matches("com.bbva.bbvacontigo"))
+        assertFalse(m.matches("com.chase.sig.android"))
     }
     @Test fun genericRuleNeedsCategoryAndReplyAndNotPrivate() {
         // CATEGORY_MESSAGE is "msg"

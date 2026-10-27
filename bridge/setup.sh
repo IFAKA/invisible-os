@@ -44,7 +44,7 @@ UIDN="$(id -u)"
 START="${INVISIBLE_PORT_FROM:-8765}"
 [ -n "$PORT" ] || PORT="$("$PY" "$TOOLS" freeport "$START")" || exit 1
 if [ -z "$NAME" ]; then
-  # the person's first name ("Facundo"): short to hear on the earbud, and it tells two users of one Mac apart
+  # the person's first name ("Ana"): short to hear on the earbud, and it tells two users of one Mac apart
   NAME="$(id -F 2>/dev/null | awk '{print $1}')"; [ -n "$NAME" ] || NAME="$(id -un)"
 fi
 

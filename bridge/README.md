@@ -23,7 +23,7 @@ The laptop is a shop. Claude Code is a worker who sometimes needs a yes or no. `
 2. On the phone: scan the QR with the camera. It is a web link (`invisible-os.vercel.app/pair#CODE`, the code stays after `#`, so the site never sees it): with the app installed it opens the app and adds the computer; without it the page says "1. Download the app, 2. Connect". No camera? The code is in the Mac's clipboard: Computers, Add a computer, Paste.
 3. The phone listens to the computer you scanned last. Switch with "Switch to Work" in the Laptop tool, or tap the computer under Computers.
 
-Each Mac user gets their own copy, bridge and port (the next free one from 8765), named by the person's first name ("Facundo"), short to hear. The `invisible` command in `/opt/homebrew/bin` is shared by all users of the Mac and runs each user's own copy. The pair code carries the name, address and token, so there is nothing to type. Not built yet: scanning inside the app; the camera app does the scan.
+Each Mac user gets their own copy, bridge and port (the next free one from 8765), named by the person's first name ("Ana"), short to hear. The `invisible` command in `/opt/homebrew/bin` is shared by all users of the Mac and runs each user's own copy. The pair code carries the name, address and token, so there is nothing to type. Not built yet: scanning inside the app; the camera app does the scan.
 
 ## By hand (what setup.sh does for you)
 - `./install.sh` prints the hooks text and a launchd file; it changes nothing itself.

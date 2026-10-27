@@ -1095,8 +1095,8 @@ class ModeTest {
     /** Many apps with no notifications, so home must hold groups. */
     private fun many(): Rig {
         val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("today"))
-        r.installed = inst("com.bbva.bbvacontigo", "com.brubank", "es.bancosantander.apps", "com.myinvestor.es", "de.traderepublic.app", "com.revolut.revolut", "com.transferwise.android",
-            "com.mercadopago.wallet", "com.westernunion.moneytransferr3app.es", "com.termux", "com.tailscale.ipn", "com.crosspaste.android", "com.themis.clientmobile")
+        r.installed = inst("com.chase.sig.android", "com.nu.production", "com.bankinter.launcher", "com.coinbase.android", "de.number26.android", "com.revolut.revolut", "com.transferwise.android",
+            "com.paypal.android.p2pmobile", "com.venmo", "com.termux", "com.tailscale.ipn", "com.dropbox.android", "com.atlassian.android.jira.core")
         return r
     }
 

@@ -14,8 +14,8 @@ class AppTreeTest {
 
     @Test fun knownApps() {
         fun g(p: String) = AppCategories.main(AppCategories.categoryOf(p))
-        for (p in listOf("com.revolut.revolut", "com.bbva.bbvacontigo", "com.brubank", "com.mercadopago.wallet", "de.traderepublic.app", "com.transferwise.android", "com.westernunion.moneytransferr3app.es", "es.bancosantander.apps", "com.myinvestor.es")) assertEquals(p, "Pay", g(p))
-        for (p in listOf("com.whatsapp", "com.microsoft.teams", "com.tencent.mm", "com.discord", "com.google.android.apps.messaging", "com.linkedin.android", "com.zhiliaoapp.musically", "com.google.android.gm")) assertEquals(p, "Talk", g(p))
+        for (p in listOf("com.revolut.revolut", "com.chase.sig.android", "com.nu.production", "com.paypal.android.p2pmobile", "de.number26.android", "com.transferwise.android", "com.venmo", "com.bankinter.launcher", "com.coinbase.android")) assertEquals(p, "Pay", g(p))
+        for (p in listOf("com.whatsapp", "com.microsoft.teams", "org.telegram.messenger", "com.discord", "com.google.android.apps.messaging", "com.linkedin.android", "com.zhiliaoapp.musically", "com.google.android.gm")) assertEquals(p, "Talk", g(p))
         for (p in listOf("com.google.android.calendar", "com.google.android.keep")) assertEquals(p, "Plan", g(p))
         for (p in listOf("com.google.android.apps.docs", "com.atlassian.android.jira.core")) assertEquals(p, "Work", g(p))
         for (p in listOf("com.android.settings", "com.miui.securitycenter", "com.x8bit.bitwarden")) assertEquals(p, "Tools", g(p))
@@ -60,7 +60,7 @@ class AppTreeTest {
     }
 
     @Test fun report() {
-        val l = phone(); assertEquals(96, l.size)
+        val l = phone(); assertEquals(93, l.size)
         val t0 = System.nanoTime()
         val opt = AppTree.build(l)
         val ms = (System.nanoTime() - t0) / 1_000_000
@@ -93,7 +93,7 @@ class AppTreeTest {
 
     @Test fun unreadNeverChangesOrder() {
         val l = phone()
-        val noisy = l.map { if (it.pkg == "com.termux" || it.pkg == "com.tencent.mm") it.copy(unread = 9) else it }
+        val noisy = l.map { if (it.pkg == "com.termux" || it.pkg == "org.telegram.messenger") it.copy(unread = 9) else it }
         assertEquals(dump(AppTree.build(l)), dump(AppTree.build(noisy)))
     }
 

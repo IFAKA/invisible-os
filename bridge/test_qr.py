@@ -64,7 +64,7 @@ class QrTest(unittest.TestCase):
             self.assertEqual(decode(qr.encode(text)), text, n)
 
     def test_utf8(self):
-        self.assertEqual(decode(qr.encode("Facundo ñ é")), "Facundo ñ é")
+        self.assertEqual(decode(qr.encode("Ana ñ é")), "Ana ñ é")
 
     def test_png_round_trip(self):
         import struct

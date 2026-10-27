@@ -7,7 +7,7 @@ import org.junit.Test
 
 class WhereAmITest {
     @Test fun streetNumberAreaCity() =
-        assertEquals(listOf("Calle Mayor 120", "Centro", "Toledo"), WhereAmI.lines(Place("Calle Mayor", "120", "Centro", "Toledo"), null))
+        assertEquals(listOf("Calle Mayor 1", "Centro", "Toledo"), WhereAmI.lines(Place("Calle Mayor", "1", "Centro", "Toledo"), null))
     @Test fun turnComesFirst() =
         assertEquals(listOf("In 200 meters turn left", "Mayor", "Toledo"), WhereAmI.lines(Place("Mayor", null, null, "Toledo"), "  In 200 meters   turn left "))
     @Test fun sameAreaAndCityOnce() =

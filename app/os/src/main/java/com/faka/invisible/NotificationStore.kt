@@ -13,7 +13,7 @@ object NotifPrivacy {
     /** Words in a package name that mark a bank, money or password app. */
     private val SENSITIVE = listOf(
         "bank", "banco", "finance", "fintech", "wallet", "password", "passwd", "authenticator", "otp", "vault",
-        "paypal", "revolut", "mercadopago", "nubank", "binance", "coinbase", "bitwarden", "lastpass", "keepass", "1password", "dashlane", "keeper",
+        "paypal", "revolut", "mercadopago", "nubank", "venmo", "getmondo", "starlingbank", "n26", "number26", "transferwise", "chase.sig", "wellsfargo", "capitalone", "americanexpress", "santander", "bbva", "bankinter", "caixa", "infonow.bofa", "brubank", "myinvestor", "traderepublic", "binance", "coinbase", "bitwarden", "lastpass", "keepass", "1password", "dashlane", "keeper",
     )
 
     fun sensitivePackage(pkg: String): Boolean = pkg.lowercase().let { p -> SENSITIVE.any { it in p } }

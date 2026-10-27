@@ -9,12 +9,15 @@ package com.faka.invisible.logickit
 object NameLang {
     private val PACKAGES: Map<String, String> = buildMap {
         for (p in listOf("com.mercadopago.wallet", "com.mercadolibre", "com.brubank", "com.bbva.bbvacontigo", "es.bancosantander.apps",
-            "com.santander.app", "com.myinvestor.es", "com.synergym", "es.lacaixa.mobile.imaginemobile", "es.caixabank.caixabankmobile", "com.mi.tarjeta.transporte"))
+            "com.santander.app", "com.myinvestor.es", "com.synergym", "es.lacaixa.mobile.imaginemobile", "es.caixabank.caixabankmobile", "es.lacaixa.mobile.android.newwapicon", "com.bankinter.launcher", "ar.com.santander.rio.mbanking",
+            "com.nu.production", "com.cabify.rider", "com.mi.tarjeta.transporte"))
             put(p, "es")
         for (p in listOf("com.whatsapp", "com.whatsapp.w4b", "com.revolut.revolut", "com.transferwise.android", "com.android.chrome", "com.google.android.gm",
             "com.google.android.apps.maps", "com.google.android.youtube", "com.google.android.apps.photos", "com.google.android.googlequicksearchbox",
             "com.google.android.calendar", "com.google.android.apps.messaging", "com.google.android.dialer", "com.ubercab", "com.spotify.music",
             "com.instagram.android", "org.telegram.messenger", "com.netflix.mediaclient", "com.microsoft.teams", "de.traderepublic.app",
+            "com.chase.sig.android", "com.paypal.android.p2pmobile", "com.infonow.bofa", "com.wf.wellsfargomobile", "com.konylabs.capitalone", "co.uk.getmondo",
+            "com.starlingbank.android", "com.venmo", "com.squareup.cash", "com.coinbase.android", "com.strava", "com.citymapper.app.release", "me.lyft.android",
             "com.facebook.katana", "com.twitter.android", "com.linkedin.android", "com.amazon.mShop.android.shopping"))
             put(p, "en")
     }

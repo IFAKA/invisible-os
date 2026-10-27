@@ -1,7 +1,7 @@
 import json,glob,os,datetime,sys,re
 out=open('/tmp/wf/pairs.jsonl','w'); meta=open('/tmp/wf/meta.jsonl','w')
 def ts(t): return datetime.datetime.fromisoformat(t.replace('Z','+00:00')).timestamp()
-for f in glob.glob('~/.claude/projects/*/*.jsonl'):
+for f in glob.glob(os.path.expanduser('~/.claude/projects/*/*.jsonl')):
     proj=f.split('/')[-2].split('-')[-1]; sid=os.path.basename(f)[:8]
     last_txt=None; last_t=None; prompt_t=None; side=('subagents' in f)
     try: fh=open(f,errors='ignore')
