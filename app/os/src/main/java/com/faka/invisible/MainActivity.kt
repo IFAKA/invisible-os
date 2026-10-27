@@ -129,7 +129,19 @@ class MainActivity : Activity() {
     /** Pages whose top (back, title) stays; only the list under it scrolls. The others scroll as one (long text, the laptop rooms). */
     private val fixedPages = setOf(Page.TASKS, Page.MENU, Page.MENUMORE, Page.VOICE, Page.EMERGENCY, Page.AI)
 
+    private var drawnPage: Page? = null
+    /** Redraw, but keep the scroll place: every redraw rebuilds the page, which would throw a scrolled list back to the top (the layout jumps). */
     private fun render() {
+        val y = if (drawnPage == page && ::body.isInitialized) (body.parent as? ScrollView)?.scrollY ?: 0 else 0
+        drawnPage = page
+        draw()
+        val sv = body.parent as? ScrollView
+        if (y > 0 && sv != null) sv.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean { sv.viewTreeObserver.removeOnPreDrawListener(this); sv.scrollTo(0, y); return true }
+        })
+    }
+
+    private fun draw() {
         val keep = page == Page.HOME && ScreenMirror.active && !settingsOpen && root.getChildAt(0) === mirrorHost && mirrorHost != null
         body = scrollBody; pageTop = null
         if (page in fixedPages) {
