@@ -136,6 +136,16 @@ def click_hold_closes():
     wait_closed()
     return "menu closed"
 
+def screen_tap_picks():
+    reset(); show("GAMES"); i = mark(); heard_start("Duel", i)
+    bcast("--es", "tap", "0")   # a tap on the first item of the mirror, as a finger on the app screen would
+    t0 = time.time()
+    while True:
+        m = state().get("mirror", "")
+        if m.endswith(":click") and m.split(":")[1] == "0": break   # the Duel started: the menu list is gone, the tap shows as a click
+        if time.time() - t0 > 8: raise Fail(f"tap did not pick the item: {state()}")
+    press("120,150,900"); wait_closed()
+    return "a tap on the app screen picks the item, the same as a click"
 def screen_mirrors_menu():
     reset(); show("PHONE"); i = mark(); heard_start("Emergency", i)
     s = state()
@@ -308,7 +318,7 @@ def computers_two():
         try: reset()
         except Fail: pass
 
-SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, screen_mirrors_menu, practice_end_to_end,
+SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, screen_mirrors_menu, screen_tap_picks, practice_end_to_end,
              phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, voice_speed_applied, rooms_go, rooms_done_spoken, computers_two, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
 
 def main():

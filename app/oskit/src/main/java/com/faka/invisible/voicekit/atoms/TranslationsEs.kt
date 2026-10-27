@@ -123,6 +123,7 @@ private val SPOKEN_ES = mapOf(
     "Last used" to "Último usado",
     "Last press" to "Última pulsación",
     "Close" to "Cerrar",
+    "Playing. Use your earbud button." to "En juego. Usa el botón del auricular.",
     "Settings" to "Ajustes",
     "Wake the menu" to "Despertar el menú",
     "Back to the menu" to "Volver al menú",

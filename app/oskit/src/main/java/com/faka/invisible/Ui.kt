@@ -311,6 +311,7 @@ class Kit(private val c: Context) {
                 box.addView(this, lp(top = 2))
             }
         }
+        if (items.isEmpty()) box.addView(text(Translations.label("Playing. Use your earbud button."), Type.BODY, Ui.soft).apply { setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1)) })
         val scroller = ScrollView(c).apply { isVerticalScrollBarEnabled = false; addView(box) }
         parent.addView(scroller, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(Ui.S2) })
         val press = text("", Type.CAPTION, Ui.soft).apply { minHeight = dp(20) }   // always there, so the list never changes height

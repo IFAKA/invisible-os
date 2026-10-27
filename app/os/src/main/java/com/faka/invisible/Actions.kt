@@ -357,7 +357,7 @@ object Actions {
     private fun gameEnded() { com.faka.invisible.voicekit.ScreenMirror.clear(); handler.post { narrator.beep(Tone.EXIT) } }
 
     /** Starts a program of the registry. The host is what it may ask of the OS; when it ends, the OS plays the close sound. */
-    private fun startProgramEntry(e: ProgramEntry) { com.faka.invisible.voicekit.ScreenMirror.setTitle(e.title.text); startProgram(e.create()) }
+    private fun startProgramEntry(e: ProgramEntry) { com.faka.invisible.voicekit.ScreenMirror.program(e.title.text); startProgram(e.create()) }
 
     private fun startProgram(p: Program) {
         running?.stop()

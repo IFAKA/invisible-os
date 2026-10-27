@@ -67,6 +67,11 @@ class MainActivity : Activity() {
         warmTree()   // the Menu page opens at once
     }
 
+    override fun onNewIntent(i: Intent) {   // for screenshots: --es page voice on the running app
+        super.onNewIntent(i); setIntent(i)
+        i.getStringExtra("page")?.let { n -> Page.values().firstOrNull { it.name.equals(n, true) }?.let { open(it) } }
+    }
+
     override fun onResume() {
         super.onResume()
         if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java))

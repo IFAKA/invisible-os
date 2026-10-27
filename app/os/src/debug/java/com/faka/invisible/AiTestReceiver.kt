@@ -27,6 +27,7 @@ class AiTestReceiver : BroadcastReceiver() {
         if (i.hasExtra("state")) { Actions.stateDev(); return }
         i.getStringExtra("computers")?.let { Actions.setComputers(com.faka.invisible.claude.Computers.parse(it)); return }   // dev: set the list of computers "name|url|token;name|url|token"
         i.getStringExtra("bridge")?.let { Actions.setClaudeBridge(it, i.getStringExtra("token") ?: ""); return }   // dev: set the Claude bridge address and token without typing
+        i.getStringExtra("tap")?.let { n -> val k = n.toInt(); Actions.tapItem(k, com.faka.invisible.voicekit.ScreenMirror.items.getOrElse(k) { "" }); return }   // dev: tap item k of the app screen mirror
         i.getStringExtra("press")?.let { Actions.pressDev(it); return }   // dev: raw presses "down,up,down,..." in ms, through the real button path
         i.getStringExtra("start")?.let { Actions.startDev(it); return }   // dev: start a program: echo, guard, duel, compass, write
         i.getStringExtra("ctl")?.let { Actions.ctlDev(it); return }

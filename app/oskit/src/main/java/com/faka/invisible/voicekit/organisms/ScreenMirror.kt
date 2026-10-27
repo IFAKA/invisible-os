@@ -34,6 +34,9 @@ object ScreenMirror {
     /** A list item starts: the whole list and the item being read. */
     fun show(items: List<String>, index: Int) = update { it.copy(active = true, items = items, index = index.coerceIn(0, maxOf(0, items.size - 1))) }
 
+    /** A program starts: its name, and no list (the menu list it was picked from is no longer being read). */
+    fun program(title: String) = update { it.copy(active = true, title = title, items = emptyList(), index = 0) }
+
     fun setTitle(title: String) = update { it.copy(active = true, title = title) }
 
     /** A button gesture, by its plain name ("click", "2 clicks", "hold"). */
