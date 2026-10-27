@@ -231,7 +231,8 @@ class MainActivity : Activity() {
         if (disclosure) { disclosureCard(); return }
         val notif = (Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: "").contains(packageName)
         val assist = (Settings.Secure.getString(contentResolver, "assistant") ?: "").contains(packageName) || handsFreeIsOurs()   // "Always" in the chooser sets the hands-free app, not the assistant setting
-        val a11y = Actions.accessibilityConnected && !freshPreview
+        val a11yOn = (Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: "").contains(packageName)   // the setting is true at once; the service connects a second later (Step 1 must not flash first)
+        val a11y = (Actions.accessibilityConnected || a11yOn) && !freshPreview
         if (a11y && EventLog.lastGesture != null) sp.edit().putBoolean("button_tested", true).apply()
         val tested = a11y && sp.getBoolean("button_tested", false) && !freshPreview
         val allSteps = Setup.steps(SetupState(a11y, tested, notif, assist, granted(Manifest.permission.POST_NOTIFICATIONS), granted(Manifest.permission.READ_CALENDAR),
@@ -279,8 +280,8 @@ class MainActivity : Activity() {
                 addView(k.primary(tr("Start")) { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) })
             }
         } else {
-            k.status(fixed, tr("Ready"), tr("Hold your earbud button to open the menu."), Ui.good, Ui.S1) {
-                addView(k.primary(tr("Open the menu")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) })
+            k.status(fixed, tr("Ready"), tr("Hold your earbud button to open Invisible OS."), Ui.good, Ui.S1) {
+                addView(k.primary(tr("Open Invisible OS")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) })
             }
         }
         if (mir.active && settingsOpen) fixed.addView(k.quiet("\u2039 " + tr("Back to the menu")) { settingsOpen = false; render() })

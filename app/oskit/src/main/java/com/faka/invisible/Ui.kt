@@ -305,7 +305,7 @@ class Kit(private val c: Context) {
      */
     fun mirrorScreen(parent: LinearLayout, title: String, items: List<String>, current: Int, lastPress: String?,
                      onPick: (Int, String) -> Unit, backLabel: String, onBack: () -> Unit, closeLabel: String, onClose: () -> Unit, moreLabel: String, onMore: () -> Unit): MirrorView {
-        parent.addView(text(title, Type.LARGE).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }, lp(top = Ui.S1))
+        status(parent, title, Translations.label("Invisible OS is open."), Ui.good, Ui.S1)   // the same header as the idle home (dot, word, line): going between them moves nothing
         val box = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
         val rows = items.mapIndexed { i, t ->
             text(t, Type.BODY).apply {
