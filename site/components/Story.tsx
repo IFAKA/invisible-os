@@ -67,7 +67,7 @@ export default function Story() {
 
   return (
     <section ref={root} id="story" className="relative h-[560svh]">
-      <div className="sticky top-0 flex h-svh flex-col items-center overflow-hidden px-5 pb-5 pt-[64px] text-center">
+      <div className="sticky top-0 flex h-svh flex-col items-center justify-center overflow-hidden px-5 pb-[56px] pt-[56px] text-center">
         <div className="relative h-[27svh] w-full max-w-[760px] shrink-0">
           {BEATS.map((b, i) => (
             <div key={b.h} className="beat absolute inset-0 flex flex-col items-center justify-center" style={{ opacity: i === 0 ? 1 : 0 }}>
@@ -77,7 +77,7 @@ export default function Story() {
           ))}
         </div>
 
-        <div className="relative min-h-0 w-full max-w-[860px] flex-1">
+        <div className="relative h-[min(44svh,400px)] w-full max-w-[860px] shrink-0">
           <div aria-hidden className="mx-auto grid h-full grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-0.5 sm:gap-4">
             <Node label="You click" on={s.beat === 3}>
               <div key={s.burst} className={`relative grid size-[min(17vw,16svh,140px)] place-items-center rounded-full border bg-card transition-[transform,border-color] duration-150 ${s.pick ? "scale-90 border-blue" : "border-line"}`}>
@@ -121,11 +121,11 @@ export default function Story() {
           </div>
         </div>
 
-        <div className="relative h-[8svh] w-full shrink-0" aria-live="off">
+        <div className="relative h-0 w-full" aria-live="off"><div className="absolute inset-x-0 top-3 h-[8svh]">
           <div className={`absolute inset-0 flex flex-wrap items-center justify-center gap-2 transition-opacity duration-300 ${s.beat === 4 ? "opacity-100" : "opacity-0"}`}>
             {CHIPS.map((c, k) => <span key={c} className="rounded-full border border-line bg-card px-3 py-1.5 text-[clamp(13px,2svh,16px)] transition-transform duration-500 ease-out" style={{ transform: s.beat === 4 ? "none" : "translateY(8px)", transitionDelay: `${k * 60}ms` }}>{c}</span>)}
           </div>
-        </div>
+        </div></div>
 
         <div aria-hidden className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5">
           {BEATS.map((_, i) => <span key={i} className={`block h-1 rounded-full transition-all duration-300 ${s.beat === i ? "w-6 bg-paper" : "w-1.5 bg-paper/30"}`} />)}

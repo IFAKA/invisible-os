@@ -41,13 +41,13 @@ export default function Home() {
 
         <section id="highlights" className={sec}>
           <Reveal><h2 className={h2}>Get the highlights.</h2></Reveal>
-          <div className="mt-[4svh] grid w-full grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+          <div className="mt-[4svh] grid w-full grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 md:grid-cols-3 md:gap-4">
             {HIGHLIGHTS.map(([Icon, t, d], i) => (
               <Reveal key={t} delay={i * 0.06}>
-                <div className="h-full rounded-[22px] bg-card p-[clamp(14px,2.6svh,28px)] text-left">
-                  <Icon className="size-[clamp(22px,3.6svh,32px)] text-blue" strokeWidth={1.8} />
-                  <h3 className="mt-[1.6svh] text-[clamp(17px,2.8svh,24px)] font-semibold tracking-[-0.02em]">{t}</h3>
-                  <p className="mt-1 text-[clamp(13px,1.9svh,16px)] leading-snug text-mute">{d}</p>
+                <div className="flex h-full items-start gap-3 rounded-[22px] bg-card p-[clamp(12px,2.6svh,28px)] text-left sm:block">
+                  <Icon className="size-[clamp(22px,3.6svh,32px)] shrink-0 text-blue" strokeWidth={1.8} />
+                  <div><h3 className="text-[clamp(16px,2.8svh,24px)] font-semibold tracking-[-0.02em] sm:mt-[1.6svh]">{t}</h3>
+                  <p className="mt-2 hidden text-[clamp(13px,1.9svh,16px)] leading-snug text-mute sm:block">{d}</p></div>
                 </div>
               </Reveal>
             ))}

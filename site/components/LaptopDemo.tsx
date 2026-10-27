@@ -58,7 +58,7 @@ export default function LaptopDemo() {
 
   return (
     <section ref={root} id="laptop" className="relative h-[440svh]">
-      <div className="sticky top-0 flex h-svh flex-col items-center overflow-hidden px-5 pb-6 pt-[64px] text-center">
+      <div className="sticky top-0 flex h-svh flex-col items-center justify-center overflow-hidden px-5 pb-[56px] pt-[56px] text-center">
         <div className="relative h-[27svh] w-full max-w-[760px] shrink-0">
           {BEATS.map((b, i) => (
             <div key={b.h} className="absolute inset-0 flex flex-col items-center justify-center transition-[opacity,transform] duration-300" style={{ opacity: s.beat === i ? 1 : 0, transform: s.beat === i ? "none" : "translateY(10px)", transitionDelay: s.beat === i ? "250ms" : "0ms" }}>
@@ -68,7 +68,7 @@ export default function LaptopDemo() {
           ))}
         </div>
 
-        <div aria-hidden className="grid min-h-0 w-full max-w-[860px] flex-1 grid-cols-1 content-center gap-4 sm:grid-cols-[1.25fr_1fr] sm:items-stretch">
+        <div aria-hidden className="grid w-full max-w-[860px] shrink-0 grid-cols-1 gap-4 sm:grid-cols-[1.25fr_1fr] sm:items-stretch">
           <div className="rounded-[20px] border border-line bg-card p-[clamp(12px,2.4svh,22px)] text-left">
             <p className="mb-[1.6svh] text-[clamp(11px,1.8svh,13px)] uppercase tracking-[0.08em] text-mute">Your laptop</p>
             <ul className="space-y-[1.2svh]">
@@ -98,7 +98,7 @@ export default function LaptopDemo() {
           </div>
         </div>
 
-        <div aria-hidden className="mt-2 flex gap-1.5">
+        <div aria-hidden className="mt-[3svh] flex gap-1.5">
           {BEATS.map((_, i) => <span key={i} className={`block h-1 rounded-full transition-all duration-300 ${s.beat === i ? "w-6 bg-paper" : "w-1.5 bg-paper/30"}`} />)}
         </div>
       </div>

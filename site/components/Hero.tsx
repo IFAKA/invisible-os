@@ -5,8 +5,8 @@ import Orb from "./Orb";
 /** One line, one picture: the button, glowing. The name lives in the nav. Same order as Apple's top of page. */
 export default function Hero() {
   return (
-    <section id="overview" className="relative mx-auto flex h-svh max-w-[1080px] overflow-x-clip flex-col items-center justify-center px-5 pb-8 pt-16 text-center">
-      <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 0.61, 0.36, 1] }} className="text-[clamp(40px,min(9vw,12vh),96px)] font-semibold leading-[1.04] tracking-[-0.035em] [text-wrap:balance]">
+    <section id="overview" className="relative mx-auto flex h-svh max-w-[1080px] overflow-x-clip flex-col items-center justify-center px-5 pb-8 pt-[calc(48px+4svh)] text-center">
+      <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 0.61, 0.36, 1] }} className="text-[clamp(40px,min(9vw,10vh),96px)] font-semibold leading-[1.04] tracking-[-0.035em] [text-wrap:balance]">
         Your phone.<br />Without looking.
       </motion.h1>
       <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.5 }} className="mt-[2vh] max-w-[26em] text-[clamp(17px,2.6vh,24px)] leading-snug text-mute">
@@ -16,7 +16,7 @@ export default function Hero() {
         <a href="https://github.com/IFAKA/invisible-os" className="rounded-full bg-[#0071e3] px-5 py-2.5 font-medium text-white hover:bg-[#0077ed]">Get it</a>
         <a href="#story" className="text-blue hover:underline">See how it works ›</a>
       </motion.div>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.2, delay: 0.6 }} className="relative mt-[2vh] w-full flex-1">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.2, delay: 0.6 }} className="relative mt-[3svh] h-[32svh] w-full shrink-0">
         <Orb />
       </motion.div>
     </section>
