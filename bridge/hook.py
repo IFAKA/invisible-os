@@ -103,11 +103,6 @@ def handle(inp):
     if event == "Stop":
         notify("done", project, " ".join(str(inp.get("last_assistant_message", "")).split())[:200] or "finished")
         return None
-    if event == "SubagentStop":   # who finished, and what: "reader agent: Found the bug in ..."
-        who = inp.get("agent_type") or "Agent"
-        what = " ".join(str(inp.get("last_assistant_message", "")).split())[:200] or "finished"
-        notify("done", project, f"{who} agent: {what}")
-        return None
     return None
 
 
