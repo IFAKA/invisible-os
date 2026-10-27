@@ -40,6 +40,7 @@ private val SPOKEN_ES = mapOf(
     "All done" to "Todo listo",
     "Task added" to "Tarea añadida",
     "{0}, new message" to "{0}, mensaje nuevo",
+    "Private notification" to "Notificación privada",
     "{0}, new notification" to "{0}, notificación nueva",
     "{0}, done" to "{0}, listo",
     "{0}, done. {1} more windows done" to "{0}, listo. {1} ventanas más listas",

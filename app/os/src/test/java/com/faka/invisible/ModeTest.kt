@@ -1214,7 +1214,7 @@ class ModeTest {
     @Test fun privateNotificationSpeaksOnlyTheApp() {
         val r = mail(); r.wake(); r.pick("Mail, 2 notifications")
         r.advance(5000)
-        assertTrue(r.spoken().contains("say Mail, new notification"))
+        assertTrue(r.spoken().contains("say Private notification"))
         assertFalse(r.spoken().any { it.contains("secret") || it.contains("Bank") })
     }
 

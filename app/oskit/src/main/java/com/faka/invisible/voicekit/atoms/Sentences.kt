@@ -85,6 +85,7 @@ object Voice {
     val ALL_DONE get() = f("All done")
     val TASK_ADDED get() = f("Task added")
     /** A private notification: the app only, never the content. */
+    val PRIVATE_NOTIF get() = f("Private notification")
     fun newNotification(app: String) = f("$app, new notification")
     /** A private chat message: the app only, never the content. */
     fun newMessage(app: String) = f("$app, new message")

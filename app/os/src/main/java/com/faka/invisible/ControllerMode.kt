@@ -785,7 +785,7 @@ class ControllerMode(
 
     /** What is read for a notification: a private one gives only the app. */
     private fun notifLine(n: Notif, max: Int, full: Boolean): Phrase {
-        if (n.hidden) return Voice.newNotification(n.app)
+        if (n.hidden) return Voice.PRIVATE_NOTIF   // inside an app the name was already said by the apps list
         val t = if (full) out.notifRead(n) else out.notifSummary(n)
         val lang = out.songLang(t)
         return Voice.cut(t.squash(), max, lang == "es", lang)
