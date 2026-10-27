@@ -801,11 +801,12 @@ class ControllerMode(
 
     /** An app without notifications: open it, or go back. */
     private fun appOpenOptions(): List<Opt> {
-        val music = if (notifPkg?.let { out.isMusicApp(it) } == true) listOf(Opt("app:music", Menu.MUSIC) { pick("app:music"); musicBack = Screen.APP_OPEN; show(Screen.MUSIC) }) else emptyList()
+        val music = if (notifPkg?.let { out.isMusicApp(it) } == true) musicOptions() else emptyList()   // the app's own actions sit in its list, not behind a second page
         val weather = if (notifPkg?.contains("weather", true) == true) listOf(Opt("app:weather", Menu.SAY_WEATHER) { pick("app:weather"); lookup(out::weather) }) else emptyList()
         return weather + music + listOf(Opt("app:open", Menu.OPEN_APP) { pick("app:open"); openApp() })
     }
 
+    private var musicHost = Screen.MUSIC   // the list that holds the music actions (the Music page or an app's list): its sub-pages come back to it
     private var musicBack = Screen.HUB
     private var contacts = listOf<Contact>()   // snapshot while the contact list is open
 
@@ -837,8 +838,8 @@ class ControllerMode(
             Opt("music:now", Menu.WHATS_PLAYING) { pick("music:now"); outro(Phrase.content(song, out.songLang(song))) },
             toggle("shuffle", "Shuffle"), toggle("repeat", "Repeat"),
             Opt("music:radio", Menu.RADIO) { pick("music:radio"); out.musicRadio(); outro(Menu.RADIO) })
-        val volume = Opt("music:volume", Menu.VOLUME) { pick("music:volume"); show(Screen.VOLUME_DIAL) }
-        val play = Opt("music:play", Menu.PLAY_SOMETHING) { pick("music:play"); show(Screen.MUSIC_PLAY) }
+        val volume = Opt("music:volume", Menu.VOLUME) { pick("music:volume"); musicHost = screen; show(Screen.VOLUME_DIAL) }
+        val play = Opt("music:play", Menu.PLAY_SOMETHING) { pick("music:play"); musicHost = screen; show(Screen.MUSIC_PLAY) }
         return if (song == null) listOf(play, volume) else listOf(volume) + ctl + play   // nothing playing: you want music first; playing: you hear it and want the volume first
     }
 
@@ -1047,7 +1048,7 @@ class ControllerMode(
             Screen.NOTIF_APPS -> show(Screen.HUB)
             Screen.APP_OPEN -> treeUp()
             Screen.MUSIC -> show(musicBack)
-            Screen.MUSIC_PLAY, Screen.VOLUME_DIAL -> show(Screen.MUSIC)
+            Screen.MUSIC_PLAY, Screen.VOLUME_DIAL -> show(musicHost)
             Screen.TREE -> { treePath.removeLastOrNull(); treeUp() }
             Screen.FIND -> { findStack.removeLastOrNull(); if (findStack.isEmpty()) show(Screen.HUB) else show(Screen.FIND) }
             Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR -> treeUp()   // opened from the tree: back to the list it was picked in
