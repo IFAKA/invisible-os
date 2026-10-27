@@ -6,26 +6,27 @@ import { useRef } from "react";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
-/** Four lines wake one by one as you scroll. The unread ones stay readable (large text, 40% light). */
+/** Apple's two-tone reading: four lines wake one by one as you scroll. The unread ones stay readable. */
 export default function Privacy() {
   const root = useRef<HTMLElement>(null);
   useGSAP(() => {
     const mm = gsap.matchMedia();
     mm.add("(prefers-reduced-motion: no-preference)", () => {
-      const tl = gsap.timeline({ defaults: { ease: "power2.out" }, scrollTrigger: { trigger: root.current, start: "top top", end: "bottom bottom", scrub: 0.5 } });
-      gsap.utils.toArray<HTMLElement>(".pl").forEach((l, i) => tl.fromTo(l, { opacity: 0.4, x: -16 }, { opacity: 1, x: 0, duration: 1 }, i));
-      tl.fromTo(".pl-lead", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 1 }, 4);
-      tl.set({}, {}, 5.4);
+      gsap.set(".pl", { opacity: 0.35 }); gsap.set(".pl-lead", { opacity: 0 });
+      const tl = gsap.timeline({ defaults: { ease: "none" }, scrollTrigger: { trigger: root.current, start: "top top", end: "bottom bottom", scrub: 0.4 } });
+      gsap.utils.toArray<HTMLElement>(".pl").forEach((l, i) => tl.to(l, { opacity: 1, duration: 0.6 }, i * 0.8));
+      tl.to(".pl-lead", { opacity: 1, duration: 0.6 }, 3.4);
+      tl.set({}, {}, 4.4);
     });
   }, { scope: root });
   return (
-    <section ref={root} className="relative h-[260svh]">
-      <div className="sticky top-0 mx-auto flex h-svh max-w-[1400px] flex-col justify-center overflow-hidden px-6 pb-8 pt-16 md:px-[8vw]">
-        <p className="mb-[2vh] font-sans text-xs uppercase tracking-[0.18em] text-mute">Privacy</p>
-        {["microphone.", "cloud.", "account.", "screen needed."].map((w) => (
-          <p key={w} className="pl text-[clamp(36px,11vh,120px)] leading-[1.04] tracking-[-0.03em]"><em className="text-mute">No</em> {w}</p>
+    <section ref={root} id="privacy" className="relative h-[240svh]">
+      <div className="sticky top-0 mx-auto flex h-svh max-w-[1080px] flex-col items-center justify-center px-5 pb-6 pt-16 text-center">
+        <p className="mb-[2svh] text-[clamp(17px,2.6svh,22px)] font-semibold">Privacy</p>
+        {["microphone.", "cloud.", "account."].map((w) => (
+          <p key={w} className="pl text-[clamp(32px,min(11svh,11vw),104px)] font-semibold leading-[1.06] tracking-[-0.04em]">No {w}</p>
         ))}
-        <p className="pl-lead mt-[3vh] max-w-[30em] text-[clamp(16px,2.5vh,22px)] leading-snug text-paper/85">It does not listen. It speaks, and waits for your finger. Everything stays on the phone.</p>
+        <p className="pl-lead mt-[3svh] max-w-[28em] text-[clamp(17px,2.6svh,24px)] leading-snug text-mute">It does not listen. It speaks, and waits for your finger. Everything stays on the phone.</p>
       </div>
     </section>
   );

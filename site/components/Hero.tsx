@@ -1,55 +1,25 @@
 "use client";
-import gsap from "gsap";
-import { SplitText } from "gsap/SplitText";
-import { useGSAP } from "@gsap/react";
-import { useRef, useState } from "react";
-import Stage from "./Stage";
-import { hit } from "@/lib/pulse";
-import { play, setSound, soundOn } from "@/lib/sound";
+import { motion } from "motion/react";
+import Orb from "./Orb";
 
-gsap.registerPlugin(SplitText, useGSAP);
-
-const LINES = ["Hear that? That is a click.", "Now scroll. It is simple on purpose.", "One button is enough."];
-
-export function SoundToggle() {
-  const [on, setOn] = useState(false);
-  return (
-    <button
-      aria-pressed={on}
-      onClick={() => { setSound(!soundOn); setOn(soundOn); play("tap"); }}
-      className="font-sans text-xs uppercase tracking-[0.14em] text-mute hover:text-paper aria-pressed:text-paper"
-    >
-      {on ? "Sound on" : "Sound off"}
-    </button>
-  );
-}
-
+/** One name, one line, one picture: the button, glowing. Same order as Apple's top of page. */
 export default function Hero() {
-  const root = useRef<HTMLElement>(null);
-  const [n, setN] = useState(0);
-  useGSAP(() => {
-    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) return;
-    const split = SplitText.create("h1", { type: "lines,words", mask: "lines", autoSplit: true });
-    gsap.from(split.words, { yPercent: 110, duration: 1.2, stagger: 0.07, ease: "expo.out", delay: 0.2 });
-    gsap.from(".hero-in", { opacity: 0, y: 16, duration: 1, stagger: 0.12, ease: "power3.out", delay: 0.9 });
-  }, { scope: root });
-
-  const press = () => { hit(); play("tap"); setN((v) => Math.min(v + 1, LINES.length)); };
   return (
-    <section ref={root} className="mx-auto grid h-svh max-w-[1400px] grid-rows-[1fr_40%] overflow-hidden px-6 pb-8 pt-16 md:grid-cols-2 md:grid-rows-1 md:gap-12 md:px-[8vw]">
-      <div className="flex flex-col justify-center">
-      <h1 className="text-[clamp(40px,min(6.4vw,11vh),104px)] [text-wrap:balance] leading-[0.96] tracking-[-0.03em]">
-        Your phone.<br /><em className="text-mute">Without the screen.</em>
-      </h1>
-      <p className="hero-in mt-8 text-[clamp(20px,2.4vw,30px)] text-mute">One button. Your ears. Nothing else.</p>
-      <button onClick={press} aria-label="Press the button" className="hero-in mt-[5vh] flex w-max items-center gap-5 font-sans text-xs uppercase tracking-[0.2em] text-mute active:scale-95">
-        <span className="block size-16 rounded-full border border-paper/60" />
-        Press
-      </button>
-      <p className="hero-in mt-4 font-sans text-[13px] text-mute">{n ? LINES[n - 1] : "Click, tap or press Enter."}</p>
-      </div>
-      <div className="relative"><Stage mode="hero" /></div>
+    <section id="overview" className="relative mx-auto flex h-svh max-w-[1080px] overflow-x-clip flex-col items-center justify-center px-5 pb-8 pt-16 text-center">
+      <motion.p initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.1 }} className="text-[clamp(18px,2.8vh,24px)] font-semibold">Invisible OS</motion.p>
+      <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 0.61, 0.36, 1] }} className="mt-[1.5vh] text-[clamp(40px,min(9vw,12vh),96px)] font-semibold leading-[1.04] tracking-[-0.035em] [text-wrap:balance]">
+        Your phone.<br />Without looking.
+      </motion.h1>
+      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.5 }} className="mt-[2vh] max-w-[26em] text-[clamp(17px,2.6vh,24px)] leading-snug text-mute">
+        One earbud button. The phone speaks. You click.
+      </motion.p>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.7 }} className="mt-[3vh] flex items-center gap-6 text-[17px]">
+        <a href="https://github.com/IFAKA/invisible-os" className="rounded-full bg-[#0071e3] px-5 py-2.5 font-medium text-white hover:bg-[#0077ed]">Get it</a>
+        <a href="#story" className="text-blue hover:underline">See how it works ›</a>
+      </motion.div>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.2, delay: 0.6 }} className="relative mt-[2vh] w-full flex-1">
+        <Orb />
+      </motion.div>
     </section>
   );
 }
