@@ -1,5 +1,7 @@
 # Invisible OS: control your Android phone with one earbud button, screen off
 
+Website: the landing page is in [`site/`](site/) (static, deployed on Vercel).
+
 **Invisible OS** is a small operating system for your ears, built as an open-source Android app: a menu, apps, games and a keyboard you use with no screen. It turns the single button on any wired or Bluetooth earbud or headset into a hands-free, eyes-free controller. Reply to WhatsApp messages, set a timer, change volume and hear your status, all with the screen off and the phone in your pocket.
 
 It uses **auto-scan** (also called single-switch scanning, the method used in assistive technology): the phone speaks the options one by one, and you click when you hear the one you want. One button is enough. No microphone, no voice recognition, no cloud.
@@ -15,7 +17,7 @@ It uses **auto-scan** (also called single-switch scanning, the method used in as
 | 3 clicks | Previous track | Go back one level |
 | Hold | Wake the menu (works on the lock screen) | Leave / exit |
 
-Menu items: **Messages** (read, reply, or turn a message into a task; Spanish or English), **Tasks** (a to-do list you add to and finish by ear), **Timer**, **Volume**, **Status** (time, battery, unread, next alarm, weather, next event, navigation step), **Games** (Duel, an audio fighting game), **More** (torch, do not disturb, find my phone, exit).
+Menu items: **Messages** (read, reply, or turn a message into a task; Spanish or English), **Tasks** (a to-do list you add to and finish by ear), **Timer**, **Volume**, **Status** (time, battery, unread, next alarm, weather, next event, navigation step), **Games** (Duel, Echo, Guard), **Laptop** (see below), **More** (torch, do not disturb, find my phone, exit). Apps are also in a tree by what you want to do (Talk, Plan, Pay, Work, Watch and listen, Play, Go, Tools); a hold on the home list opens Find by first letters.
 
 ## Features
 
@@ -29,6 +31,19 @@ Menu items: **Messages** (read, reply, or turn a message into a task; Spanish or
 - **Settings screen.** Check setup in one place, then choose which menu items you hear, their order, timer lengths, pause, voice speed, cancel time and more.
 - **Battery friendly.** Nothing polls. It reacts to button presses.
 - **Private.** No account, no analytics, no microphone. The internet is used only to download the AI model, when you ask.
+
+## Laptop: your agents in your ear
+
+If you work in tmux with several Claude Code agents, the **Laptop** tool turns each tmux window into a *room*. It needs the small bridge server on your laptop ([`bridge/`](bridge/), over Tailscale, with a token).
+
+- Rooms are named by what they work on. The one that needs you is read first, with Claude's "What needs me" line.
+- One click sends an answer: go, yes, commit, push, explain, stop, or an option the agent quoted. Order adapts to what you pick in each project.
+- Projects: continue one, or start a new one (area, name and first ask with the Write keyboard).
+- Shell rooms: run again, make targets from the project's Makefile, stop.
+- With the phone unlocked: see a room's screen in the app, or jump to Termux.
+- Still no microphone. Every send is logged in `~/.config/invisible-bridge/sends.log`.
+
+Design and evidence: [bridge/DESIGN-ROOMS.md](bridge/DESIGN-ROOMS.md). API: [bridge/ROOMS-API.md](bridge/ROOMS-API.md).
 
 ## Install
 
