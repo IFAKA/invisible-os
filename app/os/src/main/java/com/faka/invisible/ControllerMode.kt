@@ -517,7 +517,7 @@ class ControllerMode(
                 for (k in settings.hub) when (k) {
                     "messages" -> if (n > 0) all["hub:messages"] = Opt("hub:messages", Menu.messages(n)) { readUnread("hub:messages") }
                         else if (out.lacks("notif")) all["hub:messages"] = Opt("hub:messages", Menu.MESSAGES) { pick("hub:messages"); out.needed("notif"); outro(Voice.NEED_NOTIFICATIONS) }   // no access yet: say why, the app shows the button
-                    "music" -> if (out.nowPlaying() != null || out.hasMusicApp()) all["hub:music"] = Opt("hub:music", Menu.MUSIC) { pick("hub:music"); musicBack = Screen.HUB; show(Screen.MUSIC) }   // the Music page: what is playing, pause, next, play something
+                    "music" -> if (out.nowPlaying() != null || out.hasMusicApp()) all["hub:music"] = Opt("hub:music", Menu.MUSIC) { pick("hub:music"); musicBack = if (treePath.isEmpty()) Screen.HUB else Screen.TREE; show(Screen.MUSIC) }   // the Music page: what is playing, pause, next, play something
                     "tasks" -> out.tasks().let { ts -> all["hub:tasks"] = Opt("hub:tasks", Menu.tasks(ts.size)) {
                         pick("hub:tasks"); taskList = ts; taskIdx = 0
                         when {
@@ -1049,7 +1049,7 @@ class ControllerMode(
             Screen.MUSIC_PLAY, Screen.VOLUME_DIAL -> show(Screen.MUSIC)
             Screen.TREE -> { treePath.removeLastOrNull(); treeUp() }
             Screen.FIND -> { findStack.removeLastOrNull(); if (findStack.isEmpty()) show(Screen.HUB) else show(Screen.FIND) }
-            Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR -> show(Screen.HUB)
+            Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR -> treeUp()   // opened from the tree: back to the list it was picked in
             Screen.ALARM_MIN -> show(Screen.ALARM_HOUR)
             Screen.CONTACTS, Screen.EMERGENCY -> show(Screen.PHONE)
             Screen.RESET_ASK -> show(Screen.FIND)
