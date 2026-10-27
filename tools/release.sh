@@ -24,6 +24,10 @@ Install
 2. Android warns about installing from outside the Play Store. That is normal for open-source apps.
 3. Open Invisible OS, allow Button access, then hold your earbud button.
 
+Use Claude Code in tmux on a Mac? Once per Mac user, in Terminal:
+  curl -fsSL https://raw.githubusercontent.com/IFAKA/invisible-os/master/install.sh | sh
+Then scan the QR code it shows. Remove it all with: invisible uninstall
+
 Permissions and why
 - Button access (accessibility service): to hear the earbud button when the screen is off.
 - Notification access: to read and reply to new messages.

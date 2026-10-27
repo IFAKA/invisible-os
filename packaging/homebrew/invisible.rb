@@ -1,5 +1,5 @@
 # Homebrew formula for the `invisible` command. NOT published: there is no tap yet.
-# Head only (builds from the git repo's main branch). When a release exists, replace `head` with:
+# Head only (builds from the git repo's master branch). When a release exists, replace `head` with:
 #   url "https://github.com/IFAKA/invisible-os/archive/refs/tags/vX.Y.Z.tar.gz"
 #   sha256 "<shasum -a 256 of that file>"
 class Invisible < Formula
