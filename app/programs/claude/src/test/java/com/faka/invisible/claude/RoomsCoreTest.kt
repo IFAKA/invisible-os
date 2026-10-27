@@ -55,4 +55,16 @@ class RoomsCoreTest {
     @Test fun muteAtSevenSharpWaitsForTomorrow() = assertEquals(at(2026, 10, 29, 7), RoomMute.nextMorning(at(2026, 10, 28, 7, 0), tz))
     @Test fun muteAcrossClockChange() = assertEquals(at(2026, 10, 26, 7), RoomMute.nextMorning(at(2026, 10, 25, 12, 0), tz))   // 25 Oct 2026: clocks go back
     @Test fun mutedUntilTime() { assertTrue(RoomMute.muted(100, 99)); assertFalse(RoomMute.muted(100, 100)); assertFalse(RoomMute.muted(0, 5)) }
+
+    @Test fun windowLineIsProjectTopicState() {
+        assertEquals("invisible-os, Consumer-ready distribution, needs you", RoomState.windowLine(room().copy(name = "Consumer-ready distribution", project = "invisible-os")))
+        assertEquals("invisible-os, needs you", RoomState.windowLine(room().copy(name = "invisible-os", project = "invisible-os")))
+        assertEquals("api, npm, working", RoomState.windowLine(room().copy(name = "npm", project = "api", kind = "shell", state = "working")))
+    }
+    @Test fun topicIsShort() = assertEquals("a b c d e f g...", RoomState.topic(room().copy(name = "a b c d e f g h i")))
+    @Test fun tailscaleAddress() {
+        assertTrue(RoomState.isTailscale("http://100.64.1.2:8787")); assertFalse(RoomState.isTailscale("http://192.168.1.4:8787"))
+        assertTrue(ClaudeVoice.notReachable("http://100.64.1.2:8787").text.startsWith("Laptop not reachable. Is Tailscale on?"))
+        assertEquals("Laptop not reachable. Click to try again.", ClaudeVoice.notReachable("http://10.0.0.2:8787").text)
+    }
 }

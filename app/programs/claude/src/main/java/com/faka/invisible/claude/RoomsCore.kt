@@ -1,5 +1,6 @@
 package com.faka.invisible.claude
 
+import com.faka.invisible.logickit.firstWords
 import com.faka.invisible.logickit.squash
 import java.util.Calendar
 import java.util.TimeZone
@@ -28,6 +29,12 @@ object RoomState {
         "working" -> "working"
         else -> "idle"
     }
+    /** True for a Tailscale address (100.x.y.z): when it is not reachable the usual cause is Tailscale being off on the phone. */
+    fun isTailscale(url: String): Boolean = url.trim().substringAfter("://").startsWith("100.")
+    /** The short topic of a window: its name (Claude pane title, or the shell window name) in at most 7 words; blank if it only repeats the project. */
+    fun topic(r: Room): String { val t = r.name.squash().firstWords(7); return if (t.equals(r.project.squash(), true)) "" else t }
+    /** The line of a window in the list: "project, topic, state" (the topic and the project may be missing). */
+    fun windowLine(r: Room): String = listOf(r.project.squash(), topic(r), word(r.state)).filter { it.isNotEmpty() }.joinToString(", ")
     /** The name shown on the screen and heard: a blank name becomes the project, then "Room". */
     fun nameOf(r: Room): String = r.name.squash().ifEmpty { r.project.squash() }.ifEmpty { "Room" }
 }

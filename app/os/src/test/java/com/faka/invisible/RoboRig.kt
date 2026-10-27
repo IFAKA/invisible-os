@@ -63,6 +63,9 @@ internal class RoboRig {
     inner class Host : ProgramHost {
         var ended = 0
         var speechToken = 0
+        /** Every picture the program put on the app screen: the rows and the marked row. */
+        val screens = ArrayList<Pair<List<String>, Int>>()
+        override fun screen(rows: List<String>, mark: Int) { screens.add(rows to mark) }
         override val context: Context get() = ctx
         override val handler: Handler get() = this@RoboRig.handler
         override val prefs: SharedPreferences = FakeProgramHost.MemoryPrefs()

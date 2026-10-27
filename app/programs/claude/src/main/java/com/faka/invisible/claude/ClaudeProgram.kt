@@ -40,14 +40,15 @@ private class HandlerTimers(private val handler: Handler) : Timers {
 }
 
 /**
- * Laptop (Claude bridge and Rooms), a tool. With nothing to answer it reads the rooms (tmux windows) of the laptop; see bridge/ROOMS-API.md.
- * Claude bridge part: It long-polls the laptop bridge on a background thread and speaks what comes: "<project> asks: <what>",
- * then the options one by one (the kit Scanner); a click picks the option just spoken. Notes (done, needs you) are one short line.
- * 1 click = pick the option just spoken, 2 clicks = the one before, 3 clicks = skip this one (answer it on the laptop), hold 3 s = leave.
- * Only the button and the network; no microphone.
+ * Laptop, a tool. Always the same walk: Home > Laptop > the WINDOWS of the laptop (tmux, GET /rooms; bridge/ROOMS-API.md) > one
+ * window > the OPTIONS of that window (room.actions: Claude Code or shell) > an option runs. Last in the windows list: "New window"
+ * (projects) and "Laptop settings" (switch computer, mute, test). Questions the laptop asks are not read on open: the need text is in the window.
+ * The button is the OS list logic: 1 click = pick the item just spoken, 2 clicks = the one before, 3 clicks = back one level (from
+ * the windows list: leave), hold = fast scroll (release speaks the item in full), hold 3 s = leave. The app screen shows the whole
+ * list with the item being read ([ProgramHost.screen]) and a tap on a row picks it ([tap]). Only the button and the network; no microphone.
  */
 class ClaudeAndroid(private val port: RoomsPort) : Program {
-    private enum class Phase { NONE, LINE, INTRO, ITEM, STUCK, SENDING, SENT, LOADING, READING }
+    private enum class Phase { NONE, INTRO, ITEM, STUCK, SENDING, SENT, LOADING, READING }
 
     private lateinit var host: ProgramHost
     private val handler get() = host.handler
@@ -56,9 +57,6 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     private var computers: List<Computer> = emptyList()
     private var switchIntro: Phrase? = null
     private lateinit var listenTo: Computer
-    @Volatile private var gen = 0
-    private var queue = ClaudeQueue()
-    private var current: ClaudeEvent? = null
     private var phase = Phase.NONE
     private var awaitItem = false
     @Volatile private var running = false
@@ -66,10 +64,11 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     private var downAt = 0L
     private var stopWaiting: (() -> Unit)? = null
     private var down = false
+    private var fastOn = false
     private val leave = Runnable { shutdown() }
+    private val holdFast = Runnable { startFast() }
     private val resolve = Runnable { val n = clicks; clicks = 0; if (running) onClicks(n) }
 
-    private var asking = false
     private var reopen: () -> Unit = {}
     private var onBack: () -> Unit = { shutdown() }
     private var room: Room? = null
@@ -83,8 +82,9 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         Choice.Again -> ClaudeVoice.READ_AGAIN
         is Choice.SwitchPick -> ClaudeVoice.switchTo(c.computer.name)
         Choice.SwitchMenu -> ClaudeVoice.SWITCH_COMPUTER
-        is Choice.RoomPick -> ClaudeVoice.room(RoomState.nameOf(c.room), c.room.state)
+        is Choice.RoomPick -> ClaudeVoice.window(c.room)
         Choice.ProjectsPick -> ClaudeVoice.PROJECTS
+        Choice.SettingsPick -> ClaudeVoice.SETTINGS
         Choice.MutePick -> ClaudeVoice.MUTE
         Choice.TestDonePick -> ClaudeVoice.TEST_DONE
         is Choice.ActPick -> ClaudeVoice.label(c.action)
@@ -99,12 +99,18 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
 
     private val scanner: Scanner<Choice> by lazy {
         Scanner(timers, { c -> label(c) }, object : ScanOut {
-            override fun say(index: Int, label: Phrase, spearcon: Boolean) { awaitItem = true; host.speak(label) }
-            override fun sayFast(word: Phrase) {}
-            override fun tone(t: Tone) {}
-            override fun leave() { phase = Phase.STUCK; host.speak(ClaudeVoice.WAITING_YOU) }
+            override fun say(index: Int, label: Phrase, spearcon: Boolean) { awaitItem = true; showRows(index); host.speak(label) }
+            override fun sayFast(word: Phrase) { host.speak(word) }
+            override fun tone(t: Tone) { VoiceKit.narrator.beep(t) }
+            override fun leave() { phase = Phase.STUCK; reopen = { restartList() }; host.speak(ClaudeVoice.WAITING_YOU) }
         }, ScanCadence(pauseMs = { PAUSE_MS }, loops = { LOOPS }, ceremony = false), scanKey = "claude:scan")
     }
+
+    /** The app screen: every item of the list, [mark] = the one being read. */
+    private fun showRows(mark: Int) { host.screen(scanner.list.items.map { label(it).text }, mark) }
+
+    /** A line spoken and shown (the app screen shows only what the program puts there). */
+    private fun say(p: Phrase) { host.screen(listOf(p.text), 0); host.speak(p) }
 
     override val active get() = running
 
@@ -117,69 +123,31 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         timers = HandlerTimers(host.handler)
         running = true
         host.pauseMusic()
-        phase = Phase.LOADING
-        stopWaiting = host.waiting()
         connect(active)
     }
 
-    /** Work with one computer: forget the last one's questions, then poll this one. */
+    /** Work with one computer: its windows are the first list. */
     private fun connect(c: Computer) {
         listenTo = c
         client = BridgeClient(c.url, c.token)
-        queue = ClaudeQueue(); current = null; asking = false
-        phase = Phase.LOADING
-        val g = ++gen
-        val cl = client
-        Thread({ pollLoop(g, cl) }, "claude-poll").apply { isDaemon = true }.start()
+        loadRooms()
     }
 
     /** The list of the other computers (3 or more computers): pick one to listen to. */
     private fun showSwitchList() {
-        onBack = { loadRooms() }
+        onBack = { showSettings() }
         showList(Computers.others(computers, listenTo).map { Choice.SwitchPick(it) }, null)
     }
 
-    /** Listen to [c] from now on: the OS moves its watcher, this tool polls it, and its rooms open with "<name>, listening". */
+    /** Listen to [c] from now on: the OS moves its watcher, this tool lists its windows and says "<name>, listening" first. */
     private fun switchTo(c: Computer) {
         host.stopSpeech(); scanner.stop(); awaitItem = false
         port.switchTo(c.name)
-        endWaiting(); stopWaiting = host.waiting()
-        connect(c)
         switchIntro = Voice.listening(c.name)
+        connect(c)
     }
 
     override fun stop() = shutdown()
-
-    /** Background thread: the only place that waits for the network. */
-    private fun pollLoop(g: Int, client: BridgeClient) {
-        var since = 0
-        var up = true
-        var first = true
-        while (running && g == gen) {
-            try {
-                val r = client.poll(since, if (first) 1 else POLL_SEC)
-                since = r.seq
-                if (g != gen) return
-                if (first) { first = false; up = true; handler.post { if (running && g == gen) onFirst(r.events) } }
-                else {
-                    if (!up) { up = true; handler.post { if (running && g == gen && phase == Phase.NONE) host.speak(ClaudeVoice.BACK_UP) } }
-                    if (r.events.isNotEmpty()) handler.post { if (running && g == gen) onEvents(r.events) }
-                }
-            } catch (e: IOException) {
-                if (first && up) handler.post { if (running && g == gen) unreachable { loadRooms() } }
-                else if (up) handler.post { if (running && g == gen && phase == Phase.NONE) host.speak(ClaudeVoice.DOWN) }
-                up = false
-                try { Thread.sleep(RETRY_MS) } catch (_: InterruptedException) { return }
-            }
-        }
-    }
-
-    /** The first answer of the laptop: a question waiting is read first, otherwise the rooms. */
-    private fun onFirst(events: List<ClaudeEvent>) {
-        endWaiting()
-        for (e in events) queue.add(e)
-        presentNext()
-    }
 
     private fun endWaiting() { stopWaiting?.invoke(); stopWaiting = null }
 
@@ -192,34 +160,49 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         }, "claude-rooms").start()
     }
 
+    /** The laptop did not answer: say so (plainly, with the Tailscale hint for 100.x addresses). A click or a tap says "Trying again" at once, waits a moment, then runs [retry]. */
     private fun unreachable(retry: () -> Unit) {
         scanner.stop(); awaitItem = false; endWaiting()
-        phase = Phase.STUCK; reopen = retry
-        host.speak(ClaudeVoice.NOT_REACHABLE)
+        phase = Phase.STUCK
+        reopen = {
+            host.stopSpeech(); phase = Phase.LOADING
+            say(ClaudeVoice.TRYING)
+            timers.set("claude:retry", RETRY_MS) { if (running) retry() }
+        }
+        say(ClaudeVoice.notReachable(listenTo.url))
     }
+
+    private fun restartList() { if (!scanner.isEmpty) { phase = Phase.ITEM; scanner.restartIn(0) } }
 
     private fun showList(items: List<Choice>, intro: Phrase?) {
         scanner.stop(); awaitItem = false; host.stopSpeech(); timers.clear("claude:next")
-        asking = false
         scanner.load(items)
         reopen = { showList(items, intro) }
+        showRows(0)
         if (intro != null) { phase = Phase.INTRO; host.speak(intro) } else { phase = Phase.ITEM; scanner.speakItem(0) }
     }
 
     private fun loadRooms() {
-        scanner.stop(); awaitItem = false; asking = false; room = null
+        scanner.stop(); awaitItem = false; room = null
         phase = Phase.LOADING
         bg({ client.rooms() }) { list -> if (list == null) unreachable { loadRooms() } else showRooms(list) }
     }
 
+    /** The windows list: the windows (urgent first, at most [MAX_ROOMS]), then "New window" and "Laptop settings". */
     private fun showRooms(list: List<Room>) {
         onBack = { shutdown() }
-        val others = Computers.others(computers, listenTo)
-        val switch: List<Choice> = when (others.size) { 0 -> emptyList(); 1 -> listOf(Choice.SwitchPick(others[0])); else -> listOf(Choice.SwitchMenu) }
-        val picks = list.take(MAX_ROOMS).map { Choice.RoomPick(it) } + Choice.ProjectsPick + switch + Choice.MutePick + Choice.TestDonePick
+        val picks = list.take(MAX_ROOMS).map { Choice.RoomPick(it) } + Choice.ProjectsPick + Choice.SettingsPick
         val intro = switchIntro ?: if (list.isEmpty()) ClaudeVoice.NO_ROOMS else null
         switchIntro = null
         showList(picks, intro)
+    }
+
+    /** Laptop settings: switch computer (when there is another), mute, test. */
+    private fun showSettings() {
+        onBack = { loadRooms() }
+        val others = Computers.others(computers, listenTo)
+        val switch: List<Choice> = when (others.size) { 0 -> emptyList(); 1 -> listOf(Choice.SwitchPick(others[0])); else -> listOf(Choice.SwitchMenu) }
+        showList(switch + Choice.MutePick + Choice.TestDonePick, null)
     }
 
     private fun showActions(r: Room, intro: Phrase?) {
@@ -228,7 +211,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         showList(RoomAction.earbudList(r).map { Choice.ActPick(it) }, intro)
     }
 
-    private fun openRoom(r: Room) = showActions(r, r.need.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") })
+    /** A window: its need line (else what it is about), then its options. */
+    private fun openRoom(r: Room) = showActions(r, r.need.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: ClaudeVoice.window(r))
 
     private fun doAction(a: RoomAction) {
         val r = room ?: return
@@ -244,8 +228,9 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         scanner.stop(); awaitItem = false; host.stopSpeech()
         phase = Phase.SENDING
         bg({ client.act(r.id, a.id) }) { ok ->
-            if (ok == true) { phase = Phase.SENT; host.speak(ClaudeVoice.sentTo(RoomState.nameOf(r))) }
-            else { reopen = { showActions(r, null) }; phase = Phase.STUCK; host.speak(if (ok == null) ClaudeVoice.NOT_REACHABLE else ClaudeVoice.FAILED) }
+            if (ok == true) { phase = Phase.SENT; say(ClaudeVoice.sentTo(RoomState.nameOf(r))) }
+            else if (ok == null) unreachable { showActions(r, null) }
+            else { reopen = { showActions(r, null) }; phase = Phase.STUCK; say(ClaudeVoice.FAILED) }
         }
     }
 
@@ -255,8 +240,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         bg({ client.last(r.id) }) { text ->
             when {
                 text == null -> unreachable { showActions(r, null) }
-                text.isBlank() -> { reopen = { showActions(r, null) }; phase = Phase.STUCK; host.speak(ClaudeVoice.NOTHING_TO_READ) }
-                else -> { phase = Phase.READING; host.speak(Phrase.content(text, "en")) }
+                text.isBlank() -> { reopen = { showActions(r, null) }; phase = Phase.STUCK; say(ClaudeVoice.NOTHING_TO_READ) }
+                else -> { phase = Phase.READING; say(Phrase.content(text, "en")) }
             }
         }
     }
@@ -268,7 +253,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     }
 
     private fun loadProjects() {
-        scanner.stop(); awaitItem = false; asking = false
+        scanner.stop(); awaitItem = false
         phase = Phase.LOADING
         bg({ client.projects() }) { list -> if (list == null) unreachable { loadProjects() } else { projects = list; showProjects() } }
     }
@@ -279,7 +264,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     }
 
     private fun loadAreas() {
-        scanner.stop(); awaitItem = false; asking = false
+        scanner.stop(); awaitItem = false
         phase = Phase.LOADING
         bg({ client.areas() }) { list ->
             if (list == null) unreachable { loadAreas() }
@@ -308,8 +293,9 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         scanner.stop(); awaitItem = false; host.stopSpeech()
         phase = Phase.SENDING
         bg({ client.openProject(p.path, mode) }) { ok ->
-            if (ok == true) { phase = Phase.SENT; host.speak(ClaudeVoice.opened(p.name)) }
-            else { reopen = { showModes(p) }; phase = Phase.STUCK; host.speak(if (ok == null) ClaudeVoice.NOT_REACHABLE else ClaudeVoice.FAILED) }
+            if (ok == true) { phase = Phase.SENT; say(ClaudeVoice.opened(p.name)) }
+            else if (ok == null) unreachable { showModes(p) }
+            else { reopen = { showModes(p) }; phase = Phase.STUCK; say(ClaudeVoice.FAILED) }
         }
     }
 
@@ -317,60 +303,56 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         host.prefs.edit().putLong(RoomMute.KEY, RoomMute.nextMorning(System.currentTimeMillis())).apply()
         scanner.stop(); awaitItem = false; host.stopSpeech()
         phase = Phase.SENT
-        host.speak(ClaudeVoice.MUTED)
+        say(ClaudeVoice.MUTED)
+    }
+
+    /** Run the item [c] (the one just spoken or the one tapped). */
+    private fun pick(c: Choice) {
+        when (c) {
+            is Choice.SwitchPick -> switchTo(c.computer)
+            Choice.SwitchMenu -> showSwitchList()
+            is Choice.RoomPick -> openRoom(c.room)
+            Choice.ProjectsPick -> loadProjects()
+            Choice.SettingsPick -> showSettings()
+            Choice.MutePick -> mute()
+            Choice.TestDonePick -> port.testDone()
+            is Choice.ActPick -> doAction(c.action)
+            Choice.No -> room?.let { showActions(it, null) }
+            Choice.Yes -> { val r = room; val a = pending; if (r != null && a != null) act(r, a) }
+            is Choice.ProjectPick -> showModes(c.project)
+            Choice.NewProjectPick -> loadAreas()
+            is Choice.AreaPick -> newProject(c.area)
+            Choice.ContinueChat -> openProject("continue")
+            Choice.NewChat -> openProject("new")
+            else -> {}
+        }
+    }
+
+    /** The app screen was tapped on [row]: the same as the button picking it. */
+    override fun tap(row: Int) {
+        if (!running) return
+        when (phase) {
+            Phase.STUCK -> { reopen(); return }
+            Phase.READING -> { host.stopSpeech(); room?.let { showActions(it, null) }; return }
+            Phase.ITEM, Phase.INTRO -> {}
+            else -> return
+        }
+        if (row !in scanner.list.items.indices) return
+        scanner.stop(); awaitItem = false; host.stopSpeech()
+        scanner.list.moveTo(row)
+        pick(scanner.list.items[row])
     }
 
     private fun roomsClick(n: Int) {
         when {
             phase == Phase.READING -> { host.stopSpeech(); room?.let { showActions(it, null) } }
-            n >= 3 -> { scanner.stop(); awaitItem = false; host.stopSpeech(); onBack() }
+            n >= 4 -> shutdown()
+            n == 3 -> { scanner.stop(); awaitItem = false; host.stopSpeech(); timers.clear("claude:retry"); onBack() }
             phase == Phase.STUCK -> { host.stopSpeech(); reopen() }
             phase == Phase.INTRO -> { host.stopSpeech(); phase = Phase.ITEM; scanner.speakItem(0) }
+            scanner.isEmpty -> {}
             n == 2 -> { host.stopSpeech(); awaitItem = false; phase = Phase.ITEM; scanner.prevIn(0) }
-            else -> when (val c = scanner.list.current) {
-                is Choice.SwitchPick -> switchTo(c.computer)
-                Choice.SwitchMenu -> showSwitchList()
-                is Choice.RoomPick -> openRoom(c.room)
-                Choice.ProjectsPick -> loadProjects()
-                Choice.MutePick -> mute()
-                Choice.TestDonePick -> port.testDone()
-                is Choice.ActPick -> doAction(c.action)
-                Choice.No -> room?.let { showActions(it, null) }
-                Choice.Yes -> { val r = room; val a = pending; if (r != null && a != null) act(r, a) }
-                is Choice.ProjectPick -> showModes(c.project)
-                Choice.NewProjectPick -> loadAreas()
-                is Choice.AreaPick -> newProject(c.area)
-                Choice.ContinueChat -> openProject("continue")
-                Choice.NewChat -> openProject("new")
-                else -> {}
-            }
-        }
-    }
-
-    private fun onEvents(events: List<ClaudeEvent>) {
-        var fresh = false
-        for (e in events) if (queue.add(e)) fresh = true
-        if (fresh && (phase == Phase.NONE || (!asking && room == null && (phase == Phase.ITEM || phase == Phase.INTRO || phase == Phase.STUCK)))) presentNext()
-    }
-
-    private fun presentNext() {
-        val e = queue.nextByUrgency()
-        if (e == null) { current = null; loadRooms(); return }
-        current = e
-        present(e)
-    }
-
-    /** Speak [e] from the start: the line, then (for a question) the options. */
-    private fun present(e: ClaudeEvent) {
-        scanner.stop(); awaitItem = false; asking = true
-        if (e.needsAnswer) {
-            VoiceKit.narrator.beep(Tone.CLAUDE)
-            scanner.load(Choice.of(e))
-            phase = Phase.INTRO
-            host.speak(ClaudeVoice.asks(e.project, e.summary))
-        } else {
-            phase = Phase.LINE
-            host.speak(if (e.kind == ClaudeEvent.KIND_DONE) ClaudeVoice.done(e.project, e.summary) else ClaudeVoice.needs(e.project, e.summary))
+            else -> { val c = scanner.list.current; scanner.stop(); awaitItem = false; host.stopSpeech(); pick(c) }
         }
     }
 
@@ -379,60 +361,46 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         when (phase) {
             Phase.INTRO -> { phase = Phase.ITEM; scanner.speakItem(0) }
             Phase.ITEM -> if (awaitItem) { awaitItem = false; scanner.itemDone() }
-            Phase.LINE, Phase.SENT -> timers.set("claude:next", NEXT_MS) { presentNext() }
+            Phase.SENT -> timers.set("claude:next", NEXT_MS) { loadRooms() }
             Phase.READING -> room?.let { showActions(it, null) }
             else -> {}
         }
     }
 
-    override fun down(time: Long) { downAt = time; down = true; handler.removeCallbacks(resolve); handler.postDelayed(leave, Pacing.LEAVE_MS) }
+    /** A hold reached 0.5 s: fast scroll (only while a list is read). */
+    private fun startFast() {
+        if (!running || phase != Phase.ITEM || scanner.isEmpty) return
+        clicks = 0; handler.removeCallbacks(resolve)
+        host.stopSpeech(); awaitItem = false; scanner.stop()
+        fastOn = true
+        scanner.startFast()
+    }
+
+    override fun down(time: Long) {
+        downAt = time; down = true; handler.removeCallbacks(resolve)
+        handler.postDelayed(holdFast, Pacing.HOLD_MS); handler.postDelayed(leave, Pacing.LEAVE_MS)
+    }
 
     override fun up(time: Long) {
-        handler.removeCallbacks(leave)
-        if (down && time - downAt < Pacing.LEAVE_MS) { clicks++; handler.postDelayed(resolve, Pacing.GAP_MS) }
+        handler.removeCallbacks(leave); handler.removeCallbacks(holdFast)
+        if (fastOn) {   // released: stop on the item reached and speak it in full
+            fastOn = false; down = false
+            if (scanner.endFast()) { host.stopSpeech(); awaitItem = false; phase = Phase.ITEM; scanner.resumeIn(0) }
+            return
+        }
+        if (down && time - downAt < Pacing.HOLD_MS) { clicks++; handler.postDelayed(resolve, Pacing.GAP_MS) }
         down = false
     }
 
     private fun onClicks(n: Int) {
         if (phase == Phase.SENDING || phase == Phase.LOADING) return
-        if (!asking) { roomsClick(n); return }
-        val e = current
-        if (e == null || phase == Phase.NONE) { host.stopSpeech(); host.speak(ClaudeVoice.NOTHING); return }
-        if (!e.needsAnswer) { host.stopSpeech(); timers.clear("claude:next"); presentNext(); return }   // a click skips a note
-        when {
-            n >= 3 -> { scanner.stop(); awaitItem = false; host.stopSpeech(); host.speak(ClaudeVoice.SKIPPED); phase = Phase.SENT }
-            phase == Phase.INTRO || phase == Phase.STUCK -> { host.stopSpeech(); present(e) }
-            n == 2 -> { host.stopSpeech(); awaitItem = false; phase = Phase.ITEM; scanner.prevIn(0) }
-            else -> when (val c = scanner.list.current) {
-                is Choice.Option -> send(e, c.text)
-                Choice.Again -> { host.stopSpeech(); present(e) }
-                else -> {}
-            }
-        }
-    }
-
-    private fun send(e: ClaudeEvent, choice: String) {
-        scanner.stop(); awaitItem = false; host.stopSpeech()
-        phase = Phase.SENDING
-        stopWaiting = host.waiting()
-        Thread({
-            val code = try { client.answer(e.id, choice) } catch (_: IOException) { -1 }
-            handler.post {
-                stopWaiting?.invoke(); stopWaiting = null
-                if (!running) return@post
-                when (code) {
-                    200 -> { phase = Phase.SENT; host.speak(ClaudeVoice.sent(choice)) }
-                    409 -> { phase = Phase.SENT; host.speak(ClaudeVoice.TOO_LATE) }
-                    else -> { host.speak(ClaudeVoice.FAILED); timers.set("claude:retry", NEXT_MS) { present(e) } }
-                }
-            }
-        }, "claude-answer").start()
+        roomsClick(n)
     }
 
     private fun shutdown() {
         if (!running) return
-        running = false; gen++
-        handler.removeCallbacks(leave); handler.removeCallbacks(resolve)
+        running = false
+        handler.removeCallbacks(leave); handler.removeCallbacks(resolve); handler.removeCallbacks(holdFast)
         timers.clear("claude:next"); timers.clear("claude:retry"); scanner.stop()
         stopWaiting?.invoke(); stopWaiting = null
         host.stopSpeech()
@@ -442,15 +410,15 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
 
     /** Stops without telling the OS the program ended: the OS is about to start Write. */
     private fun releaseQuietly() {
-        running = false; gen++
-        handler.removeCallbacks(leave); handler.removeCallbacks(resolve)
+        running = false
+        handler.removeCallbacks(leave); handler.removeCallbacks(resolve); handler.removeCallbacks(holdFast)
         timers.clear("claude:next"); timers.clear("claude:retry"); scanner.stop()
         stopWaiting?.invoke(); stopWaiting = null
         host.stopSpeech()
         host.resumeMusic()
     }
 
-    private companion object { const val POLL_SEC = 25; const val RETRY_MS = 5000L; const val PAUSE_MS = 1200L; const val LOOPS = 2; const val NEXT_MS = 700L; const val MAX_ROOMS = 8 }
+    private companion object { const val RETRY_MS = 700L; const val PAUSE_MS = 1200L; const val LOOPS = 2; const val NEXT_MS = 700L; const val MAX_ROOMS = 8 }
 }
 
 /** What the OS registry lists for the Claude bridge (a tool of the home hub). */

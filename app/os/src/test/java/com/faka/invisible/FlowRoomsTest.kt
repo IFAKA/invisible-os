@@ -41,7 +41,7 @@ class FlowRoomsTest {
         val s = server(); val rig = RoboRig()
         start(rig, Port(listOf(Computer("Home", s.url, s.token)), Computer("Home", s.url, s.token)))
         val i = rig.mark()
-        rig.needLive("Alpha, needs you", i); rig.advance(60)
+        rig.needLive("alpha-proj, Alpha, needs you", i); rig.advance(60)
         rig.press("120")   // picks Alpha, the item just heard
         val j = rig.mark(); rig.needLive("The design doc is ready", j)
         rig.needLive("Go ahead", j); rig.advance(60)
@@ -54,7 +54,7 @@ class FlowRoomsTest {
     @Test fun rooms_new_project() {
         val s = server(); val rig = RoboRig(); val port = Port(listOf(Computer("Home", s.url, s.token)), Computer("Home", s.url, s.token))
         start(rig, port)
-        val i = rig.mark(); rig.needLive("Projects", i); rig.advance(60); rig.press("120")
+        val i = rig.mark(); rig.needLive("New window", i); rig.advance(60); rig.press("120")
         val j = rig.mark(); rig.needLive("New project", j); rig.advance(60); rig.press("120")
         val k = rig.mark(); rig.needLive("hardware", k); rig.advance(60); rig.press("120")
         val t0 = System.currentTimeMillis()
@@ -110,10 +110,49 @@ class FlowRoomsTest {
         assertFalse("heard Work (Omega) while Home is the active computer", rig.said("Omega", i))
         val j = rig.mark()
         val host = rig.Host(); val p = ClaudeAndroid(port); rig.running = p; os.running = true; p.start(host)
+        rig.needLive("alpha-proj, Alpha", j)   // the windows list is being read
+        p.tap(host.screens.last().first.indexOf("Laptop settings"))   // the settings are the last entry; the app screen taps it
         rig.needLive("Switch to Work", j); rig.advance(60); rig.press("120")
-        rig.needLive("Work, listening", j); rig.needLive("Zeta, working", j)
+        rig.needLive("Work, listening", j); rig.needLive("zeta-proj, Zeta, working", j)
         p.stop(); rig.running = null; os.running = false
         val m = rig.mark(); work.fire.add("Psi")
         rig.needLive("Psi, done", m)
+    }
+
+    // ---- new flow: the windows list, the app screen, tap, retry ----
+    @Test fun windows_list_and_tap() {
+        val s = server(); val rig = RoboRig(); val c = Computer("Home", s.url, s.token)
+        val host = start(rig, Port(listOf(c), c))
+        val i = rig.mark(); rig.needLive("alpha-proj, Alpha, needs you", i)
+        val rows = host.screens.last().first
+        assertEquals(listOf("alpha-proj, Alpha, needs you", "beta-proj, Beta, working", "gamma-proj, Gamma, done", "New window", "Laptop settings"), rows)
+        assertEquals("the marked row is the one read", 0, host.screens.last().second)
+        rig.advance(2500); assertTrue("the mark moved on: ${host.screens.takeLast(3)}", host.screens.last().second >= 1)
+        val j = rig.mark(); (rig.running as ClaudeAndroid).tap(2)   // Gamma, a shell window
+        rig.needLive("build finished", j); rig.needLive("Run again", j)
+        assertEquals(listOf("Run again", "Make test", "Stop", "Write"), host.screens.last().first)
+    }
+
+    @Test fun retry_gives_feedback_and_speaks_again() {
+        val rig = RoboRig(); val c = Computer("Home", "http://127.0.0.1:1", "x")
+        val host = start(rig, Port(listOf(c), c))
+        val i = rig.mark(); rig.needLive("Laptop not reachable", i)
+        assertEquals("Laptop not reachable. Click to try again.", host.screens.last().first.single())
+        val j = rig.mark(); rig.advance(60); rig.press("120"); rig.advance(400)   // a click
+        assertTrue("no feedback: ${rig.said.drop(j)}", rig.said("Trying again", j)); assertEquals("Trying again", host.screens.last().first.single())
+        rig.needLive("Laptop not reachable", j)   // the retry failed: it speaks again, never silent
+        val k = rig.mark(); (rig.running as ClaudeAndroid).tap(0)   // a tap does the same
+        rig.needLive("Trying again", k); rig.needLive("Laptop not reachable", k)
+    }
+
+    @Test fun hold_is_fast_scroll_and_triple_click_leaves() {
+        val s = server(); val rig = RoboRig(); val c = Computer("Home", s.url, s.token)
+        val host = start(rig, Port(listOf(c), c))
+        rig.needLive("alpha-proj, Alpha", rig.mark()); val i = rig.mark()
+        rig.press("1400")   // a hold: fast scroll, then the item reached is spoken in full on release
+        rig.advance(300)
+        assertTrue("nothing spoken by the fast scroll: ${rig.said.drop(i)}", rig.mark() > i)
+        rig.press("100,100,100,100,100"); rig.advance(800)   // three clicks: back from the windows list leaves the tool
+        assertEquals(1, host.ended)
     }
 }

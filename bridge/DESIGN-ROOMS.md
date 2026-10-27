@@ -46,12 +46,15 @@ Away from the laptop, sessions wait. Goal: from the earbud (no screen, no microp
 - `bridge/server.py`, hooks, token, Tailscale, the phone tool `hub:claude`: grow them, do not replace them.
 
 ## What you hear (a small example)
-1. The Claude earcon. Hold, pick "Laptop" (it absorbs today's "Claude" tool).
-2. Rooms, urgent first (at most 8, a `ScanList`):
-   "os, needs you" / "hardware, failed" / "wereable, done" / "layout, working".
-3. Click "os". It reads Claude's "What needs me" line: "say go for the design doc."
-4. Actions: "Go" / "Yes" / "Commit" / … (below). Click "Go". The laptop types `go` + Enter. "Sent to os."
-5. Triple click: back to rooms.
+Always the same walk: Home > Laptop > windows > one window > its options > an option runs.
+1. Hold, pick "Laptop". Pending questions are not read: the need text is already in the window.
+2. Windows, urgent first (at most 8, a `ScanList`), each "project, what it is about, state":
+   "invisible-os, Consumer-ready distribution, needs you" / "hardware, npm, failed". The topic is the Claude pane title, or the shell window name.
+   Last two entries: "New window" (projects) and "Laptop settings" (Switch computer, Mute until morning, Test done alert).
+3. Click a window. It reads the need line: "say go for the design doc." (no need line: the window line).
+4. Options of that window (below): "Go" / "Yes" / "Commit" / ... for Claude, "Run again" / "Make test" / "Stop" for a shell. Click "Go". The laptop types `go` + Enter. "Sent to os." Then the windows list again.
+5. Buttons are the OS list buttons: click = pick the item just heard, two clicks = the one before, three clicks = back one level (from the windows: leave), hold = fast scroll (release reads the item in full), hold 3 s = leave. The app screen shows the whole list, the read item marked; a tap on a row picks it.
+6. Laptop not reachable: "Laptop not reachable." (a Tailscale 100.x address adds "Is Tailscale on?"). A click or tap says "Trying again" at once, then the result; a failed retry speaks again.
 
 ## Room states (from agent-status files and hooks; no model)
 needs you (permission, question, or a status block that asks something) > failed (shell) > done (not visited since) > working > idle.

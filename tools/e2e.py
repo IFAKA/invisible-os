@@ -339,8 +339,8 @@ def rooms_go():
     srv = fake_rooms.start(host, 8799, "e2e-token")
     try:
         bcast("--es", "bridge", f"http://{host}:8799", "--es", "token", "e2e-token")
-        reset(); click_on("Alpha, needs you", "Go ahead"); i = mark(); bcast("--es", "start", "claude")
-        clicked("Alpha, needs you", i, 20)   # picks Alpha, the item just heard (the list goes on: Beta, Gamma, Projects)
+        reset(); click_on("alpha-proj, Alpha, needs you", "Go ahead"); i = mark(); bcast("--es", "start", "claude")
+        clicked("alpha-proj, Alpha, needs you", i, 20)   # picks Alpha, the item just heard (the list goes on: Beta, Gamma, New window, Laptop settings)
         j = i; need("The design doc is ready", j)
         clicked("Go ahead", j)
         need("Sent to Alpha", j)
@@ -401,7 +401,7 @@ def rooms_done_spoken():
         except Fail: pass
 
 def rooms_new_project():
-    """Laptop tool against the fake server: Projects, New project, an area, then the cue for the name (Write starts)."""
+    """Laptop tool against the fake server: New window, New project, an area, then the cue for the name (Write starts)."""
     sys.path.insert(0, os.path.join(HERE, "..", "bridge")); import fake_rooms
     home = os.path.expanduser("~/.config/invisible-bridge/")
     real_url = open(home + "url").read().strip() if os.path.exists(home + "url") else ""
@@ -410,10 +410,10 @@ def rooms_new_project():
     srv = fake_rooms.start(host, 8799, "e2e-token")
     try:
         bcast("--es", "bridge", f"http://{host}:8799", "--es", "token", "e2e-token")
-        reset(); click_on("Projects", "New project", "hardware"); i = mark(); bcast("--es", "start", "claude")
-        clicked("Projects", i, 25); clicked("New project", i); clicked("hardware", i)
+        reset(); click_on("New window", "New project", "hardware"); i = mark(); bcast("--es", "start", "claude")
+        clicked("New window", i, 25); clicked("New project", i); clicked("hardware", i)
         need("Write the project name", i)
-        return "Projects, New project, hardware, name cue heard"
+        return "New window, New project, hardware, name cue heard"
     finally:
         srv.shutdown()
         bcast("--es", "bridge", real_url, "--es", "token", real_tok)
@@ -421,7 +421,7 @@ def rooms_new_project():
         except Fail: pass
 
 def computers_two():
-    """Two computers (two fake bridges), Home active: only Home is heard (a Work window finishing is not); the Laptop tool offers "Switch to Work";
+    """Two computers (two fake bridges), Home active: only Home is heard (a Work window finishing is not); the Laptop tool offers "Switch to Work" under Laptop settings;
     picking it says "Work, listening" and opens Work's rooms; then only Work is heard."""
     sys.path.insert(0, os.path.join(HERE, "..", "bridge")); import fake_rooms
     home = os.path.expanduser("~/.config/invisible-bridge/")
@@ -442,10 +442,10 @@ def computers_two():
         # Only the active computer is watched. Home's Sigma needed a poll plus the 3 s batch; a watched Work would have been polled in the same time and its Omega taken off the list (and heard with it).
         time.sleep(0.4)
         if said("Omega", i, 0.1) or not work_fire: raise Fail("heard or polled Work (Omega) while Home is the active computer")
-        click_on("Switch to Work"); j = mark(); bcast("--es", "start", "claude")
-        clicked("Switch to Work", j, 40)
+        click_on("Laptop settings", "Switch to Work"); j = mark(); bcast("--es", "start", "claude")
+        clicked("Laptop settings", j, 40); clicked("Switch to Work", j, 40)   # the settings are the last entry of the windows list
         need("Work, listening", j, 15)
-        k = mark(); need("Zeta, working", j, 20)
+        k = mark(); need("zeta-proj, Zeta, working", j, 20)
         reset(); m = mark()
         work_fire.append("Psi")
         need("Psi, done", m, 25)

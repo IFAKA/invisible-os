@@ -22,8 +22,13 @@ object ClaudeVoice {
     val SKIPPED = f("Skipped.")
     val WAITING_YOU = f("Waiting for you. Click to hear it again.")
     val NOT_REACHABLE = f("Laptop not reachable. Click to try again.")
-    val NO_ROOMS = f("No rooms open.")
-    val PROJECTS = f("Projects")
+    val NOT_REACHABLE_TAILSCALE = f("Laptop not reachable. Is Tailscale on? Click to try again.")
+    val TRYING = f("Trying again")
+    /** The not-reachable line for the address of the computer: Tailscale addresses (100.x) name the likely cause. */
+    fun notReachable(url: String) = if (RoomState.isTailscale(url)) NOT_REACHABLE_TAILSCALE else NOT_REACHABLE
+    val NO_ROOMS = f("No windows open.")
+    val PROJECTS = f("New window")
+    val SETTINGS = f("Laptop settings")
     val MUTE = f("Mute until morning")
     val TEST_DONE = f("Test done alert")
     val MUTED = f("Quiet until morning.")
@@ -38,6 +43,8 @@ object ClaudeVoice {
     fun started(name: String) = f("Started $name.")
     val NOTHING_TO_READ = f("Nothing to read.")
     fun room(name: String, state: String) = f("$name, ${RoomState.word(state)}")
+    /** A window in the list: "project, what it is about, state". */
+    fun window(r: Room) = f(RoomState.windowLine(r))
     fun switchTo(name: String) = f("Switch to $name")
     val SWITCH_COMPUTER = f("Switch computer")
     fun sentTo(name: String) = f("Sent to $name")
