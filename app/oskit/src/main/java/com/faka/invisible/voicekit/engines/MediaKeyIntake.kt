@@ -29,6 +29,8 @@ class MediaKeyIntake(
     private lateinit var session: MediaSession
     private var track: AudioTrack? = null
     @Volatile private var playing = false
+    @Volatile private var stopped = false
+    private val retrySilence = Runnable { if (!stopped && track == null) startSilence() }
     private val watched = HashSet<String>()
     private val reclaimTask = Runnable { reclaim() }
 
@@ -55,6 +57,7 @@ class MediaKeyIntake(
     }
 
     fun stop() {
+        stopped = true; handler.removeCallbacks(retrySilence)
         playing = false
         track?.release()
         session.isActive = false
@@ -91,10 +94,14 @@ class MediaKeyIntake(
     private fun startSilence() {
         val rate = 8000
         val size = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        val t = AudioTrack.Builder()
-            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
-            .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
-            .setBufferSizeInBytes(size).setTransferMode(AudioTrack.MODE_STREAM).build()
+        val t = try {
+            AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+                .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
+                .setBufferSizeInBytes(size).setTransferMode(AudioTrack.MODE_STREAM).build()
+        } catch (e: Exception) {   // right after boot the audio system may not be ready: try again soon instead of crashing the service
+            Log.d(tag, "SILENCE track failed, retry in 5 s: $e"); handler.postDelayed(retrySilence, 5000); return
+        }
         track = t
         playing = true
         t.play()
