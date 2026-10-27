@@ -2,6 +2,7 @@
 """Invisible OS bridge server: the phone and the Claude Code hooks meet here. Python 3 stdlib only.
 
 Phone:  GET /events?since=N&wait=25   (long poll)      POST /answer {"id": "3", "choice": "Allow"}
+Rooms:  GET /rooms /room/last /room/screen /projects   POST /room/act /room/send /project/open   (see ROOMS-API.md)
 Hooks:  POST /ask {kind, project, summary, options, wait}  (blocks until answered)      POST /notify {kind, project, summary}
 All calls need the header  Authorization: Bearer <token>.
 """
@@ -13,11 +14,13 @@ import secrets
 import socket
 import subprocess
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core import Store  # noqa: E402
+from rooms import Rooms  # noqa: E402
 
 CONFIG_DIR = os.path.expanduser("~/.config/invisible-bridge")
 TOKEN_FILE = os.path.join(CONFIG_DIR, "token")
@@ -59,7 +62,7 @@ def default_host():
         s.close()
 
 
-def make_handler(store, token):
+def make_handler(store, token, rooms):
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -99,6 +102,17 @@ def make_handler(store, token):
                 self._send(200, store.events(since, wait))
             elif u.path == "/ping":
                 self._send(200, {"ok": True})
+            elif u.path == "/rooms":
+                self._send(200, {"seq": store.seq, "rooms": rooms.rooms(max_age=1.0)})
+            elif u.path in ("/room/last", "/room/screen"):
+                pane = q.get("id", [""])[0]
+                text = rooms.last_text(pane) if u.path == "/room/last" else rooms.screen_text(pane)
+                if text is None:
+                    self._send(404, {"error": "no such room"})
+                else:
+                    self._send(200, {"text": text})
+            elif u.path == "/projects":
+                self._send(200, {"projects": rooms.projects()})
             else:
                 self._send(404, {"error": "not found"})
 
@@ -113,7 +127,7 @@ def make_handler(store, token):
             elif path == "/ask":
                 if not store.phone_online():   # no phone listening: answer at once so the terminal prompt shows without delay
                     self._send(200, {"id": None, "answer": None, "offline": True}); return
-                item = store.add(b.get("kind", "permission"), b.get("project", "Claude"), b.get("summary", ""), b.get("options") or [], b.get("ref"))
+                item = store.add(b.get("kind", "permission"), b.get("project", "Claude"), b.get("summary", ""), b.get("options") or [], b.get("ref"), b.get("pane"))
                 choice = store.wait_answer(item["id"], float(b.get("wait", 600)))
                 self._send(200, {"id": item["id"], "answer": choice})
             elif path == "/notify":
@@ -122,14 +136,43 @@ def make_handler(store, token):
             elif path == "/cancel":
                 store.cancel(b.get("id") or b.get("ref"))
                 self._send(200, {"ok": True})
+            elif path == "/room/act":
+                said = rooms.act(b.get("id"), b.get("action"))
+                if said is None:
+                    self._send(400, {"ok": False, "error": "unknown room or action"})
+                else:
+                    self._send(200, {"ok": True, "said": said})
+            elif path == "/room/send":
+                ok = rooms.send(b.get("id"), b.get("text"))
+                self._send(200 if ok else 400, {"ok": ok})
+            elif path == "/project/open":
+                pane = rooms.open_project(b.get("path"), b.get("mode", "continue"))
+                self._send(200 if pane else 400, {"ok": bool(pane), "id": pane})
             else:
                 self._send(404, {"error": "not found"})
 
     return H
 
 
-def make_server(host, port, store, token):
-    return ThreadingHTTPServer((host, port), make_handler(store, token))
+def watch_rooms(rooms, store, stop, every=2.0):
+    """Poll the rooms; when one turns 'needs', push a room event to the phone through the store."""
+    prev = None
+    while not stop.is_set():
+        try:
+            now = {r["id"]: r for r in rooms.rooms()}
+            if prev is not None:
+                for pid, r in now.items():
+                    if r["state"] == "needs" and (pid not in prev or prev[pid]["state"] != "needs"):
+                        store.add_room_event(r)
+            prev = now
+        except Exception as e:   # never let the watcher die
+            print("rooms watcher:", e, file=sys.stderr)
+        stop.wait(every)
+
+
+def make_server(host, port, store, token, rooms=None):
+    rooms = rooms or Rooms.from_env(pending=store.pending_panes)
+    return ThreadingHTTPServer((host, port), make_handler(store, token, rooms))
 
 
 def main():
@@ -143,7 +186,10 @@ def main():
         print(token)
         return
     host = a.host or default_host()
-    srv = make_server(host, a.port, Store(), token)
+    store = Store()
+    rooms = Rooms.from_env(pending=store.pending_panes)
+    srv = make_server(host, a.port, store, token, rooms)
+    threading.Thread(target=watch_rooms, args=(rooms, store, threading.Event()), daemon=True).start()
     print("Bridge listening on http://%s:%d" % (host, a.port))
     os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(URL_FILE, "w") as f:

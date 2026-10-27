@@ -1,6 +1,7 @@
 """Tests: python3 -m unittest -v   (from the bridge/ folder). Pure parts, then server + fake phone + hook.py end to end."""
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -175,3 +176,298 @@ class PhoneOnlineTest(unittest.TestCase):
         self.assertTrue(st.phone_online())
         now[0] += core.Store.PHONE_ONLINE_SECONDS + 1
         self.assertFalse(st.phone_online())
+
+
+# ---------- Rooms ----------
+import json as _json  # noqa: E402
+import rooms as rooms_mod  # noqa: E402
+
+BLOCK = "Done the design.\n\n**What needs me:** say \"go\" or “keep 15”.\n"
+
+
+class NeedLineTest(unittest.TestCase):
+    def test_quoted_options(self):
+        found, need, opts = rooms_mod.need_line('Text.\n**What needs me:** say "go" or "keep 15".')
+        self.assertEqual((found, opts), (True, ["go", "keep 15"]))
+        self.assertEqual(need, 'say "go" or "keep 15".')
+        self.assertEqual(rooms_mod.need_line(BLOCK)[2], ["go", "keep 15"])
+
+    def test_nothing(self):
+        for t in ("What needs me: nothing.", "- **What needs me:** None", "What needs me:\nnothing from you"):
+            self.assertEqual(rooms_mod.need_line(t), (True, "", []), t)
+
+    def test_no_block_and_limits(self):
+        self.assertEqual(rooms_mod.need_line("Just a reply.")[0], False)
+        found, need, opts = rooms_mod.need_line('What needs me: ' + " ".join(["w"] * 40) + ' "a" "b" "c" "d"')
+        self.assertLessEqual(len(need.split()), 21)
+        self.assertEqual(rooms_mod.need_line('needs you: pick "a" "b" "c" "d"')[2], ["a", "b", "c"])
+
+    def test_markdown_and_title(self):
+        self.assertEqual(rooms_mod.strip_markdown("## Hi\n- **bold** `code` [l](http://x)"), "Hi\nbold code l")
+        self.assertEqual(rooms_mod.clean_title("✳ Fix the thing", "w"), "Fix the thing")
+        self.assertEqual(rooms_mod.clean_title("⠋ ", "win"), "win")
+        self.assertEqual(rooms_mod.last_sentences("One. Two! Three? Four."), "Three? Four.")
+
+
+class RoomsTmuxTest(unittest.TestCase):
+    """Private tmux server (-L roomstest) with `cat` panes. The owner's tmux is never touched."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.status = os.path.join(cls.tmp, "status")
+        cls.panes = os.path.join(cls.tmp, "panes")
+        cls.claude = os.path.join(cls.tmp, "claude")
+        cls.cfg = os.path.join(cls.tmp, "cfg")
+        cls.work = os.path.join(cls.tmp, "work")
+        for d in (cls.status, cls.panes, os.path.join(cls.claude, "projects", "p"), cls.work):
+            os.makedirs(d)
+        cls.tm = ["tmux", "-L", "roomstest"]
+        subprocess.run(cls.tm + ["kill-server"], capture_output=True)
+        # a fake "claude" program: process name 'claude', prints a title, then echoes input
+        fake = os.path.join(cls.tmp, "claude-bin")
+        os.makedirs(fake)
+        cls.fake_claude = os.path.join(fake, "claude")
+        shutil.copy("/bin/cat", cls.fake_claude)   # macOS: a copy of cat, re-signed, so tmux shows the command name "claude"
+        subprocess.run(["codesign", "-f", "-s", "-", cls.fake_claude], capture_output=True)
+        cls.new_window("cl", cls.fake_claude, cls.work)
+        cls.new_window("cat2", cls.fake_claude, cls.work)
+        cls.new_window("shell", "bash --norc --noprofile -i", cls.work)
+        time.sleep(0.5)
+
+    @classmethod
+    def new_window(cls, name, cmd, path):
+        args = ["new-window", "-P", "-F", "#{pane_id} #{window_id}", "-n", name, "-c", path, cmd]
+        if subprocess.run(cls.tm + ["has-session", "-t", "t"], capture_output=True).returncode != 0:
+            args = ["new-session", "-d", "-s", "t", "-x", "150", "-y", "40", "-P", "-F", "#{pane_id} #{window_id}", "-n", name, "-c", path, cmd]
+        out = subprocess.run(cls.tm + args, capture_output=True, text=True).stdout.split()
+        setattr(cls, name, out)
+        return out
+
+    @classmethod
+    def tearDownClass(cls):
+        subprocess.run(cls.tm + ["kill-server"], capture_output=True)
+
+    def make(self, llm=None, pending=None, **kw):
+        return rooms_mod.Rooms(tmux="tmux -L roomstest", status_dir=self.status, panes_dir=self.panes, claude_dir=self.claude,
+                               config_dir=self.cfg, history=os.path.join(self.claude, "history.jsonl"),
+                               zsh_history=os.path.join(self.tmp, "zsh_history"), llm=llm, claude_cmd=self.fake_claude,
+                               pending=pending, **kw)
+
+    def set_status(self, win, line):
+        open(os.path.join(self.status, win.lstrip("@")), "w").write(line + "\n")
+
+    def transcript(self, pane, sid, text):
+        """Fake the pane->session record and a transcript with one assistant message."""
+        out = subprocess.run(self.tm + ["display-message", "-p", "-t", pane, "#{session_name}_#{window_index}-#{pane_index}"],
+                             capture_output=True, text=True).stdout.strip()
+        _json.dump({"session_id": sid}, open(os.path.join(self.panes, out + ".json"), "w"))
+        with open(os.path.join(self.claude, "projects", "p", sid + ".jsonl"), "w") as f:
+            f.write(_json.dumps({"type": "assistant", "isSidechain": False, "message": {"role": "assistant", "content": [{"type": "text", "text": text}]}}) + "\n")
+            f.write(_json.dumps({"type": "assistant", "isSidechain": True, "message": {"role": "assistant", "content": [{"type": "text", "text": "SIDE"}]}}) + "\n")
+            f.write(_json.dumps({"type": "system", "subtype": "turn_duration"}) + "\n")
+
+    def by_id(self, rooms, pane):
+        return next(r for r in rooms if r["id"] == pane)
+
+    def capture(self, pane):
+        return subprocess.run(self.tm + ["capture-pane", "-p", "-t", pane], capture_output=True, text=True).stdout
+
+    def wait_screen(self, pane, text, secs=3):
+        end = time.time() + secs
+        while time.time() < end:
+            if text in self.capture(pane):
+                return True
+            time.sleep(0.1)
+        return False
+
+    def test_state_need_options_sort(self):
+        r = self.make()
+        cl, cwin = self.cl
+        c2, c2win = self.cat2
+        self.transcript(cl, "s1", BLOCK)
+        self.transcript(c2, "s2", "I did it. All good.\n**What needs me:** nothing.")
+        self.set_status(cwin, "0 0 0 0 0 0 0")
+        self.set_status(c2win, "1 0 0 0 0 0 0")
+        rooms = r.rooms()
+        a, b = self.by_id(rooms, cl), self.by_id(rooms, c2)
+        self.assertEqual((a["state"], a["kind"], a["options"]), ("needs", "claude", ["go", "keep 15"]))
+        self.assertEqual(a["need"], 'say "go" or “keep 15”.')
+        self.assertEqual(a["actions"][:3], ["option:go", "option:keep 15", "go"])
+        self.assertEqual((b["state"], b["need"], b["options"]), ("done", "", []))
+        self.assertEqual(a["project"], "work")
+        self.assertEqual(a["path"], os.path.realpath(self.work))
+        self.assertEqual(a["name"], "cl")   # no title set by the fake: window name
+        self.assertLess(rooms.index(a), rooms.index(b))   # needs before done
+        # busy -> working; action_required -> needs; idle without ask stays idle
+        self.set_status(cwin, "0 1 0 0 0 0 0")
+        self.assertEqual(self.by_id(r.rooms(), cl)["state"], "working")
+        self.set_status(cwin, "0 1 0 0 0 0 1")
+        self.assertEqual(self.by_id(r.rooms(), cl)["state"], "needs")
+        self.set_status(c2win, "0 0 0 0 0 0 0")
+        self.assertEqual(self.by_id(r.rooms(), c2)["state"], "idle")
+
+    def test_pending_ask_makes_needs(self):
+        c2, c2win = self.cat2
+        self.transcript(c2, "s3", "All done.\n**What needs me:** nothing.")
+        self.set_status(c2win, "0 0 0 0 0 0 0")
+        r = self.make(pending=lambda: {c2: "run npm test"})
+        room = self.by_id(r.rooms(), c2)
+        self.assertEqual((room["state"], room["need"]), ("needs", "run npm test"))
+        st = core.Store()
+        st.add("permission", "p", "run ls", core.PERMISSION_OPTIONS, pane="%99")
+        self.assertEqual(st.pending_panes(), {"%99": "run ls"})
+
+    def test_no_status_block_uses_last_sentences(self):
+        c2, c2win = self.cat2
+        self.transcript(c2, "s4", "First. Second. Third.")
+        self.set_status(c2win, "1 0 0 0 0 0 0")
+        room = self.by_id(self.make().rooms(), c2)
+        self.assertEqual((room["state"], room["need"]), ("done", "Second. Third."))
+
+    def test_llm_summary_is_async_and_falls_back(self):
+        c2, c2win = self.cat2
+        self.transcript(c2, "s5", "Long text. More. Final point.")
+        self.set_status(c2win, "1 0 0 0 0 0 0")
+        r = self.make(llm=lambda prompt: "model summary")
+        self.assertEqual(self.by_id(r.rooms(), c2)["need"], "More. Final point.")   # at once: rules
+        time.sleep(0.3)
+        self.assertEqual(self.by_id(r.rooms(), c2)["need"], "model summary")        # next poll: model
+        def down(prompt):
+            raise OSError("ollama down")
+        r2 = self.make(llm=down)
+        self.assertEqual(self.by_id(r2.rooms(), c2)["need"], "More. Final point.")
+        time.sleep(0.3)
+        self.assertEqual(self.by_id(r2.rooms(), c2)["need"], "More. Final point.")
+
+    def test_shell_failed_and_make_targets(self):
+        sh, _ = self.shell
+        open(os.path.join(self.work, "Makefile"), "w").write(".PHONY: a\nbuild:\n\techo\ntest-all: build\n\techo\nrare:\n\techo\nx := 1\nother:\n")
+        open(os.path.join(self.tmp, "zsh_history"), "wb").write(
+            b": 1:0;make test-all\n: 2:0;make test-all\nmake build\n: 3:0;make -C x other\n: 4:0;ls\n\xff\xfe bad bytes\n: 5:0;make other\n")
+        self.send_raw(sh, "echo 'make: *** [build] Error 2'")
+        self.assertTrue(self.wait_screen(sh, "Error 2"))
+        r = self.make()
+        room = self.by_id(r.rooms(), sh)
+        self.assertEqual((room["kind"], room["state"]), ("shell", "failed"))
+        self.assertIn("Error 2", room["need"])
+        self.assertEqual(room["actions"], ["again", "make:test-all", "make:build", "make:other", "stop", "screen", "write"])
+        self.send_raw(sh, "clear")
+        end = time.time() + 3
+        while time.time() < end and self.by_id(r.rooms(), sh)["state"] != "idle":
+            time.sleep(0.1)
+        self.assertEqual(self.by_id(r.rooms(), sh)["state"], "idle")
+
+    def send_raw(self, pane, text):
+        subprocess.run(self.tm + ["send-keys", "-t", pane, "-l", text])
+        subprocess.run(self.tm + ["send-keys", "-t", pane, "Enter"])
+
+    def test_send_act_and_log(self):
+        c2, _ = self.cat2
+        r = self.make()
+        self.assertTrue(r.send(c2, "hello rooms -x"))
+        self.assertTrue(self.wait_screen(c2, "hello rooms -x"))
+        self.assertEqual(r.act(c2, "go"), "go")
+        self.assertEqual(r.act(c2, "option:keep 15"), "keep 15")
+        self.assertEqual(r.act(c2, "commit"), "commit")
+        self.assertTrue(self.wait_screen(c2, "keep 15"))
+        self.assertIn("commit", self.capture(c2))
+        self.assertIsNone(r.act(c2, "make:build"))   # shell action in a claude room
+        self.assertIsNone(r.act(c2, "rm -rf"))
+        self.assertIsNone(r.act("%99999", "go"))
+        self.assertIsNone(r.act("$(x)", "go"))
+        self.assertFalse(r.send("%99999", "x"))
+        self.assertFalse(r.send(c2, "  "))
+        log = open(os.path.join(self.cfg, "sends.log")).read()
+        self.assertIn("hello rooms -x", log)
+        self.assertIn("\toption:keep 15\t", log)
+        self.assertIn(c2, log)
+        self.assertIn("hello rooms -x", r.screen_text(c2))
+
+    def test_stop_keys(self):
+        sh, _ = self.shell
+        c2, _ = self.cat2
+        r = self.make()
+        self.send_raw(sh, "sleep 30")
+        time.sleep(0.4)
+        self.assertEqual(r.act(sh, "stop"), "C-c")
+        self.send_raw(sh, "echo after-ctrl-c")
+        self.assertTrue(self.wait_screen(sh, "after-ctrl-c"))
+        self.assertNotIn("sleep 30\n\n", self.capture(sh).split("echo after")[0][-5:])   # the prompt came back
+        self.assertEqual(r.act(c2, "stop"), "Escape")   # cat just ignores Escape
+        # again = Up + Enter reruns the previous command
+        self.send_raw(sh, "echo AGAIN$((1+1))")
+        self.assertTrue(self.wait_screen(sh, "AGAIN2"))
+        r.act(sh, "again")
+        end = time.time() + 3
+        while time.time() < end and self.capture(sh).count("AGAIN2") < 2:
+            time.sleep(0.1)
+        self.assertGreaterEqual(self.capture(sh).count("AGAIN2"), 2)
+
+    def test_make_target_send(self):
+        sh, _ = self.shell
+        open(os.path.join(self.work, "Makefile"), "w").write("hi:\n\t@echo MADE-IT\n")
+        r = self.make()
+        self.assertEqual(r.act(sh, "make:hi"), "make hi")
+        self.assertTrue(self.wait_screen(sh, "MADE-IT"))
+        self.assertIsNone(r.act(sh, "make:nope"))
+        self.assertIsNone(r.act(sh, "make:hi; rm x"))
+
+    def test_open_project_and_projects(self):
+        hist = os.path.join(self.claude, "history.jsonl")
+        proj_a, proj_b = os.path.join(self.tmp, "proj-a"), os.path.join(self.tmp, "proj-b")
+        os.makedirs(proj_a); os.makedirs(proj_b)
+        with open(hist, "w") as f:
+            for p, n in ((proj_a, 3), (proj_b, 5), ("/does/not/exist", 9)):
+                for _ in range(n):
+                    f.write(_json.dumps({"display": "x", "project": p}) + "\n")
+            f.write("not json\n")
+        r = self.make()
+        self.assertEqual([(p["name"], p["uses"]) for p in r.projects()], [("proj-b", 5), ("proj-a", 3)])
+        pane = r.open_project(proj_a, "continue")
+        self.assertRegex(pane, r"^%\d+$")
+        self.assertIsNone(r.open_project("/does/not/exist", "new"))
+        self.assertIsNone(r.open_project(proj_a, "bad"))
+        time.sleep(0.3)
+        self.assertEqual(self.by_id(self.make().rooms(), pane)["project"], "proj-a")
+
+    def test_http_endpoints_and_auth(self):
+        c2, c2win = self.cat2
+        self.transcript(c2, "s6", "Hello **there**.\n**What needs me:** say \"go\".")
+        self.set_status(c2win, "0 0 0 0 0 0 0")
+        store = core.Store()
+        srv = server.make_server("127.0.0.1", 0, store, "tok", self.make(pending=store.pending_panes))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        url = "http://127.0.0.1:%d" % srv.server_address[1]
+        try:
+            with self.assertRaises(Exception):
+                fake_phone.call(url, "bad", "/rooms")
+            with self.assertRaises(Exception):
+                fake_phone.call(url, "bad", "/room/act", {"id": c2, "action": "go"})
+            data = fake_phone.call(url, "tok", "/rooms")
+            self.assertIn("seq", data)
+            self.assertEqual(self.by_id(data["rooms"], c2)["options"], ["go"])
+            self.assertEqual(fake_phone.call(url, "tok", "/room/last?id=" + c2.replace("%", "%25"))["text"], 'Hello there.\nWhat needs me: say "go".')
+            self.assertIn("text", fake_phone.call(url, "tok", "/room/screen?id=" + c2.replace("%", "%25")))
+            self.assertEqual(fake_phone.call(url, "tok", "/room/act", {"id": c2, "action": "yes"}), {"ok": True, "said": "yes"})
+            self.assertEqual(fake_phone.call(url, "tok", "/room/send", {"id": c2, "text": "via http"}), {"ok": True})
+            self.assertTrue(self.wait_screen(c2, "via http"))
+            self.assertIsInstance(fake_phone.call(url, "tok", "/projects")["projects"], list)
+            with self.assertRaises(Exception):
+                fake_phone.call(url, "tok", "/room/act", {"id": c2, "action": "bogus"})
+            # a room turning 'needs' reaches /events
+            self.set_status(c2win, "0 0 0 0 0 0 1")
+            stop = threading.Event()
+            rooms_obj = self.make()
+            self.set_status(c2win, "0 0 0 0 0 0 0")
+            self.transcript(c2, "s7", "ok.\n**What needs me:** nothing.")
+            t = threading.Thread(target=server.watch_rooms, args=(rooms_obj, store, stop, 0.1), daemon=True)
+            t.start()
+            time.sleep(0.4)
+            self.set_status(c2win, "0 0 0 0 0 0 1")
+            ev = fake_phone.call(url, "tok", "/events?since=0&wait=5")
+            stop.set()
+            mine = [i for i in ev["items"] if i.get("type") == "room" and i["id"] == c2]
+            self.assertEqual((mine[0]["state"], mine[0]["name"]), ("needs", "cat2"))
+        finally:
+            srv.shutdown()

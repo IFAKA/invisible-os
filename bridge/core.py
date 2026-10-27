@@ -93,10 +93,11 @@ class Store:
     def phone_online(self):
         return self.last_poll is not None and self.clock() - self.last_poll <= self.PHONE_ONLINE_SECONDS
 
-    def _add(self, kind, project, summary, options, ref=None):
+    def _add(self, kind, project, summary, options, ref=None, pane=None, room=None):
         self.seq += 1
         item = {"id": str(self.seq), "seq": self.seq, "kind": kind, "project": project,
-                "summary": summary, "options": list(options), "ref": ref, "answer": None, "cancelled": False, "at": self.clock()}
+                "summary": summary, "options": list(options), "ref": ref, "pane": pane, "room": room,
+                "answer": None, "cancelled": False, "at": self.clock()}
         self.items[item["id"]] = item
         self._trim()
         self.cv.notify_all()
@@ -107,9 +108,22 @@ class Store:
         for k in [k for k, v in self.items.items() if v["at"] < cutoff and (v["answer"] is not None or v["cancelled"] or not v["options"])]:
             del self.items[k]
 
-    def add(self, kind, project, summary, options=(), ref=None):
+    def add(self, kind, project, summary, options=(), ref=None, pane=None):
         with self.cv:
-            return self._add(kind, project, summary, options, ref)
+            return self._add(kind, project, summary, options, ref, pane)
+
+    def add_room_event(self, room):
+        """A room turned 'needs': an /events item {"type":"room","id":<pane id>,"name":...,"state":...}."""
+        ev = {"type": "room", "kind": "room", "id": room["id"], "name": room["name"], "state": room["state"],
+              "project": room["project"], "summary": room.get("need", ""), "options": []}
+        with self.cv:
+            return self._add("room", room["project"], ev["summary"], (), room=ev)
+
+    def pending_panes(self):
+        """{tmux pane id: summary} of open permission/question asks that came from a tmux pane."""
+        with self.cv:
+            return {v["pane"]: v["summary"] for v in self.items.values()
+                    if v["pane"] and v["options"] and v["answer"] is None and not v["cancelled"]}
 
     def answer(self, item_id, choice):
         """choice: option text or index. Returns True if accepted."""
@@ -178,4 +192,6 @@ class Store:
 
 
 def public(v):
+    if v.get("room"):
+        return dict(v["room"])
     return {k: v[k] for k in ("id", "kind", "project", "summary", "options")}

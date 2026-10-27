@@ -61,7 +61,8 @@ def ask(kind, project, summary, options):
         sys.exit(0)
     signal.signal(signal.SIGTERM, bye)
     try:
-        r = post("/ask", {"kind": kind, "project": project, "summary": summary, "options": options, "wait": wait, "ref": ref}, wait + 10)
+        r = post("/ask", {"kind": kind, "project": project, "summary": summary, "options": options, "wait": wait, "ref": ref,
+                               "pane": os.environ.get("TMUX_PANE") or None}, wait + 10)
         return r.get("id"), r.get("answer")
     except (urllib.error.URLError, OSError, ValueError):
         return None, None
