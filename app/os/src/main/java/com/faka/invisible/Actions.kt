@@ -136,13 +136,11 @@ object Actions {
             override fun notifAppHint(pkg: String) = try { app.packageManager.getApplicationInfo(pkg, 0).category } catch (e: Exception) { -1 }
             override fun installedApps() = DeviceApps.installedNow(app)
             override fun appUse() = DeviceApps.useNow(app)
-            override fun resetLearning(group: String?): Int {
-                val installed = DeviceApps.installedNow(app)
-                val cat = installed.associate { it.pkg to AppCategories.categoryOf(it.pkg, it.hint) }
-                val categoryOf = { k: String -> cat[k] ?: AppCategories.categoryOf(k) }
-                val gone = choices.forget { LearningReset.matches(group, it, categoryOf) }
-                LearningReset.saveBaseline(prefs(), DeviceApps.useNow(app), installed.map { it.pkg }.filter { LearningReset.matches(group, "app:$it", categoryOf) })
-                Trace.ev("learning", "reset ${group ?: "everything"}: $gone picks")
+            override fun resetLearning(pkg: String?): Int {
+                val gone = choices.forget { LearningReset.matches(pkg, it) }
+                val installed = DeviceApps.installedNow(app).map { it.pkg }
+                LearningReset.saveBaseline(prefs(), DeviceApps.useNow(app), if (pkg == null) installed else listOf(pkg))
+                Trace.ev("learning", "reset ${pkg ?: "everything"}: $gone picks")
                 return gone
             }
             override fun appMuted(pkg: String) = ControllerNotificationListener.mutes.isMuted(pkg)

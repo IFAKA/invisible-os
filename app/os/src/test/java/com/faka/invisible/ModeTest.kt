@@ -14,7 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** The home programs before Set alarm and Calculator were added; the older tests count their menu items. */
-private val OLD_HUB = LauncherSettings.DEFAULT_HUB - "alarm" - "calculator" - "write" - "compass" - "whereami" - "claude" - "sum"
+private val OLD_HUB = LauncherSettings.DEFAULT_HUB - "alarm" - "calculator" - "write" - "compass" - "whereami" - "claude" - "sum" - "reset"
 
 class ModeTest {
     private class Rig(ranker: OptionRanker = OptionRanker.DEFAULT, gap: Long? = 800, reactionText: String = "") {
@@ -769,20 +769,20 @@ class ModeTest {
 
     @Test fun noMoreInTheHubAndOrderIsFixed() {
         val a = Rig(); a.m.settings = LauncherSettings(hub = OLD_HUB); a.msgs = listOf(bob.copy(at = 1)); a.wake()
-        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator", "write", "compass", "whereami", "claude", "sum"), LauncherSettings.DEFAULT_HUB)
+        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator", "write", "compass", "whereami", "claude", "sum", "reset"), LauncherSettings.DEFAULT_HUB)
         a.advance(400 + 1300 * 8); assertFalse(a.spoken().contains("say More")); assertFalse(a.spoken().contains("say Exit"))
     }
 
     @Test fun phoneGroupListsItemsInOrderAndDndOnlyWithAccess() {
-        val a = Rig(); a.wake(); a.pick("Phone"); a.advance(400 + 1300 * 8 + 100)
-        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say Do not disturb", "say ${Voice.FIND_PHONE}", "say Reset learning"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
-        val b = Rig(); b.dnd = false; b.wake(); b.pick("Phone"); b.advance(400 + 1300 * 7 + 100)
-        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say ${Voice.FIND_PHONE}", "say Reset learning"), b.spoken())
+        val a = Rig(); a.wake(); a.pick("Phone"); a.advance(400 + 1300 * 7 + 100)
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say Do not disturb", "say ${Voice.FIND_PHONE}"), a.spoken()); assertEquals(ControllerMode.Screen.PHONE, a.m.screen)
+        val b = Rig(); b.dnd = false; b.wake(); b.pick("Phone"); b.advance(400 + 1300 * 6 + 100)
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say ${Voice.FIND_PHONE}"), b.spoken())
     }
 
     @Test fun phoneGroupHidesFindWhenWired() {
-        val r = Rig(); r.wired = true; r.wake(); r.pick("Phone"); r.advance(400 + 1300 * 7 + 100)
-        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say Do not disturb", "say Reset learning"), r.spoken())
+        val r = Rig(); r.wired = true; r.wake(); r.pick("Phone"); r.advance(400 + 1300 * 6 + 100)
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Status", "say Volume", "say Flashlight", "say Do not disturb"), r.spoken())
     }
 
     @Test fun infoAndPhoneFollowTheSettings() {
@@ -792,7 +792,7 @@ class ModeTest {
         val r = Rig().withInfo(); r.m.settings = r.m.settings.copy(info = listOf("turn", "weather")); r.wake(); r.pick("Today"); r.advance(400 + 1300 * 3 + 100)
         assertEquals(listOf("say Next turn", "say Weather", "say Next turn"), r.spoken())
         val p = Rig(); p.m.settings = p.m.settings.copy(phone = listOf("torch", "volume")); p.wake(); p.pick("Phone"); p.advance(400 + 1300 * 5 + 100)
-        assertEquals(listOf("say Emergency", "say Call a contact", "say Flashlight", "say Volume", "say Reset learning"), p.spoken())
+        assertEquals(listOf("say Emergency", "say Call a contact", "say Flashlight", "say Volume", "say Emergency"), p.spoken())
     }
 
     @Test fun infoGroupListsItemsInOrderAndTripleClickReturnsToTheHub() {
@@ -843,7 +843,7 @@ class ModeTest {
     }
 
     @Test fun firstLayerIsShortAndInOrder() {
-        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator", "write", "compass", "whereami", "claude", "sum"), LauncherSettings.DEFAULT_HUB)
+        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator", "write", "compass", "whereami", "claude", "sum", "reset"), LauncherSettings.DEFAULT_HUB)
         assertEquals(listOf("timer"), LauncherSettings.cleanHub(listOf("weather", "timer", "volume")))
     }
 
@@ -1059,7 +1059,7 @@ class ModeTest {
 
     @Test fun clickHoldWrapsWithTheRestartTone() {
         val r = scanReady(); r.clearLog()
-        r.m.onGesture(Gesture.CLICK_HOLD); r.advance(5300)
+        r.m.onGesture(Gesture.CLICK_HOLD); r.advance(4000)
         assertTrue(r.count("tone RESTART") >= 1)
     }
 

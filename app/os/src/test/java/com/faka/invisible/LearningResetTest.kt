@@ -6,22 +6,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LearningResetTest {
-    private val cat = { k: String -> if (k == "chat") "Talk/Chat" else if (k == "hub:timer") "Tools/Time" else "Pay" }
-
-    @Test fun groupMatchesOnlyItsOwnApps() {
-        assertTrue(LearningReset.matches("Talk", "app:chat", cat))
-        assertFalse(LearningReset.matches("Talk", "app:bank", cat))
-        assertTrue(LearningReset.matches("Tools", "hub:timer", cat))
-        assertFalse(LearningReset.matches("Talk", "phone:status", cat))
+    @Test fun onePackageMatchesOnlyItsOwnPicks() {
+        assertTrue(LearningReset.matches("chat", "app:chat"))
+        assertTrue(LearningReset.matches("hub:timer", "hub:timer"))
+        assertFalse(LearningReset.matches("chat", "app:bank"))
+        assertFalse(LearningReset.matches("chat", "phone:status"))
     }
 
-    @Test fun everythingMatchesAll() = assertTrue(LearningReset.matches(null, "phone:status", cat))
+    @Test fun everythingMatchesAll() = assertTrue(LearningReset.matches(null, "phone:status"))
 
     @Test fun forgetKeepsOtherPicksAndCounts() {
         var saved = emptyList<String>()
         val log = ChoiceLog(emptyList(), {}, { saved = it })
         log.record(1, "TREE", 1, "app:chat"); log.record(2, "TREE", 1, "app:chat"); log.record(3, "TREE", 1, "app:bank")
-        assertEquals(2, log.forget { LearningReset.matches("Talk", it, cat) })
+        assertEquals(2, log.forget { LearningReset.matches("chat", it) })
         assertEquals(0, log.intentCount("app:chat"))
         assertEquals(1, log.intentCount("app:bank"))
         assertEquals(1, saved.size)

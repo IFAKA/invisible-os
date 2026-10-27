@@ -5,20 +5,13 @@ import android.content.SharedPreferences
 /**
  * Pure rules for "Reset learning": which picks to forget, and the launch baseline. Android owns the launch counts and cannot clear them,
  * so a reset saves the counts of that moment per app and the tree uses only the launches made after it.
- * [group] = one list of the home tree (Talk, Plan ...); null = everything.
+ * One app (or program) at a time, or everything (pkg null).
  */
 object LearningReset {
     private const val KEY = "learn_base_"
 
-    private fun groupOf(category: String) = category.substringBefore('/')
-
-    /** Is this pick (`app:<pkg>` or `hub:<key>`) in [group]? Other picks (menu options, senders) go only with a full reset. */
-    fun matches(group: String?, intent: String, categoryOf: (String) -> String): Boolean = when {
-        group == null -> true
-        intent.startsWith("app:") -> groupOf(categoryOf(intent.removePrefix("app:"))) == group
-        intent.startsWith("hub:") -> groupOf(categoryOf(intent)) == group
-        else -> false
-    }
+    /** Is this pick the one of [pkg] (`app:<pkg>`, or a program key like `hub:timer`)? null = every pick. Other picks (menu options, senders) go only with a full reset. */
+    fun matches(pkg: String?, intent: String): Boolean = pkg == null || intent == pkg || intent == "app:$pkg"
 
     fun saveBaseline(p: SharedPreferences, use: Map<String, AppUse>, pkgs: Collection<String>) {
         val e = p.edit()

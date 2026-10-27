@@ -127,6 +127,7 @@ Go/Taxi             ee.mtakso.client
 Go/Taxi             taxi.android.client
 Go/Taxi             com.comuto
 Go/Move             hub:compass
+Tools/Setup         hub:reset
 Go/Move             hub:whereami
 Go/Move             com.miui.compass
 Go/Shop             com.amazon.mShop.android.shopping
