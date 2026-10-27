@@ -55,6 +55,7 @@ b = lp_sweep(p*e, 4000, 200); b = np.pad(b, (0, int(.3*SR))); place(b, bell(523.
 S['leave'] = S['exit'] = (b, -18, 1.6, .4)
 if __name__ == '__main__':
     import sys
+    os.makedirs(OUT, exist_ok=True)
     for k, (m, db, rt, wet) in S.items(): save(k, m, db, rt, wet)
     if len(sys.argv) > 1:  # ship: mono 16-bit copies the app loads (Earcons.pcm)
         os.makedirs(sys.argv[1], exist_ok=True)

@@ -17,21 +17,22 @@ def bell(f, dur, tau=.25, ratio=3.5, idx=2.5, a=.004):
     return y * e
 def sine(f, dur, tau, a=.01, det=0.0):
     t = T(dur); return (np.sin(2*np.pi*f*t) + np.sin(2*np.pi*f*(1+det)*t)) * .5 * adsr(len(t), a, tau)
+def svf(x, fc, q=.7, mode='low'):
+    """State-variable filter with a cutoff per sample (fc: array). One continuous filter, so a sweep has no block clicks."""
+    g = np.tan(np.pi*np.minimum(fc, SR*.45)/SR); k = 1/q; out = np.empty(len(x)); s1 = s2 = 0.0
+    for i in range(len(x)):
+        gi = g[i]; a1 = 1/(1+gi*(gi+k)); v1 = a1*(s1+gi*(x[i]-s2)); v2 = s2+gi*v1
+        s1 = 2*v1-s1; s2 = 2*v2-s2
+        out[i] = v2 if mode == 'low' else v1
+    return out
+def sweep_curve(n, f0, f1): return f0 * (f1/f0) ** (np.arange(n)/n)
 def bp_noise(dur, f0, f1, q=3):
-    n = int(dur*SR); x = rng.standard_normal(n); out = np.zeros(n); blk = 256
-    for i in range(0, n, blk):
-        f = f0 * (f1/f0) ** (i/n); w = [f/(1+1/q)/(SR/2), min(.98, f*(1+1/q)/(SR/2))]
-        out[i:i+blk] = sosfilt(butter(2, w, 'band', output='sos'), x[i:i+blk])  # block-wise (clicks are hidden by the envelope)
-    return out
+    n = int(dur*SR); return svf(rng.standard_normal(n), sweep_curve(n, f0, f1), q, 'band')
 def lp(x, fc): return sosfilt(butter(2, fc/(SR/2), 'low', output='sos'), x)
-def lp_sweep(x, f0, f1):
-    n = len(x); out = np.zeros(n); blk = 512
-    for i in range(0, n, blk):
-        f = f0 * (f1/f0) ** (i/n); out[i:i+blk] = sosfilt(butter(2, min(f, 20000)/(SR/2), 'low', output='sos'), x[i:i+blk])
-    return out
+def lp_sweep(x, f0, f1): return svf(x, sweep_curve(len(x), f0, f1))
 def reverb(x, rt=.9, wet=.28):
     n = int(rt*SR); t = np.arange(n)/SR; env = np.exp(-6.9*t/rt)
-    L = lp(rng.standard_normal(n)*env, 6000); R = lp(rng.standard_normal(n)*env, 6000)
+    L = lp(lp(rng.standard_normal(n)*env, 3500), 3500); R = lp(lp(rng.standard_normal(n)*env, 3500), 3500)   # soft tail, no hiss
     L /= np.abs(L).sum()/8; R /= np.abs(R).sum()/8
     pad = np.concatenate([x, np.zeros(n)])
     return np.stack([pad + wet*fftconvolve(pad, L)[:len(pad)], pad + wet*fftconvolve(pad, R)[:len(pad)]], 1)
