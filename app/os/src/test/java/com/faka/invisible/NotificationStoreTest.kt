@@ -64,7 +64,7 @@ class NotificationStoreTest {
 
     @Test fun privacy() {
         assertTrue(NotifPrivacy.mustHide("com.x", NotifPrivacy.VISIBILITY_SECRET, false, false))
-        assertTrue(NotifPrivacy.mustHide("com.x", NotifPrivacy.VISIBILITY_PRIVATE, true, false))
+        assertFalse(NotifPrivacy.mustHide("com.x", NotifPrivacy.VISIBILITY_PRIVATE, true, false))
         assertFalse(NotifPrivacy.mustHide("com.x", NotifPrivacy.VISIBILITY_PRIVATE, false, false))
         assertFalse(NotifPrivacy.mustHide("com.x", 1, true, false))
         assertTrue(NotifPrivacy.mustHide("com.x", 1, false, true))

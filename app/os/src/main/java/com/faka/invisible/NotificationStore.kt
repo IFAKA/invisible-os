@@ -19,11 +19,12 @@ object NotifPrivacy {
     fun sensitivePackage(pkg: String): Boolean = pkg.lowercase().let { p -> SENSITIVE.any { it in p } }
 
     /**
-     * True = say only "<App>, new notification". Secret always; private only while the phone is locked (its lock screen
-     * would hide it too); a bank or password app always; a notification with no text of its own (the system hid it) also.
+     * True = say only "<App>, new notification". Secret always; a bank or password app always; a notification with no
+     * text of its own (the system hid it) also. "Private" (hide on lock screen) is read: the phone is used screen off, so
+     * it is always locked, and the owner hears it only in the earbud. [locked] is kept for callers.
      */
     fun mustHide(pkg: String, visibility: Int, locked: Boolean, textHidden: Boolean): Boolean =
-        visibility == VISIBILITY_SECRET || (visibility == VISIBILITY_PRIVATE && locked) || sensitivePackage(pkg) || textHidden
+        visibility == VISIBILITY_SECRET || sensitivePackage(pkg) || textHidden
 }
 
 /** Pure: the apps the user muted. [save] persists the set. Muted apps are not counted and not announced. */
