@@ -117,21 +117,22 @@ def wake_reads_home_menu():
 
 def click_picks():
     reset(); show("PHONE"); i = mark()
-    heard_start("Emergency", i)
+    heard_start("Emergency", i, 30)
+    time.sleep(0.8)   # past the 500 ms grace after the item starts, so the click is for Emergency
     press("120")   # a click right after hearing an item picks it
     need("Call the emergency number", i)
     wait_screen("EMERGENCY")
     return "Emergency picked"
 
 def triple_click_goes_back():
-    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i); press("120"); wait_screen("EMERGENCY")
+    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i, 30); time.sleep(0.8); press("120"); wait_screen("EMERGENCY")
     j = mark(); heard_start("No, go back", j)
     press("100,150,100,150,100")
     wait_screen("PHONE")
     return "Emergency -> Phone"
 
 def click_hold_closes():
-    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i)
+    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i, 30)
     press("120,150,900")
     wait_closed()
     return "menu closed"
@@ -147,7 +148,7 @@ def screen_tap_picks():
     press("120,150,900"); wait_closed()
     return "a tap on the app screen picks the item, the same as a click"
 def screen_mirrors_menu():
-    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i)
+    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i, 30)
     s = state()
     if not s.get("mirror", "").startswith("true:") or s["mirror"].split(":")[1] == "0": raise Fail(f"mirror empty while a list is read: {s}")
     press("120")
@@ -178,13 +179,13 @@ def practice_end_to_end():
 
 def phone_list():
     reset(); show("PHONE"); i = mark()
-    need("Emergency", i); need("Call a contact", i)
+    need("Call a contact", i); need("Emergency", i, 30)
     h = since(i, "SAY")
-    if h[0] != "Emergency": raise Fail(f"first item is {h[0]!r}, not Emergency")
-    return "Emergency, Call a contact"
+    if h[0] != "Call a contact" or h[-1] != "Emergency": raise Fail(f"order is {h!r}, want Call a contact first and Emergency last")
+    return "Call a contact first, Emergency last"
 
 def emergency_confirm_goes_back():
-    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i); press("120"); wait_screen("EMERGENCY")
+    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i, 30); time.sleep(0.8); press("120"); wait_screen("EMERGENCY")
     j = mark(); heard_start("No, go back", j)
     if any("yes, call" in t.lower() for t in since(j, "SAY")): raise Fail("Yes was read before our click; refusing to click")   # safety: never risk the call
     press("120")   # the click lands on "No, go back"
