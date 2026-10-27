@@ -6,11 +6,11 @@ what the OS says is read from the SAY log (and the SPEAK log for the voice rate)
   tools/e2e.py                run every scenario, one line each, log in app/logs/e2e.log
   tools/e2e.py --only NAME    run scenarios whose name contains NAME (comma-separate for several)
   tools/e2e.py --list         list the scenarios
-  tools/e2e.py --all          run every scenario even if its last pass has the same inputs (same: NOCACHE=1)
 
 Result cache (app/logs/e2e-cache.json): a scenario is skipped ("SKIP name (same as pass at HH:MM)") when its last PASS had the same inputs:
 the installed APK (sha256), the phone build (fingerprint), the helper code of this file, the voice and pace settings, the fake server, and
-the scenario's own source. A FAIL is never cached. `--only NAME` always runs what it names.
+the scenario's own source, and (for a scenario that reads another app's player) the versions of the installed outside apps. A pass also expires after 24 h.
+A FAIL is never cached. `--only NAME` always runs what it names. There is one way to run the suite: no modes, no flags that change how it runs.
 Speed: the voice is the instant stand-in (debug build: same SAY/SPEAK/started/ended events, no audio) and the menu silences are scaled; only
 button timing (350 ms gap, 500 ms hold, click-then-hold, the 500 ms reaction grace) stays real. wake_reads_home_menu, click_picks,
 voice_speed_applied and chat_arrival_spoken keep the REAL voice: they prove the engine starts, speaks at its rate and reads a message.
@@ -117,8 +117,9 @@ def press(ms):
 def reset(practice_done=True):
     i = mark(); bcast("--ez", "reset", "true" if practice_done else "false")
     if not wait(lambda t: t == "reset done", i, "E2E", 20): raise Fail("reset hook did not answer (is the debug build installed?)")
-def show(screen):
-    i = mark(); bcast("--es", "show", screen)
+LAST = 99   # show(screen, at=LAST): the list starts at its last item
+def show(screen, at=None):
+    i = mark(); bcast("--es", "show", screen, *(["--ei", "at", str(at)] if at is not None else []))
     if not wait(lambda t: t == "show " + screen, i, "E2E", 20): raise Fail("show hook did not answer")
 def state():
     i = mark(); bcast("--ez", "state", "true")
@@ -161,7 +162,7 @@ def wake_reads_home_menu():
     return "heard " + ", ".join(h[:4])
 
 def click_picks():
-    reset(); show("PHONE"); i = mark()
+    reset(); show("PHONE", at=LAST); i = mark()   # the shortest real list: Phone, started at its last item (phone_list proves the walk reaches it)
     heard_start("Emergency", i, 30)
     press("120")   # a click right after hearing an item picks it
     need("Call the emergency number", i)
@@ -169,7 +170,7 @@ def click_picks():
     return "Emergency picked"
 
 def triple_click_goes_back():
-    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i, 30); press("120"); wait_screen("EMERGENCY")
+    reset(); show("EMERGENCY")   # starts on the confirm screen: click_picks proves the way to it
     j = mark(); heard_start("No, go back", j)
     press("100,150,100,150,100")
     wait_screen("PHONE")
@@ -192,7 +193,7 @@ def screen_tap_picks():
     press("120,150,900"); wait_closed()
     return "a tap on the app screen picks the item, the same as a click"
 def screen_mirrors_menu():
-    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i, 30)
+    reset(); show("PHONE", at=LAST); i = mark(); heard_start("Emergency", i, 30)
     s = state()
     if not s.get("mirror", "").startswith("true:") or s["mirror"].split(":")[1] == "0": raise Fail(f"mirror empty while a list is read: {s}")
     press("120")
@@ -419,7 +420,7 @@ def computers_two():
     work_rooms = [{"id": "%5", "name": "Zeta", "project": "zeta-proj", "path": "/tmp/zeta", "kind": "claude", "state": "working",
                    "need": "", "options": [], "actions": ["stop", "readall", "screen", "write"]}]
     home_fire = []; work_fire = []
-    a = fake_rooms.start(host, 8796, "tok-home", fire=home_fire)
+    a = fake_rooms.start(host, 8796, "tok-home", fire=home_fire, rooms=[])   # Home has no windows: the Laptop list is short, so Switch to Work is reached at once (the walk is not what this tests)
     b = fake_rooms.start(host, 8797, "tok-work", fire=work_fire, rooms=work_rooms)
     try:
         bcast("--es", "computers", f"'Home|http://{host}:8796|tok-home;Work|http://{host}:8797|tok-work'")   # quoted: the phone shell would cut at ; and |
@@ -491,8 +492,14 @@ def code_hash():
     fake = os.path.join(HERE, "..", "bridge", "fake_rooms.py")
     return src[:a] + src[b:] + (open(fake).read() if os.path.exists(fake) else "")
 
-def scenario_key(f, phone, code):
-    return hashlib.sha256((phone + code + inspect.getsource(f)).encode()).hexdigest()
+def outside_apps():
+    """Versions of the outside apps (third party): what a scenario that reads another app's player depends on."""
+    return hashlib.sha256(adb("shell", "pm", "list", "packages", "-3", "--show-versioncode").encode()).hexdigest()
+OUTSIDE = {"idle_clicks_go_to_the_player"}   # scenarios whose result depends on the player apps on the phone (the rooms, call and chat scenarios use our own fakes)
+CACHE_TTL = 24 * 3600   # a pass is trusted for 24 h
+
+def scenario_key(f, phone, code, outside=""):
+    return hashlib.sha256((phone + code + inspect.getsource(f) + (outside if f.__name__ in OUTSIDE else "")).encode()).hexdigest()
 
 def cache_load():
     try: return json.load(open(CACHE))
@@ -511,16 +518,18 @@ def main():
         k = args.index("--only"); only = [x for a in args[k + 1:k + 2] for x in a.split(",")]
     chosen = [f for f in SCENARIOS if not only or any(o in f.__name__ for o in only)]
     if not SERIAL: sys.exit("no phone connected (adb mdns services; adb connect IP:PORT)")
-    use_cache = not only and "--all" not in args and not os.environ.get("NOCACHE")
-    cache = cache_load(); phone = phone_inputs(); code = code_hash(); keys = {f.__name__: scenario_key(f, phone, code) for f in chosen}
+    use_cache = not only   # `--only` always runs what it names
+    cache = cache_load(); phone = phone_inputs(); code = code_hash()
+    outside = outside_apps() if any(f.__name__ in OUTSIDE for f in chosen) else ""
+    keys = {f.__name__: scenario_key(f, phone, code, outside) for f in chosen}
     skipped = []
     if use_cache:
         for f in list(chosen):
             c = cache.get(f.__name__)
-            if c and c.get("key") == keys[f.__name__]:
+            if c and c.get("key") == keys[f.__name__] and time.time() - c.get("ts", 0) < CACHE_TTL:
                 line = f"SKIP {f.__name__} (same as pass at {c['at']})"; print(line, flush=True); skipped.append(line); chosen.remove(f)
     if not chosen:
-        print(f"all {len(skipped)} scenarios skipped (nothing changed since their last pass); NOCACHE=1 or --all runs them anyway"); return 0
+        print(f"all {len(skipped)} scenarios skipped (nothing changed since their last pass, under 24 h ago)"); return 0
     threading.Thread(target=reader, daemon=True).start()
     import atexit; atexit.register(lambda: LOGCAT and LOGCAT[0].terminate())
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
@@ -540,7 +549,7 @@ def main():
             except Fail as e: detail = str(e); ok = False
             except Exception as e: detail = repr(e); ok = False
             fails += not ok
-            if ok: cache[f.__name__] = {"key": keys[f.__name__], "at": datetime.datetime.now().strftime("%H:%M")}; cache_save(cache)
+            if ok: cache[f.__name__] = {"key": keys[f.__name__], "ts": time.time(), "at": datetime.datetime.now().strftime("%H:%M")}; cache_save(cache)
             elif f.__name__ in cache: del cache[f.__name__]; cache_save(cache)
             dt = time.time() - t0
             sums["press"] += T["press"]; sums["adb"] += T["adb"]; sums["real"] += dt if real else 0

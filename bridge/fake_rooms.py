@@ -41,12 +41,14 @@ class H(BaseHTTPRequestHandler):
         elif u.path == "/areas": self._json({"areas": [{"name": "hardware", "path": "/tmp/fake/hardware", "uses": 9}]})
         elif u.path == "/events":
             fire = getattr(self.server, "fire", FIRE_DONE)
+            t_end = time.time() + min(float(q.get("wait", ["0"])[0]), 2.0)
+            while not fire and time.time() < t_end: time.sleep(0.03)   # a long poll answers the moment a window finishes
             if fire:
                 name = fire.pop(0)
                 self._json({"seq": 2, "items": [{"type": "room", "kind": "room", "id": "%7", "name": name, "state": "done",
                                                  "project": "p", "summary": "", "options": [], "seq": 2}]})
             else:
-                time.sleep(min(float(q.get("wait", ["0"])[0]), 2.0)); self._json({"seq": 1, "items": []})
+                self._json({"seq": 1, "items": []})
         else: self._json({"error": "not found"}, 404)
     def do_POST(self):
         if not self._ok(): return

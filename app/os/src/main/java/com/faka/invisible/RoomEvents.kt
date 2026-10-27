@@ -24,6 +24,8 @@ class RoomEvents(
     @Volatile private var waitingRooms = 0
     private val waitingBusy = java.util.concurrent.atomic.AtomicBoolean(false)
     private val batch = DoneBatch()
+    /** Dev (e2e): scales the 3 s wait that joins several finished windows into one line (1 = real). */
+    @Volatile var devBatchScale = 1f
 
     /** Starts watching the active computer (the old watcher stops). */
     fun restart() = watch.restart()
@@ -41,6 +43,6 @@ class RoomEvents(
     private fun needs() { if (programRuns() || muted()) return; beepNeeds() }
     private fun done(name: String) {
         if (programRuns() || muted()) return
-        if (batch.add(name)) handler.postDelayed({ batch.take()?.let { say(it) } }, 3000)
+        if (batch.add(name)) handler.postDelayed({ batch.take()?.let { say(it) } }, (3000 * devBatchScale).toLong())
     }
 }

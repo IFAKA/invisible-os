@@ -25,7 +25,7 @@ class AiTestReceiver : BroadcastReceiver() {
         i.getStringExtra("fake")?.let { fake(c, it); return }   // dev (e2e): post a fake "call" / "chat" notification, or "clear" them
         if (i.hasExtra("replaydry")) { Actions.replayDry = i.getBooleanExtra("replaydry", true); Log.d("E2E", "replaydry ${Actions.replayDry}"); return }
         if (i.hasExtra("reset")) { Actions.resetDev(i.getBooleanExtra("reset", true)); fake(c, "clear"); return }   // dev (e2e): known state; --ez reset false = practice not done yet
-        i.getStringExtra("show")?.let { Actions.showDev(it); return }
+        i.getStringExtra("show")?.let { Actions.showDev(it, i.getIntExtra("at", -1)); return }   // dev (e2e): --ei at N starts the list at item N (99 = the last)
         if (i.hasExtra("rate")) { Actions.rateDev(i.getFloatExtra("rate", 0.9f)); return }
         if (i.hasExtra("state")) { Actions.stateDev(); return }
         i.getStringExtra("active")?.let { Actions.setActive(it); return }   // dev: listen to this computer only

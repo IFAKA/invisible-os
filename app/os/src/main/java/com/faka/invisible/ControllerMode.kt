@@ -446,8 +446,8 @@ class ControllerMode(
         wmark("beginScan"); val opts = prebuilt?.takeIf { screen == Screen.HUB } ?: buildOptions(); prebuilt = null; wmark("buildOptions")
         scanner.load(opts, listTitle())
         if (scanner.isEmpty) { leaveSilent(); return }
-        val first = firstKey?.let { k -> opts.indexOfFirst { it.key == k } }?.takeIf { it > 0 } ?: 0
-        firstKey = null
+        val first = devAt.takeIf { it >= 0 }?.coerceAtMost(opts.size - 1) ?: firstKey?.let { k -> opts.indexOfFirst { it.key == k } }?.takeIf { it > 0 } ?: 0
+        firstKey = null; devAt = -1
         scanner.speakItem(first); wmark("speakItem called"); wakeT0 = 0
     }
 
@@ -1162,7 +1162,9 @@ class ControllerMode(
     }
 
     /** Dev (e2e): show a screen by name, waking the menu silently first. */
-    fun devShow(name: String) { if (!active) { active = true; queue = mutableListOf(); qi = 0; fromHub = false; speechOpen = false; hintPending = false; musicBack = Screen.HUB }; show(Screen.valueOf(name)) }
+    private var devAt = -1
+    /** Dev (e2e): the next list starts at item [at] (a big number = the last one), so a test need not walk the items before it. */
+    fun devShow(name: String, at: Int = -1) { devAt = at; if (!active) { active = true; queue = mutableListOf(); qi = 0; fromHub = false; speechOpen = false; hintPending = false; musicBack = Screen.HUB }; show(Screen.valueOf(name)) }
     /** Dev (e2e): "screen phase" of the menu, for the test log. */
     fun devState() = "active=$active screen=$screen"
 

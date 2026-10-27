@@ -353,8 +353,8 @@ object Actions {
         sw.alt = if (instant) Class.forName("com.faka.invisible.InstantSpeech").getConstructors()[0].newInstance(sw.words, { speechRate() }, com.faka.invisible.voicekit.VoiceKit.speechEvents) as com.faka.invisible.voicekit.SpeechPort else null
         Log.d("E2E", "voice ${if (instant) "instant" else "real"}")
     }
-    fun paceDev(f: Float) = handler.post { mode.devPace = f; Log.d("E2E", "pace $f") }
-    fun showDev(name: String) = handler.post { mode.devShow(name); Log.d("E2E", "show $name") }
+    fun paceDev(f: Float) = handler.post { mode.devPace = f; rooms.devBatchScale = f; Log.d("E2E", "pace $f") }
+    fun showDev(name: String, at: Int = -1) = handler.post { mode.devShow(name, at); Log.d("E2E", "show $name") }
     fun stateDev() = handler.post { Log.d("E2E", "state ${mode.devState()} running=${running != null} rate=${mode.settings.speechRate} mirror=${com.faka.invisible.voicekit.ScreenMirror.active}:${com.faka.invisible.voicekit.ScreenMirror.items.size}:${com.faka.invisible.voicekit.ScreenMirror.lastPress?.replace(" ", "_")}") }
     fun rateDev(r: Float) = handler.post { saveSettings(mode.settings.copy(speechRate = r)); Log.d("E2E", "rate set $r") }
     fun startDev(name: String) = handler.post { Programs.byDevName(name)?.let { startProgramEntry(it) } }
