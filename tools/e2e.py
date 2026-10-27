@@ -43,7 +43,7 @@ def reader():
         m = LINE.match(line.rstrip("\n"))
         if not m: continue
         kind, text = m.group(2), m.group(3)
-        if kind == "Invisible" and not text.startswith("SPEAK["): continue
+        if kind == "Invisible" and not text.startswith(("SPEAK[", "MSG ")): continue
         with lock: events.append((time.time(), kind, text))
 
 def mark():
@@ -179,7 +179,7 @@ def fake_incoming_call():
 
 def fake_chat_message():
     reset(); i = mark(); bcast("--es", "fake", "chat")
-    time.sleep(1.0)   # the listener must take the notification before the wake
+    if not wait(lambda t: t.startswith("MSG " + PKG + " from E2E Friend"), i, "Invisible", 15): raise Fail("the listener never took the fake message")
     press("900")
     need("E2E Friend", i, 15); need("dinner", i)
     t0 = time.time()   # the reply options follow the message
