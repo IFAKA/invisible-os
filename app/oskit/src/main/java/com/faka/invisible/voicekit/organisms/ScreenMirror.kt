@@ -48,9 +48,8 @@ object ScreenMirror {
         "DOUBLE" -> "2 clicks"
         "TRIPLE" -> "3 clicks"
         "QUAD" -> "4 clicks"
-        "HOLD" -> "hold"
-        "CLICK_HOLD" -> "click, then hold"
-        "CLICK_HOLD_END" -> "release"
+        "CLICK_HOLD" -> "hold"           // the detector names a plain hold CLICK_HOLD and click-then-hold HOLD
+        "HOLD" -> "click, then hold"
         else -> name.lowercase().replace('_', ' ')
     }
 }

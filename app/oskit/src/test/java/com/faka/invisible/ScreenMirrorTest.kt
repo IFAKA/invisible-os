@@ -52,7 +52,8 @@ class ScreenMirrorTest {
     @Test fun gestureNames() {
         assertEquals("click", ScreenMirror.gestureText(Gesture.SINGLE.name))
         assertEquals("2 clicks", ScreenMirror.gestureText(Gesture.DOUBLE.name))
-        assertEquals("click, then hold", ScreenMirror.gestureText(Gesture.CLICK_HOLD.name))
+        assertEquals("hold", ScreenMirror.gestureText(Gesture.CLICK_HOLD.name))
+        assertEquals("click, then hold", ScreenMirror.gestureText(Gesture.HOLD.name))
     }
 
     @Test fun scannerPublishesEveryItemItStarts() {

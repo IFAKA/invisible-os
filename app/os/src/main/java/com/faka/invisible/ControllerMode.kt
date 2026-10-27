@@ -258,6 +258,14 @@ class ControllerMode(
         }
     }
 
+    /** The app screen was tapped on item [i] named [text]: choose it as if it had just been spoken and the button clicked. False if the list moved on. */
+    fun pickAt(i: Int, text: String): Boolean {
+        if (!active || finding || pending != null || phase != Phase.SCAN || i !in list.items.indices) return false
+        if (com.faka.invisible.voicekit.ScreenMirror.items.getOrNull(i) != text) return false
+        stopAll(); code = i + 1; pickMs = -1; list.items[i].run()
+        return true
+    }
+
     /** Which option does a click at [pressAt] mean: the last one that started before it; the one before if it was within the grace. */
     private fun bind(pressAt: Long): Int? {
         var k = -1

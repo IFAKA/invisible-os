@@ -294,6 +294,11 @@ object Actions {
         b.connect()
     }
 
+    /** The app screen was tapped: item [i] named [text] is chosen, the same as a click on it; the voice goes on from there. */
+    fun tapItem(i: Int, text: String) = handler.post { if (mode.pickAt(i, text)) EventLog.pressed(com.faka.invisible.voicekit.Gesture.SINGLE) }
+    /** An on-screen button does what the earbud button does (Back = 3 clicks, Close = click then hold, Wake = hold). */
+    fun screenPress(g: com.faka.invisible.voicekit.Gesture) = handler.post { buttonTarget.gesture(g, 0) }
+
     /** Dev: press the button without the earbud (adb cannot inject key events on this phone): SINGLE, DOUBLE, TRIPLE, HOLD, CLICK_HOLD... */
     fun gestureDev(name: String) = handler.post { buttonTarget.gesture(Gesture.valueOf(name.uppercase()), 0) }
     /** Dev: "120,150,900" = press 120 ms, wait 150 ms, press 900 ms; fed to the real button input (programs, holds, gestures). */

@@ -244,19 +244,68 @@ class Kit(private val c: Context) {
         parent.addView(r, lp())
     }
 
-    /** The OS list being read, mirrored: one row per item, the item being read highlighted and scrolled into view. Not touchable. */
-    fun mirrorList(parent: LinearLayout, items: List<String>, current: Int) {
-        val box = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
-        items.forEachIndexed { i, t ->
-            val on = i == current
-            val r = text(t, if (on) Type.TITLE else Type.BODY, if (on) Ui.accent else Ui.ink).apply {
-                setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1)); minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL
-                if (on) { background = fill(Ui.field, Ui.RADIUS_ROW); contentDescription = t + ", " + Translations.label("selected") }
+    /** A page that never scrolls itself: it fills the window and keeps the system bars clear. Put a [mirrorScreen] in it. */
+    fun fixedScreen(a: Activity): LinearLayout {
+        a.window.statusBarColor = Ui.page; a.window.navigationBarColor = Ui.page
+        return LinearLayout(c).apply {
+            orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.page)
+            setPadding(dp(Ui.S2), dp(Ui.S2), dp(Ui.S2), dp(Ui.S2))
+            setOnApplyWindowInsetsListener { v, i ->
+                if (android.os.Build.VERSION.SDK_INT >= 30) {
+                    val b = i.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+                    v.setPadding(b.left + dp(Ui.S2), b.top + dp(Ui.S2), b.right + dp(Ui.S2), b.bottom + dp(Ui.S2)); android.view.WindowInsets.CONSUMED
+                } else i
             }
-            box.addView(r, lp(top = 2))
-            if (on) r.post { r.requestRectangleOnScreen(android.graphics.Rect(0, -dp(48), r.width, r.height + dp(48)), false) }
+            post { requestApplyInsets() }
         }
-        parent.addView(box, lp(top = Ui.S2))
+    }
+
+    /** The mirror on screen: [update] moves the mark and the last press without rebuilding, so nothing jumps. */
+    inner class MirrorView(private val rows: List<TextView>, private val scroller: ScrollView, private val press: TextView) {
+        private var shown = -1
+        fun update(current: Int, lastPress: String?) {
+            rows.forEachIndexed { i, r ->
+                val on = i == current
+                r.setTextColor(if (on) Ui.accent else Ui.ink)
+                r.background = if (on) fill(Ui.field, Ui.RADIUS_ROW) else null
+                r.contentDescription = if (on) r.text.toString() + ", " + Translations.label("selected") else null
+            }
+            press.text = lastPress?.let { Translations.label("Last press") + ": " + Translations.label(it) } ?: ""
+            if (current != shown) {
+                val first = shown < 0; shown = current
+                rows.getOrNull(current)?.let { r -> scroller.post {
+                    val y = (r.top - (scroller.height - r.height) / 2).coerceAtLeast(0)
+                    if (first) scroller.scrollTo(0, y) else scroller.smoothScrollTo(0, y)   // the current item sits in the middle
+                } }
+            }
+        }
+    }
+
+    /**
+     * The picture of the OS: where you are (title), the list being read with the current item marked (a tap chooses it, as a click would),
+     * the last press, and three buttons that do what the button does. Fits the window; only the list scrolls.
+     * Every row has the same size, so moving the mark never moves the layout.
+     */
+    fun mirrorScreen(parent: LinearLayout, title: String, items: List<String>, current: Int, lastPress: String?,
+                     onPick: (Int, String) -> Unit, backLabel: String, onBack: () -> Unit, closeLabel: String, onClose: () -> Unit, moreLabel: String, onMore: () -> Unit): MirrorView {
+        parent.addView(text(title, Type.LARGE).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }, lp(top = Ui.S1))
+        val box = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
+        val rows = items.mapIndexed { i, t ->
+            text(t, Type.BODY).apply {
+                setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1)); minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL
+                setOnClickListener { onPick(i, t) }
+                box.addView(this, lp(top = 2))
+            }
+        }
+        val scroller = ScrollView(c).apply { isVerticalScrollBarEnabled = false; addView(box) }
+        parent.addView(scroller, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(Ui.S2) })
+        val press = text("", Type.CAPTION, Ui.soft).apply { minHeight = dp(20) }   // always there, so the list never changes height
+        parent.addView(press, lp(top = Ui.S1))
+        val bar = LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL }
+        for ((label, act) in listOf(backLabel to onBack, closeLabel to onClose, moreLabel to onMore))
+            bar.addView(btn(label) { act() }.apply { minHeight = dp(52); minimumHeight = dp(52); setTextColor(Ui.ink); textSize = Type.BODY.size; background = fill(Ui.field, Ui.RADIUS_BUTTON) }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
+        parent.addView(bar, lp(top = Ui.S2))
+        return MirrorView(rows, scroller, press).also { it.update(current, lastPress) }
     }
 
     /** Home status: a coloured dot, a large word, one quiet line. */

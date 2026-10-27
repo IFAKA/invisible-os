@@ -30,6 +30,10 @@ import com.faka.invisible.voicekit.Voice
 /** Setup checklist, then the settings of the launcher (the menu you hear). Plain views, rebuilt on every change. */
 class MainActivity : Activity() {
     private lateinit var body: LinearLayout
+    private lateinit var root: android.widget.FrameLayout   // holds the scrolling pages, or the fixed mirror of the OS
+    private lateinit var scroll: ScrollView
+    private var mirror: Kit.MirrorView? = null; private var mirrorKey = ""; private var mirrorHost: View? = null
+    private var settingsOpen = false   // the person left the mirror to use the settings
     private var s = LauncherSettings()
     private var taskNote = ""        // result of the last Add, shown under the button
     private var taskNoteBad = false
@@ -46,7 +50,9 @@ class MainActivity : Activity() {
         Actions.init(applicationContext)
         s = Actions.mode.settings
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(k.dp(Ui.S2), k.dp(Ui.S2), k.dp(Ui.S2), k.dp(Ui.S4)) }
-        setContentView(k.screen(this, body))
+        scroll = k.screen(this, body)
+        root = android.widget.FrameLayout(this).apply { addView(scroll) }
+        setContentView(root)
         if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java))
         EventLog.onChange = { renderSoon() }
         ScreenMirror.onChange = { if (page == Page.HOME) EventLog.refresh() }
@@ -73,7 +79,8 @@ class MainActivity : Activity() {
     private fun change(n: LauncherSettings) { s = n; Actions.saveSettings(n); render() }
 
     // ---- small view helpers: the parts live in Kit (Ui.kt) ----
-    private fun card(title: String, hint: String? = null, fill: LinearLayout.() -> Unit) = k.card(body, title, hint, true, fill)
+    private var cardParent: LinearLayout? = null   // where card() puts the next card; the body unless a fixed page set it
+    private fun card(title: String, hint: String? = null, fill: LinearLayout.() -> Unit) = k.card(cardParent ?: body, title, hint, true, fill)
     private fun slider(label: String, valueText: String, max: Int, now: Int, apply: (Int) -> LauncherSettings) = k.slider(label, valueText, max, now) { change(apply(it)) }
 
     // ---- screens: Home shows one thing to do and a few doors; each door opens one small page ----
@@ -97,7 +104,9 @@ class MainActivity : Activity() {
     }
 
     private fun render() {
-        body.removeAllViews()
+        val keep = page == Page.HOME && ScreenMirror.active && !settingsOpen && root.getChildAt(0) === mirrorHost && mirrorHost != null
+        if (!keep && root.getChildAt(0) !== scroll) { root.removeAllViews(); root.addView(scroll) }
+        body.removeAllViews(); cardParent = null
         if (page == Page.LAPTOP && laptop.inRoom) body.addView(k.header(laptop.title(), { laptop.leaveRoom() }, "Rooms"))
         else if (page != Page.HOME) body.addView(k.header(tr(page.title), { open(Page.HOME) }))
         when (page) {
@@ -191,19 +200,33 @@ class MainActivity : Activity() {
         }
         announceStep = false
         val mir = ScreenMirror.state
-        if (mir.active && EventLog.running) {   // the OS is in use: show where the person is, instead of "Ready"
-            body.addView(k.text(mir.title.ifEmpty { tr("Home") }, Type.LARGE), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S3) })
-            k.mirrorList(body, mir.items, mir.index)
-            mir.lastPress?.let { body.addView(k.text(tr("Last press") + ": " + tr(it), Type.CAPTION, Ui.soft), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) }) }
+        if (!mir.active) settingsOpen = false
+        val fixed = k.fixedScreen(this)   // the home never scrolls as a whole: the status is fixed, the doors are the list
+        if (mir.active && EventLog.running && !settingsOpen) {   // the OS is in use: the app is its picture, and a second way to drive it
+            val key = mir.title + "\u0000" + mir.items.joinToString("\u0001")
+            if (mirrorKey == key && root.getChildAt(0) === mirrorHost) { mirror?.update(mir.index, mir.lastPress); return }   // same list: only the mark moves
+            k.mirrorScreen(fixed, mir.title.ifEmpty { tr("Home") }, mir.items, mir.index, mir.lastPress,
+                { i, t -> Actions.tapItem(i, t) },
+                tr("Back"), { Actions.screenPress(com.faka.invisible.voicekit.Gesture.TRIPLE) },
+                tr("Close"), { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) },
+                tr("Settings"), { settingsOpen = true; render() }).also { mirror = it; mirrorKey = key; mirrorHost = fixed }
+            root.removeAllViews(); root.addView(fixed)
+            return
         } else if (!EventLog.running) {
-            k.status(body, tr("Stopped"), tr("The app is not listening to the button."), Ui.bad) {
+            k.status(fixed, tr("Stopped"), tr("The app is not listening to the button."), Ui.bad) {
                 addView(k.primary(tr("Start")) { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) })
             }
         } else {
-            k.status(body, tr("Ready"), tr("Turn the screen off. Hold your earbud button to hear the menu."), Ui.good)
+            k.status(fixed, tr("Ready"), tr("Turn the screen off. Hold your earbud button to hear the menu."), Ui.good) {
+                addView(k.primary(tr("Wake the menu")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) })
+            }
         }
+        if (mir.active && settingsOpen) fixed.addView(k.quiet("\u2039 " + tr("Back to the menu")) { settingsOpen = false; render() })
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fixed.addView(ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(list) }, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = k.dp(Ui.S2) })
+        root.removeAllViews(); root.addView(fixed); cardParent = list
         val n = Actions.tasks().size
-        k.group(body) {
+        k.group(list) {
             k.navRow(this, tr("Tasks"), if (n == 0) tr("None yet") else tr("{0} to do").replace("{0}", "$n")) { open(Page.TASKS) }
             k.navRow(this, tr("Your menu"), tr("Pin, move or hide what you hear")) { open(Page.MENU) }
             k.navRow(this, tr("Voice and speed"), tr("Language") + " " + MenuLanguage.names[MenuLanguage.code] + ", " + tr("Voice").lowercase() + " ${"%.1f".format(s.speechRate)}x") { open(Page.VOICE) }
@@ -212,7 +235,7 @@ class MainActivity : Activity() {
             k.navRow(this, tr("AI on the phone"), if (!s.ai) "Off" else if (ModelDownload.ready(this@MainActivity)) "On" else "On, model not downloaded") { open(Page.AI) }
             k.navRow(this, tr("Help"), tr("Button gestures and practice")) { open(Page.HELP) }
         }
-        if (EventLog.running) body.addView(k.quiet(tr("Stop listening"), Ui.bad) { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
+        if (EventLog.running) list.addView(k.quiet(tr("Stop listening"), Ui.bad) { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
         card("Claude bridge", "Answer Claude Code on your laptop with the button. Run bridge/server.py on the laptop, then type the address it prints and the token. Leave empty to turn it off.") {
             val url = k.input("Address, e.g. http://100.64.0.5:8765").apply { minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI; setText(Actions.claudeUrl()) }
             val tok = k.input("Token").apply { minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD; setText(Actions.claudeToken()) }
