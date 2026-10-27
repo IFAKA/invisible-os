@@ -174,6 +174,15 @@ class ToolsTest(unittest.TestCase):
         finally:
             s.close()
 
+    def test_plist_get_reads_a_systemd_unit(self):
+        d = tempfile.mkdtemp()
+        unit = os.path.join(d, "invisible-bridge.service")
+        open(unit, "w").write("[Service]\nExecStart=/usr/bin/python3 /opt/b/server.py --name Work PC --port 8766\n".replace("Work PC", "'Work PC'"))
+        self.assertEqual(setup_tools.plist_get(unit, "--name"), "Work PC")
+        self.assertEqual(setup_tools.plist_get(unit, "--port"), "8766")
+        self.assertEqual(setup_tools.plist_get(os.path.join(d, "none.service"), "--port"), "")
+        shutil.rmtree(d)
+
 
 if __name__ == "__main__":
     unittest.main()

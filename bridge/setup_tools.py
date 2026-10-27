@@ -10,6 +10,7 @@
 import json
 import os
 import plistlib
+import shlex
 import shutil
 import socket
 import sys
@@ -162,6 +163,13 @@ def is_shim(path):
 
 
 def plist_get(path, key):
+    if path.endswith(".service"):   # Linux: the systemd user unit; the arguments are on its ExecStart line
+        try:
+            line = next(l for l in open(path).read().splitlines() if l.startswith("ExecStart="))
+        except (OSError, StopIteration):
+            return ""
+        args = shlex.split(line[len("ExecStart="):])
+        return args[args.index(key) + 1] if key in args and args.index(key) + 1 < len(args) else ""
     try:
         args = plistlib.load(open(path, "rb")).get("ProgramArguments", [])
     except (OSError, ValueError):

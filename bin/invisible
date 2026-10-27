@@ -79,11 +79,19 @@ def read_text(path):
         return ""
 
 
+LINUX = sys.platform.startswith("linux")
+
+
 def plist_path():
+    """The service file: a launchd plist on a Mac, a systemd user unit on Linux."""
+    if LINUX:
+        return os.path.expanduser("~/.config/systemd/user/invisible-bridge.service")
     return os.path.expanduser("~/Library/LaunchAgents/%s.plist" % LABEL)
 
 
 def log_path():
+    if LINUX:
+        return os.path.expanduser("~/.local/state/invisible-bridge.log")
     return os.path.expanduser("~/Library/Logs/invisible-bridge.log")
 
 
@@ -298,8 +306,8 @@ def cmd_uninstall(args):
         out("Nothing to remove: %s is missing, so `invisible pair` never ran here." % os.path.join(cfg(), "installed.json"))
         return 0
     hk = m.get("hooks") or {}
-    plan = [("the bridge service (launchd %s)" % m.get("launchd_label", LABEL), "stop"),
-            ("the launchd file %s" % m.get("plist", ""), "plist"),
+    plan = [("the bridge service (%s %s)" % ("systemd" if LINUX else "launchd", m.get("launchd_label", LABEL)), "stop"),
+            ("the service file %s" % m.get("plist", ""), "plist"),
             ("our Claude Code hooks in %s" % hk.get("settings", ""), "hooks"),
             ("the log %s" % m.get("log", ""), "log")]
     if m.get("link"):
@@ -320,9 +328,12 @@ def cmd_uninstall(args):
     for _, what in plan:
         if what == "stop":
             label = m.get("launchd_label", LABEL)
-            r = subprocess.run(["launchctl", "bootout", "gui/%s/%s" % (uid, label)], capture_output=True)
-            if r.returncode != 0 and m.get("plist"):
-                subprocess.run(["launchctl", "unload", m["plist"]], capture_output=True)
+            if LINUX:
+                subprocess.run(["systemctl", "--user", "disable", "--now", "invisible-bridge.service"], capture_output=True)
+            else:
+                r = subprocess.run(["launchctl", "bootout", "gui/%s/%s" % (uid, label)], capture_output=True)
+                if r.returncode != 0 and m.get("plist"):
+                    subprocess.run(["launchctl", "unload", m["plist"]], capture_output=True)
             out("Stopped the bridge service (%s)" % label)
         elif what == "plist":
             if m.get("plist") and os.path.exists(m["plist"]):

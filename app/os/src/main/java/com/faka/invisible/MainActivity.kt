@@ -310,7 +310,7 @@ class MainActivity : Activity() {
             k.navRow(this, tr("Emergency contact"), Actions.emergencyContact().ifEmpty { tr("Not set") }) { open(Page.EMERGENCY) }
             val pcs = Actions.computers()
             k.navRow(this, tr("Computers"), if (pcs.isEmpty()) tr("Add a computer") else pcs.joinToString(", ") { it.name }) { open(Page.COMPUTERS) }
-            if (pcs.isNotEmpty()) k.navRow(this, tr("Laptop"), tr("Rooms of your laptop: read, answer")) { open(Page.LAPTOP) }
+            if (pcs.isNotEmpty()) k.navRow(this, if (pcs.size == 1) pcs[0].name else tr("Rooms"), tr("Rooms of your computer: read, answer")) { open(Page.LAPTOP) }
             k.navRow(this, tr("AI on the phone"), if (!s.ai) "Off" else if (ModelDownload.ready(this@MainActivity)) "On" else "On, model not downloaded") { open(Page.AI) }
             k.navRow(this, tr("Help"), tr("Button gestures and practice")) { open(Page.HELP) }
         }
