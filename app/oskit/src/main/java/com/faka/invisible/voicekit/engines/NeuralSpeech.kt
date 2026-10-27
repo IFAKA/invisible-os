@@ -45,7 +45,7 @@ class NeuralSpeech(
         const val TAG = "NEURALTTS"
         const val THREADS = 4
         const val IDLE_UNLOAD_MS = 10 * 60_000L
-        const val GAP_MS = 120      // silence between two sentences of one text
+        const val GAP_MS = 280      // silence between two sentences of one text
     }
 
     private class Utt(val id: Int, val epoch: Int, val p: Phrase, val slow: Boolean, val lang: String)
@@ -123,8 +123,8 @@ class NeuralSpeech(
 
     private fun stale(u: Utt) = u.epoch != epoch
 
-    /** The neural voice spells a lone capitalised "Go" (the menu group) as "G O"; in lower case it says the word. */
-    private fun ear(s: String) = if (s.trim().trimEnd('.', ',') == "Go") "go" else s
+    /** The neural voice spells a lone capitalised short word ("Go", "No") as letters; in lower case it says the word. */
+    private fun ear(s: String) = SentenceSplit.ear(s)
 
     private fun play(u: Utt) {
         lastUse = System.currentTimeMillis()

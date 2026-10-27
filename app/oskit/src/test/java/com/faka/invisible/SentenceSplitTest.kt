@@ -28,4 +28,11 @@ class SentenceSplitTest {
     @Test fun spanishMarks() {
         assertEquals(listOf("¿Cómo estás hoy? Muy bien gracias."), SentenceSplit.split("¿Cómo estás hoy? Muy bien gracias.").let { listOf(it.joinToString(" ")) })
     }
+    @Test fun shortWordsAreLowerCase() {
+        assertEquals("go", SentenceSplit.ear("Go")); assertEquals("no.", SentenceSplit.ear("No.")); assertEquals("Gold", SentenceSplit.ear("Gold"))
+    }
+    @Test fun longSentenceBreaksAtComma() {
+        val t = "When the timer ends, the phone will play a long sound and then read your next task out loud to you."
+        assertEquals(listOf("When the timer ends,", "the phone will play a long sound and then read your next task out loud to you."), SentenceSplit.split(t))
+    }
 }

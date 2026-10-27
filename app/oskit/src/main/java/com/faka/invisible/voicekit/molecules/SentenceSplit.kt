@@ -8,6 +8,15 @@ package com.faka.invisible.voicekit
 object SentenceSplit {
     const val MIN = 12
     const val MAX = 220
+    const val COMMA_CUT = 80   // a piece longer than this is cut at a comma, so the voice breathes where the sentence does
+
+    private val SHORT_WORDS = setOf("go", "no", "do", "so", "to", "me", "my", "be", "he", "we", "hi", "oh", "ok", "up", "us", "in", "on", "it", "is", "at", "as", "an", "am", "by", "or", "of", "if", "ah")
+
+    /** A lone capitalised two-letter word ("Go", "No", "Ok") is a word, not letters; the voices spell it unless it is lower case. */
+    fun isShortWord(text: String) = text.trim().trimEnd('.', ',', '!', '?').lowercase() in SHORT_WORDS
+
+    /** [text] ready for the voice: a lone short word is lower case. */
+    fun ear(text: String) = if (isShortWord(text)) text.lowercase() else text
 
     fun split(text: String): List<String> {
         val raw = ArrayList<String>(); val cur = StringBuilder()
@@ -39,7 +48,18 @@ object SentenceSplit {
     }
 
     private fun cutLong(s: String): List<String> {
-        if (s.length <= MAX) return listOf(s)
+        if (s.length > COMMA_CUT) {
+            val r = ArrayList<String>(); var rest = s
+            while (rest.length > COMMA_CUT) {
+                val k = rest.indexOf(',', MIN - 1).takeIf { it in 0 until rest.length - MIN } ?: break
+                r += rest.substring(0, k + 1).trim(); rest = rest.substring(k + 1).trim()
+            }
+            if (r.isNotEmpty()) { if (rest.isNotEmpty()) r += rest; return r.flatMap { if (it.length > MAX) cutHard(it) else listOf(it) } }
+        }
+        return if (s.length <= MAX) listOf(s) else cutHard(s)
+    }
+
+    private fun cutHard(s: String): List<String> {
         val r = ArrayList<String>(); var rest = s
         while (rest.length > MAX) {
             var k = rest.lastIndexOf(',', MAX).takeIf { it > MIN } ?: rest.lastIndexOf(' ', MAX).takeIf { it > MIN } ?: MAX

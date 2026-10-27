@@ -128,7 +128,7 @@ class TtsSpeech(
 
     /** A Find letter label ("A to F", "C", "Wa to We"): each lone letter is marked to be spelled, so "A" is the letter "ay", not the word "a" ("uh"). Other text is unchanged. */
     private fun letters(text: String): CharSequence {
-        if (!LETTER_LABEL.matches(text)) return text
+        if (!LETTER_LABEL.matches(text) || SentenceSplit.isShortWord(text)) return SentenceSplit.ear(text)
         val s = android.text.SpannableString(text)
         Regex("\\b[A-Z0-9][a-z0-9]?\\b").findAll(text).forEach { m -> s.setSpan(android.text.style.TtsSpan.VerbatimBuilder(m.value).build(), m.range.first, m.range.last + 1, 0) }
         return s
