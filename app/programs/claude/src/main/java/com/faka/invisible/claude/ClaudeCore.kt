@@ -31,6 +31,7 @@ sealed class Choice {
     data class RoomPick(val room: Room) : Choice()
     object ProjectsPick : Choice()
     object MutePick : Choice()
+    object TestDonePick : Choice()
     data class ActPick(val action: RoomAction) : Choice()
     object No : Choice()
     object Yes : Choice()

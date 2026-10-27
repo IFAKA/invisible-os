@@ -25,6 +25,7 @@ object ClaudeVoice {
     val NO_ROOMS = f("No rooms open.")
     val PROJECTS = f("Projects")
     val MUTE = f("Mute until morning")
+    val TEST_DONE = f("Test done alert")
     val MUTED = f("Quiet until morning.")
     val NO_BACK = f("No, go back")
     val YES = f("Yes")

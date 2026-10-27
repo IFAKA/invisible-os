@@ -228,6 +228,7 @@ private val SPOKEN_ES = mapOf(
     "Laptop not reachable. Click to try again." to "Portátil sin conexión. Clic para reintentar.",
     "No rooms open." to "No hay salas abiertas.",
     "Projects" to "Proyectos",
+    "Test done alert" to "Probar el aviso de listo",
     "Mute until morning" to "Silenciar hasta la mañana",
     "Quiet until morning." to "Silencio hasta la mañana.",
     "Yes" to "Sí",

@@ -438,6 +438,7 @@ object Actions {
     }
     /** What the Laptop tool asks of the OS: the Write keyboard, and the way back to the tool when nothing was written. */
     val roomsPort = object : RoomsPort {
+        override fun testDone() { handler.post { say(Voice.roomDone("Test"), false) } }
         override fun write(sendTo: (String) -> Boolean) {
             handler.post { launchWrite(sendTo, null) { Programs.byId("hub:claude")?.let { startProgramEntry(it) } } }
         }

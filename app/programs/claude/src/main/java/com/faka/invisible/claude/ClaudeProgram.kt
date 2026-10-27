@@ -27,6 +27,8 @@ interface RoomsPort {
     /** Leave this tool and open Write [count] times in a row (each text is "" when nothing was written). If the first is empty the OS comes
      *  back to this tool; otherwise [finish] gets the texts, runs off the main thread, and the phrase it returns is spoken. */
     fun writeSeq(cues: List<Phrase>, finish: (List<String>) -> Phrase)
+    /** Say "Test, done" the way the OS says a finished window, so you can check the voice and the volume. */
+    fun testDone()
 }
 
 /** Timers on the host's handler, one set per run. */
@@ -77,6 +79,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         is Choice.RoomPick -> ClaudeVoice.room(RoomState.nameOf(c.room), c.room.state)
         Choice.ProjectsPick -> ClaudeVoice.PROJECTS
         Choice.MutePick -> ClaudeVoice.MUTE
+        Choice.TestDonePick -> ClaudeVoice.TEST_DONE
         is Choice.ActPick -> ClaudeVoice.label(c.action)
         Choice.No -> ClaudeVoice.NO_BACK
         Choice.Yes -> ClaudeVoice.YES
@@ -178,7 +181,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
 
     private fun showRooms(list: List<Room>) {
         onBack = { shutdown() }
-        val picks = list.take(MAX_ROOMS).map { Choice.RoomPick(it) } + Choice.ProjectsPick + Choice.MutePick
+        val picks = list.take(MAX_ROOMS).map { Choice.RoomPick(it) } + Choice.ProjectsPick + Choice.MutePick + Choice.TestDonePick
         showList(picks, if (list.isEmpty()) ClaudeVoice.NO_ROOMS else null)
     }
 
@@ -291,6 +294,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
                 is Choice.RoomPick -> openRoom(c.room)
                 Choice.ProjectsPick -> loadProjects()
                 Choice.MutePick -> mute()
+                Choice.TestDonePick -> port.testDone()
                 is Choice.ActPick -> doAction(c.action)
                 Choice.No -> room?.let { showActions(it, null) }
                 Choice.Yes -> { val r = room; val a = pending; if (r != null && a != null) act(r, a) }
