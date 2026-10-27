@@ -22,10 +22,11 @@ import com.faka.invisible.write.WriteServices
  */
 object Programs {
     private var services: WriteServices? = null
+    private var roomsPort: com.faka.invisible.claude.RoomsPort? = null
     private var appContext: android.content.Context? = null
     /** What the programs ask of the OS beyond the host; set once when the OS starts, before [all] is read. */
     private var where: WhereServices? = null
-    fun install(write: WriteServices, ctx: android.content.Context, whereServices: WhereServices) { services = write; appContext = ctx; where = whereServices }
+    fun install(write: WriteServices, rooms: com.faka.invisible.claude.RoomsPort, ctx: android.content.Context, whereServices: WhereServices) { services = write; roomsPort = rooms; appContext = ctx; where = whereServices }
 
     val all: List<ProgramEntry> by lazy { listOf(
         DuelProgram.play,
@@ -34,7 +35,7 @@ object Programs {
         DuelProgram.howTo,
         CompassProgram.entry,
         WhereAmIEntry.entry(where!!),
-        ClaudeProgram.entry,
+        ClaudeProgram.entry(roomsPort!!),
         PracticeEntry.entry,
         WriteEntries.write(services!!) { appContext!! },
         WriteEntries.sum,

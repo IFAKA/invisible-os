@@ -28,6 +28,15 @@ data class ClaudeEvent(val id: String, val kind: String, val project: String, va
 
 /** What a click in the answer list can pick: one of the laptop's options, or "Read again". */
 sealed class Choice {
+    data class RoomPick(val room: Room) : Choice()
+    object ProjectsPick : Choice()
+    object MutePick : Choice()
+    data class ActPick(val action: RoomAction) : Choice()
+    object No : Choice()
+    object Yes : Choice()
+    data class ProjectPick(val project: Project) : Choice()
+    object ContinueChat : Choice()
+    object NewChat : Choice()
     data class Option(val text: String) : Choice()
     object Again : Choice()
     companion object { fun of(e: ClaudeEvent): List<Choice> = e.options.map { Option(it) } + Again }

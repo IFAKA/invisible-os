@@ -10,7 +10,7 @@ private fun f(text: String) = Phrase.fixed(text)
 
 object ClaudeVoice {
     /** The menu label. */
-    val TITLE = f("Claude")
+    val TITLE = f("Laptop")
     val NOT_SET = f("Claude is not set up. In the app, type the bridge address and token.")
     val LISTENING = f("Listening for Claude. Hold three seconds to leave.")
     val NOTHING = f("Nothing waiting.")
@@ -21,8 +21,33 @@ object ClaudeVoice {
     val TOO_LATE = f("Too late. Answered on the laptop.")
     val SKIPPED = f("Skipped.")
     val WAITING_YOU = f("Waiting for you. Click to hear it again.")
+    val NOT_REACHABLE = f("Laptop not reachable. Click to try again.")
+    val NO_ROOMS = f("No rooms open.")
+    val PROJECTS = f("Projects")
+    val MUTE = f("Mute until morning")
+    val MUTED = f("Quiet until morning.")
+    val NO_BACK = f("No, go back")
+    val YES = f("Yes")
+    val CONTINUE_CHAT = f("Continue last chat")
+    val NEW_CHAT = f("New chat")
+    val NOTHING_TO_READ = f("Nothing to read.")
+    fun room(name: String, state: String) = f("$name, ${RoomState.word(state)}")
+    fun sentTo(name: String) = f("Sent to $name")
+    fun opened(name: String) = f("Opened $name")
+    fun sure(label: String) = f("$label?")
+    fun label(a: RoomAction): Phrase = f(RoomText.label(a))
     fun asks(project: String, summary: String) = f("$project asks: $summary")
     fun done(project: String, summary: String) = f("$project is done. $summary")
     fun needs(project: String, summary: String) = f("$project needs you. $summary")
     fun sent(choice: String) = f("Sent: $choice.")
+}
+
+/** The words of an action, for the ear and for the screen. */
+object RoomText {
+    private val fixed = mapOf(
+        "go" to "Go", "yes" to "Yes", "commit" to "Commit", "push" to "Push", "compact" to "Compact",
+        "explain" to "Explain simpler", "recommend" to "What do you recommend", "research" to "Research first",
+        "progress" to "Where are we", "hold" to "Hold", "stop" to "Stop", "clear" to "Clear",
+        "readall" to "Read all", "write" to "Write", "again" to "Run again", "screen" to "Screen")
+    fun label(a: RoomAction): String = a.option ?: a.makeTarget?.let { "Make $it" } ?: fixed[a.id] ?: a.id
 }

@@ -25,6 +25,8 @@ import android.os.SystemClock
 import android.util.Log
 import com.faka.invisible.claude.ClaudeEvent
 import com.faka.invisible.claude.ClaudeSettings
+import com.faka.invisible.claude.RoomMute
+import com.faka.invisible.claude.RoomsPort
 import com.faka.invisible.oskit.Program
 import com.faka.invisible.oskit.ProgramEntry
 import com.faka.invisible.oskit.ProgramHost
@@ -203,7 +205,7 @@ object Actions {
     fun init(ctx: Context) {
         if (::app.isInitialized) return
         app = ctx.applicationContext
-        Programs.install(writeServices, app, object : com.faka.invisible.whereami.WhereServices { override fun navigation() = ControllerNotificationListener.navigation })
+        Programs.install(writeServices, roomsPort, app, object : com.faka.invisible.whereami.WhereServices { override fun navigation() = ControllerNotificationListener.navigation })
         Programs.all.forEach { it.warm() }   // some programs build their sounds in seconds on a phone: do it now, quietly
         ControllerNotificationListener.loadMutes(app)
         TreeLeaves.store = prefs()
@@ -397,7 +399,18 @@ object Actions {
         prefs().edit().putString(ClaudeSettings.URL_KEY, url.trim()).putString(ClaudeSettings.TOKEN_KEY, token.trim()).apply()
         claudeWatch.restart()
     }
-    private val claudeWatch by lazy { ClaudeWatch({ claudeUrl() to claudeToken() }) { e -> handler.post { claudeAsked(e) } } }
+    private val claudeWatch by lazy { ClaudeWatch({ claudeUrl() to claudeToken() }, { e -> handler.post { claudeAsked(e) } }, { handler.post { roomNeeds() } }) }
+    /** A room of the laptop needs you: the Claude sound, unless muted until morning or a program is running. */
+    private fun roomNeeds() {
+        if (running != null || RoomMute.muted(prefs().getLong(RoomMute.KEY, 0L), System.currentTimeMillis())) return
+        narrator.beep(Tone.CLAUDE)
+    }
+    /** What the Laptop tool asks of the OS: the Write keyboard, and the way back to the tool when nothing was written. */
+    val roomsPort = object : RoomsPort {
+        override fun write(sendTo: (String) -> Boolean) {
+            handler.post { launchWrite(sendTo, null) { Programs.byId("hub:claude")?.let { startProgramEntry(it) } } }
+        }
+    }
     /** A question came while no program was running: tell the user with the Claude sound; if the menu is not in use, open the tool so the next click answers. */
     private fun claudeAsked(e: ClaudeEvent) {
         if (running != null) return
