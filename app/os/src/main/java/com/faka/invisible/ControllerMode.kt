@@ -710,7 +710,7 @@ class ControllerMode(
     private fun treeLabel(c: TreeNode): Phrase {
         val a = c.app
         val lang = if (a != null && !a.pkg.startsWith("hub:")) NameLang.voice(a.pkg, a.label) else null   // app names in their language; groups and OS programs stay English
-        val counted = c.unread > 0 && !isMusic(c)
+        val counted = c.unread > 0 && !isMusic(c) && a?.pkg?.startsWith("hub:") == true   // app and group notifications are counted only inside Notifications
         return if (lang == null) { if (counted) Menu.treeCount(c.label, c.unread) else Menu.treeName(c.label) }
         else Phrase.content(if (counted) c.label + ", " + Menu.countText(c.unread) else c.label, lang)
     }

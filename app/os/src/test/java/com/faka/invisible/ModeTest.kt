@@ -1123,11 +1123,11 @@ class ModeTest {
         assertFalse(LauncherSettings.migrateApps(listOf("messages", "notifications")).contains("notifications"))
     }
 
-    @Test fun homeLabelsUnreadButDoesNotReorderByIt() {
+    @Test fun homeNeverLabelsUnreadButDoesNotReorderByIt() {
         val r = mail(); r.wake(); r.advance(12000)
-        assertTrue(r.spoken().contains("say Mail, 2 notifications")); assertTrue(r.spoken().contains("say whatsapp, 1 notification")); assertTrue(r.spoken().contains("say Maps"))
+        assertTrue(r.spoken().contains("say Mail")); assertTrue(r.spoken().contains("say whatsapp")); assertTrue(r.spoken().contains("say Maps"))
         val order = r.spoken().map { it.removePrefix("say ") }
-        assertTrue(order.indexOf("Maps") < order.indexOf("Mail, 2 notifications") || order.indexOf("Maps") > order.indexOf("Mail, 2 notifications"))   // all apps are there, equal weights keep a stable order
+        assertTrue(order.indexOf("Maps") < order.indexOf("Mail") || order.indexOf("Maps") > order.indexOf("Mail"))   // all apps are there, equal weights keep a stable order
         val b = mail(); b.groups = emptyList(); b.wake(); b.advance(12000)
         assertEquals(r.spoken().map { it.substringBefore(",") }.filter { it != "say Notifications" }.take(7), b.spoken().map { it.substringBefore(",") }.take(7))   // the Notifications entry is the only difference
     }
@@ -1199,14 +1199,14 @@ class ModeTest {
     }
 
     @Test fun walkTreeToAnAppAndBackWithTripleClick() {
-        val r = mail(); r.wake(); r.pick("Mail, 2 notifications")
+        val r = mail(); r.wake(); r.pick("Mail")
         r.advance(3000); assertEquals(ControllerMode.Screen.NOTIF_LIST, r.m.screen)
         r.m.onGesture(Gesture.TRIPLE); r.advance(300)
         assertEquals(ControllerMode.Screen.HUB, r.m.screen)
     }
 
     @Test fun notificationReadInFullThenActionFires() {
-        val r = mail(); r.wake(); r.pick("Mail, 2 notifications")
+        val r = mail(); r.wake(); r.pick("Mail")
         r.pick("Boss. Call me"); r.advance(1500)
         assertTrue(r.spoken().contains("say Boss. Call me"))   // read in full, then the actions
         r.pick("Archive")
@@ -1214,17 +1214,17 @@ class ModeTest {
     }
 
     @Test fun privateNotificationSpeaksOnlyTheApp() {
-        val r = mail(); r.wake(); r.pick("Mail, 2 notifications")
+        val r = mail(); r.wake(); r.pick("Mail")
         r.advance(5000)
         assertTrue(r.spoken().contains("say Private notification"))
         assertFalse(r.spoken().any { it.contains("secret") || it.contains("Bank") })
     }
 
     @Test fun textActionGoesToWriteAndDismissRemoves() {
-        val r = mail(); r.wake(); r.pick("Mail, 2 notifications"); r.pick("Boss. Call me")
+        val r = mail(); r.wake(); r.pick("Mail"); r.pick("Boss. Call me")
         r.pick("Reply")
         assertTrue(r.has("nreply k1 1"))
-        val d = mail(); d.wake(); d.pick("Mail, 2 notifications"); d.pick("Boss. Call me"); d.pick("Dismiss")
+        val d = mail(); d.wake(); d.pick("Mail"); d.pick("Boss. Call me"); d.pick("Dismiss")
         assertTrue(d.has("ndismiss k1"))
     }
 
@@ -1289,7 +1289,7 @@ class ModeTest {
         val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Mail, 2 notifications"); r.advance(3000)
         r.m.onGesture(Gesture.TRIPLE); r.advance(300)
         assertEquals(ControllerMode.Screen.NOTIF_APPS, r.m.screen)
-        val t = mail(); t.wake(); t.pick("Mail, 2 notifications"); t.pick("Boss. Call me"); t.advance(3000)
+        val t = mail(); t.wake(); t.pick("Mail"); t.pick("Boss. Call me"); t.advance(3000)
         t.m.onGesture(Gesture.TRIPLE); t.advance(300)
         assertEquals(ControllerMode.Screen.NOTIF_LIST, t.m.screen)
         t.m.onGesture(Gesture.TRIPLE); t.advance(300)
@@ -1297,11 +1297,11 @@ class ModeTest {
     }
 
     @Test fun muteThisAppGoesHomeWithoutIt() {
-        val r = mail(); r.wake(); r.pick("Mail, 2 notifications"); r.pick("Boss. Call me"); r.pick("Mute this app")
+        val r = mail(); r.wake(); r.pick("Mail"); r.pick("Boss. Call me"); r.pick("Mute this app")
         assertTrue(r.has("nmute com.mail"))
         r.advance(30000)
         assertEquals(ControllerMode.Screen.HUB, r.m.screen)
-        assertTrue(r.spoken().contains("say whatsapp, 1 notification"))   // the home list was rebuilt without Mail
+        assertTrue(r.spoken().contains("say whatsapp"))   // the home list was rebuilt without Mail
         assertFalse(r.spoken().any { it.startsWith("say Mail") })
         assertTrue(r.spoken().contains("say Unmute all apps"))
     }
