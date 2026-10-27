@@ -23,7 +23,7 @@ data class LauncherSettings(
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "games" to "Games", "alarm" to "Set alarm", "calculator" to "Calculator", "write" to "Write", "compass" to "Compass", "claude" to "Claude (answer Claude Code on the laptop)", "whereami" to "Where am I", "sum" to "Sum prices")
+        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "games" to "Games", "alarm" to "Set alarm", "calculator" to "Calculator", "write" to "Write", "compass" to "Compass", "whereami" to "Where am I", "claude" to "Claude (answer Claude Code on the laptop)", "sum" to "Sum prices")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** Every key a saved menu has ever used, in a fixed order. Only the old migration steps use it; [cleanHub] drops what is no longer an app. */

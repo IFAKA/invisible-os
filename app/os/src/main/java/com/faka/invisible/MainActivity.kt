@@ -184,7 +184,7 @@ class MainActivity : Activity() {
         card("Claude bridge", "Answer Claude Code on your laptop with the button. Run bridge/server.py on the laptop, then type the address it prints and the token. Leave empty to turn it off.") {
             val url = k.input("Address, e.g. http://100.64.0.5:8765").apply { minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI; setText(Actions.claudeUrl()) }
             val tok = k.input("Token").apply { minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD; setText(Actions.claudeToken()) }
-            val note = k.text("", 14f, Ui.good).apply { setPadding(0, k.dp(6), 0, 0) }
+            val note = k.text("", Type.CAPTION, Ui.good).apply { setPadding(0, k.dp(Ui.S1), 0, 0) }
             addView(url, LinearLayout.LayoutParams(-1, -2))
             addView(tok, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
             addView(k.btn("Save", true) {
