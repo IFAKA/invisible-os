@@ -482,6 +482,14 @@ object Actions {
         prefs().edit().apply { if (keep == null) remove(Computers.ACTIVE_KEY) else putString(Computers.ACTIVE_KEY, keep) }.apply()
         rooms.restart()
     }
+    /** Ask a computer just added (QR scan) for its suggested profile and keep it if none was chosen. Runs on its own thread; no watcher restart. */
+    fun suggestProfile(name: String) {
+        val c = Computers.find(computers(), name)?.takeIf { it.profile.isEmpty() } ?: return
+        Thread({
+            val s = try { com.faka.invisible.claude.BridgeClient(c.url, c.token).info().suggest } catch (_: java.io.IOException) { "" } catch (_: RuntimeException) { "" }
+            if (s.isNotEmpty()) { val now = computers(); if (Computers.find(now, name)?.profile.isNullOrEmpty()) Computers.save(prefs(), Computers.withProfile(now, name, s)) }
+        }, "computer-profile").apply { isDaemon = true; start() }
+    }
     /** Listen to this computer only: save it, move the watcher. */
     fun setActive(name: String) {
         val c = Computers.find(computers(), name) ?: return

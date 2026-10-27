@@ -65,6 +65,12 @@ Entering it speaks "Wants to: <the exact command or file>", then "That means: <p
 Hear it again, No, Yes, Yes and do not ask again (only if the hook offered it), Read the details (the whole `what`). No is always read before Yes. Write is not offered.
 A click on Yes needs no second confirm. It sends POST /answer with the hook's own label, says "Sent to <window>", and goes back to the windows list. Too late (409): "Too late. Answered on the laptop."
 
+## Profiles and work tools
+A computer has a profile, `work` or `personal` (the Work / Personal chips under the Name box when you add or rename it; a chip fills the name "Work laptop" / "Laptop"; typing a name keeps the profile). The bridge suggests one (`GET /info`: work if a known project has a `dw.json`). The profile only chooses which tools a window offers.
+Window options get one more entry, **Tools** (before Read all and Write). Tree: Tools > Git (Status, Pull, Switch branch, Commit, Push) for everyone; work adds Merge request, Jira, Research, and Commerce Cloud when the window's folder has `dw.json`. With one group the group level is skipped. Same window UX everywhere: the story first, "Hear it again" first, anything that changes something asks first ("No, go back" read before "Yes"; for commit and merge request the draft you heard is the question and Cancel is read before Create), triple click = back.
+Built from outside tools only through fakeable runners: `git`, `glab`, `acli`, WebDAV over HTTPS, the local model (`gemma3:4b`, same accuracy guard as stories). `dw.json` holds passwords: the bridge reads it, never logs, speaks or sends it.
+Limits: a written text (merge request description, Jira comment, research question) ends the Laptop tool after the OS speaks the result (the Write program does not return to it); `acli` and `dw.json` were not available on the build machine, so their command names and file shape come from the vendor docs and are not checked against the real tools. Confluence: not built (no read command known in `acli`).
+
 ## Room states (from agent-status files and hooks; no model)
 needs you (permission, question, or a status block that asks something) > failed (shell) > done (not visited since) > working > idle.
 

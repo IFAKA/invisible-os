@@ -6,7 +6,7 @@ import com.faka.invisible.voicekit.Phrase
 import com.faka.invisible.voicekit.Voice
 
 /** One computer that runs its own bridge/server.py: a name you choose, its address and its token. */
-data class Computer(val name: String, val url: String, val token: String)
+data class Computer(val name: String, val url: String, val token: String, /** "work", "personal" or "" (not chosen yet; treated as personal). Decides which tools a window offers. */ val profile: String = "")
 
 /** The stored list of computers (JSON in prefs), the checks on names, and the one-time move from the old single address. */
 object Computers {
@@ -24,7 +24,7 @@ object Computers {
     // --- JSON (hand written: the list is tiny, and this stays testable on the laptop) ---
 
     fun encode(list: List<Computer>): String =
-        list.joinToString(",", "[", "]") { "{\"name\":${q(it.name)},\"url\":${q(it.url)},\"token\":${q(it.token)}}" }
+        list.joinToString(",", "[", "]") { "{\"name\":${q(it.name)},\"url\":${q(it.url)},\"token\":${q(it.token)},\"profile\":${q(it.profile)}}" }
 
     private fun q(s: String): String = buildString {
         append('"')
@@ -119,7 +119,7 @@ object Computers {
                 f[k] = r.str() ?: return out
             }
             val name = clean(f["name"].orEmpty())
-            if (name.isNotEmpty() && out.none { it.name.equals(name, true) }) out.add(Computer(name, f["url"].orEmpty().trim(), f["token"].orEmpty().trim()))
+            if (name.isNotEmpty() && out.none { it.name.equals(name, true) }) out.add(Computer(name, f["url"].orEmpty().trim(), f["token"].orEmpty().trim(), Profiles.normalize(f["profile"].orEmpty())))
         }
         return out
     }
@@ -158,6 +158,7 @@ object Computers {
     }
     fun add(list: List<Computer>, c: Computer): List<Computer> = list + c.copy(name = clean(c.name), url = c.url.trim(), token = c.token.trim())
     fun rename(list: List<Computer>, from: String, to: String): List<Computer> = list.map { if (it.name.equals(from, true)) it.copy(name = clean(to)) else it }
+    fun withProfile(list: List<Computer>, name: String, profile: String): List<Computer> = list.map { if (it.name.equals(name, true)) it.copy(profile = Profiles.normalize(profile)) else it }
     fun remove(list: List<Computer>, name: String): List<Computer> = list.filter { !it.name.equals(name, true) }
     fun find(list: List<Computer>, name: String): Computer? = list.firstOrNull { it.name.equals(clean(name), true) }
 

@@ -45,6 +45,22 @@ The hook then allows, denies or allows-and-remembers as before (hooks are not ch
 ## POST /project/new {"area":"<a path from /areas>","name":"My game","ask":"optional first message"} -> {"ok":true,"pane":"%9","path":".../my-game"}
   Makes folder slug(name) (lowercase a-z0-9 and "-", max 40) in the area, `git init`, opens a tmux window running claude, and types `ask` + Enter about 4 s later.
   400 {"ok":false} when the area is not in /areas, the name gives an empty slug, or the folder exists.
+## Profile and work tools (bridge/tools.py)
+The phone keeps a profile per computer (`work` | `personal`, chosen with the Work / Personal chips on the Add or Rename computer screen; not chosen = personal).
+## GET /info -> {"suggest":"work"|"personal","host":"mac-name"}   work if any known project folder (see /projects) has a dw.json; the phone asks it once after the computer is added and pre-fills the chips.
+## GET /room/tools?id=%3&profile=work -> [TOOL, ...]   the tools of one window (404 no such room)
+  TOOL = {"id":"git","label":"Git","confirm":false,"children":[TOOL...]}   a group has children; a tool has none and may have "write":true (its text comes from the Write keyboard) and "confirm":true (the phone asks "No, go back" / "Yes" first)
+  personal: Git (git.status, git.pull, git.switch, git.commit, git.push*).
+  work: Git, Merge request (mr.make), Jira (jira.mine), Research (research.ask, write), and Commerce Cloud (cc.switch only with 2 or more configs, cc.logs) ONLY when the window's folder or a parent (up to 4 levels, never above $HOME) has dw.json.
+## POST /room/tool?profile=work {"id":"%3","tool":"git.status","arg":""} -> {"ok":true,"story":"Branch main. 2 changed files.","items":[ITEM,...]}
+  ITEM = {"label":"Create","tool":"git.commit.do","arg":"Fix the loop","confirm":true?,"write":true?}   tool "" = Cancel. A tool the profile does not offer is refused (ok:false, nothing runs). `profile` may also be in the body.
+  The phone says `story`, then lists "Hear it again" and the items (Cancel is always read before the action it cancels). A write item sends `arg` + "\n" + the written text as `arg`.
+  git.status, git.pull, git.switch (no arg: list local branches as confirm items; with arg: switch), git.commit (no arg: message from the local model, guarded like stories, fallback "Update <files>"; Cancel, Create -> git.commit.do arg=message runs `git commit -a -m`), git.push (sets upstream if none).
+  mr.make -> reads .gitlab/merge_request_templates/*.md (Default.md first), fills it from the branch commits and diff stat (local model, same guard; fallback = first commit subject + template + commit list); items Cancel, Create (`glab mr create --title --description --target-branch <origin default> --source-branch <current> --yes`), Edit description (write; replaces the description, the draft is kept on the bridge per window and branch).
+  jira.mine -> `acli jira workitem search` (assigned to me, not done) as "KEY, summary" items -> jira.view (story: model summary of description and last comment, fallback first 25 words) -> Comment (write) -> jira.comment arg "KEY\ntext" (`acli jira workitem comment create`).
+  cc.logs -> WebDAV `https://<hostname>/on/demandware.servlet/webdav/Sites/Logs/` with the dw.json login (never logged, never in any reply) -> latest error-*.log -> "3 errors, 1 new: <message>." (grouped by message with digits collapsed; new = first seen within the last hour of the log), items = each error -> cc.error arg=index (full message, count, last time). cc.switch -> list of instances (confirm) -> flips "active" in the dw.json "configurations" list; with a single-config dw.json it only says so.
+  research.ask (write) -> a new tmux window in ~/.config/invisible-bridge/research running `claude -p "<question>"` (read-only glab/acli tools), then a shell stays open; the window's story is the answer.
+
 ## /events (exists) also delivers {"type":"room","id":"%3","name":"...","state":"needs"} when a room turns "needs".
 
 ## Action ids

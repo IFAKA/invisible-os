@@ -6,6 +6,7 @@ import android.widget.LinearLayout
 import com.faka.invisible.claude.BridgeClient
 import com.faka.invisible.claude.Computer
 import com.faka.invisible.claude.Computers
+import com.faka.invisible.claude.Profiles
 import com.faka.invisible.voicekit.Translations
 import java.io.IOException
 
@@ -27,6 +28,33 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
     private var notice = ""
     private var skipClip = false
     private var gen = 0
+    /** The Name box and the Work / Personal chips of the Add and Rename screens. */
+    private var draft = Profiles.Draft("", "")
+    private var draftFor = ""
+
+    /** The Name box (kept in [draft] as you type) and, under it, the two chips: a tap fills the name and sets the profile. */
+    private fun nameAndChips(parent: LinearLayout, hint: String) {
+        val name = k.input(hint).apply { minLines = 1; maxLines = 1; setText(draft.name) }
+        name.addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) { draft = Profiles.typed(draft, s.toString()) }
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+        })
+        parent.addView(name, LinearLayout.LayoutParams(-1, -2))
+        parent.addView(k.row(
+            k.grow(k.chip(tr("Work"), draft.profile == Profiles.WORK) { draft = Profiles.chip(Profiles.WORK); redraw() }),
+            k.grow(k.chip(tr("Personal"), draft.profile == Profiles.PERSONAL) { draft = Profiles.chip(Profiles.PERSONAL); redraw() })),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
+    }
+
+    /** Ask the new computer for its suggested profile once; it fills the form only if you have not chosen or typed yet. */
+    private fun askSuggestion(c: Computer) {
+        val original = draft.name; val g = gen
+        Thread({
+            val s = try { BridgeClient(c.url, c.token).info().suggest } catch (_: IOException) { "" } catch (_: RuntimeException) { "" }
+            a.runOnUiThread { if (g == gen && draftFor == c.url && mode == Mode.ADD && paired?.url == c.url) { draft = Profiles.suggested(draft, original, s); if (s.isNotEmpty()) redraw() } }
+        }, "computers-info").apply { isDaemon = true; start() }
+    }
     private fun tr(t: String) = Translations.label(t)
 
     /** True when the back link steps up to the list instead of leaving the page. */
@@ -79,7 +107,7 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
             }
             list.forEach { c -> body.addView(k.quiet(tr("Rename or remove {0}").replace("{0}", c.name)) { selected = c.name; mode = Mode.ONE; error = ""; redraw() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) }) }
         }
-        body.addView(k.btn(tr("Add a computer"), true) { mode = Mode.ADD; error = ""; notice = ""; paired = null; skipClip = false; redraw() }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(Ui.S2) })
+        body.addView(k.btn(tr("Add a computer"), true) { mode = Mode.ADD; error = ""; notice = ""; paired = null; skipClip = false; draftFor = ""; redraw() }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(Ui.S2) })
     }
 
     private fun clip(): String {
@@ -90,7 +118,7 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
 
     /** One tap adds: the name is filled in, so "Add" is the only step. */
     private fun addNow(c: Computer, name: String) {
-        val r = Computers.addPaired(Actions.computers(), c, name)
+        val r = Computers.addPaired(Actions.computers(), c.copy(profile = draft.profile), name)
         if (!r.already) Actions.setComputers(r.list)
         notice = tr(Computers.addedSentence(r)); error = ""; paired = null; mode = Mode.LIST; check()
     }
@@ -117,30 +145,30 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
     }
 
     private fun drawFound(c: Computer) {
-        val name = k.input(tr("Name")).apply { minLines = 1; maxLines = 1; setText(c.name) }
+        if (draftFor != c.url) { draftFor = c.url; draft = Profiles.Draft(c.name, ""); askSuggestion(c) }
         val note = k.text(error, Type.CAPTION, Ui.bad)
         k.card(body, tr("Found {0}. Add?").replace("{0}", c.name.ifEmpty { tr("a computer") }), c.url) {
-            addView(name, LinearLayout.LayoutParams(-1, -2))
-            addView(k.btn(tr("Add"), true) { addNow(c, name.text.toString()) }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+            nameAndChips(this, tr("Name"))
+            addView(k.btn(tr("Add"), true) { addNow(c, draft.name) }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
             addView(k.quiet(tr("Use another code")) { paired = null; skipClip = true; error = ""; redraw() })
             addView(note)
         }
     }
 
     private fun drawAdd() {
-        val name = k.input(tr("Name, e.g. Home")).apply { minLines = 1; maxLines = 1 }
+        if (draftFor != "hand") { draftFor = "hand"; draft = Profiles.Draft("", "") }
         val url = k.input(tr("Address, e.g. http://100.64.0.5:8765")).apply { minLines = 1; maxLines = 1; inputType = InputType.TYPE_TEXT_VARIATION_URI }
         val tok = k.input(tr("Token")).apply { minLines = 1; maxLines = 1; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
         val note = k.text(error, Type.CAPTION, Ui.bad)
         k.card(body, tr("Enter by hand"), tr("Run bridge/server.py on that computer, then type the address it prints and the token.")) {
-            addView(name, LinearLayout.LayoutParams(-1, -2))
+            nameAndChips(this, tr("Name, e.g. Home"))
             addView(url, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
             addView(tok, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
             addView(k.btn(tr("Save"), true) {
                 val list = Actions.computers()
-                val p = Computers.problem(list, name.text.toString(), url.text.toString(), tok.text.toString())
+                val p = Computers.problem(list, draft.name, url.text.toString(), tok.text.toString())
                 if (p != null) note.text = tr(p)
-                else { Actions.setComputers(Computers.add(list, Computer(name.text.toString(), url.text.toString(), tok.text.toString()))); error = ""; mode = Mode.LIST; check() }
+                else { Actions.setComputers(Computers.add(list, Computer(draft.name, url.text.toString(), tok.text.toString(), draft.profile))); error = ""; mode = Mode.LIST; check() }
             }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
             addView(note)
         }
@@ -158,15 +186,15 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
 
     private fun drawRename() {
         val old = selected.orEmpty()
-        val name = k.input(tr("Name")).apply { minLines = 1; maxLines = 1; setText(old) }
+        if (draftFor != "rename:$old") { draftFor = "rename:$old"; draft = Profiles.Draft(old, Computers.find(Actions.computers(), old)?.profile.orEmpty()) }
         val note = k.text(error, Type.CAPTION, Ui.bad)
         k.card(body, tr("Rename"), null) {
-            addView(name, LinearLayout.LayoutParams(-1, -2))
+            nameAndChips(this, tr("Name"))
             addView(k.btn(tr("Save"), true) {
                 val list = Actions.computers(); val c = Computers.find(list, old)
-                val p = if (c == null) "Write a name." else Computers.problem(list, name.text.toString(), c.url, c.token, renaming = old)
+                val p = if (c == null) "Write a name." else Computers.problem(list, draft.name, c.url, c.token, renaming = old)
                 if (p != null) note.text = tr(p)
-                else { val wasActive = c != null && isActive(c); Actions.setComputers(Computers.rename(list, old, name.text.toString())); if (wasActive) Actions.setActive(name.text.toString()); selected = Computers.clean(name.text.toString()); mode = Mode.LIST; check() }
+                else { val wasActive = c != null && isActive(c); Actions.setComputers(Computers.withProfile(Computers.rename(list, old, draft.name), draft.name, draft.profile)); if (wasActive) Actions.setActive(draft.name); selected = Computers.clean(draft.name); draftFor = ""; mode = Mode.LIST; check() }
             }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
             addView(note)
         }

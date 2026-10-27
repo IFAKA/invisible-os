@@ -182,6 +182,46 @@ class FlowRoomsTest {
         assertEquals("Home", open.getStringExtra(ChangesNotice.EXTRA_COMPUTER))
     }
 
+    // ---- rooms_tools ----
+    private fun enterTools(rig: RoboRig, s: FakeRooms, profile: String = ""): Int {
+        start(rig, Port(listOf(Computer("Home", s.url, s.token, profile)), Computer("Home", s.url, s.token, profile)))
+        val i = rig.mark(); rig.needLive("alpha-proj, Alpha, needs you", i); rig.advance(60); rig.press("120")
+        val j = rig.mark(); rig.needLive("Tools", j)   // the item Tools has just started: a click picks it
+        val k = rig.mark(); rig.press("120")
+        return k
+    }
+
+    @Test fun rooms_tools_git_status_speaks_the_story() {
+        val s = server(); val rig = RoboRig()
+        val j = enterTools(rig, s)
+        rig.needLive("Status", j)
+        assertTrue("personal profile sent: ${s.gets}", s.gets.any { it.startsWith("/room/tools?id=%251") && it.contains("profile=personal") })
+        rig.press("120")
+        rig.needLive("Branch main. 2 changed files. Ahead 1.", j)
+        val post = s.posts.last { it.first == "/room/tool" }.second
+        assertEquals("git.status", post.optString("tool"))
+    }
+
+    @Test fun rooms_tools_commit_reads_cancel_before_create() {
+        val s = server(); val rig = RoboRig()
+        val j = enterTools(rig, s)
+        rig.needLive("Commit", j); rig.press("120")
+        rig.needLive("Message: Fix the loop.", j); rig.needLive("Cancel", j); rig.needLive("Create", j)
+        val h = rig.said.drop(j)
+        assertTrue("Cancel is read before Create: $h", h.indexOfFirst { it == "Cancel" } < h.indexOfFirst { it == "Create" })
+        assertTrue("nothing committed yet", s.posts.none { it.second.optString("tool") == "git.commit.do" })
+        rig.press("120")   // Create
+        rig.needLive("Committed.", j)
+        assertEquals("Fix the loop", s.posts.last { it.first == "/room/tool" }.second.optString("arg"))
+    }
+
+    @Test fun rooms_tools_work_profile_has_more_groups() {
+        val s = server(); val rig = RoboRig()
+        val j = enterTools(rig, s, "work")
+        rig.needLive("Jira", j)
+        assertTrue("work profile sent: ${s.gets}", s.gets.any { it.contains("profile=work") })
+    }
+
     // ---- rooms_new_project ----
     @Test fun rooms_new_project() {
         val s = server(); val rig = RoboRig(); val port = Port(listOf(Computer("Home", s.url, s.token)), Computer("Home", s.url, s.token))
@@ -262,7 +302,7 @@ class FlowRoomsTest {
         rig.advance(2500); assertTrue("the mark moved on: ${host.screens.takeLast(3)}", host.screens.last().second >= 1)
         val j = rig.mark(); (rig.running as ClaudeAndroid).tap(2)   // Gamma, a shell window
         rig.needLive("Fake story for Gamma", j); rig.needLive("Run again", j)
-        assertEquals(listOf("Hear it again", "Run again", "Make test", "Stop", "Write"), host.screens.last().first)
+        assertEquals(listOf("Hear it again", "Run again", "Make test", "Stop", "Tools", "Write"), host.screens.last().first)
     }
 
     @Test fun retry_gives_feedback_and_speaks_again() {

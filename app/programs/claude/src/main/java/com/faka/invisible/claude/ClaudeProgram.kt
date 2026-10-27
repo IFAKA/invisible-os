@@ -92,6 +92,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         Choice.MutePick -> ClaudeVoice.MUTE
         Choice.TestDonePick -> ClaudeVoice.TEST_DONE
         is Choice.ActPick -> ClaudeVoice.label(c.action, room?.go.orEmpty())
+        is Choice.ToolPick -> if (c.node.tool == ToolNode.HEAR) ToolVoice.HEAR else Phrase.content(c.node.label, "en")
+        is Choice.ToolConfirm -> if (c.yes) ClaudeVoice.YES else ClaudeVoice.NO_BACK
         Choice.No -> ClaudeVoice.NO_BACK
         Choice.Yes -> ClaudeVoice.YES
         is Choice.Approve -> when (c.opt.kind) { Approval.Kind.NO -> ClaudeVoice.NO; Approval.Kind.YES -> ClaudeVoice.YES; Approval.Kind.ALWAYS -> ClaudeVoice.YES_ALWAYS }
@@ -238,12 +240,91 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         }
     }
 
+    // --- Tools of a window (bridge/tools.py): Tools > group > tool > its result; the same window walk, triple click = back ---
+
+    private var toolNodes: List<ToolNode> = emptyList()
+    private var toolBack: () -> Unit = {}
+    private var toolAsk: ToolNode? = null
+    private var toolResult: ToolReply? = null
+    private fun profile() = Profiles.effective(listenTo)
+
+    private fun loadTools(r: Room) {
+        scanner.stop(); awaitItem = false; host.stopSpeech()
+        phase = Phase.LOADING
+        bg({ client.tools(r.id, profile()) }) { list ->
+            if (list == null) unreachable { loadTools(r) }
+            else {
+                toolNodes = list
+                val back = { showActions(r, null) }
+                val top = if (list.size == 1 && list[0].children.isNotEmpty()) list[0].children else list   // one group: no extra level
+                showNodes(top, back, if (top.isEmpty()) ToolVoice.NO_TOOLS else null)
+            }
+        }
+    }
+
+    private fun showNodes(nodes: List<ToolNode>, back: () -> Unit, intro: Phrase?) {
+        toolBack = back; onBack = back
+        showList(nodes.map { Choice.ToolPick(it) }, intro)
+    }
+
+    /** A pick in a tools list or result. */
+    private fun runNode(n: ToolNode) {
+        val r = room ?: return
+        val here = scanner.list.items.mapNotNull { (it as? Choice.ToolPick)?.node }
+        val back = toolBack
+        when {
+            n.tool == ToolNode.HEAR -> toolResult?.let { showResult(r, it, back) }
+            n.tool.isEmpty() -> back()
+            n.children.isNotEmpty() -> showNodes(n.children, { showNodes(here, back, null) }, null)
+            n.write -> writeTool(r, n)
+            n.confirm -> {
+                toolAsk = n
+                onBack = { showNodes(here, back, null) }
+                showList(listOf(Choice.ToolConfirm(false), Choice.ToolConfirm(true)), ToolVoice.sure(n.label))
+            }
+            else -> callTool(r, n, n.arg, here, back)
+        }
+    }
+
+    private fun toolConfirmed(yes: Boolean) {
+        val r = room ?: return; val n = toolAsk ?: return
+        if (yes) callTool(r, n, n.arg, emptyList(), toolBack) else onBack()
+    }
+
+    private fun callTool(r: Room, n: ToolNode, arg: String, here: List<ToolNode>, back: () -> Unit) {
+        scanner.stop(); awaitItem = false; host.stopSpeech()
+        phase = Phase.LOADING
+        bg({ client.tool(r.id, n.tool, arg, profile()) }) { got ->
+            if (got == null) unreachable { callTool(r, n, arg, here, back) } else showResult(r, got, back)
+        }
+    }
+
+    /** The story first, then "Hear it again" and the follow-ups. No follow-ups: the story is read, then the window's options. */
+    private fun showResult(r: Room, got: ToolReply, back: () -> Unit) {
+        toolResult = got
+        val story = Phrase.content(got.story.ifBlank { "Done." }, "en")
+        if (got.items.isEmpty()) { scanner.stop(); awaitItem = false; host.stopSpeech(); phase = Phase.READING; onBack = { showActions(r, null) }; say(story); return }
+        showNodes(listOf(ToolNode("", ToolNode.HEAR)) + got.items, back, story)
+    }
+
+    /** The text comes from Write; the OS speaks the result. */
+    private fun writeTool(r: Room, n: ToolNode) {
+        val c = client; val p = profile()
+        releaseQuietly()
+        port.writeSeq(listOf(ToolVoice.WRITE)) { texts ->
+            val text = texts[0]
+            if (text.isBlank()) ToolVoice.NOT_WRITTEN
+            else try { Phrase.content(c.tool(r.id, n.tool, n.argWith(text), p).story.ifBlank { "Done." }, "en") } catch (_: IOException) { ClaudeVoice.NOT_REACHABLE }
+        }
+    }
+
     private fun doAction(a: RoomAction) {
         val r = room ?: return
         when {
             a.id == RoomAction.HEAR -> showActions(r, storyIntro ?: intro(r))
             a.id == "readall" -> readAll(r)
             a.id == "write" -> write(r)
+            a.id == RoomAction.TOOLS -> loadTools(r)
             a.needsConfirm -> { pending = a; onBack = { showActions(r, null) }; showList(listOf(Choice.No, Choice.Yes), if (a.id == "preview") ChangesVoice.START_PREVIEW else ClaudeVoice.sure(RoomText.label(a))) }
             else -> act(r, a)
         }
@@ -379,6 +460,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
             is Choice.ActPick -> doAction(c.action)
             is Choice.Approve -> room?.let { approve(it, c.opt) }
             Choice.Details -> room?.let { readDetails(it) }
+            is Choice.ToolPick -> runNode(c.node)
+            is Choice.ToolConfirm -> toolConfirmed(c.yes)
             Choice.No -> room?.let { showActions(it, null) }
             Choice.Yes -> { val r = room; val a = pending; if (r != null && a != null) act(r, a) }
             is Choice.ProjectPick -> showModes(c.project)

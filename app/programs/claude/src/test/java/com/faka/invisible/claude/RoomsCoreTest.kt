@@ -49,7 +49,7 @@ class RoomsCoreTest {
     }
     @Test fun earbudListKeepsServerOrderAndDropsScreen() {
         val r = room("option:go", "go", "screen", "yes", "go", "readall", "write")
-        assertEquals(listOf("hear", "option:go", "go", "yes", "readall", "write"), RoomAction.earbudList(r).map { it.id })
+        assertEquals(listOf("hear", "option:go", "go", "yes", "tools", "readall", "write"), RoomAction.earbudList(r).map { it.id })
         assertEquals(listOf("option:go", "go", "yes"), RoomAction.screenList(r).map { it.id })
     }
 

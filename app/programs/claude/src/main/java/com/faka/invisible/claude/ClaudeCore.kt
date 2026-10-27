@@ -36,6 +36,8 @@ sealed class Choice {
     object MutePick : Choice()
     object TestDonePick : Choice()
     data class ActPick(val action: RoomAction) : Choice()
+    data class ToolPick(val node: ToolNode) : Choice()
+    data class ToolConfirm(val yes: Boolean) : Choice()
     object No : Choice()
     object Yes : Choice()
     data class Approve(val opt: Approval.Opt) : Choice()

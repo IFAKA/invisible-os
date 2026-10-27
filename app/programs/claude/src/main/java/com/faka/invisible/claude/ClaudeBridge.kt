@@ -82,6 +82,20 @@ class BridgeClient(base: String, internal val token: String) {
     /** POST /project/open: a new tmux window with claude; mode is "continue" or "new". */
     @Throws(IOException::class) fun openProject(path: String, mode: String): Boolean = json("/project/open", JSONObject().put("path", path).put("mode", mode).toString(), "POST", 10_000).optBoolean("ok")
 
+    /** GET /info: the profile this laptop suggests (work if a project has dw.json) and its name. */
+    @Throws(IOException::class) fun info(): BridgeInfo = json("/info").let { BridgeInfo(Profiles.normalize(it.optString("suggest")), it.optString("host")) }
+    /** GET /room/tools: the tools of one window for [profile] (groups with children, or tools). */
+    @Throws(IOException::class)
+    fun tools(id: String, profile: String): List<ToolNode> {
+        val (code, text) = call("GET", "/room/tools?id=${enc(id)}&profile=${enc(profile)}", null, 8000)
+        if (code != 200) throw IOException("HTTP $code")
+        return try { ToolsJson.list(JSONArray(text)) } catch (e: org.json.JSONException) { throw IOException("bad reply") }
+    }
+    /** POST /room/tool: run [tool] with [arg]; the story to say and the follow-up items. */
+    @Throws(IOException::class)
+    fun tool(id: String, tool: String, arg: String, profile: String): ToolReply =
+        ToolsJson.reply(json("/room/tool?profile=${enc(profile)}", JSONObject().put("id", id).put("tool", tool).put("arg", arg).toString(), "POST", 120_000))
+
     internal fun call(method: String, path: String, body: String?, timeoutMs: Int): Pair<Int, String> {
         val c = URL(base + path).openConnection() as HttpURLConnection
         try {

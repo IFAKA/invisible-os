@@ -82,13 +82,19 @@ data class RoomAction(val id: String) {
     /** Push and Clear ask "No, go back" / "Yes" first. */
     val needsConfirm get() = id == "push" || id == "clear" || id == "preview"
     /** Handled on the phone, not sent with POST /room/act. */
-    val onPhone get() = id == "readall" || id == "screen" || id == "write" || id == HEAR || id == "show" || id == "preview"
+    val onPhone get() = id == "readall" || id == "screen" || id == "write" || id == HEAR || id == TOOLS || id == "show" || id == "preview"
     /** True for something the earbud list can show (the screen view is the "screen" action itself). */
     val earbud get() = id != "screen" && id.isNotBlank()
 
     companion object {
         /** The actions to read, in the order the server gave them, without repeats and without "screen". */
-        fun earbudList(room: Room): List<RoomAction> = listOf(RoomAction(HEAR)) + room.actions.map { RoomAction(it.trim()) }.filter { it.earbud && it.id != HEAR }.distinctBy { it.id }
+        fun earbudList(room: Room): List<RoomAction> {
+            val acts = room.actions.map { RoomAction(it.trim()) }.filter { it.earbud && it.id != HEAR && it.id != TOOLS }.distinctBy { it.id }
+            val at = acts.indexOfFirst { it.id == "readall" || it.id == "write" }.let { if (it < 0) acts.size else it }   // Tools sits before Read all / Write
+            return listOf(RoomAction(HEAR)) + acts.take(at) + RoomAction(TOOLS) + acts.drop(at)
+        }
+        /** Phone-only option that opens the work tools of the window (Git, merge request...). */
+        const val TOOLS = "tools"
         /** Phone-only first option of every window: say the story again. */
         const val HEAR = "hear"
         /** The actions that make a button on the phone screen: everything the server can run (no read-aloud, no keyboard, no "screen"). */

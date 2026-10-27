@@ -429,9 +429,9 @@ class Kit(private val c: Context) {
     }
 
     /** A tinted button for one value (a timer length). */
-    fun chip(label: String, onClick: () -> Unit) = Button(c).apply {
-        text = label; isAllCaps = false; textSize = Type.TITLE.size; setTextColor(Ui.accent); stateListAnimator = null; elevation = 0f
-        background = fill(Ui.tint, Ui.RADIUS_CHIP)
+    fun chip(label: String, selected: Boolean = false, onClick: () -> Unit) = Button(c).apply {
+        text = label; isAllCaps = false; textSize = Type.TITLE.size; setTextColor(if (selected) Ui.onAccent else Ui.accent); stateListAnimator = null; elevation = 0f
+        background = fill(if (selected) Ui.accentFill else Ui.tint, Ui.RADIUS_CHIP)
         setOnClickListener { onClick() }
     }
 

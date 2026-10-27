@@ -18,6 +18,7 @@ class PairActivity : Activity() {
             val r = Computers.addPaired(Actions.computers(), c)
             if (!r.already) Actions.setComputers(r.list)
             Actions.setActive(r.name)
+            if (!r.already) Actions.suggestProfile(r.name)
             Computers.addedSentence(r)
         }
         Toast.makeText(applicationContext, said, Toast.LENGTH_LONG).show()

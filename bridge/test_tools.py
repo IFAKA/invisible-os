@@ -46,7 +46,7 @@ class ListTest(unittest.TestCase):
         self.assertEqual(self.ids(t, "personal"), ["git"])
         kids = t.tool_list(self.d, "personal")[0]["children"]
         self.assertEqual([(k["id"], k["confirm"]) for k in kids],
-                         [("git.status", False), ("git.pull", False), ("git.switch", False), ("git.commit", True), ("git.push", True)])
+                         [("git.status", False), ("git.pull", False), ("git.switch", False), ("git.commit", False), ("git.push", True)])
 
     def test_work_packs_and_dw(self):
         t, _ = mk([])
@@ -119,8 +119,8 @@ class GitTest(unittest.TestCase):
         t, f = mk(rules, model=lambda p: '{"message": "Fix the a.py loop"}')
         r = t.call("%1", self.d, "personal", "git.commit")
         self.assertEqual(r["story"], "Message: Fix the a.py loop.")
-        self.assertEqual([i["label"] for i in r["items"]], ["Create", "Cancel"])
-        self.assertTrue(r["items"][0]["confirm"]); self.assertEqual(f.ran("commit"), [])
+        self.assertEqual([i["label"] for i in r["items"]], ["Cancel", "Create"])      # Cancel is read first
+        self.assertEqual(f.ran("commit"), [])
         # the model invents a name: fallback from the file names
         t, _ = mk(rules, model=lambda p: '{"message": "Fix Kubernetes login"}')
         self.assertEqual(t.call("%1", self.d, "personal", "git.commit")["story"], "Message: Update a.py.")
@@ -162,8 +162,8 @@ class MrTest(unittest.TestCase):
         t, f = mk(self.rules, model=model)
         r = t.call("%1", self.d, "work", "mr.make")
         self.assertTrue(r["story"].startswith("Merge request: Add retry to fetch. 2 commits, 1 file."))
-        self.assertEqual([i["label"] for i in r["items"]], ["Create", "Edit description", "Cancel"])
-        self.assertTrue(r["items"][0]["confirm"] and r["items"][1]["write"])
+        self.assertEqual([i["label"] for i in r["items"]], ["Cancel", "Create", "Edit description"])
+        self.assertTrue(r["items"][2]["write"])
         self.assertIn("origin/develop..HEAD", " ".join(f.ran("log")[0]))
         self.assertEqual(f.ran("glab"), [])
         r = t.call("%1", self.d, "work", "mr.edit", "Only the retry")

@@ -23,7 +23,7 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
     }
     fun stop() { open = false; server.close() }
 
-    private fun reply(c: Socket, o: JSONObject, code: Int = 200) {
+    private fun reply(c: Socket, o: Any, code: Int = 200) {
         val b = o.toString().toByteArray()
         val head = "HTTP/1.1 $code X\r\nContent-Type: application/json\r\nContent-Length: ${b.size}\r\nConnection: close\r\n\r\n"
         c.getOutputStream().apply { write(head.toByteArray()); write(b); flush() }
@@ -44,6 +44,7 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
             when (path) {
                 "/room/act" -> reply(c, JSONObject().put("ok", true).put("said", j.optString("action")))
                 "/project/open" -> reply(c, JSONObject().put("ok", true).put("id", "%9"))
+                "/room/tool" -> reply(c, tool(j))
                 else -> reply(c, JSONObject().put("ok", true))
             }
             return
@@ -58,6 +59,14 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
                 if (r == null) reply(c, JSONObject().put("error", "no such room"), 404)
                 else reply(c, JSONObject().put("story", r.optString("story").ifBlank { "Fake story for ${r.optString("name")}." }).put("go", r.optString("go")))
             }
+            "/info" -> reply(c, JSONObject().put("suggest", "work").put("host", "fake-host"))
+            "/room/tools" -> {
+                val work = target.contains("profile=work")
+                val kids = JSONArray().put(t("git.status", "Status")).put(t("git.commit", "Commit")).put(t("git.push", "Push", true))
+                val groups = JSONArray().put(JSONObject().put("id", "git").put("label", "Git").put("confirm", false).put("children", kids))
+                if (work) groups.put(JSONObject().put("id", "jira").put("label", "Jira").put("confirm", false).put("children", JSONArray().put(t("jira.mine", "My tickets"))))
+                reply(c, groups)
+            }
             "/room/screen" -> reply(c, JSONObject().put("text", "$ claude\n> working on the design doc\n  done"))
             "/projects" -> reply(c, JSONObject().put("projects", JSONArray().put(proj("alpha-proj", "/tmp/alpha", 10)).put(proj("beta-proj", "/tmp/beta", 5))))
             "/areas" -> reply(c, JSONObject().put("areas", JSONArray().put(proj("hardware", "/tmp/fake/hardware", 9))))
@@ -69,6 +78,16 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
             }
             else -> reply(c, JSONObject().put("error", "not found"), 404)
         }
+    }
+    private fun t(id: String, label: String, confirm: Boolean = false) = JSONObject().put("id", id).put("label", label).put("confirm", confirm)
+    /** The fixed answers of POST /room/tool (the real ones are made by bridge/tools.py). */
+    private fun tool(j: JSONObject): JSONObject = when (j.optString("tool")) {
+        "git.status" -> JSONObject().put("ok", true).put("story", "Branch main. 2 changed files. Ahead 1.")
+        "git.commit" -> JSONObject().put("ok", true).put("story", "Message: Fix the loop.").put("items", JSONArray()
+            .put(JSONObject().put("label", "Cancel").put("tool", "").put("arg", ""))
+            .put(JSONObject().put("label", "Create").put("tool", "git.commit.do").put("arg", "Fix the loop")))
+        "git.commit.do" -> JSONObject().put("ok", true).put("story", "Committed.")
+        else -> JSONObject().put("ok", true).put("story", "Done.")
     }
     private fun proj(name: String, path: String, uses: Int) = JSONObject().put("name", name).put("path", path).put("uses", uses)
 

@@ -242,7 +242,7 @@ class Tools:
         """[{id,label,confirm,write?,children?}]: the tools of one window (GET /room/tools)."""
         t = lambda i, label, confirm=False, write=False: dict(id=i, label=label, confirm=confirm, **({"write": True} if write else {}))
         groups = [dict(id="git", label="Git", confirm=False, children=[
-            t("git.status", "Status"), t("git.pull", "Pull"), t("git.switch", "Switch branch"), t("git.commit", "Commit", True), t("git.push", "Push", True)])]
+            t("git.status", "Status"), t("git.pull", "Pull"), t("git.switch", "Switch branch"), t("git.commit", "Commit"), t("git.push", "Push", True)])]
         if profile == "work":
             groups.append(dict(id="mr", label="Merge request", confirm=False, children=[t("mr.make", "Make merge request")]))
             groups.append(dict(id="jira", label="Jira", confirm=False, children=[t("jira.mine", "My tickets")]))
@@ -362,7 +362,7 @@ class Tools:
         msg, stat = self.commit_message(path)
         if not msg:
             return reply("Nothing to commit.")
-        return reply("Message: %s." % msg.rstrip("."), [item("Create", "git.commit.do", msg, confirm=True), CANCEL])
+        return reply("Message: %s." % msg.rstrip("."), [CANCEL, item("Create", "git.commit.do", msg)])   # the message you heard is the question: Cancel is read first
 
     def t_git_commit_do(self, pane, path, arg):
         msg = squash(arg)[:200]
@@ -428,7 +428,7 @@ class Tools:
         return lead + (" " + cut(body, STORY_WORDS) if body else "")
 
     def _mr_items(self):
-        return [item("Create", "mr.create", confirm=True), item("Edit description", "mr.edit", write=True), CANCEL]
+        return [CANCEL, item("Create", "mr.create"), item("Edit description", "mr.edit", write=True)]
 
     def t_mr_make(self, pane, path, arg):
         d = self.mr_draft(path)

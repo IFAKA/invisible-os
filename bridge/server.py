@@ -24,11 +24,8 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core import Store  # noqa: E402
 from rooms import Rooms  # noqa: E402
-<<<<<<< HEAD
 import preview  # noqa: E402
-=======
 from tools import Tools, host_name  # noqa: E402
->>>>>>> 00e7d04a (Bridge: work tools per window (Git, merge request, Jira, Commerce Cloud, Research) and GET /info profile suggestion)
 
 CONFIG_DIR = os.path.expanduser("~/.config/invisible-bridge")
 TOKEN_FILE = os.path.join(CONFIG_DIR, "token")
