@@ -52,7 +52,7 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
         gets.add(target)
         when (path) {
             "/rooms" -> reply(c, JSONObject().put("seq", 1).put("rooms", JSONArray(rooms)))
-            "/room/last" -> reply(c, JSONObject().put("text", "Alpha last message. The design doc is ready."))
+            "/room/last" -> reply(c, JSONObject().put("text", if (target.contains("%25")) "First paragraph here.\n\nSecond paragraph here.\n\nThird paragraph here." else "Alpha last message. The design doc is ready."))
             "/room/story" -> {
                 val id = target.substringAfter("id=", "").substringBefore('&').let { java.net.URLDecoder.decode(it, "UTF-8") }
                 val r = rooms.firstOrNull { it.optString("id") == id }
@@ -101,6 +101,14 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
             room("%4", "Delta", "delta-proj", "claude", "needs", "waiting for your permission", listOf("stop", "readall", "screen", "write"))
                 .put("ask", JSONObject().put("id", "7").put("kind", "permission").put("what", "rm -rf build/cache")
                     .put("plain", "Deletes the build cache folder").put("options", JSONArray(options)))
+        /** A window with a multiple-choice menu on its screen (ROOMS-API.md room.choice); the pick is POST /room/choose {id, picks, other}, recorded in [posts]. */
+        fun choiceRoom(multi: Boolean = false) =
+            room("%6", "Eps", "eps-proj", "claude", "needs", "Which approach do you want?", listOf("stop", "readall", "screen", "write"))
+                .put("choice", JSONObject().put("question", "Which approach do you want?").put("multi", multi).put("other", true).put("options", JSONArray()
+                    .put(JSONObject().put("n", 1).put("label", "Tree").put("desc", "Group apps by what you want to do"))
+                    .put(JSONObject().put("n", 2).put("label", "Flat list").put("desc", "One long list"))))
+        /** A window whose last message has three paragraphs (the "More" option). */
+        fun partsRoom() = room("%7", "Zeta", "zeta-proj", "claude", "done", "", listOf("go", "readall", "screen", "write"), "Zeta story.")
         val DEFAULT_ROOMS = listOf(
             room("%1", "Alpha", "alpha-proj", "claude", "needs", "The design doc is ready.", ACTIONS, "Wrote the design doc. It is ready. Say go to start building.", "start building"),
             room("%2", "Beta", "beta-proj", "claude", "working", "", listOf("stop", "readall", "screen", "write")),

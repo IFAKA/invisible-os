@@ -188,6 +188,8 @@ object Menu {
     val CLEAR_ALL get() = f("Clear all")
     /** The home entry for all apps' notifications, with how many. */
     fun notifications(n: Int) = f("Notifications, $n")
+    /** The same with the laptop model's one-line digest after it ("Notifications, 8. 3 chats, 2 junk"). */
+    fun notificationsDigest(n: Int, line: String) = notifications(n).let { Phrase.join(listOf(Phrase.content(it.text + ".", it.lang), Phrase.content(line, "en"))) }
     val MUTE_APP get() = f("Mute this app")
     val UNMUTE_ALL get() = f("Unmute all apps")
     val MUSIC get() = f("Music")

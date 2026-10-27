@@ -39,6 +39,7 @@ class ModeTest {
         var vol = 7
         var wired = false
         var nav: String? = null
+        var digest = ""; var shorts = mapOf<String, String>()
         var groups = listOf<NotifGroup>(); var muted = 0
         var installed = listOf<InstalledApp>(); val opened = ArrayList<String>(); val mutedPkgs = HashSet<String>(); val picksOf = HashMap<String, Int>()
         var weatherAnswer: String? = null     // null = the answer has not come yet
@@ -74,6 +75,8 @@ class ModeTest {
             override fun timerRinging() = ringing
             override fun messages() = msgs
             override fun notifGroups() = groups
+            override fun notifDigest() = digest
+            override fun notifShort(text: String) = shorts[text].orEmpty()
             override fun installedApps() = installed
             override fun pickCount(intent: String) = picksOf[intent] ?: 0
             override fun appMuted(pkg: String) = pkg in mutedPkgs
@@ -1232,6 +1235,41 @@ class ModeTest {
         assertTrue(order.toString(), "Notifications, 3" in order)
         val e = mail(); e.groups = emptyList(); e.wake(); e.advance(12000)
         assertFalse(e.spoken().any { it.startsWith("say Notifications") })
+    }
+
+    // ---------- The laptop's model for notifications: digest and long messages ----------
+    @Test fun digestIsSpokenAfterTheNotificationsCountOnlyWhenKnown() {
+        val r = mail(); r.digest = "2 chats, 1 junk"; r.wake(); r.advance(12000)
+        val order = r.spoken().map { it.replace(Regex("^say(\\[..\\])? "), "") }
+        assertTrue(order.toString(), "Notifications, 3. 2 chats, 1 junk" in order)
+        val n = mail(); n.wake(); n.advance(12000)   // no laptop, or no answer yet: as before
+        assertTrue(n.spoken().map { it.replace(Regex("^say(\\[..\\])? "), "") }.toString(), "Notifications, 3" in n.spoken().map { it.replace(Regex("^say(\\[..\\])? "), "") })
+    }
+
+    private val longText = (1..45).joinToString(" ") { "word$it" }
+    private fun longMsg(shortText: String?): Rig {
+        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("today"))
+        r.groups = listOf(NotifGroup("com.chat", "Chat", "com.chat", listOf(Notif("k9", "com.chat", "Chat", "Ana", longText, 5L))))
+        r.installed = listOf(InstalledApp("com.chat", "Chat"))
+        if (shortText != null) r.shorts = mapOf(longText to shortText)
+        return r
+    }
+
+    @Test fun aLongMessageIsReadAsItsShortVersionAndReadAllGivesTheOriginal() {
+        val r = longMsg("Ana sent a long list of words."); r.wake(); r.pick("Notifications, 1"); r.pick("Chat, 1 notification"); repeat(600) { if (r.log.any { it == "say Read all" }) return@repeat; r.advance(50) }
+        val order = r.spoken().map { it.replace(Regex("^say(\\[..\\])? "), "") }
+        assertTrue(order.toString(), "Ana: Ana sent a long list of words." in order)
+        assertFalse("the original is not read first", order.any { it.contains("word30") })
+        assertTrue("Read all is the first option: $order", order.indexOf("Read all") > order.indexOf("Ana: Ana sent a long list of words."))
+        r.advance(150); r.clearLog(); r.click(); r.advance(3000)
+        assertTrue(r.log.toString(), r.log.any { it.contains("word45") })
+    }
+
+    @Test fun aLongMessageWithoutAnAnswerYetIsReadAsToday() {
+        val r = longMsg(null); r.wake(); r.pick("Notifications, 1"); r.pick("Chat, 1 notification"); r.advance(15000)
+        val order = r.spoken().map { it.replace(Regex("^say(\\[..\\])? "), "") }
+        assertTrue(order.toString(), order.any { it.contains("word1 ") })
+        assertFalse(order.toString(), "Read all" in order)
     }
 
     @Test fun notificationsListHasClearAllLastAfterOnlyAppsWithNotifications() {

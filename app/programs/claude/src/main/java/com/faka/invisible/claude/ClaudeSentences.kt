@@ -38,6 +38,12 @@ object ClaudeVoice {
     val NO = f("No")
     val YES_ALWAYS = f("Yes and do not ask again")
     val DETAILS = f("Read the details")
+    val SELECTED = f("Selected")
+    val REMOVED = f("Removed")
+    val CHOICE_SEND = f("Done, send")
+    val OTHER = f("Other")
+    val NO_PICK = f("Nothing selected.")
+    val END_MSG = f("End of message.")
     private val WANTS = f("Wants to:")
     private val MEANS = f("That means:")
     /** What an approval says first: "Wants to: <command or file>", then "That means: <plain>" if the laptop has one. */
@@ -72,7 +78,7 @@ object RoomText {
         "go" to "Go ahead", "yes" to "Yes", "commit" to "Commit", "push" to "Push", "compact" to "Compact",
         "explain" to "Explain simpler", "recommend" to "What do you recommend", "research" to "Research first",
         "progress" to "Where are we", "hold" to "Hold", "stop" to "Stop", "clear" to "Clear",
-        "hear" to "Hear it again", "tools" to "Tools", "show" to "Show on phone", "preview" to "Start preview", "readall" to "Read all", "write" to "Write", "again" to "Run again", "screen" to "Screen")
+        "hear" to "Hear it again", "tools" to "Tools", "more" to "More", "show" to "Show on phone", "preview" to "Start preview", "readall" to "Read all", "write" to "Write", "again" to "Run again", "screen" to "Screen")
     /** [go] = what a plain "go" approves (from the story): "Go: commit the fix". Quoted options stay as they are. */
     fun label(a: RoomAction, go: String = ""): String {
         val g = go.squash()

@@ -63,6 +63,14 @@ The phone keeps a profile per computer (`work` | `personal`, chosen with the Wor
 
 ## /events (exists) also delivers {"type":"room","id":"%3","name":"...","state":"needs"} when a room turns "needs".
 
+## Choices (a window with an open Claude Code menu: AskUserQuestion or plan approval)
+`/rooms` adds `"choice": {"question":"Which database?","multi":false,"options":[{"n":1,"label":"SQLite","desc":"one file, no server"}, ...],"other":true}` (state "needs"; `n` is the row number on screen). Parsed from the pane (`choice.py`), never by the model. The phone speaks the question, "Hear it again", each option as "Label: description" (12 words), then "Other" (Write).
+## POST /room/choose {"id":"%3","picks":[2]}  -> {"ok":true}   moves the menu cursor to row 2 and presses Enter; with `multi` it toggles each pick (Space) and then submits. `{"id":..., "other":true}` only moves to the "Type something" row (the phone then sends the typed text with /room/send). 400 when the menu is gone or a pick is not a row.
+## POST /ai/digest {"items":[{"app":"WhatsApp","title":"Ana","text":"..."}]} -> {"line":"3 chats, 2 deliveries, 3 junk"}
+The model only labels each item from a fixed set; the code counts, so the numbers always add up. `""` when there is no model, it fails, or a label is unknown. Only non-private notifications are sent (max 30).
+## POST /ai/short {"text":"..."} -> {"short":"..."}   1 to 2 sentences (at most 45 words) of a long message, behind the accuracy guard (`story.check_story`); `""` means read the original. Cached by text.
+The phone-only action id `more` ("More") reads `/room/last` one paragraph at a time (a click = next, triple click = back to the options).
+
 ## Action ids
 Claude room: option:<text> (send that text), go, yes, commit, push*, compact (/compact), explain ("i dont get it, explain simpler"),
 recommend ("what do you recommend?"), research ("research online first, then recommend"), progress ("where are we? what is done and what is left?"),

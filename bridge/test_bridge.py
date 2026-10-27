@@ -463,6 +463,24 @@ class RoomsTmuxTest(unittest.TestCase):
         subprocess.run(self.tm + ["send-keys", "-t", pane, "-l", text])
         subprocess.run(self.tm + ["send-keys", "-t", pane, "Enter"])
 
+    def test_choice_in_rooms_and_choose(self):
+        import choice_fixtures
+        menu = os.path.join(self.tmp, "menu.txt")
+        open(menu, "w").write(choice_fixtures.SINGLE)
+        pane, win = self.new_window("menuwin", self.fake_claude + " " + menu + " -", self.work)
+        self.assertTrue(self.wait_screen(pane, "Enter to select"))
+        r = self.make()
+        self.set_status(win, "0 0 0 0 0 0 0")
+        room = self.by_id(r.rooms(), pane)
+        self.assertEqual(room["state"], "needs")
+        self.assertEqual(room["choice"]["question"], "Which approach do you want?")
+        self.assertEqual([o["n"] for o in room["choice"]["options"]], [1, 2])
+        self.assertFalse(r.choose(pane, [9]))
+        self.assertFalse(r.choose(pane, [1, 2]))   # single select takes one pick
+        self.assertTrue(r.choose(pane, [2]))
+        self.assertTrue(self.wait_screen(pane, "^[[B"))   # cat echoes the Down key
+        self.assertFalse(r.choose("%999", [1]))
+
     def test_send_act_and_log(self):
         c2, _ = self.cat2
         r = self.make()

@@ -19,6 +19,7 @@ Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rule
 | Calculator.kt | `Calculator` = state of the spoken calculator (digit, point, operate, equals, undo, `spoken()`), left to right; `%` = percent of. Used by the Calculator program. |
 | PriceSum.kt | `PriceSum` = running total of prices in cents (`add("12.5")`, `undo()`, `spoken()`). Used by the Sum prices tool (`launchSum` in Actions). |
 | Calls.kt | `Calls.kind(category, callType, actions)` = a dialer notification is INCOMING, ONGOING or NONE. `callerName`, `spokenNumber`, `rank(contacts)` (starred, then most called, one per number), `withTop(top, rest)` (3 most called first, then `rank`), `topNumbers(log)` (most frequent numbers of a call log), `emergencyNumber(country)` (112 fallback), `emergencyText()`. Used by the call screens in `ControllerMode` and the listener. |
+| AiAssist.kt | `AiAssist.isLong(text)` (> 40 words: a short version is read first), `digestKey(items, hidden)` (cache key of a set of notifications), `digestable(n)`, `withPrivate(line, hidden)` (adds ", 2 private" so the digest numbers add up to all). Used by `AiHelp` (:os) and `ControllerMode`; the model runs on the laptop bridge (`/ai/digest`, `/ai/short`). |
 | ChatLang.kt | `ChatLang.of(seen, detect)` = the language of the chat or message a reply goes to (null if too short or unknown). `needsTranslation(target)`. Used by Write for screen chats and for notification replies. |
 
 ## Elsewhere (use these, do not copy them)

@@ -3,7 +3,7 @@
 
 Phone:  GET /events?since=N&wait=25   (long poll)      POST /answer {"id": "3", "choice": "Allow"}
 Tools:  GET /info /room/tools   POST /room/tool   (see ROOMS-API.md, tools.py)
-Rooms:  GET /rooms /room/last /room/screen /room/story /projects /areas   POST /room/act /room/send /project/open /project/new   (see ROOMS-API.md)
+Rooms:  GET /rooms /room/last /room/screen /room/story /projects /areas   POST /room/act /room/send /room/choose /ai/digest /ai/short /project/open /project/new   (see ROOMS-API.md)
 Hooks:  POST /ask {kind, project, summary, options, wait}  (blocks until answered)      POST /notify {kind, project, summary}
 All calls need the header  Authorization: Bearer <token>.
 """
@@ -224,6 +224,13 @@ def make_handler(store, token, rooms, tools=None):
                 else:
                     prof = parse_qs(urlparse(self.path).query).get("profile", [b.get("profile", "personal")])[0]
                     self._send(200, tools.call(pane, rpath, prof, b.get("tool"), b.get("arg")))
+            elif path == "/room/choose":
+                ok = rooms.choose(b.get("id"), b.get("picks") or [], bool(b.get("other")))
+                self._send(200 if ok else 400, {"ok": ok})
+            elif path == "/ai/digest":
+                self._send(200, {"line": rooms.ai.digest(b.get("items"))})
+            elif path == "/ai/short":
+                self._send(200, {"short": rooms.ai.short(b.get("text"))})
             elif path == "/room/send":
                 ok = rooms.send(b.get("id"), b.get("text"))
                 self._send(200 if ok else 400, {"ok": ok})

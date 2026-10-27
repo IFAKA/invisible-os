@@ -180,6 +180,59 @@ class FlowRoomsTest {
         assertEquals(ChangesActivity::class.java.name, open.component?.className)
         assertEquals("%1", open.getStringExtra(ChangesNotice.EXTRA_ROOM))
         assertEquals("Home", open.getStringExtra(ChangesNotice.EXTRA_COMPUTER))
+
+    // ---- rooms_choice ----
+    private var lastHost: RoboRig.Host? = null
+    private fun enterWindow(rig: RoboRig, s: FakeRooms, label: String): Int {
+        lastHost = start(rig, Port(listOf(Computer("Home", s.url, s.token)), Computer("Home", s.url, s.token)))
+        val i = rig.mark(); rig.needLive(label, i); rig.advance(60)
+        val j = rig.mark(); rig.press("120")
+        return j
+    }
+
+    @Test fun rooms_choice_single_reads_question_then_options_and_a_click_picks() {
+        val s = server(rooms = listOf(FakeRooms.choiceRoom())); val rig = RoboRig()
+        val j = enterWindow(rig, s, "eps-proj, Eps, needs you")
+        rig.needLive("Tree: Group apps by what you want to do", j)
+        val h = rig.said.drop(j)
+        val q = h.indexOfFirst { it.contains("Which approach do you want?") }
+        val hear = h.indexOfFirst { it.contains("Hear it again") }
+        val tree = h.indexOfFirst { it.startsWith("Tree:") }
+        assertTrue("question, Hear it again, then the first option: $h", q in 0 until hear && hear < tree)
+        s.posts.clear()
+        rig.press("120")   // the item just heard
+        rig.needLive("Sent to Eps", j)
+        assertTrue("picked option 1: ${s.posts}", s.posts.any { (path, b) -> path == "/room/choose" && b.optString("id") == "%6" && b.getJSONArray("picks").toString() == "[1]" && !b.optBoolean("other") })
+    }
+
+    @Test fun rooms_choice_multi_toggles_and_sends_with_done() {
+        val s = server(rooms = listOf(FakeRooms.choiceRoom(multi = true))); val rig = RoboRig()
+        val j = enterWindow(rig, s, "eps-proj, Eps, needs you")
+        rig.needLive("Tree: Group apps", j); rig.advance(60)
+        val k = rig.mark(); rig.press("120")
+        rig.needLive("Selected", k)
+        rig.needLive("Flat list: One long list", k)   // the list goes on
+        rig.needLive("Other", k); rig.needLive("Done, send", k); rig.advance(60)
+        assertTrue("nothing sent by a toggle: ${s.posts}", s.posts.none { it.first == "/room/choose" })
+        rig.press("120")
+        rig.needLive("Sent to Eps", k)
+        assertTrue("sent picks [1]: ${s.posts}", s.posts.any { (path, b) -> path == "/room/choose" && b.getJSONArray("picks").toString() == "[1]" })
+    }
+
+    // ---- rooms_more ----
+    @Test fun rooms_more_reads_a_paragraph_per_click_and_triple_click_goes_back() {
+        val s = server(rooms = listOf(FakeRooms.partsRoom())); val rig = RoboRig()
+        val j = enterWindow(rig, s, "zeta-proj, Zeta, done")
+        rig.needLive("More", j); rig.advance(60)
+        val k = rig.mark(); rig.press("120")
+        rig.needLive("First paragraph here.", k)
+        rig.advance(5000)
+        assertFalse("waits for a click: the second paragraph does not start alone", rig.said("Second paragraph", k))
+        rig.press("120")
+        rig.needLive("Second paragraph here.", k)
+        val m = rig.mark(); rig.press("120,100,120,100,120")   // three clicks: back to the options
+        rig.needLive("Hear it again", m)
+        assertTrue("the paragraphs are on the app screen", lastHost!!.screens.any { (rows, _) -> rows.contains("Third paragraph here.") })
     }
 
     // ---- rooms_tools ----

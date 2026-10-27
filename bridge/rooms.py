@@ -16,6 +16,8 @@ import threading
 import time
 import urllib.request
 
+from aitext import AiText
+import choice as choicelib
 from core import shorten
 from story import StoryCache, first_sentence, ollama_model
 from preview import Preview
@@ -261,6 +263,7 @@ class Rooms:
         self.ask_delay = 4.0
         self.summarizer = Summarizer(llm)
         self.stories = StoryCache(story_model)
+        self.ai = AiText(story_model)   # /ai/digest, /ai/short
         self.lock = threading.Lock()
         self.snap = (0.0, [])
         self._msg_cache = {}      # transcript path -> (mtime, size, text)
@@ -362,6 +365,7 @@ class Rooms:
             self._shell_state(room, row)
         room["actions"] = self._actions(room)
         self._add_ask(room)
+        self._add_choice(room)
         source = room.get("_src", "")
         if room["state"] != "working":
             room.update(self.stories.peek(row["id"], room["kind"], source, self._story_context(room), self._story_fallback(room, source)))
@@ -378,6 +382,65 @@ class Rooms:
         room["state"] = "needs"
         room["ask"] = {"id": ask["id"], "kind": ask.get("kind", "permission"), "what": str(ask["what"])[:200],
                        "plain": self.stories.plain(ask["what"]), "options": list(ask["options"])}
+
+    def menu_of(self, pane):
+        """The parsed menu (choice.parse_screen) on the screen of a pane now, or None."""
+        return choicelib.parse_screen(self.screen_lines(pane, 40, scrollback=False))
+
+    def _add_choice(self, room):
+        """A multiple-choice menu on a Claude window's screen: the room needs you, and `choice` has the question and the options."""
+        if room["kind"] != "claude" or "ask" in room:
+            return
+        menu = self.menu_of(room["id"])
+        if menu:
+            room["state"], room["need"] = "needs", shorten(menu["question"], 20)
+            room["choice"] = choicelib.public(menu)
+
+    def choose(self, pane, picks, other=False):
+        """Answer the menu on the screen of `pane` (POST /room/choose). picks = the numbers printed on the screen.
+        Single select: move to the row, Enter. Multi: move to each row and press Space, then the Submit row (or Right) and Enter.
+        other=True: only move to the "type your own" row (the phone then sends the text with /room/send). Returns True when done."""
+        row = self.room_row(pane)
+        menu = self.menu_of(pane) if row and self.is_claude(row["cmd"]) else None
+        if not menu or not isinstance(picks, list):
+            return False
+        valid = {o["n"] for o in menu["options"]}
+        picks = [p for p in picks if isinstance(p, int) and p in valid]
+        if other:
+            if not menu["other"]:
+                return False
+            self._goto(pane, menu["other"])
+            self._log(pane, "choose", "other", row["path"])
+            return True
+        if not picks or (not menu["multi"] and len(picks) != 1):
+            return False
+        self._log(pane, "choose", json.dumps(picks), row["path"])
+        if not menu["multi"]:
+            self._goto(pane, picks[0])
+            self.tmux("send-keys", "-t", pane, "Enter")
+            return True
+        for n in sorted(picks):
+            self._goto(pane, n)
+            self.tmux("send-keys", "-t", pane, "Space")
+            time.sleep(0.1)
+        after = self.menu_of(pane)
+        if after and after["submit"]:
+            self._goto(pane, after["submit"])
+        else:
+            self.tmux("send-keys", "-t", pane, "Right")
+            time.sleep(0.1)
+        self.tmux("send-keys", "-t", pane, "Enter")
+        return True
+
+    def _goto(self, pane, n):
+        """Move the menu cursor to row n (read from the screen each time, so a wrong guess does not drift)."""
+        menu = self.menu_of(pane)
+        if not menu:
+            return
+        for key in choicelib.moves(menu["cursor"] or 1, n):
+            self.tmux("send-keys", "-t", pane, key)
+            time.sleep(0.05)
+        time.sleep(0.1)
 
     @staticmethod
     def _story_context(room):

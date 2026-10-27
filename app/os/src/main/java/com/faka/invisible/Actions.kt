@@ -126,6 +126,8 @@ object Actions {
             override fun notifGroups() = ControllerNotificationListener.notifs.groups { ControllerNotificationListener.modules.forNotif(it).groupKey(it) }
             override fun liveApps() = liveAppsNow()
             override fun roomsWaiting() = roomsWaitingNow()
+            override fun notifDigest() = aiHelp.digest(ControllerNotificationListener.notifs.all())
+            override fun notifShort(text: String) = aiHelp.short(text)
             override fun liveNotif(key: String) = ControllerNotificationListener.ongoingNotif(key)
             override fun notifRead(n: Notif) = ControllerNotificationListener.modules.forNotif(n).read(n)
             override fun notifSummary(n: Notif) = ControllerNotificationListener.modules.forNotif(n).summary(n)
@@ -244,6 +246,7 @@ object Actions {
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
         rooms.restart()
+        aiHelp   // starts listening to notification changes
     }
 
     /** The program of the registry that runs now (at most one). */
@@ -503,6 +506,8 @@ object Actions {
             { narrator.beep(Tone.CLAUDE) }, { say(it, true) }, { e -> handler.post { claudeAsked(e) } })
     }
     private fun roomsWaitingNow(): Int = rooms.waitingNow()
+    /** The laptop's model for notifications: the digest on home and the short version of long messages (never blocks; nothing without a computer). */
+    private val aiHelp by lazy { AiHelp({ activeComputer() }).also { ai -> ControllerNotificationListener.onChange = { ai.changed(ControllerNotificationListener.notifs.all()) } } }
     /** What the Laptop tool asks of the OS: the Write keyboard, and the way back to the tool when nothing was written. */
     val roomsPort = object : RoomsPort {
         override fun computers() = this@Actions.computers()

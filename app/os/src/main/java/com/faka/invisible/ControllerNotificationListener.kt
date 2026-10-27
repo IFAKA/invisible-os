@@ -35,6 +35,8 @@ class ControllerNotificationListener : NotificationListenerService() {
         private var mutesLoaded = false
         private val notifActions = HashMap<String, Array<Notification.Action>>()
         @Volatile private var live: ControllerNotificationListener? = null
+        /** Called (on the listener thread) after a notification was kept or removed: the laptop's model may have something new to sort. */
+        @Volatile var onChange: (() -> Unit)? = null
         /** The latest Google Maps navigation sentence while it is active, else null. */
         @Volatile var navigation: String? = null
         /** A call of the dialer: the ringing one (name and answer / decline button) and the running one. */
@@ -139,6 +141,7 @@ class ControllerNotificationListener : NotificationListenerService() {
         if (sbn.packageName == Navigation.PACKAGE && sbn.key == navKey) { navigation = null; navKey = null }
         notifs.remove(sbn.key); ongoing.remove(sbn.key); synchronized(Companion) { notifActions.remove(sbn.key) }
         modules.all().forEach { it.onRemoved(sbn) }
+        onChange?.invoke()
     }
 
     /** The mailbox: keeps any app's notification. A private one (see [NotifPrivacy]) keeps no title and no text at all. */
@@ -157,6 +160,7 @@ class ControllerNotificationListener : NotificationListenerService() {
         }
         synchronized(Companion) { if (n.actions != null) notifActions[sbn.key] = n.actions else notifActions.remove(sbn.key) }
         notifs.upsert(Notif(sbn.key, sbn.packageName, appLabel(sbn.packageName), if (hidden) "" else title, if (hidden) "" else text, sbn.postTime, actions, hidden, n.channelId.orEmpty()))
+        onChange?.invoke()
     }
 
     /** An ongoing notification of another app (this app's own only in the e2e test): kept apart from the mailbox, with its actions, so a live one can open on home. */

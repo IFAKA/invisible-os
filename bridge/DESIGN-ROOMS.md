@@ -84,6 +84,11 @@ Order then adapts by your picks per room, like `AppWeights`.
 ## Shell room
 The 7-word summary, then Run again, Make, Stop (Ctrl-C), Write.
 
+## Choices, More, digest, long messages
+* Choices: the menu is read from the pane by code (`choice.py`), the keys are sent by code (`Rooms.choose`); no model. Multi select: each click toggles ("Selected" / "Removed"), the last item "Done, send" submits. Not yet checked against a real Claude Code menu (Space toggles, "Submit" row or Right submits).
+* More: the option reads the whole last message by paragraph, so a long answer is heard in pieces and a click is "next".
+* Digest and short use the same local model rules as the story (6 s, accuracy guard, original on failure). The digest counts labels in code. The phone asks in the background and speaks the line only if it is for the current set of notifications.
+
 ## Tension to name (from `me.md`, not decided for you)
 Your busiest hours are 22:00 to 02:00, and you feel wired after work. An earbud that calls "os needs you" follows you to bed.
 Option, off by default: quiet hours where the earcon does not play (rooms still readable when you ask). Your call.

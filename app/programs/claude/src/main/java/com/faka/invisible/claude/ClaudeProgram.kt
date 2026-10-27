@@ -51,7 +51,7 @@ private class HandlerTimers(private val handler: Handler) : Timers {
  * list with the item being read ([ProgramHost.screen]) and a tap on a row picks it ([tap]). Only the button and the network; no microphone.
  */
 class ClaudeAndroid(private val port: RoomsPort) : Program {
-    private enum class Phase { NONE, INTRO, ITEM, STUCK, SENDING, SENT, LOADING, READING }
+    private enum class Phase { NONE, INTRO, ITEM, STUCK, SENDING, SENT, LOADING, READING, TOGGLE }
 
     private lateinit var host: ProgramHost
     private val handler get() = host.handler
@@ -80,6 +80,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     private var areas: List<Area> = emptyList()
     private var pending: RoomAction? = null
     private var storyIntro: Phrase? = null
+    private val picked = sortedSetOf<Int>()   // multi-select menu: the numbers chosen so far
+    private var partsMode = false              // the list is Claude's message in paragraphs (waits for a click, no loops)
 
     private fun label(c: Choice): Phrase = when (c) {
         is Choice.Option -> Phrase.content(c.text, "en")
@@ -98,6 +100,10 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         Choice.Yes -> ClaudeVoice.YES
         is Choice.Approve -> when (c.opt.kind) { Approval.Kind.NO -> ClaudeVoice.NO; Approval.Kind.YES -> ClaudeVoice.YES; Approval.Kind.ALWAYS -> ClaudeVoice.YES_ALWAYS }
         Choice.Details -> ClaudeVoice.DETAILS
+        is Choice.ChoicePick -> ChoiceText.spoken(c.opt).let { if (c.opt.n in picked) Phrase.join(listOf(ClaudeVoice.SELECTED, Phrase.content(it, "en"))) else Phrase.content(it, "en") }
+        Choice.ChoiceOther -> ClaudeVoice.OTHER
+        Choice.ChoiceSend -> ClaudeVoice.CHOICE_SEND
+        is Choice.Part -> Phrase.content(c.text, "en")
         is Choice.ProjectPick -> Phrase.content(c.project.name, "en")
         Choice.ContinueChat -> ClaudeVoice.CONTINUE_CHAT
         Choice.NewChat -> ClaudeVoice.NEW_CHAT
@@ -111,7 +117,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
             override fun sayFast(word: Phrase) { host.speak(word) }
             override fun tone(t: Tone) { VoiceKit.narrator.beep(t) }
             override fun leave() { phase = Phase.STUCK; reopen = { restartList() }; host.speak(ClaudeVoice.WAITING_YOU) }
-        }, ScanCadence(pauseMs = { PAUSE_MS }, loops = { LOOPS }, ceremony = false), scanKey = "claude:scan")
+        }, ScanCadence(pauseMs = { if (partsMode) PARTS_PAUSE_MS else PAUSE_MS }, loops = { if (partsMode) 1 else LOOPS }, ceremony = false), scanKey = "claude:scan")
     }
 
     /** The app screen: every item of the list, [mark] = the one being read. */
@@ -184,6 +190,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
 
     private fun showList(items: List<Choice>, intro: Phrase?) {
         scanner.stop(); awaitItem = false; host.stopSpeech(); timers.clear("claude:next")
+        partsMode = items.firstOrNull() is Choice.Part
         scanner.load(items)
         reopen = { showList(items, intro) }
         showRows(0)
@@ -219,18 +226,22 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         room = r; pending = null
         onBack = { loadRooms() }
         val ask = r.ask
-        val items: List<Choice> = if (ask == null) RoomAction.earbudList(r).map { Choice.ActPick(it) }
+        val ch = r.choice
+        val items: List<Choice> = if (ch != null && ask == null) listOf<Choice>(Choice.ActPick(RoomAction(RoomAction.HEAR))) + ch.options.map { Choice.ChoicePick(it) } +
+                (if (ch.other) listOf(Choice.ChoiceOther) else emptyList()) + (if (ch.multi) listOf(Choice.ChoiceSend) else emptyList())
+            else if (ask == null) RoomAction.earbudList(r).map { Choice.ActPick(it) }
             else listOf<Choice>(Choice.ActPick(RoomAction(RoomAction.HEAR))) + Approval.options(ask.options).map { Choice.Approve(it) } + Choice.Details   // No is always read before Yes; no Write here
         showList(items, intro)
     }
 
     /** What is said first in a window: its story, else its need line, else what it is about. */
     private fun intro(r: Room): Phrase =
-        r.ask?.let { ClaudeVoice.wants(it.what, it.plain) } ?: r.story.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: r.need.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: ClaudeVoice.window(r)
+        r.ask?.let { ClaudeVoice.wants(it.what, it.plain) } ?: r.choice?.let { Phrase.content(it.question, "en") } ?: r.story.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: r.need.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: ClaudeVoice.window(r)
 
     /** A window: its story first (asked from the laptop once if the list had none), then its options. */
     private fun openRoom(r: Room) {
-        if (r.ask != null) { storyIntro = intro(r); showActions(r, storyIntro); return }
+        if (r.choice != null && r.ask == null) picked.clear()
+        if (r.ask != null || r.choice != null) { storyIntro = intro(r); showActions(r, storyIntro); return }
         if (r.story.isNotBlank()) { storyIntro = intro(r); showActions(r, storyIntro); return }
         scanner.stop(); awaitItem = false; host.stopSpeech()
         phase = Phase.LOADING
@@ -322,6 +333,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         val r = room ?: return
         when {
             a.id == RoomAction.HEAR -> showActions(r, storyIntro ?: intro(r))
+            a.id == RoomAction.MORE -> more(r)
             a.id == "readall" -> readAll(r)
             a.id == "write" -> write(r)
             a.id == RoomAction.TOOLS -> loadTools(r)
@@ -373,6 +385,57 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         scanner.stop(); awaitItem = false; host.stopSpeech()
         phase = Phase.READING
         say(Phrase.content(what, "en"))
+    }
+
+    /** "More": Claude's last message one paragraph at a time. A click goes on to the next one, three clicks go back to the options. */
+    private fun more(r: Room) {
+        scanner.stop(); awaitItem = false; host.stopSpeech()
+        phase = Phase.LOADING
+        bg({ client.last(r.id) }) { text ->
+            val parts = text?.let { Paragraphs.split(it) }.orEmpty()
+            when {
+                text == null -> unreachable { showActions(r, null) }
+                parts.isEmpty() -> { reopen = { showActions(r, null) }; phase = Phase.STUCK; say(ClaudeVoice.NOTHING_TO_READ) }
+                else -> { onBack = { showActions(r, null) }; showList(parts.mapIndexed { i, t -> Choice.Part(i, t) }, null) }
+            }
+        }
+    }
+
+    /** The paragraph [p] was heard and clicked: the next one, or the options after the last. */
+    private fun nextPart(p: Choice.Part) {
+        val r = room ?: return
+        if (p.index + 1 < scanner.list.items.size) { phase = Phase.ITEM; scanner.speakItem(p.index + 1) } else showActions(r, ClaudeVoice.END_MSG)
+    }
+
+    /** A pick in a single-select menu, or the finished picks of a multi-select menu: type them in the laptop window. */
+    private fun sendChoice(r: Room, picks: List<Int>) {
+        scanner.stop(); awaitItem = false; host.stopSpeech()
+        phase = Phase.SENDING
+        bg({ client.choose(r.id, picks) }) { ok ->
+            if (ok == true) { phase = Phase.SENT; say(ClaudeVoice.sentTo(RoomState.nameOf(r))) }
+            else if (ok == null) unreachable { showActions(r, null) }
+            else { reopen = { loadRooms() }; phase = Phase.STUCK; say(ClaudeVoice.TOO_LATE) }
+        }
+    }
+
+    /** A click on an option of a multi-select menu: select it or take it back, say which, then go on with the list. */
+    private fun toggle(o: ChoiceOpt) {
+        val on = picked.add(o.n)
+        if (!on) picked.remove(o.n)
+        scanner.stop(); awaitItem = false; host.stopSpeech()
+        phase = Phase.TOGGLE
+        host.speak(if (on) ClaudeVoice.SELECTED else ClaudeVoice.REMOVED)
+    }
+
+    /** "Other": move the laptop menu to its type-your-own entry, then Write sends the text. */
+    private fun chooseOther(r: Room) {
+        scanner.stop(); awaitItem = false; host.stopSpeech()
+        phase = Phase.SENDING
+        bg({ client.choose(r.id, emptyList(), other = true) }) { ok ->
+            if (ok == true) write(r)
+            else if (ok == null) unreachable { showActions(r, null) }
+            else { reopen = { loadRooms() }; phase = Phase.STUCK; say(ClaudeVoice.TOO_LATE) }
+        }
     }
 
     private fun readAll(r: Room) {
@@ -462,6 +525,10 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
             Choice.Details -> room?.let { readDetails(it) }
             is Choice.ToolPick -> runNode(c.node)
             is Choice.ToolConfirm -> toolConfirmed(c.yes)
+            is Choice.ChoicePick -> room?.let { r -> if (r.choice?.multi == true) toggle(c.opt) else sendChoice(r, listOf(c.opt.n)) }
+            Choice.ChoiceOther -> room?.let { chooseOther(it) }
+            Choice.ChoiceSend -> room?.let { r -> if (picked.isEmpty()) { phase = Phase.TOGGLE; host.speak(ClaudeVoice.NO_PICK) } else sendChoice(r, picked.toList()) }
+            is Choice.Part -> nextPart(c)
             Choice.No -> room?.let { showActions(it, null) }
             Choice.Yes -> { val r = room; val a = pending; if (r != null && a != null) act(r, a) }
             is Choice.ProjectPick -> showModes(c.project)
@@ -506,6 +573,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         when (phase) {
             Phase.INTRO -> { phase = Phase.ITEM; scanner.speakItem(0) }
             Phase.ITEM -> if (awaitItem) { awaitItem = false; scanner.itemDone() }
+            Phase.TOGGLE -> { phase = Phase.ITEM; scanner.speakItem(scanner.list.nextIndex()) }
             Phase.SENT -> timers.set("claude:next", NEXT_MS) { loadRooms() }
             Phase.READING -> room?.let { showActions(it, null) }
             else -> {}
@@ -563,7 +631,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         host.resumeMusic()
     }
 
-    private companion object { const val RETRY_MS = 700L; const val PAUSE_MS = 1200L; const val LOOPS = 2; const val NEXT_MS = 700L; const val MAX_ROOMS = 8 }
+    private companion object { const val RETRY_MS = 700L; const val PAUSE_MS = 1200L; const val PARTS_PAUSE_MS = 90_000L; const val LOOPS = 2; const val NEXT_MS = 700L; const val MAX_ROOMS = 8 }
 }
 
 /** What the OS registry lists for the Claude bridge (a tool of the home hub). */

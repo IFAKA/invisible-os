@@ -11,7 +11,9 @@ data class Room(val id: String, val name: String, val project: String, val kind:
                 /** The short story (what it was doing, what happened, what it wants) and what a plain "go" approves; "" when the server has none yet. */
                 val story: String = "", val go: String = "",
                 /** An open permission ask of this window (state "needs"): Claude Code wants to run a command or edit a file. */
-                val ask: RoomAsk? = null)
+                val ask: RoomAsk? = null,
+                /** A multiple-choice menu on the screen of this window (state "needs"). */
+                val choice: RoomChoice? = null)
 
 /** A permission ask (bridge/ROOMS-API.md, room.ask): [id] for the answer, [what] the exact command or file, [plain] a one-line meaning from the laptop's model ("" if none), [options] the hook's labels in its order. */
 data class RoomAsk(val id: String, val what: String, val plain: String, val options: List<String>)
@@ -82,21 +84,24 @@ data class RoomAction(val id: String) {
     /** Push and Clear ask "No, go back" / "Yes" first. */
     val needsConfirm get() = id == "push" || id == "clear" || id == "preview"
     /** Handled on the phone, not sent with POST /room/act. */
-    val onPhone get() = id == "readall" || id == "screen" || id == "write" || id == HEAR || id == TOOLS || id == "show" || id == "preview"
+    val onPhone get() = id == "readall" || id == "screen" || id == "write" || id == HEAR || id == TOOLS || id == MORE || id == "show" || id == "preview"
     /** True for something the earbud list can show (the screen view is the "screen" action itself). */
     val earbud get() = id != "screen" && id.isNotBlank()
 
     companion object {
         /** The actions to read, in the order the server gave them, without repeats and without "screen". */
         fun earbudList(room: Room): List<RoomAction> {
-            val acts = room.actions.map { RoomAction(it.trim()) }.filter { it.earbud && it.id != HEAR && it.id != TOOLS }.distinctBy { it.id }
+            val acts = room.actions.map { RoomAction(it.trim()) }.filter { it.earbud && it.id != HEAR && it.id != TOOLS && it.id != MORE }.distinctBy { it.id }
             val at = acts.indexOfFirst { it.id == "readall" || it.id == "write" }.let { if (it < 0) acts.size else it }   // Tools sits before Read all / Write
-            return listOf(RoomAction(HEAR)) + acts.take(at) + RoomAction(TOOLS) + acts.drop(at)
+            val rest = acts.drop(at).flatMap { if (it.id == "readall") listOf(RoomAction(MORE), it) else listOf(it) }   // "More" (one paragraph at a time) just before "Read all"
+            return listOf(RoomAction(HEAR)) + acts.take(at) + RoomAction(TOOLS) + rest
         }
         /** Phone-only option that opens the work tools of the window (Git, merge request...). */
         const val TOOLS = "tools"
         /** Phone-only first option of every window: say the story again. */
         const val HEAR = "hear"
+        /** Phone-only: Claude's last message one paragraph at a time. */
+        const val MORE = "more"
         /** The actions that make a button on the phone screen: everything the server can run (no read-aloud, no keyboard, no "screen"). */
         fun screenList(room: Room): List<RoomAction> = earbudList(room).filter { !it.onPhone }
     }

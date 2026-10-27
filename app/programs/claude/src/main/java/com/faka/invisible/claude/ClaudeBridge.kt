@@ -51,9 +51,23 @@ class BridgeClient(base: String, internal val token: String) {
         return (0 until a.length()).mapNotNull { i ->
             val r = a.getJSONObject(i)
             val id = r.optString("id")
-            if (id.isBlank()) null else Room(id, r.optString("name"), r.optString("project"), r.optString("kind"), r.optString("state"), r.optString("need"), strings(r.optJSONArray("options")), strings(r.optJSONArray("actions")), r.optString("story"), r.optString("go"), r.optJSONObject("ask")?.let { ak -> RoomAsk(ak.optString("id"), ak.optString("what"), ak.optString("plain"), strings(ak.optJSONArray("options"))) }?.takeIf { it.id.isNotBlank() })
+            if (id.isBlank()) null else Room(id, r.optString("name"), r.optString("project"), r.optString("kind"), r.optString("state"), r.optString("need"), strings(r.optJSONArray("options")), strings(r.optJSONArray("actions")), r.optString("story"), r.optString("go"), r.optJSONObject("ask")?.let { ak -> RoomAsk(ak.optString("id"), ak.optString("what"), ak.optString("plain"), strings(ak.optJSONArray("options"))) }?.takeIf { it.id.isNotBlank() }, r.optJSONObject("choice")?.let { parseChoice(it) })
         }
     }
+    private fun parseChoice(c: JSONObject): RoomChoice? {
+        val a = c.optJSONArray("options") ?: return null
+        val opts = (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { ChoiceOpt(it.optInt("n"), it.optString("label"), it.optString("desc")) } }.filter { it.n > 0 && it.label.isNotBlank() }
+        return if (opts.isEmpty() || c.optString("question").isBlank()) null else RoomChoice(c.optString("question"), c.optBoolean("multi"), opts, c.optBoolean("other"))
+    }
+    /** POST /room/choose: pick [picks] (the numbers on the laptop screen) in the menu of a window; [other] = only move to the "type your own" entry. */
+    @Throws(IOException::class) fun choose(id: String, picks: List<Int>, other: Boolean = false): Boolean =
+        call("POST", "/room/choose", JSONObject().put("id", id).put("picks", JSONArray(picks)).put("other", other).toString(), 15_000).first == 200
+    /** POST /ai/digest: one line over the notifications ([items] = app, title, text), "" when the laptop's model has none. */
+    @Throws(IOException::class) fun digest(items: List<Triple<String, String, String>>): String =
+        json("/ai/digest", JSONObject().put("items", JSONArray(items.map { JSONObject().put("app", it.first).put("title", it.second).put("text", it.third) })).toString(), "POST", 15_000).optString("line")
+    /** POST /ai/short: a one or two sentence version of a long [text], "" when the laptop's model has none. */
+    @Throws(IOException::class) fun short(text: String): String =
+        json("/ai/short", JSONObject().put("text", text).toString(), "POST", 15_000).optString("short")
     /** GET /room/last: Claude's whole last message. */
     @Throws(IOException::class) fun last(id: String): String = json("/room/last?id=${enc(id)}").optString("text")
     /** GET /room/story: the short story and go text of one window (the laptop may take a few seconds to make it). */

@@ -35,6 +35,8 @@ interface ModeOutput {
     fun messages(): List<Msg>        // latest unread messages, newest first
     fun reply(key: String, text: String): Boolean   // true if the reply was sent
     fun notifGroups(): List<NotifGroup> = emptyList()   // the mailbox: every app's notifications, grouped, muted apps left out
+    fun notifDigest(): String = ""             // one line over the waiting notifications from the laptop's model ("3 chats, 2 junk"), "" until known
+    fun notifShort(text: String): String = ""   // a 1-2 sentence version of a long message from the laptop's model, "" until known
     fun roomsWaiting(): Int = 0                   // Claude windows on the computer that wait for you (the last answer; renewed in the background)
     fun liveApps(): List<LiveApp> = emptyList()   // apps that are live now (playing, a workout...), most recently updated first, for the front of home
     fun liveNotif(key: String): Notif? = null     // an ongoing notification by key (live entries open it)
@@ -392,7 +394,7 @@ class ControllerMode(
         if (s == Screen.CALL_ACTIVE) intro += Intro(Voice.CALL_ANSWERED, null)
         if (s == Screen.EMERGENCY) intro += Intro(Voice.EMERGENCY_ASK, null)
         if (s == Screen.RESET_ASK) intro += Intro(resetName?.let { Voice.resetAsk(it) } ?: Voice.RESET_ASK_ALL, null)
-        if (s == Screen.NOTIF_ACTIONS) openNotif()?.let { intro += Intro(notifRead(it), null) }
+        if (s == Screen.NOTIF_ACTIONS) openNotif()?.let { intro += Intro(notifIntro(it), null) }
         curIntro = null
         if (s == Screen.VOLUME_DIAL) {   // no list: the song plays on and the button is the dial
             phase = Phase.WAIT; waitNext = null; dialScreen()
@@ -452,7 +454,7 @@ class ControllerMode(
     }
 
     /** The title of the list on screen, read again each time the list starts over: a single notification is its own title. */
-    private fun listTitle(): Phrase? = if (screen == Screen.NOTIF_ACTIONS) openNotif()?.let { notifRead(it) } else null
+    private fun listTitle(): Phrase? = if (screen == Screen.NOTIF_ACTIONS) openNotif()?.let { notifIntro(it) } else null
 
     private fun recordStart() {
         if (awaitStart < 0) return
@@ -563,7 +565,8 @@ class ControllerMode(
                 val front = (if (playing == null) sug else listOf(playing) + sug.filter { it.key != playing.key }).filter { it.key !in liveKeys }
                 suggestedKeys = front.map { it.key }
                 val notifs = out.notifGroups().sumOf { it.items.size }
-                val notifOpt = if (notifs > 0) listOf(Opt("notifs:all", Menu.notifications(notifs)) { pick("notifs:all"); show(Screen.NOTIF_APPS) }) else emptyList()   // all waiting notifications, right after the live apps
+                val digest = if (notifs > 0) out.notifDigest() else ""
+                val notifOpt = if (notifs > 0) listOf(Opt("notifs:all", if (digest.isEmpty()) Menu.notifications(notifs) else Menu.notificationsDigest(notifs, digest)) { pick("notifs:all"); show(Screen.NOTIF_APPS) }) else emptyList()   // all waiting notifications, right after the live apps
                 val (pinned, rest) = treeOptions(root).partition { o -> AppTree.PINNED.any { o.key == it } }   // the pinned Laptop tool comes right after Notifications, before the suggestions
                 liveOpts + notifOpt + pinned + front.filter { f -> pinned.none { it.key == f.key } } + rest + unmuteOption() + Opt("phone:emergency", Menu.EMERGENCY) { pick("phone:emergency"); show(Screen.EMERGENCY) }   // the home list is the tree's top; only the small Suggested slot in front adapts; Emergency is always the last item
             }
@@ -805,6 +808,13 @@ class ControllerMode(
         return Voice.cut(t.squash(), max, lang == "es", lang)
     }
     private fun notifRead(n: Notif) = notifLine(n, 500, true)
+    /** The short version of a long message (> 40 words) from the laptop's model, or "" (short message, private, no laptop, no answer yet). */
+    private fun longShort(n: Notif): String = if (n.hidden || !AiAssist.isLong(n.text.squash())) "" else out.notifShort(n.text)
+    /** What is said on opening a notification: the short version of a long message, else the message. */
+    private fun notifIntro(n: Notif): Phrase {
+        val s = longShort(n)
+        return if (s.isEmpty()) notifRead(n) else Phrase.content((if (n.title.isBlank()) s else "${n.title}: $s").squash(), out.songLang(s))
+    }
 
     /** An app without notifications: open it, or go back. */
     private fun appOpenOptions(): List<Opt> {
@@ -886,7 +896,8 @@ class ControllerMode(
                 else notifDone(out.notifFire(n.key, a.index))
             }
         }
-        return acts + listOf(
+        val readAll = if (longShort(n).isEmpty()) emptyList() else listOf(Opt("notif:readall", Menu.READ_ALL) { pick("notif:readall"); say(notifLine(n, 5000, true)); phase = Phase.WAIT; waitNext = { beginScan() } })   // the original, whole
+        return readAll + acts + listOf(
             Opt("notif:dismiss", Menu.DISMISS) { pick("notif:dismiss"); notifDone(out.notifDismiss(n.key)) },
             Opt("notif:mute", Menu.MUTE_APP) {
                 pick("notif:mute"); out.notifMute(n.pkg); say(Voice.APP_MUTED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
