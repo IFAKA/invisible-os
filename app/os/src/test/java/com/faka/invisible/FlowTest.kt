@@ -28,10 +28,10 @@ import org.junit.Test
  *  live_app_first_on_home        FlowTest.live_app_first_on_home                 partly: LiveApps.pick on fed data; the listener turning a real notification into it is the phone's
  *  voice_speed_applied           FlowTest.voice_speed_applied                    partly: the rate number the engine gets; the real engine speaking at it is the phone's
  *  rooms_go                      FlowRoomsTest.rooms_go                          fully (real HTTP to a fake Rooms server in the test)
- *  rooms_waiting_on_home         FlowRoomsTest.rooms_waiting_on_home             fully (the private count glue in Actions is mirrored in the test)
- *  rooms_done_spoken             FlowRoomsTest.rooms_done_spoken                 fully (the private roomDone glue in Actions is mirrored in the test)
+ *  rooms_waiting_on_home         FlowRoomsTest.rooms_waiting_on_home             fully
+ *  rooms_done_spoken             FlowRoomsTest.rooms_done_spoken                 fully
  *  rooms_new_project             FlowRoomsTest.rooms_new_project                 fully
- *  computers_two                 FlowRoomsTest.computers_two                     fully (the private switch / roomDone glue in Actions is mirrored in the test)
+ *  computers_two                 FlowRoomsTest.computers_two                     fully
  *  idle_clicks_go_to_the_player  FlowTest.idle_clicks_go_to_the_player           partly: choosing the real player / sending the key is the phone's
  */
 class FlowTest {

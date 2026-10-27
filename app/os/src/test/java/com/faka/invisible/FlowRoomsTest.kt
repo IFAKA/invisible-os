@@ -12,15 +12,13 @@ import org.robolectric.annotation.Config
 
 /**
  * The Laptop tool and the room events against a fake Rooms server on localhost (real HTTP, real BridgeClient, real ClaudeAndroid and
- * ClaudeWatch, real Android handler in fake time). The few lines of glue that are private in Actions (`roomDone`, `roomsWaitingNow`,
- * `switchTo`) are mirrored here, line for line.
+ * ClaudeWatch and RoomEvents, the same class Actions uses; real Android handler in fake time).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class FlowRoomsTest {
     private val servers = ArrayList<FakeRooms>()
-    private val watches = ArrayList<ClaudeWatch>()
-    private fun server(token: String = "e2e-token", rooms: List<org.json.JSONObject> = FakeRooms.DEFAULT_ROOMS) = FakeRooms(token, rooms).also { servers.add(it) }
+        private fun server(token: String = "e2e-token", rooms: List<org.json.JSONObject> = FakeRooms.DEFAULT_ROOMS) = FakeRooms(token, rooms).also { servers.add(it) }
     @After fun stop() { servers.forEach { it.stop() } }
 
     private class Port(var all: List<Computer>, var current: Computer?, val onSwitch: (String) -> Unit = {}) : RoomsPort {
@@ -64,24 +62,21 @@ class FlowRoomsTest {
         assertTrue("the name cue never came: ${port.cueSeen}", port.cueSeen.any { it.contains("Write the project name", true) })
     }
 
-    // ---- the OS glue of Actions that watches the laptop (mirrored) ----
+    /** The OS's own room-event code ([RoomEvents], the same class [Actions] uses), on the test rig's handler and voice. */
     private inner class Os(val port: Port, val rig: RoboRig) {
         var running = false
-        var waiting = 0
-        val batch = DoneBatch()
-        val watch = ClaudeWatch({ port.current }, {}, {}, { e ->
-            rig.handler.post {   // Actions.roomDone: only when no program runs; several in 3 s are one line
-                if (!running && batch.add(e.name)) rig.handler.postDelayed({ batch.take()?.let { rig.said.add(it.text) } }, 3000)
-            }
-        }).also { watches.add(it) }
-        fun refreshWaiting() { val c = port.current ?: return; waiting = com.faka.invisible.claude.BridgeClient(c.url, c.token).rooms().count { it.state == "needs" } }
+        val events = RoomEvents(rig.handler, { port.current }, { running }, { false }, {}, { rig.said.add(it.text) })
+        val watch = events
+        fun restart() = events.restart()
+        fun waitingBlocking(): Int { events.waitingNow(); val t0 = System.currentTimeMillis(); var n = 0
+            while (System.currentTimeMillis() - t0 < 10_000) { Thread.sleep(20); n = events.waitingNow(); if (n > 0) break }; return n }
     }
 
     // ---- rooms_done_spoken ----
     @Test fun rooms_done_spoken() {
         val s = server(); val rig = RoboRig(); val c = Computer("Home", s.url, s.token)
         val os = Os(Port(listOf(c), c), rig)
-        val i = rig.mark(); os.watch.restart(); s.fire.add("Delta")
+        val i = rig.mark(); os.restart(); s.fire.add("Delta")
         rig.needLive("Delta, done", i)
         assertEquals(Voice.roomDone("Delta").text, rig.said.last { it.contains("Delta") })
     }
@@ -90,9 +85,9 @@ class FlowRoomsTest {
     @Test fun rooms_waiting_on_home() {
         val s = server(); val rig = RoboRig(); val c = Computer("Home", s.url, s.token)
         val os = Os(Port(listOf(c), c), rig)
-        os.refreshWaiting()   // the count renewed at the first wake
-        assertEquals(1, os.waiting)   // Alpha needs you
-        val f = Flow(); f.r.rooms = os.waiting
+        val waiting = os.waitingBlocking()   // the count renewed at the first wake
+        assertEquals(1, waiting)   // Alpha needs you
+        val f = Flow(); f.r.rooms = waiting
         f.r.extraPrograms = listOf("hub:claude" to "Laptop"); f.m.settings = LauncherSettings(hub = listOf("claude", "timer", "today", "games"))
         val i = f.mark(); f.press("900")
         f.heardStart("needs you", i, 20_000)
@@ -106,9 +101,9 @@ class FlowRoomsTest {
         val h = Computer("Home", home.url, "tok-home"); val w = Computer("Work", work.url, "tok-work")
         val rig = RoboRig()
         lateinit var os: Os
-        val port = Port(listOf(h, w), h) { os.watch.restart() }
+        val port = Port(listOf(h, w), h) { os.restart() }
         os = Os(port, rig)
-        os.watch.restart()
+        os.restart()
         val i = rig.mark(); work.fire.add("Omega"); home.fire.add("Sigma")
         rig.needLive("Sigma, done", i)
         rig.advance(5000); Thread.sleep(500); rig.advance(500)

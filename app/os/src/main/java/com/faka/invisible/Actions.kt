@@ -242,7 +242,7 @@ object Actions {
             override fun ended() { mode.onSpeechDone(); running?.takeIf { it.active }?.speechDone() }
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
-        claudeWatch.restart()
+        rooms.restart()
     }
 
     /** The program of the registry that runs now (at most one). */
@@ -457,45 +457,21 @@ object Actions {
         Computers.save(prefs(), list)
         val keep = Computers.activeAfter(before, list, active)
         prefs().edit().apply { if (keep == null) remove(Computers.ACTIVE_KEY) else putString(Computers.ACTIVE_KEY, keep) }.apply()
-        claudeWatch.restart()
+        rooms.restart()
     }
     /** Listen to this computer only: save it, move the watcher. */
     fun setActive(name: String) {
         val c = Computers.find(computers(), name) ?: return
         prefs().edit().putString(Computers.ACTIVE_KEY, c.name).apply()
-        claudeWatch.restart()
+        rooms.restart()
     }
     /** Dev hook: one address replaces the whole list (a blank address clears it). */
     fun setClaudeBridge(url: String, token: String) = setComputers(Computers.single(url, token))
-    private val claudeWatch by lazy {
-        ClaudeWatch({ activeComputer() },
-            { e -> handler.post { claudeAsked(e) } },
-            { roomsWaitingNow(); handler.post { roomNeeds() } },
-            { e -> roomsWaitingNow(); handler.post { roomDone(e.name) } })
+    private val rooms by lazy {
+        RoomEvents(handler, { activeComputer() }, { running != null }, { RoomMute.muted(prefs().getLong(RoomMute.KEY, 0L), System.currentTimeMillis()) },
+            { narrator.beep(Tone.CLAUDE) }, { say(it, true) }, { e -> handler.post { claudeAsked(e) } })
     }
-    @Volatile private var waitingRooms = 0
-    private val waitingBusy = java.util.concurrent.atomic.AtomicBoolean(false)
-    /** Windows of the active computer that wait for you: the last answer now, renewed in a background thread (a change shows one wake later). */
-    private fun roomsWaitingNow(): Int {
-        val c = activeComputer() ?: return 0
-        if (c.url.isBlank() || c.token.isBlank()) return 0
-        if (waitingBusy.compareAndSet(false, true)) Thread({
-            waitingRooms = try { com.faka.invisible.claude.BridgeClient(c.url, c.token).rooms().count { it.state == "needs" } } catch (e: Exception) { 0 }
-            waitingBusy.set(false)
-        }, "rooms-waiting").apply { isDaemon = true }.start()
-        return waitingRooms
-    }
-    /** A room of the laptop needs you: the Claude sound unless muted until morning or a program is running. */
-    private fun roomNeeds() {
-        if (running != null || RoomMute.muted(prefs().getLong(RoomMute.KEY, 0L), System.currentTimeMillis())) return
-        narrator.beep(Tone.CLAUDE)
-    }
-    private val doneBatch = DoneBatch()
-    /** A window finished: say its name when the OS is idle. Several in 3 s are one line: the first name, then how many more. */
-    private fun roomDone(name: String) {
-        if (running != null || RoomMute.muted(prefs().getLong(RoomMute.KEY, 0L), System.currentTimeMillis())) return
-        if (doneBatch.add(name)) handler.postDelayed({ doneBatch.take()?.let { say(it, true) } }, 3000)
-    }
+    private fun roomsWaitingNow(): Int = rooms.waitingNow()
     /** What the Laptop tool asks of the OS: the Write keyboard, and the way back to the tool when nothing was written. */
     val roomsPort = object : RoomsPort {
         override fun computers() = this@Actions.computers()
