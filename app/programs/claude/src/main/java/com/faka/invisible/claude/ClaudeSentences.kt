@@ -53,7 +53,7 @@ object ClaudeVoice {
 /** The words of an action, for the ear and for the screen. */
 object RoomText {
     private val fixed = mapOf(
-        "go" to "Go", "yes" to "Yes", "commit" to "Commit", "push" to "Push", "compact" to "Compact",
+        "go" to "Go ahead", "yes" to "Yes", "commit" to "Commit", "push" to "Push", "compact" to "Compact",
         "explain" to "Explain simpler", "recommend" to "What do you recommend", "research" to "Research first",
         "progress" to "Where are we", "hold" to "Hold", "stop" to "Stop", "clear" to "Clear",
         "readall" to "Read all", "write" to "Write", "again" to "Run again", "screen" to "Screen")

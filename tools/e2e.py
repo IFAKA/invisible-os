@@ -237,7 +237,7 @@ def rooms_go():
         heard_start("Alpha, needs you", i, 20)
         press("120")   # picks Alpha, the item just heard (the list goes on: Beta, Gamma, Projects)
         j = mark(); need("The design doc is ready", j)
-        heard_start("Go", j)
+        heard_start("Go ahead", j)
         press("120")
         need("Sent to Alpha", j)
         if ("/room/act", {"id": "%1", "action": "go"}) not in fake_rooms.POSTS: raise Fail(f"fake server got {fake_rooms.POSTS}")

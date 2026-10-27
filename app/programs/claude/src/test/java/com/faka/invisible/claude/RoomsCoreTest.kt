@@ -21,7 +21,7 @@ class RoomsCoreTest {
     @Test fun roomLineIsNameThenStateWord() = assertEquals("os, needs you", ClaudeVoice.room("os", "needs").text)
 
     @Test fun labels() {
-        assertEquals("Go", RoomText.label(RoomAction("go")))
+        assertEquals("Go ahead", RoomText.label(RoomAction("go")))
         assertEquals("Explain simpler", RoomText.label(RoomAction("explain")))
         assertEquals("What do you recommend", RoomText.label(RoomAction("recommend")))
         assertEquals("Research first", RoomText.label(RoomAction("research")))

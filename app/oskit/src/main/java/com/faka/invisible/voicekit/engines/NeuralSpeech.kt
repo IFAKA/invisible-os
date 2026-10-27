@@ -123,6 +123,9 @@ class NeuralSpeech(
 
     private fun stale(u: Utt) = u.epoch != epoch
 
+    /** The neural voice spells a lone capitalised "Go" (the menu group) as "G O"; in lower case it says the word. */
+    private fun ear(s: String) = if (s.trim().trimEnd('.', ',') == "Go") "go" else s
+
     private fun play(u: Utt) {
         lastUse = System.currentTimeMillis()
         val tts = load(u.lang) ?: run { broken += u.lang; handler.post { fallback(u.p, false, u.slow) }; return }
@@ -135,7 +138,7 @@ class NeuralSpeech(
         for ((i, s) in parts.withIndex()) {
             if (stale(u)) break
             // an explicit class, not a lambda: the sherpa JNI code looks up a method named invoke([F)Integer, which d8 does not keep on a lambda
-            tts.generateWithCallback(s, sid, speed, object : Function1<FloatArray, Int> {
+            tts.generateWithCallback(ear(s), sid, speed, object : Function1<FloatArray, Int> {
                 override fun invoke(chunk: FloatArray): Int {
                     if (stale(u)) return 0
                     if (trk == null) { trk = newTrack(sr); trkRate = sr; frames = 0; cur = trk; trk?.play() }

@@ -130,10 +130,14 @@ class MainActivity : Activity() {
     private val fixedPages = setOf(Page.TASKS, Page.MENU, Page.MENUMORE, Page.VOICE, Page.EMERGENCY, Page.AI)
 
     private var drawnPage: Page? = null
+    private var drawnKind: List<Any>? = null
     /** Redraw, but keep the scroll place: every redraw rebuilds the page, which would throw a scrolled list back to the top (the layout jumps). */
     private fun render() {
         val y = if (drawnPage == page && ::body.isInitialized) (body.parent as? ScrollView)?.scrollY ?: 0 else 0
         drawnPage = page
+        val kind = listOf(page, ScreenMirror.active && !settingsOpen, EventLog.running)
+        if (kind != drawnKind && drawnKind != null) android.transition.TransitionManager.beginDelayedTransition(root, android.transition.Fade().setDuration(160))   // a new kind of screen fades in; it does not snap
+        drawnKind = kind
         draw()
         val sv = body.parent as? ScrollView
         if (y > 0 && sv != null) sv.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
