@@ -12,11 +12,13 @@ function Button() {
   const rings = useRef<(THREE.Mesh | null)[]>([]);
   useFrame((state, dt) => {
     const wide = state.size.width > 900;
-    const y = typeof window === "undefined" ? 0 : window.scrollY / window.innerHeight;
-    // The button drifts to the right of the page on a wide screen, to the middle on a phone, and sinks as you scroll.
-    group.current.position.x = THREE.MathUtils.damp(group.current.position.x, wide ? 2.4 - Math.min(y, 3) * 0.6 : 0, 3, dt);
-    group.current.position.y = THREE.MathUtils.damp(group.current.position.y, wide ? 0 : -1.9 - y * 0.8, 3, dt);
-    group.current.scale.setScalar(THREE.MathUtils.damp(group.current.scale.x, wide ? 0.78 : 0.6, 3, dt));
+    const h = window.innerHeight, y = window.scrollY / h;
+    const end = (document.documentElement.scrollHeight - h - window.scrollY) / h < 0.6;   // the last screen
+    const show = y < 0.6 || end;
+    // The button sits at the right of the first screen, leaves while the page explains, and comes back at the end.
+    group.current.position.x = THREE.MathUtils.damp(group.current.position.x, wide ? 2.4 : 0, 3, dt);
+    group.current.position.y = THREE.MathUtils.damp(group.current.position.y, wide ? 0 : -1.9, 3, dt);
+    group.current.scale.setScalar(THREE.MathUtils.damp(group.current.scale.x, show ? (wide ? 0.78 : 0.6) : 0.001, 4, dt));
     group.current.rotation.y += dt * 0.15;
     const now = performance.now() / 1000;
     rings.current.forEach((m, i) => {

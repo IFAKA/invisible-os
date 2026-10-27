@@ -30,7 +30,7 @@ export default function ScanDemo() {
 
   return (
     <div>
-      <ol ref={ref} onClick={choose} className="mt-12 max-w-[520px] cursor-pointer border-t border-line" aria-label="Demo of the menu">
+      <ol ref={ref} onClick={choose} className="w-full max-w-[460px] cursor-pointer border-t border-line" aria-label="Demo of the menu">
         {ITEMS.map((t, k) => {
           const on = k === i && picked === null, done = k === picked;
           return (
@@ -38,7 +38,7 @@ export default function ScanDemo() {
               key={t}
               animate={{ color: done ? "#000" : on ? "#f4f4f1" : "#4a4a47", paddingLeft: on || done ? 16 : 0, backgroundColor: done ? "#f4f4f1" : "#00000000" }}
               transition={{ duration: 0.3 }}
-              className="flex items-baseline justify-between border-b border-line py-5 text-[clamp(24px,3vw,36px)]"
+              className="flex items-baseline justify-between border-b border-line py-[1.2vh] text-[clamp(18px,3.4vh,34px)]"
             >
               {t}
               <motion.span animate={{ opacity: on || done ? 1 : 0, scale: on || done ? 1 : 0.3 }} className={`mr-4 block size-2.5 rounded-full ${done ? "bg-ink" : "bg-paper"}`} />
@@ -46,7 +46,7 @@ export default function ScanDemo() {
           );
         })}
       </ol>
-      <p className="mt-4 font-sans text-[13px] text-mute">{picked !== null ? `You picked ${ITEMS[picked]}. That was one click.` : "Click when you hear what you want."}</p>
+      <p className="mt-3 font-sans text-[13px] text-mute">{picked !== null ? `You picked ${ITEMS[picked]}. That was one click.` : "Click when you hear what you want."}</p>
     </div>
   );
 }

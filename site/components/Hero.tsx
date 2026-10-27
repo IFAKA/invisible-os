@@ -36,12 +36,12 @@ export default function Hero() {
 
   const press = () => { hit(); play("tap"); setN((v) => Math.min(v + 1, LINES.length)); };
   return (
-    <section ref={root} className="mx-auto flex min-h-screen max-w-[1200px] flex-col justify-center px-6 py-[14vh] md:px-[8vw]">
-      <h1 className="text-[clamp(48px,9.5vw,136px)] leading-[0.96] tracking-[-0.03em]">
+    <section ref={root} className="mx-auto flex h-svh max-w-[1400px] flex-col justify-center overflow-hidden px-6 pb-8 pt-16 md:px-[8vw]">
+      <h1 className="text-[clamp(44px,min(9.5vw,15vh),136px)] leading-[0.96] tracking-[-0.03em]">
         Your phone.<br /><em className="text-mute">Without the screen.</em>
       </h1>
       <p className="hero-in mt-8 text-[clamp(20px,2.4vw,30px)] text-mute">One button. Your ears. Nothing else.</p>
-      <button onClick={press} aria-label="Press the button" className="hero-in mt-14 flex w-max items-center gap-5 font-sans text-xs uppercase tracking-[0.2em] text-mute active:scale-95">
+      <button onClick={press} aria-label="Press the button" className="hero-in mt-[5vh] flex w-max items-center gap-5 font-sans text-xs uppercase tracking-[0.2em] text-mute active:scale-95">
         <span className="block size-16 rounded-full border border-paper/60" />
         Press
       </button>
