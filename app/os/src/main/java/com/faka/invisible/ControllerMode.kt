@@ -546,7 +546,7 @@ class ControllerMode(
                 val far = suggestableLeaves(root)   // apps and programs that are not direct entries of home: offered too, when worth it
                 val home = root.children.map { c -> c.app?.let { leafKey(it.pkg) } ?: "group:${c.label}" }
                 val cost = far.mapValues { it.value.second }
-                val sug = out.suggest(deep.keys + far.keys, clock(), home) { key, share, pos -> key !in cost || SuggestGate.worth(share, cost.getValue(key), pos) }
+                val sug = out.suggest((deep.keys - "phone:emergency") + far.keys, clock(), home) { key, share, pos -> key !in cost || SuggestGate.worth(share, cost.getValue(key), pos) }   // Emergency is never suggested: it is the last item of home
                     .mapNotNull { deep[it] ?: far[it]?.first }; wmark("suggest")
                 com.faka.invisible.oskit.Trace.ev("live", "home live=" + live.joinToString(",") { "${it.pkg}:${it.state}" })
                 val liveOpts = live.map { liveOption(it) }   // live apps (playing music, a running workout) come first, most recently updated first
@@ -557,7 +557,7 @@ class ControllerMode(
                 val notifs = out.notifGroups().sumOf { it.items.size }
                 val notifOpt = if (notifs > 0) listOf(Opt("notifs:all", Menu.notifications(notifs)) { pick("notifs:all"); show(Screen.NOTIF_APPS) }) else emptyList()   // all waiting notifications, right after the live apps
                 val (pinned, rest) = treeOptions(root).partition { o -> AppTree.PINNED.any { o.key == it } }   // the pinned Laptop tool comes right after Notifications, before the suggestions
-                liveOpts + notifOpt + pinned + front.filter { f -> pinned.none { it.key == f.key } } + rest + unmuteOption()   // the home list is the tree's top; only the small Suggested slot in front adapts
+                liveOpts + notifOpt + pinned + front.filter { f -> pinned.none { it.key == f.key } } + rest + unmuteOption() + Opt("phone:emergency", Menu.EMERGENCY) { pick("phone:emergency"); show(Screen.EMERGENCY) }   // the home list is the tree's top; only the small Suggested slot in front adapts; Emergency is always the last item
             }
             Screen.TASK -> {   // "Add task" first, then this page of tasks (a click right after hearing one = done), then "More tasks"
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)
