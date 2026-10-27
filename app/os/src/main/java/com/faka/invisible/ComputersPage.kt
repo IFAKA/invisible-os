@@ -52,8 +52,7 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
             st.windows == 1 -> tr("1 window")
             else -> tr("{0} windows").replace("{0}", "${st.windows}")
         }
-        val listening = if (isActive(c)) tr("Listening") + " · " else ""
-        return listening + c.url + if (state.isEmpty()) "" else " · $state"
+        return c.url + if (state.isEmpty()) "" else " · $state"
     }
     private fun isActive(c: Computer) = Actions.activeComputer()?.name.equals(c.name, true)
     private fun dot(c: Computer) = when (status[c.name]?.ok) { true -> Ui.good; false -> Ui.edge; null -> Ui.edge }
