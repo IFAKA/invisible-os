@@ -42,6 +42,7 @@ class MainActivity : Activity() {
         if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java))
         EventLog.onChange = { render() }
         intent.getStringExtra("page")?.let { n -> Page.values().firstOrNull { it.name.equals(n, true) }?.let { page = it } }   // for screenshots: adb ... --es page menu --es open /Tools
+        previewReady = intent.getBooleanExtra("ready", false)
         if (intent.getBooleanExtra("disclosure", false)) disclosure = true   // for screenshots
         intent.getStringExtra("open")?.let { openGroups = it.split(',').toSet() }
         render()
@@ -126,6 +127,7 @@ class MainActivity : Activity() {
     }
 
     private var lastStep = ""
+    private var previewReady = false   // for screenshots: --ez ready true shows the home after setup
 
     private fun home() {
         if (disclosure) { disclosureCard(); return }
@@ -137,7 +139,7 @@ class MainActivity : Activity() {
         val steps = Setup.steps(SetupState(a11y, tested, notif, assist, granted(Manifest.permission.POST_NOTIFICATIONS), granted(Manifest.permission.READ_CALENDAR),
             granted(Manifest.permission.ACCESS_COARSE_LOCATION), usageOn(), android.os.Build.VERSION.SDK_INT, sp.getStringSet("setup_skipped", emptySet()) ?: emptySet(),
             contacts = granted(Manifest.permission.READ_CONTACTS), calls = granted(Manifest.permission.CALL_PHONE) && granted(Manifest.permission.ANSWER_PHONE_CALLS), sms = granted(Manifest.permission.SEND_SMS)))
-        val next = Setup.current(steps)
+        val next = if (previewReady) -1 else Setup.current(steps)
         val stepKey = if (next >= 0) steps[next].id else if (!EventLog.running) "stopped" else "ready"
         if (stepKey != lastStep) { lastStep = stepKey; body.post { k.enter(body) } }
         if (next >= 0) {
@@ -167,14 +169,14 @@ class MainActivity : Activity() {
             k.navRow(this, "Help", "Button gestures and practice") { open(Page.HELP) }
         }
         card("Emergency contact", "Gets a text when you pick Emergency in Phone. Leave empty for no text.") {
-            val box = k.input("Phone number, e.g. +54 11 5555 1234").apply {
+            val box = k.input("Phone number").apply {
                 minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_CLASS_PHONE; setText(Actions.emergencyContact())
             }
-            val note = k.text("", Type.CAPTION, Ui.good).apply { setPadding(0, k.dp(Ui.S1), 0, 0) }
+            val note = k.text("", Type.CAPTION, Ui.good).apply { setPadding(0, k.dp(Ui.S1), 0, 0); visibility = View.GONE }
             addView(box, LinearLayout.LayoutParams(-1, -2))
             addView(k.btn("Save") {
                 Actions.setEmergencyContact(box.text.toString())
-                note.text = if (Actions.emergencyContact().isEmpty()) "Saved. No emergency contact." else "Saved."
+                note.visibility = View.VISIBLE; note.text = if (Actions.emergencyContact().isEmpty()) "Saved. No emergency contact." else "Saved."
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
             addView(note)
         }
@@ -389,20 +391,20 @@ class MainActivity : Activity() {
 
     private fun helpPage() {
         card("How to use it") {
-            addView(k.text("Music playing or phone idle: click = play/pause, 2 = next, 3 = previous.\n" +
-                "Hold: wake the menu.\n" +
-                com.faka.invisible.voicekit.Voice.GESTURE_HELP.text).apply { setLineSpacing(0f, 1.25f); setPadding(0, k.dp(6), 0, 0) })
+            addView(k.text("Music or idle phone: click plays or pauses. 2 clicks: next. 3 clicks: previous.\n\n" +
+                "Hold: wake the menu.\n\n" +
+                com.faka.invisible.voicekit.Voice.GESTURE_HELP.text).apply { setLineSpacing(0f, 1.1f) })
         }
 
         card("Practice", "A one-minute lesson you hear: click, two clicks, three clicks, close.") {
             addView(k.btn("Replay the practice") { Actions.startPractice() })
         }
 
-        card("Last button presses") {
+        card("Recent button presses") {
             addView(k.text(EventLog.items.joinToString("\n").ifEmpty { "None yet. Press your button." }, Type.SMALL, Ui.soft).apply { setLineSpacing(0f, 1.2f) })
         }
 
-        body.addView(k.btn("Reset settings") { k.confirm("Reset all settings?", "Reset") { change(LauncherSettings()) } }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = k.dp(12) })
+        body.addView(k.quiet("Reset settings", Ui.bad) { k.confirm("Reset all settings?", "Reset") { change(LauncherSettings()) } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
     }
 
     /** "25 min", "1 h", "1 h 30". */
