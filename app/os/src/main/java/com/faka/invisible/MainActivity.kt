@@ -280,11 +280,11 @@ class MainActivity : Activity() {
             root.removeAllViews(); root.addView(fixed)
             return
         } else if (!listening()) {
-            k.status(fixed, tr("Stopped"), tr("The app is not listening to the button."), Ui.bad, Ui.S1, align = true) {
+            k.status(fixed, tr("Stopped"), tr("The app is not listening to the button."), Ui.bad, Ui.S1) {
                 addView(k.primary(tr("Start")) { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) })
             }
         } else {
-            k.status(fixed, tr("Ready"), tr("Hold your earbud button to open Invisible OS."), Ui.good, Ui.S1, align = true) {
+            k.status(fixed, tr("Ready"), tr("Hold your earbud button to open Invisible OS."), Ui.good, Ui.S1) {
                 addView(k.primary(tr("Open Invisible OS")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) })
             }
         }
