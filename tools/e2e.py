@@ -142,7 +142,7 @@ def screen_tap_picks():
     t0 = time.time()
     while True:
         m = state().get("mirror", "")
-        if m.endswith(":click") and m.split(":")[1] == "0": break   # the Duel started: the menu list is gone, the tap shows as a click
+        if m.endswith(":click") and state().get("running") == "true": break   # the Duel started (its own lines now fill the screen), the tap shows as a click
         if time.time() - t0 > 8: raise Fail(f"tap did not pick the item: {state()}")
     press("120,150,900"); wait_closed()
     return "a tap on the app screen picks the item, the same as a click"
