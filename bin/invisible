@@ -224,7 +224,7 @@ def cmd_pair(args):
 
 
 def wait_for_phone(start, wait_sec, sleep=time.sleep, clock=time.time):
-    out("\n" + c("1", "Waiting for your phone") + " (scan the QR code above with the phone camera)")
+    out(c("1", "Waiting for your phone..."))
     end = clock() + wait_sec
     while clock() < end:
         seen = phone_seen()

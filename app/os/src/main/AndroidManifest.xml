@@ -43,6 +43,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="invisible-pair" />
             </intent-filter>
+            <intent-filter android:autoVerify="true">   <!-- the QR of `invisible pair`: https://invisible-os.vercel.app/pair#CODE opens the app directly (site/public/.well-known/assetlinks.json) -->
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="invisible-os.vercel.app" android:path="/pair" />
+            </intent-filter>
         </activity>
         <activity android:name=".HandsFreeActivity" android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"

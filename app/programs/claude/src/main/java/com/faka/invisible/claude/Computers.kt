@@ -81,15 +81,19 @@ object Computers {
     // --- the pair code: one line printed by bridge/server.py ---
 
     private const val PAIR_PREFIX = "invisible-pair:"
+    private const val PAIR_WEB = "/pair#"
 
     fun pairCode(c: Computer): String =
         PAIR_PREFIX + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString("{\"n\":${q(c.name)},\"u\":${q(c.url)},\"t\":${q(c.token)}}".toByteArray(Charsets.UTF_8))
 
     /** The computer in a pasted pair code (extra words around the code are ignored); null if there is no usable code. Never throws. */
     fun parsePair(text: String): Computer? {
-        val at = text.indexOf(PAIR_PREFIX)
-        if (at < 0) return null
-        val b64 = text.substring(at + PAIR_PREFIX.length).trimStart('/').takeWhile { !it.isWhitespace() }   // "invisible-pair://..." is the form in the QR code
+        val at = text.indexOf(PAIR_PREFIX); val web = text.indexOf(PAIR_WEB)
+        val b64 = when {
+            at >= 0 -> text.substring(at + PAIR_PREFIX.length).trimStart('/')   // "invisible-pair://..." (pasted, or the site's Connect button)
+            web >= 0 -> text.substring(web + PAIR_WEB.length)   // "https://invisible-os.vercel.app/pair#..." is the form in the QR code
+            else -> return null
+        }.takeWhile { !it.isWhitespace() }
         val json = try { String(java.util.Base64.getUrlDecoder().decode(b64), Charsets.UTF_8) } catch (_: IllegalArgumentException) { return null }
         val f = flatObject(json) ?: return null
         val url = f["u"].orEmpty().trim(); val token = f["t"].orEmpty().trim()
@@ -174,20 +178,19 @@ object Computers {
     /** What adding a pair-code computer did: the new list, the name it got, whether it is the one the phone listens to, and whether it was there already. */
     data class Added(val list: List<Computer>, val name: String, val active: Boolean, val already: Boolean)
 
-    /** Add the computer from a pair code without questions: a name that is taken gets " 2", " 3"...; the same address and token again changes nothing; the first computer becomes the active one. */
+    /** Add the computer from a pair code without questions: a name that is taken gets " 2", " 3"...; the same address and token again changes nothing. The scanned computer always becomes the active one: you scan it to use it now. */
     fun addPaired(list: List<Computer>, c: Computer, name: String = c.name): Added {
-        list.firstOrNull { it.url.trim() == c.url.trim() && it.token == c.token.trim() }?.let { return Added(list, it.name, false, true) }
+        list.firstOrNull { it.url.trim() == c.url.trim() && it.token == c.token.trim() }?.let { return Added(list, it.name, true, true) }
         val base = clean(name).ifEmpty { "Computer" }
         var n = base; var i = 2
         while (list.any { it.name.equals(n, true) }) n = "$base ${i++}"
-        return Added(add(list, c.copy(name = n)), n, list.isEmpty(), false)
+        return Added(add(list, c.copy(name = n)), n, true, false)
     }
 
     /** The line to show after [addPaired]. */
     fun addedSentence(a: Added) = when {
-        a.already -> "${a.name} is already added."
-        a.active -> "Added ${a.name}. The phone listens to it."
-        else -> "Added ${a.name}. Switch to it from the Laptop tool or tap it."
+        a.already -> "${a.name}: the phone listens to it."
+        else -> "Added ${a.name}. The phone listens to it."
     }
 
     /** The old dev hook: one address replaces the whole list; a blank address clears it. */

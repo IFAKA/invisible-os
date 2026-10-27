@@ -77,9 +77,8 @@ class SetupTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         out = r.stdout
         self.assertIn("Work", out)
-        self.assertIn("invisible-pair:", out)
-        self.assertIn("\x1b[30;47m", out)   # the QR
-        self.assertIn("On the phone:", out)
+        self.assertIn("\x1b[30;47m", out)   # the QR (a web link: install if needed, then connect)
+        self.assertTrue(out.rstrip().endswith("Scan this with your phone camera."))   # the QR and its one line come last
         self.assertLessEqual(len([l for l in out.splitlines() if "\x1b" not in l]), 8)
         # settings: ours added, theirs kept, backup of the old file
         s = self.settings()
@@ -127,7 +126,7 @@ class SetupTest(unittest.TestCase):
         self.assertTrue(self.settings()["hooks"]["Stop"])
         self.assertNotIn("clipboard", r.stdout)
 
-    def test_second_bridge_gets_next_port_and_user_name(self):
+    def test_second_bridge_gets_next_port_and_first_name(self):
         s = socket.socket(); s.bind(("0.0.0.0", 0)); first = s.getsockname()[1]
         try:
             r = self.run_setup(env=dict(self.env, INVISIBLE_PORT_FROM=str(first)))
@@ -136,7 +135,9 @@ class SetupTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         plist = os.path.join(self.home, "Library", "LaunchAgents", "com.invisible.bridge.plist")
         self.assertNotEqual(setup_tools.plist_get(plist, "--port"), str(first))
-        self.assertIn(subprocess.run(["id", "-un"], capture_output=True, text=True).stdout.strip(), setup_tools.plist_get(plist, "--name"))
+        first_name = (subprocess.run(["id", "-F"], capture_output=True, text=True).stdout.split() or [""])[0] or \
+            subprocess.run(["id", "-un"], capture_output=True, text=True).stdout.strip()
+        self.assertEqual(setup_tools.plist_get(plist, "--name"), first_name)   # the person's first name: short to hear
 
     def test_unreadable_checkout_says_one_line(self):
         d = tempfile.mkdtemp(); self.addCleanup(shutil.rmtree, d, True)

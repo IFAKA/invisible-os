@@ -44,8 +44,8 @@ UIDN="$(id -u)"
 START="${INVISIBLE_PORT_FROM:-8765}"
 [ -n "$PORT" ] || PORT="$("$PY" "$TOOLS" freeport "$START")" || exit 1
 if [ -z "$NAME" ]; then
-  HOSTN="$(hostname -s 2>/dev/null || hostname)"
-  if [ "$PORT" = "$START" ]; then NAME="$HOSTN"; else NAME="$HOSTN-$(id -un)"; fi   # the first bridge on this Mac is just the Mac's name
+  # the person's first name ("Facundo"): short to hear on the earbud, and it tells two users of one Mac apart
+  NAME="$(id -F 2>/dev/null | awk '{print $1}')"; [ -n "$NAME" ] || NAME="$(id -un)"
 fi
 
 # (b) Claude Code hooks for this user
@@ -79,8 +79,9 @@ URL="$("$PY" "$TOOLS" wait "$CFG" 20)" || { say "The bridge did not answer in 20
 CODE="$("$PY" "$DIR/server.py" --name "$NAME" --port "$PORT" --show-token | tail -n 1)"
 say "Bridge \"$NAME\" is $LOADED at $URL (starts at every login)."
 case "$HOOKS" in added*) say "Claude Code hooks added to ~/.claude/settings.json (backup: settings.json.bak)." ;; *) say "Claude Code hooks were already in ~/.claude/settings.json." ;; esac
-if "$PY" "$DIR/qr.py" "invisible-pair://${CODE#invisible-pair:}" 2>/dev/null; then QRSAY="QR code above."; else QRSAY="No QR code (text too long)."; fi
-say "$CODE"
-if command -v pbcopy >/dev/null 2>&1 && printf '%s' "$CODE" | pbcopy 2>/dev/null; then say "$QRSAY The pair code line is also copied to this Mac's clipboard."; else say "$QRSAY"; fi
-[ -n "$LINK" ] && say "The command \`invisible\` is ready ($LINK). Try: invisible status"
-say "On the phone: scan the QR with the camera (it opens Invisible OS), or Computers, Add a computer, Paste."
+[ -n "$LINK" ] && say "Command \`invisible\` ready: invisible status, invisible uninstall."
+command -v pbcopy >/dev/null 2>&1 && printf '%s' "$CODE" | pbcopy 2>/dev/null && say "No camera? The code is copied: paste it in the app, Computers, Add."
+say ""
+# the QR is last, so the one thing to do is what the eye lands on. A web link: a phone without the app gets "install, then connect"
+"$PY" "$DIR/qr.py" "https://invisible-os.vercel.app/pair#${CODE#invisible-pair:}" 2>/dev/null || say "$CODE"
+say "Scan this with your phone camera."

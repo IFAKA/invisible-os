@@ -106,7 +106,7 @@ class FullRun(CliBase):
         r = self.cli("pair", "--no-wait", "--name", "Work", "--port", str(port))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("python3", r.stdout)
-        self.assertIn("invisible-pair:", r.stdout)
+        self.assertIn("Scan this with your phone camera.", r.stdout)
         cfg = self.path(".config", "invisible-bridge")
         m = json.load(open(os.path.join(cfg, "installed.json")))
         self.assertEqual(m["launchd_label"], "com.invisible.bridge")

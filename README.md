@@ -55,6 +55,16 @@ Menu items: **Messages** (read, reply, or turn a message into a task; Spanish or
 
 If you work in tmux with several Claude Code agents, the **Laptop** tool turns each tmux window into a *room*. It needs the small bridge server on your laptop ([`bridge/`](bridge/), over Tailscale, with a token).
 
+**Set it up** (on the Mac, once per Mac user and once per computer):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/IFAKA/invisible-os/master/install.sh | sh
+```
+
+Then scan the QR code it shows with your phone camera. No app yet? The page installs it first. The terminal says "Paired" when the phone connects.
+- The phone listens to one computer at a time: the one you scanned last. Switch with "Switch to Work" in the Laptop tool, or tap it in the app under Computers.
+- Later: `invisible status`, `invisible logs`, `invisible pair` (show the QR again), `invisible uninstall` (removes everything it added).
+
 - Rooms are named by what they work on. The one that needs you is read first, with Claude's "What needs me" line.
 - One click sends an answer: go, yes, commit, push, explain, stop, or an option the agent quoted. Order adapts to what you pick in each project.
 - Projects: continue one, or start a new one (area, name and first ask with the Write keyboard).

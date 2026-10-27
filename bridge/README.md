@@ -1,10 +1,11 @@
 # Invisible bridge
 
 ## Quick start
+On the Mac, as the user to add (once per Mac user and once per computer):
 ```
-invisible pair        # checks your Mac, sets it up, shows a QR code
+curl -fsSL https://raw.githubusercontent.com/IFAKA/invisible-os/master/install.sh | sh
 ```
-Scan the QR code with the phone camera. Done. (First time only: run `sh bridge/setup.sh` once in this folder; it also gives you the `invisible` command.)
+Scan the QR code with the phone camera. The terminal says "Paired". Done. (No app on the phone yet? The QR page installs it first, then Connect.)
 
 To take it all away again: `invisible uninstall` (asks once, then removes the hooks it added, the launchd service, the log and the settings folder). Other commands: `invisible status`, `invisible logs`; run `invisible` alone to see them all.
 
@@ -18,11 +19,11 @@ The laptop is a shop. Claude Code is a worker who sometimes needs a yes or no. `
 - If the desk is closed, or you do not answer in 10 minutes, `hook.py` says nothing. Claude Code then asks in the terminal as always. Nothing breaks.
 
 ## Set up (the whole story in 3 lines)
-1. On the computer, as the Mac user to add, run `sh bridge/setup.sh` (optional `--name Work`, `--port 8766`). It adds the Claude Code hooks to that user's `~/.claude/settings.json` (backup kept), starts the bridge at login (launchd, no terminal left open), and prints a QR code and the pair code line. Run it again any time: it changes nothing that is already right.
-2. On the phone: scan the QR with the camera app (it opens Invisible OS and adds the computer), or open Computers, Add a computer, and tap Paste from clipboard (a copied code is found by itself: "Found Work. Add?", then Add).
-3. Switch computers with "Switch to Work" in the Laptop tool, or tap the computer under Computers. The first computer you add is listened to at once; later ones wait until you switch.
+1. On the computer, as the Mac user to add, run the one line above (or `invisible pair`, or `sh bridge/setup.sh`; optional `--name Work`, `--port 8766`). It gets a copy into `~/invisible-os`, adds the Claude Code hooks to that user's `~/.claude/settings.json` (backup kept), starts the bridge at login (launchd, no terminal left open), puts the `invisible` command on PATH, and shows a QR code. Run it again any time: it changes nothing that is already right.
+2. On the phone: scan the QR with the camera. It is a web link (`invisible-os.vercel.app/pair#CODE`, the code stays after `#`, so the site never sees it): with the app installed it opens the app and adds the computer; without it the page says "1. Download the app, 2. Connect". No camera? The code is in the Mac's clipboard: Computers, Add a computer, Paste.
+3. The phone listens to the computer you scanned last. Switch with "Switch to Work" in the Laptop tool, or tap the computer under Computers.
 
-The first bridge on a Mac uses the Mac's name and port 8765. A second Mac user gets the next free port and the name "<mac>-<user>". The pair code carries the name, address and token, so there is nothing to type. If the checkout is not readable by that user, setup says so in one line (copy it to `/Users/Shared/invisible-bridge`). Not built yet: scanning inside the app (no scanner library is in the offline Gradle cache); the camera app does the scan.
+Each Mac user gets their own copy, bridge and port (the next free one from 8765), named by the person's first name ("Facundo"), short to hear. The `invisible` command in `/opt/homebrew/bin` is shared by all users of the Mac and runs each user's own copy. The pair code carries the name, address and token, so there is nothing to type. Not built yet: scanning inside the app; the camera app does the scan.
 
 ## By hand (what setup.sh does for you)
 - `./install.sh` prints the hooks text and a launchd file; it changes nothing itself.

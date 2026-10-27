@@ -126,8 +126,8 @@ class ComputersTest {
         assertTrue(a.active); assertEquals("Mac", a.name)
         assertEquals("Added Mac. The phone listens to it.", Computers.addedSentence(a))
         val b = Computers.addPaired(a.list, Computer("Work", "http://h:2", "t2"))
-        assertFalse(b.active); assertEquals(2, b.list.size)
-        assertEquals("Added Work. Switch to it from the Laptop tool or tap it.", Computers.addedSentence(b))
+        assertTrue(b.active); assertEquals(2, b.list.size)
+        assertEquals("Added Work. The phone listens to it.", Computers.addedSentence(b))
     }
     @Test fun pairedNameClashGetsANumberAndSameBridgeIsNotAddedTwice() {
         val l = Computers.addPaired(emptyList(), Computer("Mac", "http://h:1", "t1")).list
@@ -137,5 +137,12 @@ class ComputersTest {
         assertTrue(again.already); assertEquals(b.list, again.list); assertEquals("mac 2", again.name)
         assertEquals("Computer", Computers.addPaired(emptyList(), Computer("  ", "http://h:3", "t")).name)
         assertEquals("My Mac", Computers.addPaired(emptyList(), Computer("x", "http://h:3", "t"), name = " My   Mac ").name)
+    }
+
+    @Test fun pairCodeFromTheWebLink() {
+        val code = Computers.pairCode(Computer("Work", "http://100.1.2.3:8766", "tok"))
+        val web = "https://invisible-os.vercel.app/pair#" + code.removePrefix("invisible-pair:")
+        assertEquals(Computer("Work", "http://100.1.2.3:8766", "tok"), Computers.parsePair(web))
+        assertEquals(null, Computers.parsePair("https://invisible-os.vercel.app/pair#"))
     }
 }

@@ -77,6 +77,11 @@ export default function Home() {
               <img src="/install-qr.png" alt="QR code: download Invisible OS for Android" width={176} height={176} className="rounded-xl" />
               <p className="text-sm text-mute">Scan with your phone camera and install.</p>
               <a href="https://github.com/IFAKA/invisible-os/releases/latest/download/invisible-os.apk" className="inline-block rounded-full bg-[#0071e3] px-6 py-3 text-[17px] font-medium text-white hover:bg-[#0077ed]">Download for Android</a>
+              <div className="mt-2 flex w-full max-w-[560px] flex-col items-center gap-2">
+                <p className="text-sm text-mute">Use Claude Code in tmux? On your Mac, once per user:</p>
+                <code className="w-full overflow-x-auto whitespace-nowrap rounded-xl bg-white/5 px-4 py-3 text-left text-[13px]">curl -fsSL https://raw.githubusercontent.com/IFAKA/invisible-os/master/install.sh | sh</code>
+                <p className="text-sm text-mute">Then scan the QR code it shows. Remove it all with <code>invisible uninstall</code>.</p>
+              </div>
               <a href="https://github.com/IFAKA/invisible-os" className="text-sm text-mute underline">Source on GitHub</a>
             </div>
           </Reveal>

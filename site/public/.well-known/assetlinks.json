@@ -1,0 +1,5 @@
+[{"relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {"namespace": "android_app", "package_name": "com.faka.invisible",
+    "sha256_cert_fingerprints": [
+      "C3:10:EC:96:2F:91:86:BC:CF:BE:71:38:E7:45:1C:D9:29:F5:89:BB:4C:28:87:E8:9E:AA:0C:86:4C:06:9F:8F",
+      "17:00:BA:6D:32:98:66:05:C4:BD:5A:1D:C5:C0:95:17:69:75:10:C8:F1:9E:06:09:5A:20:87:A9:8A:5C:3F:6A"]}}]

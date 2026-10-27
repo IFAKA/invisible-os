@@ -13,8 +13,8 @@ if [ "$1" = "--stop" ]; then
 fi
 [ -f $SIM/bridge.pid ] && kill "$(cat $SIM/bridge.pid)" 2>/dev/null || true
 rm -rf $SIM; mkdir -p $SIM/home $SIM/fakebin
-SRC="${1:-$SIM/src.bundle}"
-[ -n "$1" ] || git -C "$ROOT" bundle create $SIM/src.bundle HEAD:refs/heads/master >/dev/null 2>&1
+SRC="${1:-$SIM/src.git}"
+if [ -z "$1" ]; then git clone -q --bare "$ROOT" $SIM/src.git && git -C $SIM/src.git branch -f master "$(git -C "$ROOT" rev-parse HEAD)"; fi
 cat > $SIM/fakebin/launchctl <<EOF
 #!/bin/sh
 # fake launchctl: bootstrap runs the plist's program with the fake HOME
