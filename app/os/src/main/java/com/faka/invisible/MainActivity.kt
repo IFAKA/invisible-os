@@ -135,7 +135,8 @@ class MainActivity : Activity() {
     private fun render() {
         val y = if (drawnPage == page && ::body.isInitialized) (body.parent as? ScrollView)?.scrollY ?: 0 else 0
         drawnPage = page
-        val kind = listOf(page, ScreenMirror.active && !settingsOpen, EventLog.running)
+        val mirrored = ScreenMirror.active && !settingsOpen && EventLog.running
+        val kind = listOf(page, mirrored, EventLog.running, if (mirrored && page == Page.HOME) ScreenMirror.state.title + "\u0000" + ScreenMirror.state.items.joinToString("\u0001") else "")   // a new list (Back, Close, a pick) fades; the mark moving does not
         if (kind != drawnKind && drawnKind != null) android.transition.TransitionManager.beginDelayedTransition(root, android.transition.Fade().setDuration(160))   // a new kind of screen fades in; it does not snap
         drawnKind = kind
         draw()

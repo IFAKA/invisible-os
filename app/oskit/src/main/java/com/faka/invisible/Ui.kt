@@ -287,10 +287,13 @@ class Kit(private val c: Context) {
             press.text = lastPress?.let { Translations.label("Last press") + ": " + Translations.label(it) } ?: ""
             if (current != shown) {
                 val first = shown < 0; shown = current
-                rows.getOrNull(current)?.let { r -> scroller.post {
-                    val y = (r.top - (scroller.height - r.height) / 2).coerceAtLeast(0)
-                    if (first) scroller.scrollTo(0, y) else scroller.smoothScrollTo(0, y)   // the current item sits in the middle
-                } }
+                rows.getOrNull(current)?.let { r ->
+                    fun centre() = (r.top - (scroller.height - r.height) / 2).coerceAtLeast(0)
+                    if (first) scroller.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {   // before the first frame: the new list never shows at the top for a moment
+                        override fun onPreDraw(): Boolean { if (scroller.height == 0) return true; scroller.viewTreeObserver.removeOnPreDrawListener(this); scroller.scrollTo(0, centre()); return true }
+                    })
+                    else scroller.post { scroller.smoothScrollTo(0, centre()) }   // the current item sits in the middle
+                }
             }
         }
     }
