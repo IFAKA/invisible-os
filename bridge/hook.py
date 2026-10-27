@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Claude Code hook for the Invisible OS bridge. Reads the hook JSON on stdin, talks to server.py.
 Any problem (bridge down, no answer in time) prints nothing and exits 0: Claude Code then asks in the terminal as usual.
-Env: INVISIBLE_BRIDGE_URL (default http://127.0.0.1:8765), INVISIBLE_BRIDGE_TIMEOUT seconds (default 600).
+Env: INVISIBLE_BRIDGE_URL (default: the address server.py wrote to ~/.config/invisible-bridge/url, else http://127.0.0.1:8765), INVISIBLE_BRIDGE_TIMEOUT seconds (default 600).
 """
 import json
 import os
@@ -15,10 +15,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import core  # noqa: E402
 
 TOKEN_FILE = os.path.expanduser("~/.config/invisible-bridge/token")
+URL_FILE = os.path.expanduser("~/.config/invisible-bridge/url")
 
 
 def base_url():
-    return os.environ.get("INVISIBLE_BRIDGE_URL", "http://127.0.0.1:8765").rstrip("/")
+    url = os.environ.get("INVISIBLE_BRIDGE_URL")
+    if not url:
+        try:
+            url = open(URL_FILE).read().strip()
+        except OSError:
+            url = ""
+    return (url or "http://127.0.0.1:8765").rstrip("/")
 
 
 def token():

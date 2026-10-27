@@ -21,6 +21,7 @@ from core import Store  # noqa: E402
 
 CONFIG_DIR = os.path.expanduser("~/.config/invisible-bridge")
 TOKEN_FILE = os.path.join(CONFIG_DIR, "token")
+URL_FILE = os.path.join(CONFIG_DIR, "url")   # read by hook.py, so the hook calls the address the server really listens on
 
 
 def load_token(path=TOKEN_FILE):
@@ -144,6 +145,9 @@ def main():
     host = a.host or default_host()
     srv = make_server(host, a.port, Store(), token)
     print("Bridge listening on http://%s:%d" % (host, a.port))
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(URL_FILE, "w") as f:
+        f.write("http://%s:%d\n" % (host, a.port))
     print("Paste this address and the token into the phone app (home screen, Claude bridge).")
     print("Token (also in %s):\n  %s" % (TOKEN_FILE, token))
     sys.stdout.flush()
