@@ -51,29 +51,6 @@ Menu items: **Messages** (read, reply, or turn a message into a task; Spanish or
 - **Battery friendly.** Nothing polls. It reacts to button presses.
 - **Private.** No account, no analytics, no microphone. The internet is used only to download the AI model, when you ask.
 
-## Laptop: your agents in your ear
-
-If you work in tmux with several Claude Code agents, the **Laptop** tool turns each tmux window into a *room*. It needs the small bridge server on your laptop ([`bridge/`](bridge/), over Tailscale, with a token).
-
-**Set it up** (on the Mac, once per Mac user and once per computer):
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/IFAKA/invisible-os/master/install.sh | sh
-```
-
-Then scan the QR code it shows with your phone camera. No app yet? The page installs it first. The terminal says "Paired" when the phone connects.
-- The phone listens to one computer at a time: the one you scanned last. Switch with "Switch to Work" in the Laptop tool, or tap it in the app under Computers.
-- Later: `invisible status`, `invisible logs`, `invisible pair` (show the QR again), `invisible uninstall` (removes everything it added).
-
-- Rooms are named by what they work on. The one that needs you is read first, with Claude's "What needs me" line.
-- One click sends an answer: go, yes, commit, push, explain, stop, or an option the agent quoted. Order adapts to what you pick in each project.
-- Projects: continue one, or start a new one (area, name and first ask with the Write keyboard).
-- Shell rooms: run again, make targets from the project's Makefile, stop.
-- With the phone unlocked: see a room's screen in the app, or jump to Termux.
-- Still no microphone. Every send is logged in `~/.config/invisible-bridge/sends.log`.
-
-Design and evidence: [bridge/DESIGN-ROOMS.md](bridge/DESIGN-ROOMS.md). API: [bridge/ROOMS-API.md](bridge/ROOMS-API.md).
-
 ## Install
 
 Invisible OS never listens. It has no microphone permission. It has no account and no ads. It works offline.
@@ -104,6 +81,34 @@ or run `app/run.sh` (build, install, start). Maintainers: `tools/release.sh VERS
 ## Share the APK
 
 `share/invisible.apk` is a debug-signed build with setup steps in `share/SETUP.txt` (the APK is git-ignored; build it yourself). Build it from a clean commit. The new phone needs "install unknown apps", Button access and Notification access turned on by hand.
+
+## Laptop: your agents in your ear
+
+If you work in tmux with several Claude Code agents, the **Laptop** tool turns each tmux window into a *room*. It needs the small bridge server on your laptop ([`bridge/`](bridge/), over Tailscale, with a token).
+
+**Set it up** (on the Mac, once per Mac user and once per computer):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/IFAKA/invisible-os/master/install.sh | sh
+```
+
+Then scan the QR code it shows with your phone camera:
+- App installed: it opens and adds the computer.
+- A web page opens instead: tap "Connect". No app yet? Tap "Download the app" first, then "Connect".
+- No camera? The code is already copied: paste it in the app under Computers, Add.
+
+The terminal says "Paired" when the phone connects.
+- The phone listens to one computer at a time: the one you scanned last. Switch with "Switch to Work" in the Laptop tool, or tap it in the app under Computers.
+- Later: `invisible status`, `invisible logs`, `invisible pair` (show the QR again), `invisible uninstall` (removes everything it added).
+
+- Rooms are named by what they work on. The one that needs you is read first, with Claude's "What needs me" line.
+- One click sends an answer: go, yes, commit, push, explain, stop, or an option the agent quoted. Order adapts to what you pick in each project.
+- Projects: continue one, or start a new one (area, name and first ask with the Write keyboard).
+- Shell rooms: run again, make targets from the project's Makefile, stop.
+- With the phone unlocked: see a room's screen in the app, or jump to Termux.
+- Still no microphone. Every send is logged in `~/.config/invisible-bridge/sends.log`.
+
+Design and evidence: [bridge/DESIGN-ROOMS.md](bridge/DESIGN-ROOMS.md). API: [bridge/ROOMS-API.md](bridge/ROOMS-API.md).
 
 ## Docs
 
