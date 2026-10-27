@@ -2,6 +2,7 @@ import { Code2, Laptop, MessageCircle, MicOff, MousePointerClick, Volume2 } from
 import Smooth from "@/components/Smooth";
 import LocalNav from "@/components/LocalNav";
 import Hero from "@/components/Hero";
+import LaptopDemo from "@/components/LaptopDemo";
 import Story from "@/components/Story";
 import Privacy from "@/components/Privacy";
 import Faq from "@/components/Faq";
@@ -55,17 +56,7 @@ export default function Home() {
 
         <Privacy />
 
-        <section id="laptop" className={sec}>
-          <Reveal><p className={eyebrow}>New</p><h2 className={h2}>Your agents.<br />In your ear.</h2></Reveal>
-          <Reveal delay={0.1}><p className="mt-[2svh] max-w-[30em] text-[clamp(16px,2.4svh,21px)] leading-snug text-mute">Many windows on your laptop, each with an agent at work. Away from the desk, the earbud tells you which one needs you, reads what it asks, and sends your answer.</p></Reveal>
-          <Reveal delay={0.2} className="w-full max-w-[560px]">
-            <div className="mt-[4svh] rounded-[22px] bg-card p-[clamp(16px,3svh,28px)] text-left">
-              <p className="text-[13px] text-mute">Battery-free device ideas <b className="ml-2 font-semibold text-blue">needs you</b></p>
-              <p className="my-[1.8svh] text-[clamp(17px,2.8svh,24px)] font-medium leading-snug tracking-[-0.02em]">“Pick the mini’s cell. Reply use AM-1454, or keep it small.”</p>
-              <p className="text-sm text-mute">Click: <b className="font-semibold text-paper">use AM-1454</b> · Sent.</p>
-            </div>
-          </Reveal>
-        </section>
+        <LaptopDemo />
 
         <section id="specs" className={sec}>
           <Reveal><h2 className={h2}>Tech specs.</h2></Reveal>
