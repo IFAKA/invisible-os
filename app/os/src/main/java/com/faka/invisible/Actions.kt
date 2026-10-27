@@ -23,6 +23,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import com.faka.invisible.claude.ClaudeEvent
+import com.faka.invisible.claude.ClaudeSettings
 import com.faka.invisible.oskit.Program
 import com.faka.invisible.oskit.ProgramEntry
 import com.faka.invisible.oskit.ProgramHost
@@ -216,6 +218,7 @@ object Actions {
             override fun ended() { mode.onSpeechDone(); running?.takeIf { it.active }?.speechDone() }
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
+        claudeWatch.restart()
     }
 
     /** The program of the registry that runs now (at most one). */
@@ -371,6 +374,21 @@ object Actions {
     fun callAnswered() { if (::app.isInitialized) handler.post { mode.callOngoing() } }
     /** No call is left. */
     fun callOver() { if (::app.isInitialized) handler.post { mode.callEnded() } }
+
+    /** The Claude bridge (laptop address and token), set on the app's home screen; the watcher listens for questions while the OS is idle. */
+    fun claudeUrl(): String = prefs().getString(ClaudeSettings.URL_KEY, "").orEmpty()
+    fun claudeToken(): String = prefs().getString(ClaudeSettings.TOKEN_KEY, "").orEmpty()
+    fun setClaudeBridge(url: String, token: String) {
+        prefs().edit().putString(ClaudeSettings.URL_KEY, url.trim()).putString(ClaudeSettings.TOKEN_KEY, token.trim()).apply()
+        claudeWatch.restart()
+    }
+    private val claudeWatch by lazy { ClaudeWatch({ claudeUrl() to claudeToken() }) { e -> handler.post { claudeAsked(e) } } }
+    /** A question came while no program was running: tell the user with the Claude sound; if the menu is not in use, open the tool so the next click answers. */
+    private fun claudeAsked(e: ClaudeEvent) {
+        if (running != null) return
+        narrator.beep(Tone.CLAUDE)
+        if (!mode.active) Programs.byId("hub:claude")?.let { startProgramEntry(it) }
+    }
 
     /** New chat message arrived: short earcon, no speech. Favourite senders get a different tone. */
     fun arrival(sender: String) {

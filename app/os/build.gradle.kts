@@ -49,6 +49,7 @@ dependencies {
     implementation(project(":programs:duel"))
     implementation(project(":programs:compass"))
     implementation(project(":programs:whereami"))
+    implementation(project(":programs:claude"))
     implementation(project(":programs:practice"))
     implementation(project(":programs:write"))
     implementation(project(":adapters"))

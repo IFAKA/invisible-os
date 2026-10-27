@@ -11,6 +11,7 @@ class LogicKitTest {
     @Test fun squashCollapsesAndTrims() = assertEquals("a b c", "  a \t b\n\nc  ".squash())
     @Test fun wordsSkipEmpty() = assertEquals(listOf("a", "b"), "  a   b ".words())
     @Test fun wordsOfBlankIsEmpty() = assertTrue("   ".words().isEmpty())
+    @Test fun firstWordsCutsWithDots() { assertEquals("a b...", "a  b c d".firstWords(2)); assertEquals("a b", " a b ".firstWords(2)); assertEquals("", "".firstWords(3)) }
 
     @Test fun shortTextHasNoLanguage() = assertNull(ChatLang.of("hola") { "es" })
     @Test fun unknownLanguageIsNull() = assertNull(ChatLang.of("a long enough text here") { "und" })

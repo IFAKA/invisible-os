@@ -91,6 +91,7 @@ Tools/Web           com.mi.globalbrowser
 Tools/Web           org.chromium.webapk.a7e73b90ab8fcb825_v2
 Tools/Web           com.google.android.googlequicksearchbox
 Tools/Utilities     hub:calculator
+Work/Dev            hub:claude
 Tools/Utilities     com.miui.calculator
 Tools/Utilities     com.xiaomi.scanner
 Tools/Utilities     com.google.android.apps.nbu.files

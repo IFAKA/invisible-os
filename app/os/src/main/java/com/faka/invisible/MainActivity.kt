@@ -181,6 +181,18 @@ class MainActivity : Activity() {
             addView(note)
         }
         if (EventLog.running) body.addView(k.quiet("Stop listening", Ui.bad) { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
+        card("Claude bridge", "Answer Claude Code on your laptop with the button. Run bridge/server.py on the laptop, then type the address it prints and the token. Leave empty to turn it off.") {
+            val url = k.input("Address, e.g. http://100.64.0.5:8765").apply { minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI; setText(Actions.claudeUrl()) }
+            val tok = k.input("Token").apply { minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD; setText(Actions.claudeToken()) }
+            val note = k.text("", 14f, Ui.good).apply { setPadding(0, k.dp(6), 0, 0) }
+            addView(url, LinearLayout.LayoutParams(-1, -2))
+            addView(tok, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
+            addView(k.btn("Save", true) {
+                Actions.setClaudeBridge(url.text.toString(), tok.text.toString())
+                note.text = if (Actions.claudeUrl().isEmpty()) "Saved: Claude bridge is off." else "Saved. Pick Claude in the menu, or wait: the phone tells you when Claude asks."
+            }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+            addView(note)
+        }
     }
 
     private fun tasksPage() {

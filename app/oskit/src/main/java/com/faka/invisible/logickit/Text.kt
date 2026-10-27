@@ -8,3 +8,9 @@ fun String.squash(): String = replace(spaces, " ").trim()
 
 /** The words of a text, split on any white space, none empty. */
 fun String.words(): List<String> = trim().split(spaces).filter { it.isNotEmpty() }
+
+/** The first [max] words of a text, white space squashed; a cut text ends with "..." so a listener knows there was more. */
+fun String.firstWords(max: Int): String {
+    val w = words()
+    return if (w.size <= max) w.joinToString(" ") else w.take(max).joinToString(" ") + "..."
+}

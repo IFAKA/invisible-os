@@ -4,6 +4,7 @@ import com.faka.invisible.echo.EchoProgram
 import com.faka.invisible.compass.CompassProgram
 import com.faka.invisible.whereami.WhereAmIEntry
 import com.faka.invisible.whereami.WhereServices
+import com.faka.invisible.claude.ClaudeProgram
 import com.faka.invisible.practice.PracticeEntry
 import com.faka.invisible.tell.DuelProgram
 import com.faka.invisible.guard.GuardProgram
@@ -33,6 +34,7 @@ object Programs {
         DuelProgram.howTo,
         CompassProgram.entry,
         WhereAmIEntry.entry(where!!),
+        ClaudeProgram.entry,
         PracticeEntry.entry,
         WriteEntries.write(services!!) { appContext!! },
         WriteEntries.sum,
