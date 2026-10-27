@@ -86,6 +86,12 @@ class Store:
         self.cv = threading.Condition()
         self.seq = 0
         self.items = {}   # id -> dict
+        self.last_poll = None   # when the phone last asked for events (clock time)
+
+    PHONE_ONLINE_SECONDS = 40   # a phone long-polls every ~25 s; quieter than this = not listening
+
+    def phone_online(self):
+        return self.last_poll is not None and self.clock() - self.last_poll <= self.PHONE_ONLINE_SECONDS
 
     def _add(self, kind, project, summary, options, ref=None):
         self.seq += 1
@@ -159,6 +165,7 @@ class Store:
         """Items newer than `since` that still need the phone. Waits up to `wait` seconds when there are none.
         A phone that starts at since=0 also gets the asks that are still open."""
         end = time.monotonic() + wait
+        self.last_poll = self.clock()
         with self.cv:
             while True:
                 vis = self._visible(since)

@@ -110,6 +110,8 @@ def make_handler(store, token):
                 ok = store.answer(b.get("id"), b.get("choice"))
                 self._send(200 if ok else 409, {"ok": ok})
             elif path == "/ask":
+                if not store.phone_online():   # no phone listening: answer at once so the terminal prompt shows without delay
+                    self._send(200, {"id": None, "answer": None, "offline": True}); return
                 item = store.add(b.get("kind", "permission"), b.get("project", "Claude"), b.get("summary", ""), b.get("options") or [], b.get("ref"))
                 choice = store.wait_answer(item["id"], float(b.get("wait", 600)))
                 self._send(200, {"id": item["id"], "answer": choice})

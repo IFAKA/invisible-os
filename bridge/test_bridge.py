@@ -164,3 +164,14 @@ class EndToEnd(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PhoneOnlineTest(unittest.TestCase):
+    def test_online_only_after_a_recent_poll(self):
+        now = [1000.0]
+        st = core.Store(clock=lambda: now[0])
+        self.assertFalse(st.phone_online())
+        st.events(0, 0)
+        self.assertTrue(st.phone_online())
+        now[0] += core.Store.PHONE_ONLINE_SECONDS + 1
+        self.assertFalse(st.phone_online())
