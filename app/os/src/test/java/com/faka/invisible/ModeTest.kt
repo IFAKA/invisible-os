@@ -1234,12 +1234,12 @@ class ModeTest {
         assertFalse(e.spoken().any { it.startsWith("say Notifications") })
     }
 
-    @Test fun notificationsListHasClearAllFirstThenOnlyAppsWithNotifications() {
+    @Test fun notificationsListHasClearAllLastAfterOnlyAppsWithNotifications() {
         val r = mail(); r.wake(); r.pick("Notifications, 3"); r.advance(6000)
         assertEquals(ControllerMode.Screen.NOTIF_APPS, r.m.screen)
-        val order = r.spoken().map { it.removePrefix("say ") }.dropWhile { it != "Clear all" }
-        assertEquals(listOf("Clear all", "Mail, 2 notifications", "whatsapp, 1 notification"), order.take(3).sortedBy { listOf("Clear all", "Mail, 2 notifications", "whatsapp, 1 notification").indexOf(it) })
-        assertEquals("Clear all", order.first()); assertFalse(order.any { it == "Maps" })
+        val order = r.spoken().map { it.removePrefix("say ") }.dropWhile { it != "Mail, 2 notifications" && it != "whatsapp, 1 notification" }
+        assertEquals(setOf("Mail, 2 notifications", "whatsapp, 1 notification"), order.take(2).toSet())
+        assertEquals("Clear all", order[2]); assertFalse(order.any { it == "Maps" })
     }
 
     @Test fun clearAllInNotificationsListClearsEveryAppSpeaksCountAndGoesHome() {
@@ -1249,13 +1249,15 @@ class ModeTest {
         assertEquals(ControllerMode.Screen.HUB, r.m.screen)
     }
 
-    @Test fun appWithTwoNotificationsListsThemWithClearAllFromThisAppFirst() {
-        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Mail, 2 notifications"); r.advance(6000)
-        assertEquals(ControllerMode.Screen.NOTIF_LIST, r.m.screen)
-        val order = r.spoken().map { it.removePrefix("say ") }.dropWhile { it != "Clear all from this app" }
-        assertEquals("Clear all from this app", order.first()); assertTrue(order.contains("Boss. Call me"))
-        r.pick("Clear all from this app"); r.advance(3000)
-        assertTrue(r.has("nclear com.mail")); assertEquals(ControllerMode.Screen.NOTIF_APPS, r.m.screen)   // back to the apps list; Mail is gone from it
+    @Test fun appWithTwoNotificationsReadsThemThenClearAllFromThisAppLast() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Mail, 2 notifications"); r.advance(15000)
+        val order = r.spoken().map { it.removePrefix("say ") }
+        assertTrue(order.indexOf("Boss. Call me") >= 0 && order.indexOf("Clear all from this app") > order.indexOf("Boss. Call me"))
+    }
+
+    @Test fun clearAllFromThisAppGoesBackToTheAppsListWithoutThatApp() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Mail, 2 notifications"); r.pick("Clear all from this app"); r.advance(3000)
+        assertTrue("log=${r.log} screen=${r.m.screen}", r.has("nclear com.mail")); assertEquals(ControllerMode.Screen.NOTIF_APPS, r.m.screen)
         assertFalse(r.spoken().takeLast(6).any { it == "say Mail, 2 notifications" })
     }
 
