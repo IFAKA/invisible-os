@@ -266,7 +266,7 @@ class Kit(private val c: Context) {
             setPadding(dp(Ui.S2), dp(Ui.S2), dp(Ui.S2), dp(Ui.S2))
             setOnApplyWindowInsetsListener { v, i ->
                 if (android.os.Build.VERSION.SDK_INT >= 30) {
-                    val b = i.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+                    val b = i.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout() or android.view.WindowInsets.Type.ime())
                     v.setPadding(b.left + dp(Ui.S2), b.top + dp(Ui.S2), b.right + dp(Ui.S2), b.bottom + dp(Ui.S2)); android.view.WindowInsets.CONSUMED
                 } else i
             }

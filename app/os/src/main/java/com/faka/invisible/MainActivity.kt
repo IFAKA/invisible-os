@@ -33,6 +33,8 @@ class MainActivity : Activity() {
     private lateinit var root: android.widget.FrameLayout   // holds the scrolling pages, or the fixed mirror of the OS
     private lateinit var scroll: ScrollView
     private var mirror: Kit.MirrorView? = null; private var mirrorKey = ""; private var mirrorHost: View? = null
+    private lateinit var scrollBody: LinearLayout   // the body of the scrolling pages
+    private var pageTop: LinearLayout? = null         // fixed pages: the part above the scrolling list
     private var settingsOpen = false   // the person left the mirror to use the settings
     private var s = LauncherSettings()
     private var taskNote = ""        // result of the last Add, shown under the button
@@ -50,6 +52,8 @@ class MainActivity : Activity() {
         Actions.init(applicationContext)
         s = Actions.mode.settings
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(k.dp(Ui.S2), k.dp(Ui.S2), k.dp(Ui.S2), k.dp(Ui.S4)) }
+        scrollBody = body
+        if (android.os.Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { if (!goBack()) finish() }   // Android 16 no longer calls onBackPressed
         scroll = k.screen(this, body)
         root = android.widget.FrameLayout(this).apply { addView(scroll) }
         setContentView(root)
@@ -90,7 +94,7 @@ class MainActivity : Activity() {
     private fun slider(label: String, valueText: String, max: Int, now: Int, apply: (Int) -> LauncherSettings) = k.slider(label, valueText, max, now) { change(apply(it)) }
 
     // ---- screens: Home shows one thing to do and a few doors; each door opens one small page ----
-    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), COMPUTERS("Computers"), LAPTOP("Laptop"), AI("AI on the phone"), HELP("Help") }
+    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), MENUMORE("Order, Today and Phone"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), COMPUTERS("Computers"), LAPTOP("Laptop"), AI("AI on the phone"), HELP("Help") }
     private var page = Page.HOME
 
     private val laptop by lazy { LaptopPage(this, k, body) { render() } }
@@ -98,8 +102,16 @@ class MainActivity : Activity() {
 
     private fun open(p: Page) { page = p; if (p == Page.LAPTOP) laptop.start(); if (p == Page.COMPUTERS) computersPage.start(); render(); (body.parent as? ScrollView)?.scrollTo(0, 0); k.enter(body) }
 
-    @Deprecated("Back goes to Home first, then leaves")
-    override fun onBackPressed() { if (page == Page.COMPUTERS && computersPage.inside) computersPage.back() else if (page != Page.HOME) open(Page.HOME) else super.onBackPressed() }
+    /** Back goes up one step: inside the Computers page, a sub-page to its page, a page to Home, the settings to the mirror; from Home it leaves. */
+    private fun goBack(): Boolean = when {
+        page == Page.COMPUTERS && computersPage.inside -> { computersPage.back(); true }
+        page == Page.MENUMORE -> { open(Page.MENU); true }
+        page != Page.HOME -> { open(Page.HOME); true }
+        settingsOpen -> { settingsOpen = false; render(); true }
+        else -> false
+    }
+    @Deprecated("Back goes up one step, then leaves")
+    override fun onBackPressed() { if (!goBack()) super.onBackPressed() }
 
     private var lastDraw = 0L
     private var drawQueued = false
@@ -110,17 +122,31 @@ class MainActivity : Activity() {
         else if (!drawQueued) { drawQueued = true; body.postDelayed({ drawQueued = false; lastDraw = android.os.SystemClock.uptimeMillis(); render() }, wait) }
     }
 
+    /** Pages whose top (back, title) stays; only the list under it scrolls. The others scroll as one (long text, the laptop rooms). */
+    private val fixedPages = setOf(Page.TASKS, Page.MENU, Page.MENUMORE, Page.VOICE, Page.EMERGENCY, Page.AI)
+
     private fun render() {
         val keep = page == Page.HOME && ScreenMirror.active && !settingsOpen && root.getChildAt(0) === mirrorHost && mirrorHost != null
-        if (!keep && root.getChildAt(0) !== scroll) { root.removeAllViews(); root.addView(scroll) }
+        body = scrollBody; pageTop = null
+        if (page in fixedPages) {
+            val f = k.fixedScreen(this)
+            f.addView(k.header(tr(page.title), { open(if (page == Page.MENUMORE) Page.MENU else Page.HOME) }, if (page == Page.MENUMORE) "Your menu" else "Home"))
+            val top = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            f.addView(top)
+            f.addView(ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(content) }, LinearLayout.LayoutParams(-1, 0, 1f))
+            body = content; pageTop = top
+            root.removeAllViews(); root.addView(f)
+        } else if (!keep && root.getChildAt(0) !== scroll) { root.removeAllViews(); root.addView(scroll) }
         body.removeAllViews(); cardParent = null
-        if (page == Page.LAPTOP && laptop.inRoom) body.addView(k.header(laptop.title(), { laptop.leaveRoom() }, laptop.backLabel()))
-        else if (page == Page.COMPUTERS && computersPage.inside) body.addView(k.header(tr(page.title), { computersPage.back() }, "Computers"))
+        if (page in fixedPages) { /* header is already in place */ }
+        else if (page == Page.LAPTOP && laptop.inRoom) body.addView(k.header(laptop.title(), { laptop.leaveRoom() }, "Rooms"))
         else if (page != Page.HOME) body.addView(k.header(tr(page.title), { open(Page.HOME) }))
         when (page) {
             Page.HOME -> home()
             Page.TASKS -> tasksPage()
             Page.MENU -> menuPage()
+            Page.MENUMORE -> menuMorePage()
             Page.VOICE -> voicePage()
             Page.EMERGENCY -> emergencyPage()
             Page.COMPUTERS -> computersPage.draw()
@@ -128,7 +154,7 @@ class MainActivity : Activity() {
             Page.AI -> aiPage()
             Page.HELP -> helpPage()
         }
-        body.addView(k.text(tr("Version {0}").replace("{0}", BuildConfig.VERSION_NAME) + if (page == Page.HELP) " (${BuildConfig.BUILD_STAMP})" else "", Type.CAPTION, Ui.soft).apply { gravity = Gravity.CENTER },
+        if (page !in fixedPages) body.addView(k.text(tr("Version {0}").replace("{0}", BuildConfig.VERSION_NAME) + if (page == Page.HELP) " (${BuildConfig.BUILD_STAMP})" else "", Type.CAPTION, Ui.soft).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S4) })
     }
 
@@ -266,7 +292,7 @@ class MainActivity : Activity() {
     }
 
     private fun tasksPage() {
-        card("Tasks" + Actions.tasks().size.let { if (it > 0) " ($it)" else "" }, "Add one here, or share from Google Keep. Hold the button and pick \"Tasks\" to hear them.") {
+        k.card(pageTop!!, "Tasks" + Actions.tasks().size.let { if (it > 0) " ($it)" else "" }, "Add one here, or share from Google Keep. Hold the button and pick \"Tasks\" to hear them.", true) {
             val input = k.input("Write a task, or paste a checklist")
             val note = k.text(taskNote, Type.CAPTION, if (taskNoteBad) Ui.bad else Ui.good).apply { setPadding(0, k.dp(6), 0, 0) }
             fun add() {
@@ -281,8 +307,10 @@ class MainActivity : Activity() {
             addView(input, LinearLayout.LayoutParams(-1, -2))
             addView(k.btn("Add task", true) { add() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
             if (taskNote.isNotEmpty()) addView(note)
+        }
+        run {
             val ts = Actions.tasks()
-            if (ts.isEmpty()) addView(k.text("No tasks yet.\nIn Google Keep: open a note, tap Share, choose \"Invisible task\". Only unchecked items are added.", Type.CAPTION, Ui.soft).apply { setPadding(0, k.dp(12), 0, 0) })
+            if (ts.isEmpty()) body.addView(k.text("No tasks yet.\nIn Google Keep: open a note, tap Share, choose \"Invisible task\". Only unchecked items are added.", Type.CAPTION, Ui.soft).apply { setPadding(0, k.dp(12), 0, 0) })
             val taskRows = ArrayList<View>()
             val th = k.dp(68)
             ts.forEachIndexed { i, t ->
@@ -293,7 +321,7 @@ class MainActivity : Activity() {
                 k.surface(item)
                 taskRows.add(item)
                 if (ts.size > 1) k.makeDraggable(handle, taskRows, ts.size - 1, th + k.dp(8)) { from, to -> Actions.moveTask(from, to); render() }
-                addView(item, LinearLayout.LayoutParams(-1, th).apply { topMargin = k.dp(if (i == 0) 14 else 8) })
+                body.addView(item, LinearLayout.LayoutParams(-1, th).apply { topMargin = k.dp(if (i == 0) 14 else 8) })
             }
         }
 
@@ -420,7 +448,11 @@ class MainActivity : Activity() {
     }
 
     private fun menuPage() {
+        k.group(body) { k.navRow(this, tr("Order, Today and Phone"), tr("Order, and what Today and Phone say")) { open(Page.MENUMORE) } }
         treeCard()
+    }
+
+    private fun menuMorePage() {
         k.group(body, "Order and speed") {
             k.toggleRow(this, "Reply options by use", "Put the ones you pick most first.", s.learnOrder) { v -> change(s.copy(learnOrder = v)) }
             k.toggleRow(this, "Fast sound for known options", "Well-known options are spoken as a short sound.", s.spearcons) { v -> change(s.copy(spearcons = v)) }
@@ -437,9 +469,14 @@ class MainActivity : Activity() {
     }
 
     private fun voicePage() {
-        k.group(body, tr("Menu language"), tr("What the phone says and shows. Messages keep their own language.")) {
-            k.choiceRow(this, tr("Automatic"), s.menuLanguage == MenuLanguage.AUTO) { change(s.copy(menuLanguage = MenuLanguage.AUTO)) }
-            MenuLanguage.supported.forEach { c -> k.choiceRow(this, MenuLanguage.names[c] ?: c, s.menuLanguage == c) { change(s.copy(menuLanguage = c)) } }
+        k.group(body) {
+            val codes = listOf(MenuLanguage.AUTO) + MenuLanguage.supported
+            fun name(c: String) = if (c == MenuLanguage.AUTO) tr("Automatic") else MenuLanguage.names[c] ?: c
+            k.navRow(this, tr("Menu language"), name(s.menuLanguage)) {
+                AlertDialog.Builder(this@MainActivity).setTitle(tr("Menu language")).setSingleChoiceItems(codes.map { name(it) }.toTypedArray(), codes.indexOf(s.menuLanguage).coerceAtLeast(0)) { d, i ->
+                    d.dismiss(); change(s.copy(menuLanguage = codes[i]))
+                }.show()
+            }
         }
         card(tr("Speed"), tr("Find what feels right. You can change it any time.")) {
             addView(slider(tr("Pause between options"), "%.1f s".format(s.itemGapMs / 1000f), 39, ((s.itemGapMs - 100) / 100).toInt()) {
