@@ -180,6 +180,7 @@ class FlowRoomsTest {
         assertEquals(ChangesActivity::class.java.name, open.component?.className)
         assertEquals("%1", open.getStringExtra(ChangesNotice.EXTRA_ROOM))
         assertEquals("Home", open.getStringExtra(ChangesNotice.EXTRA_COMPUTER))
+    }
 
     // ---- rooms_choice ----
     private var lastHost: RoboRig.Host? = null
