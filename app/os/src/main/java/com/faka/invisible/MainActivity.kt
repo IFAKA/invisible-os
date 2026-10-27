@@ -8,6 +8,8 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
@@ -119,7 +121,7 @@ class MainActivity : Activity() {
     private fun renderSoon() {
         val wait = 200 - (android.os.SystemClock.uptimeMillis() - lastDraw)
         if (wait <= 0) { lastDraw = android.os.SystemClock.uptimeMillis(); render() }
-        else if (!drawQueued) { drawQueued = true; body.postDelayed({ drawQueued = false; lastDraw = android.os.SystemClock.uptimeMillis(); render() }, wait) }
+        else if (!drawQueued) { drawQueued = true; Handler(Looper.getMainLooper()).postDelayed({ drawQueued = false; lastDraw = android.os.SystemClock.uptimeMillis(); render() }, wait) }
     }
 
     /** Pages whose top (back, title) stays; only the list under it scrolls. The others scroll as one (long text, the laptop rooms). */
@@ -214,7 +216,7 @@ class MainActivity : Activity() {
         val next = if (previewReady) -1 else Setup.current(steps)
         val stepKey = if (next >= 0) steps[next].id else if (!EventLog.running) "stopped" else "ready"
         val changed = stepKey != lastStep
-        if (changed) { lastStep = stepKey; body.post { k.enter(body) } }
+        if (changed) { lastStep = stepKey; if (next >= 0) body.post { k.enter(body) } }
         if (next >= 0) {
             val t = steps[next]
             val perm = t.id in Setup.PERMISSION_STEPS
@@ -248,11 +250,11 @@ class MainActivity : Activity() {
             root.removeAllViews(); root.addView(fixed)
             return
         } else if (!EventLog.running) {
-            k.status(fixed, tr("Stopped"), tr("The app is not listening to the button."), Ui.bad) {
+            k.status(fixed, tr("Stopped"), tr("The app is not listening to the button."), Ui.bad, Ui.S1) {
                 addView(k.primary(tr("Start")) { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) })
             }
         } else {
-            k.status(fixed, tr("Ready"), tr("Turn the screen off. Hold your earbud button to hear the menu."), Ui.good) {
+            k.status(fixed, tr("Ready"), tr("Turn the screen off. Hold your earbud button to hear the menu."), Ui.good, Ui.S1) {
                 addView(k.primary(tr("Wake the menu")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) })
             }
         }

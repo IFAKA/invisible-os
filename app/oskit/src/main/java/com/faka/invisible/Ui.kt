@@ -324,9 +324,9 @@ class Kit(private val c: Context) {
     }
 
     /** Home status: a coloured dot, a large word, one quiet line. */
-    fun status(parent: LinearLayout, headline: String, line: String, color: Int, fill: LinearLayout.() -> Unit = {}) {
+    fun status(parent: LinearLayout, headline: String, line: String, color: Int, top: Int = Ui.S3, fill: LinearLayout.() -> Unit = {}) {
         val dot = View(c).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) } }
-        parent.addView(row(dot.apply { layoutParams = LinearLayout.LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(12) } }, text(headline, Type.TITLE)), lp(top = Ui.S3))
+        parent.addView(row(dot.apply { layoutParams = LinearLayout.LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(12) } }, text(headline, Type.LARGE)), lp(top = top))
         parent.addView(text(line, Type.SMALL, Ui.soft), lp(top = Ui.S1))
         val extra = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
         extra.fill()
