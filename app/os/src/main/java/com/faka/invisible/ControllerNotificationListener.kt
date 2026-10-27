@@ -53,6 +53,14 @@ class ControllerNotificationListener : NotificationListenerService() {
             return i >= 0 && fireAction(c.key, i, null, ctx)
         }
         @Volatile private var navKey: String? = null
+
+        /** An ongoing notification (a player, a workout, a stopwatch...) and what says whether it is live; see [LiveApps]. */
+        class Ongoing(val notif: Notif, val category: String, val chronometer: Boolean, val mediaStyle: Boolean)
+        private val ongoing = java.util.concurrent.ConcurrentHashMap<String, Ongoing>()
+        /** The ongoing notifications now, for the live entries on home. */
+        fun ongoingNow(): List<Ongoing> = ongoing.values.filter { !mutes.isMuted(it.notif.pkg) }
+        /** One ongoing notification by key (for its actions screen). */
+        fun ongoingNotif(key: String): Notif? = ongoing[key]?.notif?.takeIf { !mutes.isMuted(it.pkg) }
         /** Voice for a song name: English only when the detector clearly says English, otherwise Spanish (same rule as messages). */
         fun voiceFor(text: String): String {
             val d = try { detector.detect(text) } catch (e: Exception) { "" }
@@ -103,7 +111,7 @@ class ControllerNotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         loaded = false; live = this; loadMutes(applicationContext)
         modules.all().forEach { it.onConnected(applicationContext, adapterHost) }
-        notifs.clear(); synchronized(Companion) { notifActions.clear() }; navigation = null; navKey = null
+        notifs.clear(); ongoing.clear(); synchronized(Companion) { notifActions.clear() }; navigation = null; navKey = null
         reloadActive()
     }
 
@@ -125,13 +133,14 @@ class ControllerNotificationListener : NotificationListenerService() {
             callHandler.postDelayed({ if (ringing == null && ongoingKey == null) Actions.callOver() }, 700)   // an answered call swaps its notification: wait a moment
         }
         if (sbn.packageName == Navigation.PACKAGE && sbn.key == navKey) { navigation = null; navKey = null }
-        notifs.remove(sbn.key); synchronized(Companion) { notifActions.remove(sbn.key) }
+        notifs.remove(sbn.key); ongoing.remove(sbn.key); synchronized(Companion) { notifActions.remove(sbn.key) }
         modules.all().forEach { it.onRemoved(sbn) }
     }
 
     /** The mailbox: keeps any app's notification. A private one (see [NotifPrivacy]) keeps no title and no text at all. */
     private fun keep(sbn: StatusBarNotification) {
         val n = sbn.notification
+        if (n.flags and Notification.FLAG_ONGOING_EVENT != 0) trackOngoing(sbn)
         if (sbn.packageName == packageName || n.flags and (Notification.FLAG_GROUP_SUMMARY or Notification.FLAG_ONGOING_EVENT) != 0) return
         if (modules.forPackage(sbn.packageName).skips(n.channelId.orEmpty())) return
         val x = n.extras
@@ -144,6 +153,27 @@ class ControllerNotificationListener : NotificationListenerService() {
         }
         synchronized(Companion) { if (n.actions != null) notifActions[sbn.key] = n.actions else notifActions.remove(sbn.key) }
         notifs.upsert(Notif(sbn.key, sbn.packageName, appLabel(sbn.packageName), if (hidden) "" else title, if (hidden) "" else text, sbn.postTime, actions, hidden, n.channelId.orEmpty()))
+    }
+
+    /** An ongoing notification of another app (this app's own only in the e2e test): kept apart from the mailbox, with its actions, so a live one can open on home. */
+    private fun trackOngoing(sbn: StatusBarNotification) {
+        val n = sbn.notification
+        if (sbn.packageName == packageName && !fake(sbn)) return
+        if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
+        val x = n.extras
+        val title = x.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val text = x.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+        val locked = getSystemService(KeyguardManager::class.java)?.isDeviceLocked ?: true
+        val hidden = NotifPrivacy.mustHide(sbn.packageName, n.visibility, locked, false)
+        val actions = n.actions.orEmpty().mapIndexedNotNull { i, a ->
+            a.title?.toString()?.takeIf { it.isNotBlank() }?.let { NotifAction(i, it, !a.remoteInputs.isNullOrEmpty()) }
+        }
+        if (n.actions != null) synchronized(Companion) { notifActions[sbn.key] = n.actions }
+        val chrono = n.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER) || n.extras.getBoolean("android.chronometerCountDown")
+        val media = x.getString(Notification.EXTRA_TEMPLATE)?.endsWith("MediaStyle") == true
+        ongoing[sbn.key] = Ongoing(
+            Notif(sbn.key, sbn.packageName, appLabel(sbn.packageName), if (hidden) "" else title, if (hidden) "" else text, sbn.postTime, actions, hidden, n.channelId.orEmpty()),
+            n.category.orEmpty(), chrono, media)
     }
 
     private fun appLabel(pkg: String): String = try {

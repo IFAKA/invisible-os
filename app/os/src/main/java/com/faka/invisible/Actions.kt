@@ -124,6 +124,8 @@ object Actions {
             override fun messages() = ControllerNotificationListener.store.all()
             override fun reply(key: String, text: String) = ControllerNotificationListener.sendReply(key, text, app)
             override fun notifGroups() = ControllerNotificationListener.notifs.groups { ControllerNotificationListener.modules.forNotif(it).groupKey(it) }
+            override fun liveApps() = liveAppsNow()
+            override fun liveNotif(key: String) = ControllerNotificationListener.ongoingNotif(key)
             override fun notifRead(n: Notif) = ControllerNotificationListener.modules.forNotif(n).read(n)
             override fun notifSummary(n: Notif) = ControllerNotificationListener.modules.forNotif(n).summary(n)
             override fun notifFire(key: String, index: Int) = ControllerNotificationListener.fireAction(key, index, null, app)
@@ -503,7 +505,7 @@ object Actions {
 
     private fun readArrival(a: Arriving) {
         if (!ArrivalPlan.mayRead(ControllerNotificationListener.inCall, running != null)) { Log.d(TAG, "ARRIVAL not read (call or program)"); return }
-        val label = try { app.packageManager.getApplicationLabel(app.packageManager.getApplicationInfo(a.pkg, 0)).toString() } catch (e: Exception) { a.pkg.substringAfterLast('.') }
+        val label = appName(a.pkg)
         val lines = ArrivalPlan.lines(label, a.sender, a.text, a.lang, a.hidden)
         val duck = !mode.active && pauseMusicNow()   // an open menu already handles the music
         lines.forEach { say(it, true) }
@@ -625,6 +627,25 @@ object Actions {
     }
 
     private var pausedPkg: String? = null
+
+    /** The live apps for the front of home: media sessions that play or were paused lately, and ongoing notifications that are not static. */
+    private fun liveAppsNow(): List<LiveApp> {
+        val now = System.currentTimeMillis(); val elapsed = android.os.SystemClock.elapsedRealtime()
+        val media = otherSessions().mapNotNull { c ->
+            val st = c.playbackState ?: return@mapNotNull null
+            val playing = st.state == PlaybackState.STATE_PLAYING; val paused = st.state == PlaybackState.STATE_PAUSED
+            if (!playing && !paused) return@mapNotNull null
+            LiveCandidate(c.packageName, appName(c.packageName), now - (elapsed - st.lastPositionUpdateTime), mediaPlaying = playing, mediaPaused = paused)
+        }
+        val notes = ControllerNotificationListener.ongoingNow().map { o ->
+            val n = o.notif
+            LiveCandidate(n.pkg, n.app, n.at, notifKey = n.key, hasActions = n.actions.isNotEmpty(), chronometer = o.chronometer, category = o.category,
+                mediaStyle = o.mediaStyle, line = listOf(n.text, n.title).firstOrNull { it.isNotBlank() }.orEmpty(), hidden = n.hidden)
+        }
+        return LiveApps.pick(media + notes, now, "", { ControllerNotificationListener.mutes.isMuted(it) })
+    }
+
+    private fun appName(pkg: String): String = try { app.packageManager.getApplicationLabel(app.packageManager.getApplicationInfo(pkg, 0)).toString() } catch (e: Exception) { pkg.substringAfterLast('.') }
 
     private fun otherSessions() = try {
         app.getSystemService(MediaSessionManager::class.java)

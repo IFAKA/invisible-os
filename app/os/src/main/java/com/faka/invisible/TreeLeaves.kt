@@ -63,7 +63,7 @@ object TreeLeaves {
         val p = store
         val warm = p?.getString("tree_levels", null)?.split(',')?.filter { '=' in it }?.associate { it.substringBefore('=') to (it.substringAfter('=').toIntOrNull() ?: -1) }
         // Same apps, same places, same pins, same week: the earlier levels still hold, only the order inside each list is recomputed (cheap).
-        val sig = leaves.sortedBy { it.pkg }.joinToString("|") { "${it.pkg}:${it.category}:${it.weight >= PIN_BOOST}" }.hashCode().toString() + "/" + System.currentTimeMillis() / (7 * 86_400_000L)
+        val sig = leaves.sortedBy { it.pkg }.joinToString("|") { "${it.pkg}:${it.category}:${it.weight >= PIN_BOOST}:${it.live}" }.hashCode().toString() + "/" + System.currentTimeMillis() / (7 * 86_400_000L)
         if (warm != null && p?.getString("tree_sig", null) == sig) AppTree.fromLevels(leaves, warm)?.let { return it }
         val (root, levels) = AppTree.built(leaves, warm)
         p?.edit()?.putString("tree_levels", levels.entries.joinToString(",") { it.key + "=" + it.value })?.putString("tree_sig", sig)?.apply()

@@ -4,8 +4,9 @@ package com.faka.invisible
  * An entry that may appear in the tree: an app, or a built-in program of the OS (pkg "hub:tasks"). [category] = place, see [AppCategories].
  * [unread] = its notifications now (shown in the label only; it never changes the order). [weight] = how much it is used, see [AppWeights].
  * [rank] = the user's own order, used only when weights tie (lower first).
+ * [live] = the app is on home as a live entry in front of the tree ([LiveApps]): it is never promoted again, and each live app takes one promoted slot.
  */
-data class AppLeaf(val pkg: String, val label: String, val category: String, val unread: Int, val weight: Double, val rank: Int = 0)
+data class AppLeaf(val pkg: String, val label: String, val category: String, val unread: Int, val weight: Double, val rank: Int = 0, val live: Boolean = false)
 
 /** One list entry: a group ([children]) or an app ([app]). [unread] and [weight] are sums over the leaves below. */
 class TreeNode(val label: String, val children: List<TreeNode> = emptyList(), val app: AppLeaf? = null, val unread: Int = 0, val weight: Double = 0.0, val rank: Int = 0) {
@@ -91,7 +92,7 @@ object AppTree {
     }
 
     /** An app is in its own place (group, or group/sub) or promoted to home: it is never lifted out of its sub-group into a mixed list, so each list holds one kind of thing. */
-    private fun allowed(l: AppLeaf, v: Int) = v == 0 || v == maxLevel(l)
+    private fun allowed(l: AppLeaf, v: Int) = (v == 0 && !l.live) || v == maxLevel(l)
 
     private fun maxLevel(l: AppLeaf) = if (AppCategories.sub(l.category) != null) 2 else 1
 
@@ -106,7 +107,8 @@ object AppTree {
             ls.filter { lv.getValue(it.pkg) > 0 }.groupBy { AppCategories.main(it.category) }.flatMap { (g, l) ->
                 memo.getOrPut(listOf<Any>(g) + l.map { it.pkg to lv.getValue(it.pkg) }) { listOfNotNull(listEntry(g, groupEntries(l, lv))) }
             }
-        if (home.size > HOME_MAX || ls.count { lv.getValue(it.pkg) == 0 } > PROMOTED) return Layout(INF, node("", emptyList()), lv)
+        val slots = maxOf(0, PROMOTED - ls.count { it.live })   // live apps are shown in front of the tree and use up the promoted slots
+        if (home.size > HOME_MAX - PROMOTED + slots || ls.count { lv.getValue(it.pkg) == 0 } > slots) return Layout(INF, node("", emptyList()), lv)
         val (cost, kids) = arrange(home, HOME_MAX)
         return Layout(cost, node("", kids), lv)
     }
@@ -142,7 +144,7 @@ object AppTree {
 
     /** Every level assignment one move away: one app straight home (promoted) or back to its place. */
     private fun moves(ls: List<AppLeaf>, lv: Map<String, Int>): List<Map<String, Int>> =
-        ls.map { l -> lv + (l.pkg to if (lv.getValue(l.pkg) > 0) 0 else maxLevel(l)) }
+        ls.filter { !it.live }.map { l -> lv + (l.pkg to if (lv.getValue(l.pkg) > 0) 0 else maxLevel(l)) }
 
     // ---- measuring any tree (the old one, the flat list, this one) ----
     class Path(val app: AppLeaf, val heard: Int, val levels: Int)

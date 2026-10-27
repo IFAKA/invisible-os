@@ -52,6 +52,20 @@ class AppTreeTest {
     }
     private fun flat(l: List<AppLeaf>) = TreeNode("", l.sortedWith(compareByDescending<AppLeaf> { it.weight }.thenBy { it.pkg }).map { TreeNode(it.label, app = it, weight = it.weight) })
 
+    @Test fun liveAppsTakePromotedSlotsAndAreNeverPromoted() {
+        val base = phone()
+        val top = base.filter { it.pkg != "hub:music" }.sortedByDescending { it.weight }.take(3).map { it.pkg }   // the three heaviest would be promoted without live
+        for (n in 0..3) {
+            val liveSet = top.take(n).toSet()
+            val root = AppTree.build(base.map { if (it.pkg in liveSet) it.copy(live = true) else it })
+            val promoted = root.children.filter { it.isApp }.map { it.app!!.pkg }
+            assertTrue("no live app on home: $promoted", promoted.none { it in liveSet })
+            assertTrue("promoted ${promoted.size} with $n live", promoted.size <= 2 - n || promoted.isEmpty())
+            assertTrue(root.children.size <= 8 + maxOf(0, 2 - n))
+            assertTrue(liveSet.all { p -> AppTree.apps(root).any { it.pkg == p } })   // still in its group
+        }
+    }
+
     @Test fun weightUsesLaunchesNotMinutes() {
         assertEquals(1.0 + 3 * Math.log(17.0) + 5 * 2, AppWeights.weight("com.x", 10, 3, 2), 1e-9)
         assertEquals(1.0, AppWeights.weight("com.microsoft.launcher", 155, 122, 0), 1e-9)

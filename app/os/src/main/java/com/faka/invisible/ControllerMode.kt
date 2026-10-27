@@ -35,6 +35,8 @@ interface ModeOutput {
     fun messages(): List<Msg>        // latest unread messages, newest first
     fun reply(key: String, text: String): Boolean   // true if the reply was sent
     fun notifGroups(): List<NotifGroup> = emptyList()   // the mailbox: every app's notifications, grouped, muted apps left out
+    fun liveApps(): List<LiveApp> = emptyList()   // apps that are live now (playing, a workout...), most recently updated first, for the front of home
+    fun liveNotif(key: String): Notif? = null     // an ongoing notification by key (live entries open it)
     fun notifRead(n: Notif): String = GenericModule.read(n)         // what is read in full (the app's module decides)
     fun notifSummary(n: Notif): String = GenericModule.summary(n)   // the one line in the list
     fun notifFire(key: String, index: Int): Boolean = false   // press action [index] of a notification
@@ -503,7 +505,9 @@ class ControllerMode(
                 suggestedKeys = emptyList()
                 out.setContext(buildSet { if (n > 0) add("unread"); if (out.nowPlaying() != null) add("playing"); if (out.navigation() != null) add("navigating"); if (out.wiredConnected()) add("wired") })
                 hubOpts = all
-                homeLeaves = treeLeaves(all)
+                val leaves = treeLeaves(all)
+                val live = out.liveApps().filter { l -> l.pkg == AppWeights.SELF || leaves.any { it.pkg == l.pkg } }   // a live app must be a leaf (installed, not hidden or muted); this app's own is only the e2e fake
+                homeLeaves = leaves.map { if (live.any { l -> l.pkg == it.pkg }) it.copy(live = true) else it }
                 planFind()
                 val root = cachedTree(homeLeaves); treeRoot = root; treePath.clear()
                 val deep = deepOptions()
@@ -512,10 +516,12 @@ class ControllerMode(
                 val cost = far.mapValues { it.value.second }
                 val sug = out.suggest(deep.keys + far.keys, clock(), home) { key, share, pos -> key !in cost || SuggestGate.worth(share, cost.getValue(key), pos) }
                     .mapNotNull { deep[it] ?: far[it]?.first }
-                val playing = if (out.nowPlaying() != null) all["hub:music"] else null   // something is playing: its controls are always the first entry
-                val front = if (playing == null) sug else listOf(playing) + sug.filter { it.key != playing.key }
+                val liveOpts = live.map { liveOption(it) }   // live apps (playing music, a running workout) come first, most recently updated first
+                val liveKeys = live.map { "app:${it.pkg}" }.toSet() + (if (live.any { out.isMusicApp(it.pkg) }) setOf("hub:music") else emptySet())
+                val playing = if (out.nowPlaying() != null && "hub:music" !in liveKeys) all["hub:music"] else null   // something is playing and is not already a live entry: its controls come first
+                val front = (if (playing == null) sug else listOf(playing) + sug.filter { it.key != playing.key }).filter { it.key !in liveKeys }
                 suggestedKeys = front.map { it.key }
-                front + treeOptions(root) + unmuteOption()   // the home list is the tree's top; only the small Suggested slot in front adapts
+                liveOpts + front + treeOptions(root) + unmuteOption()   // the home list is the tree's top; only the small Suggested slot in front adapts
             }
             Screen.TASK -> {   // "Add task" first, then this page of tasks (a click right after hearing one = done), then "More tasks"
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)
@@ -603,7 +609,21 @@ class ControllerMode(
 
     // ---- The tree: home -> group -> (subgroup) -> app -> its notifications -> one in full with its actions ----
     private fun openItems() = out.notifGroups().filter { it.pkg == notifPkg }.flatMap { it.items }.sortedByDescending { it.at }
-    private fun openNotif() = openItems().firstOrNull { it.key == notifKey }
+    private fun openNotif() = openItems().firstOrNull { it.key == notifKey } ?: notifKey?.let { out.liveNotif(it) }
+    private fun liveOpen() = notifKey?.let { out.liveNotif(it) } != null   // the open notification is a live (ongoing) one: it is not in an app's list
+
+    /** A live app on home: "<App>, playing" / "<App>, live" / "<App>, <its short line>". It opens its notification with the actions (pause, next, lap...), or the Music page for a music app. */
+    private fun liveLabel(l: LiveApp): Phrase =
+        if (l.line.isNotEmpty()) Phrase.content(l.app + ", " + l.line, out.songLang(l.line)) else Menu.liveState(l.app, l.state)
+    private fun liveOption(l: LiveApp) = Opt("live:${l.pkg}", liveLabel(l)) {
+        pick("app:${l.pkg}"); notifPkg = l.pkg
+        val key = l.notifKey
+        when {
+            out.isMusicApp(l.pkg) -> { musicBack = Screen.HUB; show(Screen.MUSIC) }
+            key != null -> { notifKey = key; show(Screen.NOTIF_ACTIONS) }
+            else -> show(Screen.APP_OPEN)
+        }
+    }
 
     /** A screen whose app or notification is gone (dismissed, removed by the app) falls back one level (an empty app: home, which is rebuilt). */
     private fun notifGuard(s: Screen): Screen = when {
@@ -629,7 +649,7 @@ class ControllerMode(
     private var treeKey: List<Any>? = null; private var treeCache: TreeNode? = null
     /** The search is exact but not free: when no weight, label or place changed since the last home list, the same tree is reused (unread changes only labels, so they are left out of the key). */
     private fun cachedTree(leaves: List<AppLeaf>): TreeNode {
-        val key = leaves.map { listOf(it.pkg, it.label, it.category, it.weight) }
+        val key = leaves.map { listOf(it.pkg, it.label, it.category, it.weight, it.live) }
         val old = treeCache
         if (key == treeKey && old != null) return withUnread(old, leaves.associate { it.pkg to it.unread })
         return TreeLeaves.tree(leaves).also { treeKey = key; treeCache = it }
@@ -801,7 +821,7 @@ class ControllerMode(
             Opt("notif:open", Menu.OPEN_APP) { pick("notif:open"); openApp() })
     }
 
-    private fun notifDone(ok: Boolean) { say(if (ok) Voice.NOTIF_DONE else Voice.NOTIF_FAILED); phase = Phase.WAIT; waitNext = { show(Screen.NOTIF_LIST) } }
+    private fun notifDone(ok: Boolean) { say(if (ok) Voice.NOTIF_DONE else Voice.NOTIF_FAILED); phase = Phase.WAIT; waitNext = { show(if (liveOpen()) Screen.NOTIF_ACTIONS else Screen.NOTIF_LIST) } }
 
     /** The options one level down that can be offered straight from the hub (never Back or Done). */
     private fun deepOptions(): Map<String, Opt> {
@@ -951,7 +971,7 @@ class ControllerMode(
             Screen.MORE_MSG -> show(Screen.MESSAGE)
             Screen.COMPOSE, Screen.MSG_TASK -> show(Screen.MORE_MSG)
             Screen.VOLUME -> show(Screen.PHONE)
-            Screen.NOTIF_ACTIONS -> show(Screen.NOTIF_LIST)
+            Screen.NOTIF_ACTIONS -> if (liveOpen()) show(Screen.HUB) else show(Screen.NOTIF_LIST)
             Screen.NOTIF_LIST, Screen.APP_OPEN -> treeUp()
             Screen.MUSIC -> show(musicBack)
             Screen.MUSIC_PLAY, Screen.VOLUME_DIAL -> show(Screen.MUSIC)

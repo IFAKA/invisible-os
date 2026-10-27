@@ -221,6 +221,22 @@ def chat_arrival_spoken():
     if sum(1 for l in since(i, "SAY") if "dinner" in l) != 1: raise Fail("the text was read more than once: " + " | ".join(since(i, "SAY")))
     return " | ".join(lines[:3])
 
+def live_app_first_on_home():
+    """An ongoing notification with a chronometer and a Lap button comes first on home (before the groups); a static one does not; a click opens its actions."""
+    reset(); bcast("--es", "fake", "static"); bcast("--es", "fake", "live"); time.sleep(1.5)
+    i = mark(); press("900")
+    need("12:30 running", i, 20)
+    wait(lambda t: len(set(since(i, "SAY"))) >= 4, i, "SAY", 20)
+    h = list(dict.fromkeys(since(i, "SAY")))
+    if "running" not in h[0] and "running" not in (h[1] if len(h) > 1 else ""): raise Fail("the live entry is not first: " + " | ".join(h[:4]))
+    if any("Connected" in l for l in h): raise Fail("a static ongoing notification was offered: " + " | ".join(h))
+    press("120")   # a click right after hearing it picks it
+    j = mark(); need("Lap", j, 15); need("Dismiss", j, 15)
+    wait_screen("NOTIF_ACTIONS")
+    press("100,150,100,150,100"); wait_screen("HUB")   # triple click = back to home
+    reset()
+    return " | ".join(h[:3]) + " -> Lap, Dismiss ..."
+
 def voice_speed_applied():
     old = float(state()["rate"])
     try:
@@ -337,7 +353,7 @@ def computers_two():
         except Fail: pass
 
 SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, screen_mirrors_menu, screen_tap_picks, practice_end_to_end,
-             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, chat_arrival_spoken, voice_speed_applied, rooms_go, rooms_done_spoken, computers_two, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
+             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, chat_arrival_spoken, live_app_first_on_home, voice_speed_applied, rooms_go, rooms_done_spoken, computers_two, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
 
 def main():
     args = sys.argv[1:]

@@ -169,6 +169,8 @@ object Menu {
     /** What the number after a name counts, in words ("WhatsApp, 2 notifications"): a bare number never says what it counts. */
     fun countText(n: Int) = if (n == 1) "1 notification" else "$n notifications"
     fun treeCount(label: String, n: Int) = Phrase.mixed("$label, ${countText(n)}")
+    /** A live app at the front of home: "Music, playing", "Music, paused", "Workout, live". */
+    fun liveState(app: String, state: String) = Phrase.mixed("$app, $state")
     val MESSAGES get() = f("Messages")
     fun messages(unread: Int) = f("Messages, $unread unread")
     val DISMISS get() = f("Dismiss")

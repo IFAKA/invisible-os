@@ -47,11 +47,15 @@ class AiTestReceiver : BroadcastReceiver() {
     /** Fake notifications for the e2e test. Their buttons point at nobody, so nothing real is answered, rejected or sent. */
     private fun fake(c: Context, what: String) {
         val nm = c.getSystemService(android.app.NotificationManager::class.java)
-        if (what == "clear") { nm.cancel(7001); nm.cancel(7002); return }
+        if (what == "clear") { nm.cancel(7001); nm.cancel(7002); nm.cancel(7003); nm.cancel(7004); return }
         nm.createNotificationChannel(android.app.NotificationChannel("e2e", "e2e", android.app.NotificationManager.IMPORTANCE_HIGH))
         fun pi(flag: Int) = android.app.PendingIntent.getBroadcast(c, 0, Intent("com.faka.invisible.E2E_NOOP").setPackage(c.packageName), flag or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
         val b = android.app.Notification.Builder(c, "e2e").setSmallIcon(android.R.drawable.sym_def_app_icon).setVisibility(android.app.Notification.VISIBILITY_PUBLIC).addExtras(android.os.Bundle().apply { putBoolean("e2e", true) })
-        if (what == "call") {
+        if (what == "live" || what == "static") {   // an ongoing notification: "live" has a chronometer and a Lap button, "static" has neither (like USB debugging)
+            b.setOngoing(true).setContentTitle("E2E Workout").setContentText(if (what == "live") "12:30 running" else "Connected")
+            if (what == "live") b.setUsesChronometer(true).addAction(android.app.Notification.Action.Builder(null, "Lap", pi(android.app.PendingIntent.FLAG_IMMUTABLE)).build())
+            nm.notify(if (what == "live") 7003 else 7004, b.build())
+        } else if (what == "call") {
             b.setContentTitle("E2E Caller").setContentText("Incoming call").setCategory(android.app.Notification.CATEGORY_CALL)
                 .addAction(android.app.Notification.Action.Builder(null, "Answer", pi(android.app.PendingIntent.FLAG_IMMUTABLE)).build())
                 .addAction(android.app.Notification.Action.Builder(null, "Decline", pi(android.app.PendingIntent.FLAG_IMMUTABLE)).build())
