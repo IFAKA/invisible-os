@@ -14,11 +14,12 @@ GETS = []   # path of every GET, in order (a test can wait for the phone to ask)
 ACTIONS = ["go", "yes", "commit", "push", "readall", "screen", "write", "stop"]
 ROOMS = [
     {"id": "%1", "name": "Alpha", "project": "alpha-proj", "path": "/tmp/alpha", "kind": "claude", "state": "needs",
-     "need": "The design doc is ready.", "options": [], "actions": ACTIONS},
+     "need": "The design doc is ready.", "options": [], "actions": ACTIONS,
+     "story": "Wrote the design doc. It is ready. Say go to start building.", "go": "start building"},
     {"id": "%2", "name": "Beta", "project": "beta-proj", "path": "/tmp/beta", "kind": "claude", "state": "working",
-     "need": "", "options": [], "actions": ["stop", "readall", "screen", "write"]},
+     "need": "", "options": [], "actions": ["stop", "readall", "screen", "write"], "story": "", "go": ""},
     {"id": "%3", "name": "Gamma", "project": "gamma-proj", "path": "/tmp/gamma", "kind": "shell", "state": "done",
-     "need": "build finished", "options": [], "actions": ["again", "make:test", "stop", "screen", "write"]},
+     "need": "build finished", "options": [], "actions": ["again", "make:test", "stop", "screen", "write"], "story": "", "go": ""},
 ]
 PROJECTS = [{"name": "alpha-proj", "path": "/tmp/alpha", "uses": 10}, {"name": "beta-proj", "path": "/tmp/beta", "uses": 5}]
 
@@ -36,6 +37,9 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path); q = parse_qs(u.query); GETS.append(u.path)
         if u.path == "/rooms": self._json({"seq": 1, "rooms": getattr(self.server, "rooms", ROOMS)})
         elif u.path == "/room/last": self._json({"text": "Alpha last message. The design doc is ready."})
+        elif u.path == "/room/story":
+            r = next((x for x in getattr(self.server, "rooms", ROOMS) if x["id"] == q.get("id", [""])[0]), None)
+            self._json({"story": r.get("story") or "Fake story for " + r["name"] + ".", "go": r.get("go", "")} if r else {"error": "no such room"}, 200 if r else 404)
         elif u.path == "/room/screen": self._json({"text": "$ claude\n> working on the design doc\n  done"})
         elif u.path == "/projects": self._json({"projects": PROJECTS})
         elif u.path == "/areas": self._json({"areas": [{"name": "hardware", "path": "/tmp/fake/hardware", "uses": 9}]})

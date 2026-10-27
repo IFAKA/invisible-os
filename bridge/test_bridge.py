@@ -392,6 +392,21 @@ class RoomsTmuxTest(unittest.TestCase):
         time.sleep(0.3)
         self.assertEqual(self.by_id(r2.rooms(), c2)["need"], "More. Final point.")
 
+    def test_story_in_rooms_cached_and_asked(self):
+        c2, c2win = self.cat2
+        self.transcript(c2, "s6", "I fixed 3 bugs in build.py. Should I commit the fix?")
+        self.set_status(c2win, "1 0 0 0 0 0 0")
+        r = self.make(story_model=lambda p: '{"story": "Fixed 3 bugs. Commit the fix?", "go": "commit the fix"}')
+        first = self.by_id(r.rooms(), c2)
+        self.assertEqual((first["story"], first["go"]), ("", ""))   # /rooms never waits for the model
+        got = r.story_for(c2, wait=3)
+        self.assertEqual(got, {"story": "Fixed 3 bugs. Commit the fix?", "go": "commit the fix"})
+        again = self.by_id(r.rooms(), c2)
+        self.assertEqual((again["story"], again["go"]), ("Fixed 3 bugs. Commit the fix?", "commit the fix"))
+        self.assertIsNone(r.story_for("%999999"))
+        bad = self.make(story_model=lambda p: '{"story": "Fixed 9 bugs.", "go": ""}')   # invents a number: the need line is used
+        self.assertEqual(bad.story_for(c2, wait=3)["story"], self.by_id(bad.rooms(), c2)["need"])
+
     def test_shell_failed_and_make_targets(self):
         sh, _ = self.shell
         open(os.path.join(self.work, "Makefile"), "w").write(".PHONY: a\nbuild:\n\techo\ntest-all: build\n\techo\nrare:\n\techo\nx := 1\nother:\n")

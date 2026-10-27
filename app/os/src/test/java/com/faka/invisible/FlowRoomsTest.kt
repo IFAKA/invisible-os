@@ -43,11 +43,48 @@ class FlowRoomsTest {
         val i = rig.mark()
         rig.needLive("alpha-proj, Alpha, needs you", i); rig.advance(60)
         rig.press("120")   // picks Alpha, the item just heard
-        val j = rig.mark(); rig.needLive("The design doc is ready", j)
-        rig.needLive("Go ahead", j); rig.advance(60)
+        val j = rig.mark(); rig.needLive("Wrote the design doc", j)
+        rig.needLive("Go: start building", j); rig.advance(60)
         rig.press("120")
         rig.needLive("Sent to Alpha", j)
         assertTrue("fake server got ${s.posts}", s.posts.any { (path, b) -> path == "/room/act" && b.optString("id") == "%1" && b.optString("action") == "go" })
+    }
+
+    // ---- rooms_story_first ----
+    @Test fun rooms_story_first() {
+        val s = server(); val rig = RoboRig()
+        start(rig, Port(listOf(Computer("Home", s.url, s.token)), Computer("Home", s.url, s.token)))
+        val i = rig.mark(); rig.needLive("alpha-proj, Alpha, needs you", i); rig.advance(60); rig.press("120")
+        val j = rig.mark(); rig.needLive("Go: start building", j)
+        val h = rig.said.drop(j)
+        val story = h.indexOfFirst { it.contains("Wrote the design doc. It is ready.") }
+        val hear = h.indexOfFirst { it.contains("Hear it again") }
+        val go = h.indexOfFirst { it.contains("Go: start building") }
+        assertTrue("story first, then Hear it again, then Go: $h", story in 0 until hear && hear < go)
+        assertFalse("a story the list already has is not asked again", s.gets.any { it.startsWith("/room/story") })
+    }
+
+    // ---- rooms_story_asked ----
+    @Test fun rooms_story_asked_when_the_list_has_none() {
+        val s = server(); val rig = RoboRig()
+        start(rig, Port(listOf(Computer("Home", s.url, s.token)), Computer("Home", s.url, s.token)))
+        val i = rig.mark(); rig.needLive("beta-proj, Beta, working", i); rig.advance(60); rig.press("120")
+        val j = rig.mark(); rig.needLive("Fake story for Beta", j); rig.needLive("Hear it again", j)
+        assertEquals(1, s.gets.count { it.startsWith("/room/story?id=") })
+    }
+
+    // ---- rooms_hear_again ----
+    @Test fun rooms_hear_again_replays_the_story() {
+        val s = server(); val rig = RoboRig()
+        start(rig, Port(listOf(Computer("Home", s.url, s.token)), Computer("Home", s.url, s.token)))
+        val i = rig.mark(); rig.needLive("alpha-proj, Alpha, needs you", i); rig.advance(60); rig.press("120")
+        val j = rig.mark(); rig.needLive("Hear it again", j); rig.advance(60)
+        val before = rig.said.drop(j).count { it.contains("Wrote the design doc") }
+        rig.press("120")   // picks "Hear it again"
+        val k = rig.mark(); rig.needLive("Wrote the design doc", k)
+        rig.needLive("Hear it again", k)   // and then the options again, from the first
+        assertEquals(1, before)
+        assertFalse("never sent to the laptop", s.posts.any { it.first == "/room/act" })
     }
 
     // ---- rooms_new_project ----
@@ -129,8 +166,8 @@ class FlowRoomsTest {
         assertEquals("the marked row is the one read", 0, host.screens.last().second)
         rig.advance(2500); assertTrue("the mark moved on: ${host.screens.takeLast(3)}", host.screens.last().second >= 1)
         val j = rig.mark(); (rig.running as ClaudeAndroid).tap(2)   // Gamma, a shell window
-        rig.needLive("build finished", j); rig.needLive("Run again", j)
-        assertEquals(listOf("Run again", "Make test", "Stop", "Write"), host.screens.last().first)
+        rig.needLive("Fake story for Gamma", j); rig.needLive("Run again", j)
+        assertEquals(listOf("Hear it again", "Run again", "Make test", "Stop", "Write"), host.screens.last().first)
     }
 
     @Test fun retry_gives_feedback_and_speaks_again() {

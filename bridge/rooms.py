@@ -17,6 +17,7 @@ import time
 import urllib.request
 
 from core import shorten
+from story import StoryCache, first_sentence, ollama_model
 
 STATES = ["needs", "failed", "done", "working", "idle"]
 SHELLS = {"zsh", "bash", "sh", "fish", "-zsh", "-bash", "-sh", "-fish"}
@@ -244,7 +245,7 @@ class Rooms:
              "#{pane_current_path}\t#{window_name}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{window_activity}"
 
     def __init__(self, tmux=None, status_dir=None, panes_dir=None, claude_dir=None, config_dir=None, history=None,
-                 zsh_history=None, llm=None, claude_cmd="claude", pending=None, clock=time.time):
+                 zsh_history=None, llm=None, story_model=None, claude_cmd="claude", pending=None, clock=time.time):
         self.tmux_cmd = shlex.split(tmux or _default_tmux())
         self.status_dir = status_dir or os.path.join(os.environ.get("TMUX_TMPDIR", "/tmp"), "agent-status-%d" % os.getuid())
         self.panes_dir = panes_dir or os.path.expanduser("~/.local/state/claude-panes")
@@ -257,6 +258,7 @@ class Rooms:
         self.clock = clock
         self.ask_delay = 4.0
         self.summarizer = Summarizer(llm)
+        self.stories = StoryCache(story_model)
         self.lock = threading.Lock()
         self.snap = (0.0, [])
         self._msg_cache = {}      # transcript path -> (mtime, size, text)
@@ -267,9 +269,11 @@ class Rooms:
     @classmethod
     def from_env(cls, pending=None):
         e = os.environ.get
-        llm = None if e("INVISIBLE_OLLAMA", "1") == "0" else ollama_llm()
+        off = e("INVISIBLE_OLLAMA", "1") == "0"
+        llm = None if off else ollama_llm()
         return cls(tmux=e("INVISIBLE_TMUX"), status_dir=e("INVISIBLE_AGENT_STATUS_DIR"), panes_dir=e("CLAUDE_PANES_DIR"),
                    claude_dir=e("INVISIBLE_CLAUDE_DIR"), config_dir=e("INVISIBLE_CONFIG_DIR"), llm=llm,
+                   story_model=None if off else ollama_model(),
                    zsh_history=e("INVISIBLE_ZSH_HISTORY"), claude_cmd=e("INVISIBLE_CLAUDE_CMD", "claude"), pending=pending)
 
     # -- tmux --
@@ -346,18 +350,31 @@ class Rooms:
         claude = self.is_claude(row["cmd"])
         project = os.path.basename(row["path"].rstrip("/")) or row["wname"]
         room = dict(id=row["id"], name=clean_title(row["title"], row["wname"]) if claude else row["wname"], project=project,
-                    path=row["path"], kind="claude" if claude else "shell", state="idle", need="", options=[], actions=[])
+                    path=row["path"], kind="claude" if claude else "shell", state="idle", need="", options=[], actions=[],
+                    story="", go="")
         room["_activity"] = row["activity"]
         if claude:
             self._claude_state(room, row, asks)
         else:
             self._shell_state(room, row)
         room["actions"] = self._actions(room)
+        source = room.get("_src", "")
+        if room["state"] != "working":
+            room.update(self.stories.peek(row["id"], room["kind"], source, self._story_context(room), self._story_fallback(room, source)))
         return room
+
+    @staticmethod
+    def _story_context(room):
+        return "%s, %s" % (room["name"], room["project"])
+
+    @staticmethod
+    def _story_fallback(room, source):
+        return room["need"] or first_sentence(source)
 
     def _claude_state(self, room, row, asks):
         st = self.agent_status(row["window"])
         msg = self.last_message(self.session_id(row))
+        room["_src"] = strip_markdown(msg) if msg else ""
         found, need, options = need_line(msg) if msg else (False, "", [])
         if not found and msg:
             need = self.summarizer.get("claude", msg, last_sentences(msg))
@@ -379,7 +396,9 @@ class Rooms:
         if row["cmd"] not in SHELLS:
             room["state"] = "working"
             return
-        lines = self.screen_lines(row["id"], 15, scrollback=False)   # what is on the screen now
+        screen = self.screen_lines(row["id"], 30, scrollback=False)   # what is on the screen now
+        room["_src"] = "\n".join(l.rstrip() for l in screen if l.strip())
+        lines = screen[-15:]
         if any(FAIL_RE.search(l) for l in lines):
             room["state"] = "failed"
             real = [l.strip() for l in lines if l.strip() and not PROMPT_END_RE.search(l)]
@@ -426,6 +445,7 @@ class Rooms:
             rooms.sort(key=lambda r: (STATES.index(r["state"]), -r["_activity"]))
             for r in rooms:
                 del r["_activity"]
+                r.pop("_src", None)
             self.snap = (self.clock(), rooms)
             return rooms
 
@@ -442,7 +462,23 @@ class Rooms:
         if not row:
             return None
         msg = self.last_message(self.session_id(row)) if self.is_claude(row["cmd"]) else None
-        return strip_markdown(msg) if msg else ""
+        text = strip_markdown(msg) if msg else ""
+        if text:   # start the story now, so it is ready when the phone asks
+            room = self.build_room(row, {})
+            room.pop("_src", None)
+        return text
+
+    def story_for(self, pane, wait=6.0):
+        """{story, go} of one room, waiting up to `wait` s for the model (GET /room/story). None when there is no such room."""
+        row = self.room_row(pane)
+        if not row:
+            return None
+        room = self.build_room(row, self.pending() or {})
+        source = room.pop("_src", "")
+        ctx, fb = self._story_context(room), self._story_fallback(room, source)
+        if room["state"] == "working" and not source:
+            return {"story": fb, "go": ""}
+        return self.stories.ask(pane, room["kind"], source, ctx, fb, wait)
 
     def screen_text(self, pane):
         if not self.room_row(pane):

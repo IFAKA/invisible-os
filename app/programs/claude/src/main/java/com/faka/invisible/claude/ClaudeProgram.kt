@@ -4,6 +4,7 @@ import android.os.Handler
 import com.faka.invisible.oskit.Program
 import com.faka.invisible.oskit.ProgramEntry
 import com.faka.invisible.oskit.ProgramHost
+import com.faka.invisible.logickit.squash
 import com.faka.invisible.voicekit.Pacing
 import com.faka.invisible.voicekit.Phrase
 import com.faka.invisible.voicekit.ScanCadence
@@ -76,6 +77,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     private var project: Project? = null
     private var areas: List<Area> = emptyList()
     private var pending: RoomAction? = null
+    private var storyIntro: Phrase? = null
 
     private fun label(c: Choice): Phrase = when (c) {
         is Choice.Option -> Phrase.content(c.text, "en")
@@ -87,7 +89,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         Choice.SettingsPick -> ClaudeVoice.SETTINGS
         Choice.MutePick -> ClaudeVoice.MUTE
         Choice.TestDonePick -> ClaudeVoice.TEST_DONE
-        is Choice.ActPick -> ClaudeVoice.label(c.action)
+        is Choice.ActPick -> ClaudeVoice.label(c.action, room?.go.orEmpty())
         Choice.No -> ClaudeVoice.NO_BACK
         Choice.Yes -> ClaudeVoice.YES
         is Choice.ProjectPick -> Phrase.content(c.project.name, "en")
@@ -205,18 +207,33 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         showList(switch + Choice.MutePick + Choice.TestDonePick, null)
     }
 
-    private fun showActions(r: Room, intro: Phrase?) {
+    private fun showActions(r0: Room, intro: Phrase?) {
+        val old = room
+        val r = if (r0.story.isBlank() && old != null && old.id == r0.id) r0.copy(story = old.story, go = old.go) else r0   // keep the story fetched on entry
         room = r; pending = null
         onBack = { loadRooms() }
         showList(RoomAction.earbudList(r).map { Choice.ActPick(it) }, intro)
     }
 
-    /** A window: its need line (else what it is about), then its options. */
-    private fun openRoom(r: Room) = showActions(r, r.need.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: ClaudeVoice.window(r))
+    /** What is said first in a window: its story, else its need line, else what it is about. */
+    private fun intro(r: Room): Phrase =
+        r.story.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: r.need.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: ClaudeVoice.window(r)
+
+    /** A window: its story first (asked from the laptop once if the list had none), then its options. */
+    private fun openRoom(r: Room) {
+        if (r.story.isNotBlank()) { storyIntro = intro(r); showActions(r, storyIntro); return }
+        scanner.stop(); awaitItem = false; host.stopSpeech()
+        phase = Phase.LOADING
+        bg({ client.story(r.id) }) { got ->
+            if (got == null) unreachable { openRoom(r) }
+            else { val r2 = r.copy(story = got.first.squash(), go = got.second.squash()); storyIntro = intro(r2); showActions(r2, storyIntro) }
+        }
+    }
 
     private fun doAction(a: RoomAction) {
         val r = room ?: return
         when {
+            a.id == RoomAction.HEAR -> showActions(r, storyIntro ?: intro(r))
             a.id == "readall" -> readAll(r)
             a.id == "write" -> write(r)
             a.needsConfirm -> { pending = a; onBack = { showActions(r, null) }; showList(listOf(Choice.No, Choice.Yes), ClaudeVoice.sure(RoomText.label(a))) }

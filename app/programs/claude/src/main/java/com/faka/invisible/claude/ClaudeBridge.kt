@@ -51,11 +51,13 @@ class BridgeClient(base: String, private val token: String) {
         return (0 until a.length()).mapNotNull { i ->
             val r = a.getJSONObject(i)
             val id = r.optString("id")
-            if (id.isBlank()) null else Room(id, r.optString("name"), r.optString("project"), r.optString("kind"), r.optString("state"), r.optString("need"), strings(r.optJSONArray("options")), strings(r.optJSONArray("actions")))
+            if (id.isBlank()) null else Room(id, r.optString("name"), r.optString("project"), r.optString("kind"), r.optString("state"), r.optString("need"), strings(r.optJSONArray("options")), strings(r.optJSONArray("actions")), r.optString("story"), r.optString("go"))
         }
     }
     /** GET /room/last: Claude's whole last message. */
     @Throws(IOException::class) fun last(id: String): String = json("/room/last?id=${enc(id)}").optString("text")
+    /** GET /room/story: the short story and go text of one window (the laptop may take a few seconds to make it). */
+    @Throws(IOException::class) fun story(id: String): Pair<String, String> = json("/room/story?id=${enc(id)}", timeoutMs = 12_000).let { it.optString("story") to it.optString("go") }
     /** GET /room/screen: the last lines of the pane. */
     @Throws(IOException::class) fun screen(id: String): String = json("/room/screen?id=${enc(id)}").optString("text")
     /** POST /room/act: run one action id. */

@@ -15,9 +15,17 @@ ROOM = {
   "need": "say \"go\" for the design doc.",  max ~20 words, plain text, no markdown; "" if nothing
   "options": ["go"],                quoted replies found in the need line (max 3)
   "actions": ["option:go","go","yes","commit",...]   ordered action ids for this room (see below)
+  "story": "Tests ran, 3 of 12 failed. Fixed one. Commit the fix?",  the short story (see /room/story); "" until it is made, always "" for working rooms
+  "go": "commit the fix"            at most 5 words: what a plain "go" or "yes" approves; "" if unclear
 }
 
 ## GET /room/last?id=%3   -> {"text": "..."}   Claude's whole last message, markdown stripped (for "Read all")
+## GET /room/story?id=%3 -> {"story": "...", "go": "..."}   may wait up to 6 s for the local model; then the fallback
+  story = the shortest text that keeps accuracy, at most ~25 words, plain words: what it was doing, what happened (done / failed / a question), what it wants from you.
+  Made by a local model (Ollama gemma3:4b, temperature 0) from Claude's last message (shell windows: the last 30 screen lines) in a background thread, cached by
+  (pane id, hash of the source). /rooms only reads the cache and never waits. `bridge/story.py` guard: every number, file name, quoted string and capitalised word
+  of the story must be in the source, and the story must be shorter than the source; else (or on timeout, Ollama down) the story is the room's need line, else the
+  first sentence of the message cut to 25 words, and go is "". 404 if there is no such room.
 ## GET /room/screen?id=%3 -> {"text": "..."}   last 60 lines of the pane, ANSI stripped (for the screen view)
 ## POST /room/act {"id":"%3","action":"go"}             -> {"ok":true,"said":"go"}   runs one action id
 ## POST /room/send {"id":"%3","text":"free text"}       -> {"ok":true}            types text + Enter (from Write)

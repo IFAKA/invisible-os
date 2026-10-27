@@ -10,6 +10,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 /** The Kotlin twin of bridge/fake_rooms.py: a tiny fake Rooms server on localhost (same token header, same fixed answers, records every POST). */
 internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONObject> = DEFAULT_ROOMS) {
     val posts = CopyOnWriteArrayList<Pair<String, JSONObject>>()
+    /** Path (with query) of every GET, in order. */
+    val gets = CopyOnWriteArrayList<String>()
     /** Names of windows that finished: the next /events says so, one name per call. */
     val fire = CopyOnWriteArrayList<String>()
     private val server = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
@@ -46,9 +48,16 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
             }
             return
         }
+        gets.add(target)
         when (path) {
             "/rooms" -> reply(c, JSONObject().put("seq", 1).put("rooms", JSONArray(rooms)))
             "/room/last" -> reply(c, JSONObject().put("text", "Alpha last message. The design doc is ready."))
+            "/room/story" -> {
+                val id = target.substringAfter("id=", "").substringBefore('&').let { java.net.URLDecoder.decode(it, "UTF-8") }
+                val r = rooms.firstOrNull { it.optString("id") == id }
+                if (r == null) reply(c, JSONObject().put("error", "no such room"), 404)
+                else reply(c, JSONObject().put("story", r.optString("story").ifBlank { "Fake story for ${r.optString("name")}." }).put("go", r.optString("go")))
+            }
             "/room/screen" -> reply(c, JSONObject().put("text", "$ claude\n> working on the design doc\n  done"))
             "/projects" -> reply(c, JSONObject().put("projects", JSONArray().put(proj("alpha-proj", "/tmp/alpha", 10)).put(proj("beta-proj", "/tmp/beta", 5))))
             "/areas" -> reply(c, JSONObject().put("areas", JSONArray().put(proj("hardware", "/tmp/fake/hardware", 9))))
@@ -65,11 +74,11 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
 
     companion object {
         private val ACTIONS = listOf("go", "yes", "commit", "push", "readall", "screen", "write", "stop")
-        fun room(id: String, name: String, project: String, kind: String, state: String, need: String, actions: List<String>) =
+        fun room(id: String, name: String, project: String, kind: String, state: String, need: String, actions: List<String>, story: String = "", go: String = "") =
             JSONObject().put("id", id).put("name", name).put("project", project).put("path", "/tmp/$name").put("kind", kind).put("state", state)
-                .put("need", need).put("options", JSONArray()).put("actions", JSONArray(actions))
+                .put("need", need).put("options", JSONArray()).put("actions", JSONArray(actions)).put("story", story).put("go", go)
         val DEFAULT_ROOMS = listOf(
-            room("%1", "Alpha", "alpha-proj", "claude", "needs", "The design doc is ready.", ACTIONS),
+            room("%1", "Alpha", "alpha-proj", "claude", "needs", "The design doc is ready.", ACTIONS, "Wrote the design doc. It is ready. Say go to start building.", "start building"),
             room("%2", "Beta", "beta-proj", "claude", "working", "", listOf("stop", "readall", "screen", "write")),
             room("%3", "Gamma", "gamma-proj", "shell", "done", "build finished", listOf("again", "make:test", "stop", "screen", "write")),
         )

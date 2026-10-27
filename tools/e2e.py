@@ -339,13 +339,13 @@ def rooms_go():
     srv = fake_rooms.start(host, 8799, "e2e-token")
     try:
         bcast("--es", "bridge", f"http://{host}:8799", "--es", "token", "e2e-token")
-        reset(); click_on("alpha-proj, Alpha, needs you", "Go ahead"); i = mark(); bcast("--es", "start", "claude")
+        reset(); click_on("alpha-proj, Alpha, needs you", "Go: start building"); i = mark(); bcast("--es", "start", "claude")
         clicked("alpha-proj, Alpha, needs you", i, 20)   # picks Alpha, the item just heard (the list goes on: Beta, Gamma, New window, Laptop settings)
-        j = i; need("The design doc is ready", j)
-        clicked("Go ahead", j)
+        j = i; need("Wrote the design doc", j)
+        clicked("Go: start building", j)
         need("Sent to Alpha", j)
         if ("/room/act", {"id": "%1", "action": "go"}) not in fake_rooms.POSTS: raise Fail(f"fake server got {fake_rooms.POSTS}")
-        return "Alpha heard and picked, its need heard, Go reached the server"
+        return "Alpha heard and picked, its story heard, Go reached the server"
     finally:
         srv.shutdown()
         bcast("--es", "bridge", real_url, "--es", "token", real_tok)

@@ -30,18 +30,26 @@ class RoomsCoreTest {
         assertEquals("Make test", RoomText.label(RoomAction("make:test")))
         assertEquals("keep 15", RoomText.label(RoomAction("option:keep 15")))
         assertEquals("Read all", RoomText.label(RoomAction("readall")))
+        assertEquals("Hear it again", RoomText.label(RoomAction("hear")))
+    }
+    @Test fun goAndYesSayWhatTheyDo() {
+        assertEquals("Go: commit the fix", RoomText.label(RoomAction("go"), "commit the fix"))
+        assertEquals("Yes: commit the fix", RoomText.label(RoomAction("yes"), " commit  the fix "))
+        assertEquals("Go ahead", RoomText.label(RoomAction("go"), ""))
+        assertEquals("keep 15", RoomText.label(RoomAction("option:keep 15"), "commit the fix"))
+        assertEquals("Commit", RoomText.label(RoomAction("commit"), "commit the fix"))
     }
     @Test fun onlyPushAndClearAsk() {
         for (id in listOf("push", "clear")) assertTrue(id, RoomAction(id).needsConfirm)
         for (id in listOf("go", "yes", "commit", "compact", "stop", "hold", "again", "make:x", "option:go")) assertFalse(id, RoomAction(id).needsConfirm)
     }
     @Test fun phoneOnlyActionsAreNotSent() {
-        for (id in listOf("readall", "screen", "write")) assertTrue(id, RoomAction(id).onPhone)
+        for (id in listOf("readall", "screen", "write", "hear")) assertTrue(id, RoomAction(id).onPhone)
         assertFalse(RoomAction("go").onPhone)
     }
     @Test fun earbudListKeepsServerOrderAndDropsScreen() {
         val r = room("option:go", "go", "screen", "yes", "go", "readall", "write")
-        assertEquals(listOf("option:go", "go", "yes", "readall", "write"), RoomAction.earbudList(r).map { it.id })
+        assertEquals(listOf("hear", "option:go", "go", "yes", "readall", "write"), RoomAction.earbudList(r).map { it.id })
         assertEquals(listOf("option:go", "go", "yes"), RoomAction.screenList(r).map { it.id })
     }
 

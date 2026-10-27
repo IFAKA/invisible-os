@@ -34,9 +34,12 @@ Away from the laptop, sessions wait. Goal: from the earbud (no screen, no microp
 - Test (`research/draft.py`): 40 random free replies (4 to 40 words). The model saw Claude's last message and wrote 3 likely replies.
   Match with your real reply: **0 of 40** (fixed list: 5%). Mean similarity 0.20.
 - Why: your free replies carry new facts only you have ("i hate that they are in the middle so i cant break blocks", "does it spread if it has flowers above?"). No model can guess them. A bigger model does not change this (not tested; the missing part is information, not skill).
-- So the model has 2 small jobs only:
-  1. When a Claude message has no status block (51%): shorten it to 2 sentences.
-  2. Shell rooms: the screen to 7 words ("build failed, 2 tests").
+- Free-reply prediction is NOT built (0 of 40). The model has one job: the story of a window.
+- **The story (built):** owner feedback: entering a window, you heard options but not what happened. `bridge/story.py` makes, with `gemma3:4b` (temperature 0, 6 s limit),
+  `{"story", "go"}` from Claude's last message (shell windows: the last 30 screen lines). Story = at most ~25 words: what it was doing, what happened, what it wants from you.
+  Go = at most 5 words: what "go" would approve. Accuracy guard (pure, tested): every number, file name, quoted string and capitalised word must be in the source, and the story
+  must be shorter than the source. If the guard or the model fails: the need line, else the first sentence cut to 25 words, and no go. Computed in the background, cached by
+  (pane, hash of source); /rooms never waits; GET /room/story may wait 6 s.
 - Free text from the earbud: the Write keyboard, slow. Real long prompts stay at the laptop.
 
 ## Reuse what already exists (do not build twice)
@@ -51,8 +54,8 @@ Always the same walk: Home > Laptop > windows > one window > its options > an op
 2. Windows, urgent first (at most 8, a `ScanList`), each "project, what it is about, state":
    "invisible-os, Consumer-ready distribution, needs you" / "hardware, npm, failed". The topic is the Claude pane title, or the shell window name.
    Last two entries: "New window" (projects) and "Laptop settings" (Switch computer, Mute until morning, Test done alert).
-3. Click a window. It reads the need line: "say go for the design doc." (no need line: the window line).
-4. Options of that window (below): "Go" / "Yes" / "Commit" / ... for Claude, "Run again" / "Make test" / "Stop" for a shell. Click "Go". The laptop types `go` + Enter. "Sent to os." Then the windows list again.
+3. Click a window. It reads the story: "Tests ran, 3 of 12 failed. Fixed one. Commit the fix?" (no story: the need line, then the window line). Then the options.
+4. Options of that window (below), the first is "Hear it again" (replays the story, then the options again). Options say what they do: "Go: commit the fix" / "Yes: commit the fix" when the story has a go text. "Go" / "Yes" / "Commit" / ... for Claude, "Run again" / "Make test" / "Stop" for a shell. Click "Go". The laptop types `go` + Enter. "Sent to os." Then the windows list again.
 5. Buttons are the OS list buttons: click = pick the item just heard, two clicks = the one before, three clicks = back one level (from the windows: leave), hold = fast scroll (release reads the item in full), hold 3 s = leave. The app screen shows the whole list, the read item marked; a tap on a row picks it.
 6. Laptop not reachable: "Laptop not reachable." (a Tailscale 100.x address adds "Is Tailscale on?"). A click or tap says "Trying again" at once, then the result; a failed retry speaks again.
 

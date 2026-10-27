@@ -7,7 +7,9 @@ import java.util.TimeZone
 
 /** One room of the laptop: a tmux pane (bridge/ROOMS-API.md). */
 data class Room(val id: String, val name: String, val project: String, val kind: String, val state: String,
-                val need: String, val options: List<String>, val actions: List<String>)
+                val need: String, val options: List<String>, val actions: List<String>,
+                /** The short story (what it was doing, what happened, what it wants) and what a plain "go" approves; "" when the server has none yet. */
+                val story: String = "", val go: String = "")
 
 /** A folder you can open a Claude chat in. */
 data class Project(val name: String, val path: String, val uses: Int)
@@ -46,13 +48,15 @@ data class RoomAction(val id: String) {
     /** Push and Clear ask "No, go back" / "Yes" first. */
     val needsConfirm get() = id == "push" || id == "clear"
     /** Handled on the phone, not sent with POST /room/act. */
-    val onPhone get() = id == "readall" || id == "screen" || id == "write"
+    val onPhone get() = id == "readall" || id == "screen" || id == "write" || id == HEAR
     /** True for something the earbud list can show (the screen view is the "screen" action itself). */
     val earbud get() = id != "screen" && id.isNotBlank()
 
     companion object {
         /** The actions to read, in the order the server gave them, without repeats and without "screen". */
-        fun earbudList(room: Room): List<RoomAction> = room.actions.map { RoomAction(it.trim()) }.filter { it.earbud }.distinctBy { it.id }
+        fun earbudList(room: Room): List<RoomAction> = listOf(RoomAction(HEAR)) + room.actions.map { RoomAction(it.trim()) }.filter { it.earbud && it.id != HEAR }.distinctBy { it.id }
+        /** Phone-only first option of every window: say the story again. */
+        const val HEAR = "hear"
         /** The actions that make a button on the phone screen: everything the server can run (no read-aloud, no keyboard, no "screen"). */
         fun screenList(room: Room): List<RoomAction> = earbudList(room).filter { !it.onPhone }
     }

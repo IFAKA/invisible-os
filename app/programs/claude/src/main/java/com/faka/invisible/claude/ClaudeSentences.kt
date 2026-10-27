@@ -2,6 +2,7 @@
 
 package com.faka.invisible.claude
 
+import com.faka.invisible.logickit.squash
 import com.faka.invisible.voicekit.KitOnly
 import com.faka.invisible.voicekit.Phrase
 
@@ -50,7 +51,7 @@ object ClaudeVoice {
     fun sentTo(name: String) = f("Sent to $name")
     fun opened(name: String) = f("Opened $name")
     fun sure(label: String) = f("$label?")
-    fun label(a: RoomAction): Phrase = f(RoomText.label(a))
+    fun label(a: RoomAction, go: String = ""): Phrase = f(RoomText.label(a, go))
     fun asks(project: String, summary: String) = f("$project asks: $summary")
     fun done(project: String, summary: String) = f("$project is done. $summary")
     fun needs(project: String, summary: String) = f("$project needs you. $summary")
@@ -63,6 +64,12 @@ object RoomText {
         "go" to "Go ahead", "yes" to "Yes", "commit" to "Commit", "push" to "Push", "compact" to "Compact",
         "explain" to "Explain simpler", "recommend" to "What do you recommend", "research" to "Research first",
         "progress" to "Where are we", "hold" to "Hold", "stop" to "Stop", "clear" to "Clear",
-        "readall" to "Read all", "write" to "Write", "again" to "Run again", "screen" to "Screen")
-    fun label(a: RoomAction): String = a.option ?: a.makeTarget?.let { "Make $it" } ?: fixed[a.id] ?: a.id
+        "hear" to "Hear it again", "readall" to "Read all", "write" to "Write", "again" to "Run again", "screen" to "Screen")
+    /** [go] = what a plain "go" approves (from the story): "Go: commit the fix". Quoted options stay as they are. */
+    fun label(a: RoomAction, go: String = ""): String {
+        val g = go.squash()
+        if (g.isNotEmpty() && a.id == "go") return "Go: $g"
+        if (g.isNotEmpty() && a.id == "yes") return "Yes: $g"
+        return a.option ?: a.makeTarget?.let { "Make $it" } ?: fixed[a.id] ?: a.id
+    }
 }
