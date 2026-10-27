@@ -154,6 +154,19 @@ def heard_start(text, i, timeout=15.0):
     d = st + GRACE_S + 0.03 - time.time()   # reaction grace: a click in the first 500 ms of an item is for the one before; wait for exactly that, then the click is for this item
     if d > 0: time.sleep(d)
 
+def click_on(*texts):
+    """Arm clicks on these items, in turn: the phone clicks each 600 ms after its speech starts (past the 500 ms reaction grace).
+    Timed on the phone, not here: a SAY line can reach the laptop late over Wi-Fi, and a click sent from here would then land on the next item."""
+    d = max(0.0, PRESS_END[0] - time.time())
+    if d: time.sleep(d)
+    i = mark(); bcast("--es", "presson", "|".join(texts), "--es", "press", "120")
+    if not wait(lambda t: t.startswith("presson "), i, "E2E", 10): raise Fail("presson hook did not answer")
+def clicked(text, i, timeout=15.0):
+    """Wait until `text` was spoken and the phone clicked it."""
+    need(text, i, timeout)
+    if wait(lambda t: t == "presson fired " + text.lower(), i, "E2E", timeout) is None: raise Fail(f"{text!r} was spoken but its click never fired (the voice never started it?)")
+    PRESS_END[0] = time.time() + 0.12 + GAP_S + 0.05
+
 # ---- scenarios ----
 def wake_reads_home_menu():
     reset(); i = mark(); press("900")
@@ -164,9 +177,8 @@ def wake_reads_home_menu():
     return "heard " + ", ".join(h[:4])
 
 def click_picks():
-    reset(); show("PHONE", at=LAST); i = mark()   # the shortest real list: Phone, started at its last item (phone_list proves the walk reaches it)
-    heard_start("Emergency", i, 30)
-    press("120")   # a click right after hearing an item picks it
+    reset(); click_on("Emergency"); i = mark(); show("PHONE", at=LAST)   # the shortest real list: Phone, started at its last item (phone_list proves the walk reaches it)
+    clicked("Emergency", i, 30)   # a click right after hearing an item picks it
     need("Call the emergency number", i)
     wait_screen("EMERGENCY")
     return "Emergency picked"
@@ -283,13 +295,12 @@ def live_app_first_on_home():
     for who in ("title=E2E Workout", "text=Connected"):   # both notifications reached the listener
         if not wait(lambda t: who in t, n0, "Invisible", 10): raise Fail(f"the listener never took the fake notification ({who})")
     state()   # one round trip through the main thread: the listener has finished taking them
-    i = mark(); press("900")
-    heard_start("12:30 running", i, 20)
+    click_on("12:30 running"); i = mark(); press("900")
+    clicked("12:30 running", i, 20)   # the click opens its actions
     h = list(dict.fromkeys(since(i, "SAY")))
     if "running" not in h[0] and "running" not in (h[1] if len(h) > 1 else ""): raise Fail("the live entry is not first: " + " | ".join(h[:4]))
     if any("Connected" in l for l in h): raise Fail("a static ongoing notification was offered: " + " | ".join(h))
-    press("120")   # heard_start waited out the reaction grace
-    j = mark(); need("Lap", j, 15); need("Dismiss", j, 15)
+    j = i; need("Lap", j, 15); need("Dismiss", j, 15)
     wait_screen("NOTIF_ACTIONS")
     press("100,150,100,150,100"); wait_screen("HUB")   # triple click = back to home
     reset()
@@ -328,12 +339,10 @@ def rooms_go():
     srv = fake_rooms.start(host, 8799, "e2e-token")
     try:
         bcast("--es", "bridge", f"http://{host}:8799", "--es", "token", "e2e-token")
-        reset(); i = mark(); bcast("--es", "start", "claude")
-        heard_start("Alpha, needs you", i, 20)
-        press("120")   # picks Alpha, the item just heard (the list goes on: Beta, Gamma, Projects)
-        j = mark(); need("The design doc is ready", j)
-        heard_start("Go ahead", j)
-        press("120")
+        reset(); click_on("Alpha, needs you", "Go ahead"); i = mark(); bcast("--es", "start", "claude")
+        clicked("Alpha, needs you", i, 20)   # picks Alpha, the item just heard (the list goes on: Beta, Gamma, Projects)
+        j = i; need("The design doc is ready", j)
+        clicked("Go ahead", j)
         need("Sent to Alpha", j)
         if ("/room/act", {"id": "%1", "action": "go"}) not in fake_rooms.POSTS: raise Fail(f"fake server got {fake_rooms.POSTS}")
         return "Alpha heard and picked, its need heard, Go reached the server"
@@ -401,11 +410,9 @@ def rooms_new_project():
     srv = fake_rooms.start(host, 8799, "e2e-token")
     try:
         bcast("--es", "bridge", f"http://{host}:8799", "--es", "token", "e2e-token")
-        reset(); i = mark(); bcast("--es", "start", "claude")
-        heard_start("Projects", i, 25); press("120")
-        j = mark(); heard_start("New project", j); press("120")
-        k = mark(); heard_start("hardware", k); press("120")
-        need("Write the project name", k)
+        reset(); click_on("Projects", "New project", "hardware"); i = mark(); bcast("--es", "start", "claude")
+        clicked("Projects", i, 25); clicked("New project", i); clicked("hardware", i)
+        need("Write the project name", i)
         return "Projects, New project, hardware, name cue heard"
     finally:
         srv.shutdown()
@@ -435,8 +442,8 @@ def computers_two():
         # Only the active computer is watched. Home's Sigma needed a poll plus the 3 s batch; a watched Work would have been polled in the same time and its Omega taken off the list (and heard with it).
         time.sleep(0.4)
         if said("Omega", i, 0.1) or not work_fire: raise Fail("heard or polled Work (Omega) while Home is the active computer")
-        j = mark(); bcast("--es", "start", "claude")
-        heard_start("Switch to Work", j, 40); press("120")
+        click_on("Switch to Work"); j = mark(); bcast("--es", "start", "claude")
+        clicked("Switch to Work", j, 40)
         need("Work, listening", j, 15)
         k = mark(); need("Zeta, working", j, 20)
         reset(); m = mark()

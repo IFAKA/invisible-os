@@ -239,7 +239,7 @@ object Actions {
         taskMemory = PhraseMemory(if (mf.exists()) mf.readLines() else emptyList()) { lines -> try { mf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "task_memory.txt write failed", e) } }
         taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList(), onAdd = { taskMemory.record(it.text, it.lang) }) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
         VoiceKit.init(app, handler, { speechRate() }, object : SpeechListener {
-            override fun started() { mode.onSpeechStarted(); Log.d("E2E", "speech started") }
+            override fun started() { mode.onSpeechStarted(); Log.d("E2E", "speech started"); pressOnStarted() }
             override fun ended() { mode.onSpeechDone(); running?.takeIf { it.active }?.speechDone(); Log.d("E2E", "speech ended") }
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
@@ -321,6 +321,21 @@ object Actions {
     /** Dev: press the button without the earbud (adb cannot inject key events on this phone): SINGLE, DOUBLE, TRIPLE, HOLD, CLICK_HOLD... */
     fun gestureDev(name: String) = handler.post { buttonTarget.gesture(Gesture.valueOf(name.uppercase()), 0) }
     /** Dev: "120,150,900" = press 120 ms, wait 150 ms, press 900 ms; fed to the real button input (programs, holds, gestures). */
+    /** Dev (e2e): click ([ms] presses) on each item in [texts] ("A|B|C") in turn, when it is spoken, 600 ms after its speech starts
+     *  (past ControllerMode's 500 ms reaction grace). Timed on the phone, so a late log line over Wi-Fi cannot move a click onto the next item. */
+    fun pressOnDev(texts: String, ms: String) = handler.post {
+        pressOn.clear(); texts.split("|").forEach { pressOn.add(it.trim().lowercase()) }; pressOnMs = ms; pressOnArmed = false
+        Log.d("E2E", "presson $texts")
+    }
+    private val pressOn = ArrayDeque<String>()
+    private var pressOnMs = "120"
+    private var pressOnArmed = false
+    private fun pressOnSaid(text: String) { if (pressOn.firstOrNull()?.let { text.lowercase().contains(it) } == true) pressOnArmed = true }
+    private fun pressOnStarted() {
+        if (!pressOnArmed) return
+        val t = pressOn.removeFirst(); pressOnArmed = false
+        handler.postDelayed({ Log.d("E2E", "presson fired $t"); pressDev(pressOnMs) }, 600)
+    }
     fun pressDev(ms: String) = handler.post {
         var t = android.os.SystemClock.uptimeMillis(); var down = -1L
         ms.split(",").map { it.trim().toLong() }.forEachIndexed { i, d ->
@@ -537,7 +552,7 @@ object Actions {
     /** A screen of the app speaks with the app's own voice (the setup steps, the lost-access warning). */
     fun announce(p: Phrase, queue: Boolean) { handler.post { say(p, queue) } }
 
-    private fun say(p: Phrase, queue: Boolean, fast: Boolean = false, slow: Boolean = false) { Log.d("SAY", p.text); narrator.say(p, queue, fast, slow) }   // SAY log: lets a dev check what the menu speaks
+    private fun say(p: Phrase, queue: Boolean, fast: Boolean = false, slow: Boolean = false) { Log.d("SAY", p.text); pressOnSaid(p.text); narrator.say(p, queue, fast, slow) }   // SAY log: lets a dev check what the menu speaks
 
     private fun adjustVolume(up: Boolean) {
         val am = app.getSystemService(AudioManager::class.java)
