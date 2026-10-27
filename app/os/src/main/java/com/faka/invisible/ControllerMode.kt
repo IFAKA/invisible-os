@@ -553,7 +553,8 @@ class ControllerMode(
                 suggestedKeys = front.map { it.key }
                 val notifs = out.notifGroups().sumOf { it.items.size }
                 val notifOpt = if (notifs > 0) listOf(Opt("notifs:all", Menu.notifications(notifs)) { pick("notifs:all"); show(Screen.NOTIF_APPS) }) else emptyList()   // all waiting notifications, right after the live apps
-                liveOpts + notifOpt + front + treeOptions(root) + unmuteOption()   // the home list is the tree's top; only the small Suggested slot in front adapts
+                val (pinned, rest) = treeOptions(root).partition { o -> AppTree.PINNED.any { o.key == it } }   // the pinned Laptop tool comes right after Notifications, before the suggestions
+                liveOpts + notifOpt + pinned + front.filter { f -> pinned.none { it.key == f.key } } + rest + unmuteOption()   // the home list is the tree's top; only the small Suggested slot in front adapts
             }
             Screen.TASK -> {   // "Add task" first, then this page of tasks (a click right after hearing one = done), then "More tasks"
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)
