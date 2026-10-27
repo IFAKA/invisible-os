@@ -504,10 +504,11 @@ object Actions {
     }
 
     private fun readArrival(a: Arriving) {
-        if (!ArrivalPlan.mayRead(ControllerNotificationListener.inCall, running != null)) { Log.d(TAG, "ARRIVAL not read (call or program)"); return }
+        if (!ArrivalPlan.mayRead(ControllerNotificationListener.inCall, running != null)) { Log.d(TAG, "ARRIVAL not read (call or program)"); com.faka.invisible.oskit.Trace.ev("arrival", "not read pkg=${a.pkg} call=${ControllerNotificationListener.inCall} program=${running != null}"); return }
         val label = appName(a.pkg)
         val lines = ArrivalPlan.lines(label, a.sender, a.text, a.lang, a.hidden)
         val duck = !mode.active && pauseMusicNow()   // an open menu already handles the music
+        com.faka.invisible.oskit.Trace.ev("arrival", "read pkg=${a.pkg} private=${a.hidden} menuOpen=${mode.active} duck=$duck lines=${lines.size}")
         lines.forEach { say(it, true) }
         if (duck) {
             fun waitEnd(n: Int) { handler.postDelayed({ if (narrator.speaking && n < 200) waitEnd(n + 1) else resumeMusicNow() }, 400) }

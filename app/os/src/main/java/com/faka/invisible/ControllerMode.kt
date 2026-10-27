@@ -516,6 +516,7 @@ class ControllerMode(
                 val cost = far.mapValues { it.value.second }
                 val sug = out.suggest(deep.keys + far.keys, clock(), home) { key, share, pos -> key !in cost || SuggestGate.worth(share, cost.getValue(key), pos) }
                     .mapNotNull { deep[it] ?: far[it]?.first }
+                com.faka.invisible.oskit.Trace.ev("live", "home live=" + live.joinToString(",") { "${it.pkg}:${it.state}" })
                 val liveOpts = live.map { liveOption(it) }   // live apps (playing music, a running workout) come first, most recently updated first
                 val liveKeys = live.map { "app:${it.pkg}" }.toSet() + (if (live.any { out.isMusicApp(it.pkg) }) setOf("hub:music") else emptySet())
                 val playing = if (out.nowPlaying() != null && "hub:music" !in liveKeys) all["hub:music"] else null   // something is playing and is not already a live entry: its controls come first
