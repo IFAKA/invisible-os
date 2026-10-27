@@ -1,5 +1,6 @@
 import Smooth from "@/components/Smooth";
-import SceneLayer from "@/components/SceneLayer";
+import Story from "@/components/Story";
+import Privacy from "@/components/Privacy";
 import Hero, { SoundToggle } from "@/components/Hero";
 import ScanDemo from "@/components/ScanDemo";
 import ScreenSlider from "@/components/ScreenSlider";
@@ -12,7 +13,7 @@ const sec = "relative mx-auto flex h-svh max-w-[1400px] flex-col justify-center 
 const two = "grid items-center gap-[3vh] md:grid-cols-2 md:gap-16";
 const label = "mb-[2vh] font-sans text-xs uppercase tracking-[0.18em] text-mute";
 const h2 = "text-[clamp(32px,7.2vh,84px)] leading-[1.03] tracking-[-0.02em]";
-const lead = "mt-[2.4vh] max-w-[30em] text-[clamp(16px,2.5vh,22px)] leading-snug text-paper/75";
+const lead = "mt-[2.4vh] max-w-[30em] text-[clamp(16px,2.5vh,22px)] leading-snug text-paper/85";
 
 const HIGHLIGHTS = [
   ["One button", "Click, two, three, hold. That is all you need."],
@@ -29,10 +30,10 @@ const APPS = [["Messages", "Read and reply to chats. Spanish or English."], ["Ta
 export default function Home() {
   return (
     <Smooth>
-      <SceneLayer />
       <LocalNav right={<SoundToggle />} />
       <main className="relative z-10">
         <div id="overview"><Hero /></div>
+        <Story />
 
         <section id="highlights" className={sec}>
           <Reveal><p className={label}>Get the highlights</p><h2 className={h2}>Everything. Without looking.</h2></Reveal>
@@ -76,25 +77,19 @@ export default function Home() {
           <Reveal><p className={label}>All the must-haves</p><h2 className={h2}>All on your ears.</h2></Reveal>
           <div className="mt-[4vh] grid grid-cols-2 gap-x-4 gap-y-[1.6vh] md:gap-x-10 lg:grid-cols-3">
             {APPS.map(([t, d]) => (
-              <Reveal key={t}><div className="rounded-2xl border border-line bg-[#070707] p-[2.2vh]"><h3 className="text-[clamp(20px,3.2vh,30px)]">{t}</h3><p className="mt-1 font-sans text-[13px] leading-snug text-mute">{d}</p></div></Reveal>
+              <Reveal key={t}><div className="rounded-2xl border border-line bg-[#0c0c0e] p-[2.2vh]"><h3 className="text-[clamp(20px,3.2vh,30px)]">{t}</h3><p className="mt-1 font-sans text-[13px] leading-snug text-mute">{d}</p></div></Reveal>
             ))}
           </div>
         </section>
 
-        <section className={sec}>
-          <Reveal><p className={label}>Privacy</p></Reveal>
-          {["microphone.", "cloud.", "account.", "screen needed."].map((w) => (
-            <Reveal key={w}><p className="text-[clamp(36px,11vh,120px)] leading-[1.04] tracking-[-0.03em]"><em className="text-mute">No</em> {w}</p></Reveal>
-          ))}
-          <Reveal><p className={lead}>It does not listen. It speaks, and waits for your finger. Everything stays on the phone.</p></Reveal>
-        </section>
+        <Privacy />
 
         <section id="laptop" className={sec}>
           <div className={two}>
             <Reveal><p className={label}>New: Laptop</p><h2 className={h2}>Your agents, in your ear.</h2>
               <p className={lead}>Many windows on your laptop, each with an agent at work. Away from the desk, the earbud tells you which one needs you, reads what it asks, and sends the answer.</p></Reveal>
             <Reveal>
-              <div className="rounded-[18px] border border-line bg-[#070707] p-[3vh]">
+              <div className="rounded-[18px] border border-line bg-[#0c0c0e] p-[3vh]">
                 <p className="font-sans text-[13px] tracking-wide text-mute">Battery-free device ideas <b className="ml-2 font-semibold text-paper">needs you</b></p>
                 <p className="my-[2vh] text-[clamp(18px,3vh,26px)]">“Pick the mini’s cell. Reply use AM-1454, or keep it small.”</p>
                 <p className="font-sans text-sm text-mute">Click: <b className="font-semibold text-paper">use AM-1454</b> · Sent.</p>

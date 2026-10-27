@@ -3,6 +3,7 @@ import gsap from "gsap";
 import { SplitText } from "gsap/SplitText";
 import { useGSAP } from "@gsap/react";
 import { useRef, useState } from "react";
+import Stage from "./Stage";
 import { hit } from "@/lib/pulse";
 import { play, setSound, soundOn } from "@/lib/sound";
 
@@ -36,8 +37,9 @@ export default function Hero() {
 
   const press = () => { hit(); play("tap"); setN((v) => Math.min(v + 1, LINES.length)); };
   return (
-    <section ref={root} className="mx-auto flex h-svh max-w-[1400px] flex-col justify-center overflow-hidden px-6 pb-8 pt-16 md:px-[8vw]">
-      <h1 className="text-[clamp(44px,min(9.5vw,15vh),136px)] leading-[0.96] tracking-[-0.03em]">
+    <section ref={root} className="mx-auto grid h-svh max-w-[1400px] grid-rows-[1fr_40%] overflow-hidden px-6 pb-8 pt-16 md:grid-cols-2 md:grid-rows-1 md:gap-12 md:px-[8vw]">
+      <div className="flex flex-col justify-center">
+      <h1 className="text-[clamp(40px,min(6.4vw,11vh),104px)] [text-wrap:balance] leading-[0.96] tracking-[-0.03em]">
         Your phone.<br /><em className="text-mute">Without the screen.</em>
       </h1>
       <p className="hero-in mt-8 text-[clamp(20px,2.4vw,30px)] text-mute">One button. Your ears. Nothing else.</p>
@@ -46,6 +48,8 @@ export default function Hero() {
         Press
       </button>
       <p className="hero-in mt-4 font-sans text-[13px] text-mute">{n ? LINES[n - 1] : "Click, tap or press Enter."}</p>
+      </div>
+      <div className="relative"><Stage mode="hero" /></div>
     </section>
   );
 }
