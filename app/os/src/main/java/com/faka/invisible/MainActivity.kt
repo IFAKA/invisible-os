@@ -49,6 +49,7 @@ class MainActivity : Activity() {
         if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java))
         EventLog.onChange = { render() }
         intent.getStringExtra("page")?.let { n -> Page.values().firstOrNull { it.name.equals(n, true) }?.let { page = it } }   // for screenshots: adb ... --es page menu --es open /Tools
+        if (page == Page.LAPTOP) laptop.start()
         previewReady = intent.getBooleanExtra("ready", false)
         if (intent.getBooleanExtra("disclosure", false)) disclosure = true   // for screenshots
         intent.getStringExtra("open")?.let { openGroups = it.split(',').toSet() }
@@ -74,23 +75,27 @@ class MainActivity : Activity() {
     private fun slider(label: String, valueText: String, max: Int, now: Int, apply: (Int) -> LauncherSettings) = k.slider(label, valueText, max, now) { change(apply(it)) }
 
     // ---- screens: Home shows one thing to do and a few doors; each door opens one small page ----
-    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), AI("AI on the phone"), HELP("Help") }
+    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), LAPTOP("Laptop"), AI("AI on the phone"), HELP("Help") }
     private var page = Page.HOME
 
-    private fun open(p: Page) { page = p; render(); (body.parent as? ScrollView)?.scrollTo(0, 0); k.enter(body) }
+    private val laptop by lazy { LaptopPage(this, k, body) { render() } }
+
+    private fun open(p: Page) { page = p; if (p == Page.LAPTOP) laptop.start(); render(); (body.parent as? ScrollView)?.scrollTo(0, 0); k.enter(body) }
 
     @Deprecated("Back goes to Home first, then leaves")
     override fun onBackPressed() { if (page != Page.HOME) open(Page.HOME) else super.onBackPressed() }
 
     private fun render() {
         body.removeAllViews()
-        if (page != Page.HOME) body.addView(k.header(tr(page.title), { open(Page.HOME) }))
+        if (page == Page.LAPTOP && laptop.inRoom) body.addView(k.header(laptop.title(), { laptop.leaveRoom() }, "Rooms"))
+        else if (page != Page.HOME) body.addView(k.header(tr(page.title), { open(Page.HOME) }))
         when (page) {
             Page.HOME -> home()
             Page.TASKS -> tasksPage()
             Page.MENU -> menuPage()
             Page.VOICE -> voicePage()
             Page.EMERGENCY -> emergencyPage()
+            Page.LAPTOP -> laptop.draw()
             Page.AI -> aiPage()
             Page.HELP -> helpPage()
         }
@@ -187,6 +192,7 @@ class MainActivity : Activity() {
             k.navRow(this, tr("Your menu"), tr("Pin, move or hide what you hear")) { open(Page.MENU) }
             k.navRow(this, tr("Voice and speed"), tr("Language") + " " + MenuLanguage.names[MenuLanguage.code] + ", " + tr("Voice").lowercase() + " ${"%.1f".format(s.speechRate)}x") { open(Page.VOICE) }
             k.navRow(this, tr("Emergency contact"), Actions.emergencyContact().ifEmpty { tr("Not set") }) { open(Page.EMERGENCY) }
+            if (Actions.claudeUrl().isNotBlank()) k.navRow(this, tr("Laptop"), "Rooms of your laptop: read, answer") { open(Page.LAPTOP) }
             k.navRow(this, tr("AI on the phone"), if (!s.ai) "Off" else if (ModelDownload.ready(this@MainActivity)) "On" else "On, model not downloaded") { open(Page.AI) }
             k.navRow(this, tr("Help"), tr("Button gestures and practice")) { open(Page.HELP) }
         }

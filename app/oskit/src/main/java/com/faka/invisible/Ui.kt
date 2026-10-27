@@ -62,7 +62,8 @@ object Ui {
 /** The type scale: large title, title, headline, body, caption. System font. */
 enum class Type(val size: Float, val face: String, val bold: Boolean = false) {
     LARGE(34f, "sans-serif", true), TITLE(22f, "sans-serif-medium"), HEAD(17f, "sans-serif-medium"),
-    BODY(17f, "sans-serif"), SMALL(15f, "sans-serif"), CAPTION(13f, "sans-serif"), SECTION(13f, "sans-serif-medium")
+    BODY(17f, "sans-serif"), SMALL(15f, "sans-serif"), CAPTION(13f, "sans-serif"), SECTION(13f, "sans-serif-medium"),
+    MONO(15f, "monospace")
 }
 
 /** UI Kit parts (composable). Screens build only from these and the [Ui] values; a missing part is added here first. */
@@ -78,6 +79,11 @@ class Kit(private val c: Context) {
         if (type == Type.LARGE) letterSpacing = -0.01f
         if (type == Type.LARGE || type == Type.TITLE || type == Type.SECTION) isAccessibilityHeading = true   // TalkBack can jump from title to title
         if (type == Type.BODY || type == Type.SMALL) setLineSpacing(0f, 1.12f)
+    }
+
+    /** A block of fixed-width text (a terminal screen): soft surface, wraps long lines, text can be selected. */
+    fun mono(t: String) = text(t, Type.MONO).apply {
+        setTextIsSelectable(true); setPadding(dp(Ui.S2), dp(Ui.S2), dp(Ui.S2), dp(Ui.S2)); surface(this)
     }
 
     /** The system bars take the page colour; the content stays clear of them. Call once from onCreate. */
