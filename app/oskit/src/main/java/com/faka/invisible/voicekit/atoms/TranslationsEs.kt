@@ -474,6 +474,7 @@ private val SCREEN_ES = mapOf(
     "So you can start, answer and end calls with the button." to "Para iniciar, contestar y terminar llamadas con el botón.",
     "Hold it for one second." to "Mantenlo pulsado un segundo.",
     "Button access is off." to "El acceso al botón está apagado.",
+    "Notification access is off. Music and messages will not work. Open the app to turn it on." to "El acceso a notificaciones está apagado. La música y los mensajes no funcionarán. Abre la app para activarlo.",
     "selected" to "seleccionado",
     "Not set" to "Sin configurar",
     "AI on the phone" to "IA en el teléfono",

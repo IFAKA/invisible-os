@@ -137,6 +137,7 @@ object Actions {
             override fun appMuted(pkg: String) = ControllerNotificationListener.mutes.isMuted(pkg)
             override fun openApp(pkg: String) = DeviceApps.open(app, pkg)
             override fun notifMutedCount() = ControllerNotificationListener.mutes.all().size
+            override fun notifAccessOff() = Needs.missing(app, "notif").also { if (it) Needs.record(app, "notif") }
             override fun notifUnmuteAll() = ControllerNotificationListener.unmuteAll()
             override fun startNotifReply(key: String, index: Int) = launchWrite({ text -> ControllerNotificationListener.fireAction(key, index, text, app) },
                 ControllerNotificationListener.notifs.get(key))

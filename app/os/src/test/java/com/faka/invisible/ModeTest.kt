@@ -43,6 +43,7 @@ class ModeTest {
         var installed = listOf<InstalledApp>(); val opened = ArrayList<String>(); val mutedPkgs = HashSet<String>(); val picksOf = HashMap<String, Int>()
         var weatherAnswer: String? = null     // null = the answer has not come yet
         var pendingWeather: ((Phrase) -> Unit)? = null
+        var accessOff = false
         var codes = 100          // experienced by default; learning tests set 0
         private val timers = HashMap<String, Pair<Long, () -> Unit>>()
         /** Platform speech: starts 50 ms after the call, ends 500 ms after it. */
@@ -63,6 +64,7 @@ class ModeTest {
             override fun log(line: String) {}
             override fun pauseMusic(): Boolean { if (playing) log.add("pause"); return playing }
             override fun resumeMusic() { log.add("resume") }
+            override fun notifAccessOff() = accessOff
             override fun volume(up: Boolean) { log.add("vol $up"); vol += if (up) 1 else -1 }
             override fun volumeLevel() = vol
             override fun startTimer(minutes: Int) { log.add("timer $minutes") }
@@ -163,6 +165,18 @@ class ModeTest {
     private val info = Msg("i", "Eve", "ok see you", "en", 999_000)
 
     // ---------- weather, next event, find my phone ----------
+    @Test fun wakeWarnsOnceWhenNotificationAccessIsOff() {
+        val r = Rig(); r.accessOff = true; r.wake(); r.advance(3000)
+        assertEquals("say ${Voice.NOTIF_ACCESS_OFF}", r.spoken().firstOrNull())
+        r.pick("Today"); r.advance(3000)
+        assertFalse(r.spoken().contains("say ${Voice.NOTIF_ACCESS_OFF}"))   // pick clears the log: not said again
+    }
+
+    @Test fun wakeSaysNoWarningWhenNotificationAccessIsOn() {
+        val r = Rig(); r.wake(); r.advance(3000)
+        assertTrue(r.spoken().isNotEmpty()); assertFalse(r.spoken().contains("say ${Voice.NOTIF_ACCESS_OFF}"))
+    }
+
     @Test fun weatherSpeaksTheAnswerAfterItArrives() {
         val r = Rig().withInfo(); r.wake(); r.pick("Today"); r.pick("Weather")
         r.advance(300); assertTrue(r.spoken().isEmpty())   // waiting, nothing said yet

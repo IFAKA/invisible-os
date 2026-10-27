@@ -122,6 +122,7 @@ object Voice {
     fun setupStep(n: Int, total: Int, title: String, action: String?) =
         f("Step $n of $total. $title. " + if (action != null) "Double tap $action." else "Hold it for one second.")
     val BUTTON_ACCESS_OFF get() = f("Button access is off.")
+    val NOTIF_ACCESS_OFF get() = f("Notification access is off. Music and messages will not work. Open the app to turn it on.")
 
     // ---- weather, calendar, find my phone ----
     val NEED_LOCATION get() = f("Weather needs location. Open the app.")

@@ -48,6 +48,7 @@ interface ModeOutput {
     fun openApp(pkg: String): Boolean = false   // start the app (its launch intent)
     fun notifAppHint(pkg: String): Int = -1   // ApplicationInfo.category of the app, -1 = unknown (a hint for its group)
     fun notifMutedCount(): Int = 0
+    fun notifAccessOff(): Boolean = false   // the notification listener is not allowed: music control and messages fail silently
     fun notifUnmuteAll() {}
     fun startNotifReply(key: String, index: Int) {}   // Write keyboard; its text goes into that action's reply box
     fun status(): Status
@@ -308,12 +309,15 @@ class ControllerMode(
     }
     private var firstKey: String? = null
 
+    private var accessWarn = false   // said once, before the first screen of this wake
+
     private fun wake() {
         active = true
         pausedByUs = out.pauseMusic()
         queue = buildQueue(); qi = 0
         fromHub = false; speechOpen = false
         hintPending = learning()
+        accessWarn = out.notifAccessOff()
         out.log("MODE enter")
         com.faka.invisible.oskit.Trace.ev("wake", "menu on pausedMusic=$pausedByUs queue=${queue.size}")
         out.choice(if (queue.isEmpty()) "HUB" else if (queue[0] == null) "TIMER_DONE" else "MESSAGE", 0, "wake", queue.getOrNull(0)?.sender ?: "")
@@ -361,6 +365,7 @@ class ControllerMode(
         com.faka.invisible.voicekit.ScreenMirror.setTitle(mirrorTitle(s))
         if (!backNav) tn(tone(s)); backNav = false
         intro.clear()
+        if (accessWarn) { accessWarn = false; com.faka.invisible.oskit.Trace.ev("wake", "notification access off: warned"); intro += Intro(Voice.NOTIF_ACCESS_OFF, null) }
         if (hintPending) { hintPending = false; intro += Intro(Voice.HINT, null, hint = true) }
         val m = cur
         if (s == Screen.MESSAGE && m != null) out.prepareAiReplies(m)
