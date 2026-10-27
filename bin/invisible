@@ -342,9 +342,13 @@ def cmd_uninstall(args):
             out("Removed %s" % m.get("log"))
         elif what == "link":
             lk = m["link"]
-            if os.path.islink(lk) and os.path.realpath(lk) == os.path.realpath(__file__):
+            ours = (os.path.islink(lk) and os.path.realpath(lk) == os.path.realpath(__file__)) or \
+                (os.path.isfile(lk) and "invisible-shim" in open(lk, errors="replace").read(200))
+            if ours and os.path.realpath(lk).startswith(os.path.realpath(os.path.expanduser("~")) + os.sep):
                 os.remove(lk)
                 out("Removed %s" % lk)
+            elif ours:
+                out("Left %s (shared by all users of this Mac; it does nothing without your copy)" % lk)
             else:
                 out("Left %s (not our link)" % lk)
         elif what == "cfg":

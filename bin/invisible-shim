@@ -1,0 +1,14 @@
+#!/bin/sh
+# invisible-shim: the `invisible` command that setup puts on PATH. Shared by every user of this Mac:
+# it runs THIS user's own copy of Invisible OS, and gets one the first time.
+# Copy found in: $INVISIBLE_HOME, else the path setup wrote to ~/.config/invisible-bridge/checkout, else ~/invisible-os.
+home="$INVISIBLE_HOME"
+[ -z "$home" ] && [ -f "$HOME/.config/invisible-bridge/checkout" ] && home="$(cat "$HOME/.config/invisible-bridge/checkout")"
+[ -z "$home" ] || [ ! -f "$home/bin/invisible" ] && home="$HOME/invisible-os"
+if [ ! -f "$home/bin/invisible" ]; then
+  src="${INVISIBLE_SOURCE:-https://github.com/IFAKA/invisible-os}"
+  [ -z "$INVISIBLE_SOURCE" ] && [ -r /Users/Shared/invisible-os.bundle ] && src=/Users/Shared/invisible-os.bundle
+  echo "First time for $(id -un): getting Invisible OS into ~/invisible-os (one time)."
+  git clone -q -b master "$src" "$home" || { echo "Could not get it from $src."; exit 1; }
+fi
+exec python3 "$home/bin/invisible" "$@"

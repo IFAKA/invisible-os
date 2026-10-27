@@ -126,8 +126,15 @@ def write_manifest(config_dir, plist, log, hook_cmd, link=""):
 
 
 def link_cli(script):
-    """Link the `invisible` script into a bin folder on this Mac. Returns (link path, on_path)."""
+    """Put the `invisible` command on PATH. Returns (path, on_path).
+    It is a copy of bin/invisible-shim, not a link: /opt/homebrew/bin is shared by every user of this Mac,
+    so the command must run each user's own copy (written to ~/.config/invisible-bridge/checkout)."""
     script = os.path.realpath(script)
+    shim = os.path.join(os.path.dirname(script), "invisible-shim")
+    cfg = os.path.expanduser("~/.config/invisible-bridge")
+    os.makedirs(cfg, exist_ok=True)
+    with open(os.path.join(cfg, "checkout"), "w") as f:
+        f.write(os.path.dirname(os.path.dirname(script)) + "\n")
     forced = os.environ.get("INVISIBLE_BIN_DIR")   # tests and people who want one place
     for d in ([forced] if forced else ["/opt/homebrew/bin", os.path.expanduser("~/.local/bin")]):
         if d.startswith("/opt") and not os.access(d, os.W_OK):
@@ -135,15 +142,23 @@ def link_cli(script):
         try:
             os.makedirs(d, exist_ok=True)
             dest = os.path.join(d, "invisible")
-            if os.path.lexists(dest):
-                if not os.path.islink(dest):
-                    continue   # a real file that is not ours: leave it
-                os.remove(dest)
-            os.symlink(script, dest)
+            if os.path.lexists(dest) and not os.path.islink(dest) and not is_shim(dest):
+                continue   # a real file that is not ours: leave it
+            tmp = dest + ".tmp%d" % os.getpid()
+            shutil.copyfile(shim, tmp)
+            os.chmod(tmp, 0o755)
+            os.replace(tmp, dest)
             return dest, d in os.environ.get("PATH", "").split(os.pathsep)
         except OSError:
             continue
     return "", False
+
+
+def is_shim(path):
+    try:
+        return "invisible-shim" in open(path, errors="replace").read(200)
+    except OSError:
+        return False
 
 
 def plist_get(path, key):

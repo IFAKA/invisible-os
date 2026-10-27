@@ -113,7 +113,9 @@ class FullRun(CliBase):
         self.assertTrue(m["hooks"]["command"].endswith("hook.py"))
         link = self.path("bin", "invisible")
         self.assertEqual(m["link"], link)
-        self.assertEqual(os.path.realpath(link), os.path.realpath(CLI))
+        self.assertFalse(os.path.islink(link))   # a copy of the shim: shared by all users, runs each user's own copy
+        self.assertIn("invisible-shim", open(link).read())
+        self.assertEqual(open(os.path.join(cfg, "checkout")).read().strip(), os.path.dirname(os.path.dirname(os.path.realpath(CLI))))
 
         # status: running, phone not seen, hooks in
         s = self.cli("status").stdout
