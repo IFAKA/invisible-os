@@ -5,7 +5,7 @@ data class SetupState(
     val button: Boolean, val buttonTested: Boolean, val notifications: Boolean, val assistant: Boolean,
     val postNotifications: Boolean, val calendar: Boolean, val location: Boolean, val usage: Boolean,
     val sdk: Int, val skipped: Set<String> = emptySet(),
-    val contacts: Boolean = false, val calls: Boolean = false, val sms: Boolean = false,
+    val contacts: Boolean = false, val calls: Boolean = false, val sms: Boolean = false, val callLog: Boolean = false,
 )
 
 /** One line of the setup checklist. [optional] steps can be skipped; a skipped step counts as passed. */
@@ -25,6 +25,7 @@ object Setup {
         add(SetupStep("location", "Location", "So it can tell you the weather where you are.", s.location, true))
         add(SetupStep("contacts", "Contacts", "So it can say who is calling and let you call a contact.", s.contacts, true))
         add(SetupStep("calls", "Phone calls", "So you can answer, reject, end and start calls with the button.", s.calls, true))
+        add(SetupStep("calllog", "Call history", "So your most-called people come first.", s.callLog, true))
         add(SetupStep("sms", "Text messages", "So Emergency can text your emergency contact.", s.sms, true))
         add(SetupStep("usage", "Usage access", "Better order of apps: the ones you use most come first.", s.usage, true))
     }.map { it.copy(skipped = !it.done && it.optional && it.id in s.skipped) }
@@ -33,6 +34,9 @@ object Setup {
     fun current(steps: List<SetupStep>) = steps.indexOfFirst { !it.passed }
 
     fun label(index: Int, total: Int) = "Step ${index + 1} of $total"
+
+    /** The permission asked by a runtime step, or null when the step opens a Settings page. */
+    val PERMISSION_STEPS = setOf("post", "calendar", "location", "contacts", "calls", "calllog", "sms")
 
     /** Everything a new user must do is done (optional steps do not count). */
     fun ready(steps: List<SetupStep>) = steps.filter { !it.optional }.all { it.done }

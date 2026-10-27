@@ -25,6 +25,7 @@ class ButtonService : Service() {
         startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
 
         Actions.init(this)
+        ButtonAccess.check(this)
 
         keys = com.faka.invisible.voicekit.VoiceKit.mediaKeys().also { it.start() }
         EventLog.running = true

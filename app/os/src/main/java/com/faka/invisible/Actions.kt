@@ -193,7 +193,10 @@ object Actions {
 
     fun setSwapEars(on: Boolean) { prefs().edit().putBoolean("swap_ears", on).apply() }
 
-    fun saveSettings(s: LauncherSettings) { mode.settings = s; SettingsStore.save(prefs(), s) }
+    fun saveSettings(s: LauncherSettings) { mode.settings = s; SettingsStore.save(prefs(), s); applyLanguage(s) }
+
+    /** The menu language follows the setting; "auto" follows the phone. */
+    private fun applyLanguage(s: LauncherSettings) = com.faka.invisible.voicekit.MenuLanguage.apply(s.menuLanguage, java.util.Locale.getDefault().language)
 
     private fun prefs() = app.getSharedPreferences("invisible", Context.MODE_PRIVATE)
 
@@ -205,6 +208,7 @@ object Actions {
         ControllerNotificationListener.loadMutes(app)
         TreeLeaves.store = prefs()
         mode.settings = SettingsStore.load(prefs())
+        applyLanguage(mode.settings)
         val f = java.io.File(app.filesDir, "choices.log")
         choices = ChoiceLog(if (f.exists()) f.readLines() else emptyList()) { line -> try { f.appendText(line + "\n") } catch (e: Exception) { Log.e(TAG, "choices.log write failed", e) } }
         val tf = java.io.File(app.filesDir, "tasks.txt")
@@ -395,6 +399,9 @@ object Actions {
         if (!::app.isInitialized) return
         handler.post { narrator.beep(if (sender in choices.favourites()) Tone.ARRIVE_FAV else Tone.ARRIVE) }
     }
+
+    /** A screen of the app speaks with the app's own voice (the setup steps, the lost-access warning). */
+    fun announce(p: Phrase, queue: Boolean) { handler.post { say(p, queue) } }
 
     private fun say(p: Phrase, queue: Boolean, fast: Boolean = false, slow: Boolean = false) { Log.d("SAY", p.text); narrator.say(p, queue, fast, slow) }   // SAY log: lets a dev check what the menu speaks
 

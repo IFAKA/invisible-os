@@ -9,8 +9,8 @@ import com.faka.invisible.voicekit.Phrase
 private fun f(text: String) = Phrase.fixed(text)
 
 object WhereVoice {
-    val TITLE = f("Where am I")
-    val WAIT = f("Finding where you are.")
-    val NOT_FOUND = f("Location not found.")
-    val NEED_LOCATION = f("Location is off. Allow location in the setup.")
+    val TITLE get() = f("Where am I")
+    val WAIT get() = f("Finding where you are.")
+    val NOT_FOUND get() = f("Location not found.")
+    val NEED_LOCATION get() = f("Location is off. Allow location in the setup.")
 }

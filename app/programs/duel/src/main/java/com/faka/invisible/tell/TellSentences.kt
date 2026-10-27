@@ -10,24 +10,24 @@ private fun f(text: String) = Phrase.fixed(text)
 
 object TellVoice {
     /** The menu labels. */
-    val TITLE = f("Duel")
-    val HOW_TO_PLAY = f("How to play")
+    val TITLE get() = f("Duel")
+    val HOW_TO_PLAY get() = f("How to play")
     // ---- markers inside a step's lines: a sound instead of a sentence ----
-    val CLICK1 = f("<click1>")
-    val CLICK2 = f("<click2>")
-    val NOTES = f("<notes>")
+    val CLICK1 get() = f("<click1>")
+    val CLICK2 get() = f("<click2>")
+    val NOTES get() = f("<notes>")
 
     // ---- the levels: short teaching before each real match ----
-    val L1_TAP = listOf(f("Level one. Jab and guard."), f("To leave, hold three seconds."), f("Tap to jab."))
-    val L1_GUARD = listOf(f("Listen for a click."), CLICK1, f("Hold to the click to guard."))
-    val L1_RULE = listOf(f("Guard beats jab."))
-    val L2_CHARGE = listOf(f("Level two. Charge."), f("Hold longer."), f("Two clicks."), CLICK2, f("Let go after the second."))
-    val L2_RULE = listOf(f("Charge beats guard."), f("Jab beats charge."), f("No charge twice in a row."))
-    val L3_ENERGY = listOf(f("Level three. Energy."), f("Charge costs three."), f("Listen."), NOTES, f("More energy, higher note."), f("You get one back each round."))
-    val DONE = listOf(f("Jab."), f("Guard."), f("Charge."))
-    val NOT_AGAIN = f("Not again.")
-    val SKIP = f("Let's move on.")
-    val LEAVE_HINT = f("Hold three seconds to leave.")
+    val L1_TAP get() = listOf(f("Level one. Jab and guard."), f("To leave, hold three seconds."), f("Tap to jab."))
+    val L1_GUARD get() = listOf(f("Listen for a click."), CLICK1, f("Hold to the click to guard."))
+    val L1_RULE get() = listOf(f("Guard beats jab."))
+    val L2_CHARGE get() = listOf(f("Level two. Charge."), f("Hold longer."), f("Two clicks."), CLICK2, f("Let go after the second."))
+    val L2_RULE get() = listOf(f("Charge beats guard."), f("Jab beats charge."), f("No charge twice in a row."))
+    val L3_ENERGY get() = listOf(f("Level three. Energy."), f("Charge costs three."), f("Listen."), NOTES, f("More energy, higher note."), f("You get one back each round."))
+    val DONE get() = listOf(f("Jab."), f("Guard."), f("Charge."))
+    val NOT_AGAIN get() = f("Not again.")
+    val SKIP get() = f("Let's move on.")
+    val LEAVE_HINT get() = f("Hold three seconds to leave.")
     fun hint(tapStep: Boolean) = f(if (tapStep) "Press to continue." else "Press the button.")
     private val NAMES = listOf("jab", "guard", "charge")
     /** Every sentence of the practice (the markers are sounds). Each is at most 7 words. */
@@ -42,8 +42,8 @@ object TellVoice {
 
     private val NUM = listOf("zero", "one", "two", "three", "four", "five")
     fun duelRung(rung: Int) = f("Duel. Rung ${NUM[rung.coerceIn(0, 5)]}.")
-    val LOADING = f("Loading the duel")
-    val COULD_NOT_START = f("Duel could not start")
+    val LOADING get() = f("Loading the duel")
+    val COULD_NOT_START get() = f("Duel could not start")
 
     private fun base(m: Move) = when (m) { Move.JAB -> "jab"; Move.GUARD -> "guard"; Move.CHARGE -> "charge" }
     private fun n(x: Int) = NUM[x.coerceIn(0, 5)]
@@ -104,15 +104,15 @@ object TellVoice {
     }
 
     // ---- the end of a match ----
-    val WIN = f("You win.")
-    val LOSE = f("You lose.")
-    val DRAW = f("Draw.")
-    val PLAY_AGAIN = f("Tap to play again. Hold to leave.")
+    val WIN get() = f("You win.")
+    val LOSE get() = f("You lose.")
+    val DRAW get() = f("Draw.")
+    val PLAY_AGAIN get() = f("Tap to play again. Hold to leave.")
     /** After a match: the result word, what the mistake cost (content computed by the game), and the way on. Empty parts are left out. */
     fun matchEnd(word: Phrase, mistake: Phrase): Phrase =
-        f(listOf(word.text, mistake.text, PLAY_AGAIN.text).filter { it.isNotEmpty() }.joinToString(" "))
+        Phrase.join(listOf(word, mistake, PLAY_AGAIN).filter { it.isNotEmpty })
     /** "Not again." in front of a narration. */
-    fun notAgainThen(text: Phrase): Phrase = f((NOT_AGAIN.text + " " + text.text).trim())
+    fun notAgainThen(text: Phrase): Phrase = Phrase.join(listOf(NOT_AGAIN, text).filter { it.isNotEmpty })
     /** Three taps: the score and your moves. */
     fun summary(rounds: Int, myLife: Int?, oppLife: Int?, jabs: Int, guards: Int, charges: Int): Phrase {
         val life = if (myLife != null && oppLife != null) " Life $myLife to $oppLife." else ""

@@ -24,6 +24,7 @@ class ButtonAccessibilityService : AccessibilityService() {
         if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java)) // self-start, no screen needed
         Log.d("Invisible", "A11Y connected")
         EventLog.add("accessibility connected")
+        ButtonAccess.check(this)   // remembers that it is on
     }
 
     override fun onKeyEvent(e: KeyEvent): Boolean = VoiceKit.buttons.keyEvent("a11y", e)
@@ -66,6 +67,7 @@ class ButtonAccessibilityService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         Actions.accessibilityConnected = false
         Log.d("Invisible", "A11Y disconnected")
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ ButtonAccess.check(applicationContext) }, 1500)   // off for good? then tell
         return super.onUnbind(intent)
     }
 }

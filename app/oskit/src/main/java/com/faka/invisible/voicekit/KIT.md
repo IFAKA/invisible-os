@@ -34,3 +34,7 @@ Rules are checked two ways:
 | VoiceKit.kt | facade | `init` once from the OS; `narrator`, `buttons`, `mediaKeys()`. |
 
 Add a sentence: put it in `Sentences.kt`. Add a sound: `Earcons.kt` and a `Tone`. Add a list: use `Scanner`. Add a program: it gets `RawButton` and speaks through `Narrator`.
+
+## Menu language
+Fixed sentences and screen labels are keyed by their English text. `MenuLanguage` holds the language (setting "auto" = the phone's language if supported, else English). `Translations.packs` lists the `LangPack`s (one file each, `atoms/TranslationsEs.kt`); a key with `{0}` is a pattern whose parts are translated on their own. A translated sentence carries its language tag, so the matching voice speaks it. A sentence with no translation is spoken in English (never half and half). Sentence objects use `get()` (not `val x = f(...)`) so a language change takes effect. To add a language: one file, one line in `Translations.packs`; `TranslationsTest` lists every missing key and checks the 7-word rule.
+Not translated yet: the composed Duel round narration, calculator number reading, long screen texts (Help, Tasks, Menu pages), the permission disclosure.

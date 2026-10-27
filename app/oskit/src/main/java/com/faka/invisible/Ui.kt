@@ -18,6 +18,7 @@ import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
+import com.faka.invisible.voicekit.Translations
 
 /**
  * UI Kit values: one calm system. Colours follow the system light or dark mode ([sync] reads it).
@@ -31,8 +32,9 @@ object Ui {
 
     val ink get() = pick("#1C1C1E", "#FFFFFF")            // main text
     val soft get() = pick("#6C6C70", "#98989F")           // hints, captions
-    val accent get() = pick("#007AFF", "#0A84FF")         // the one accent: buttons, values, links
-    val good get() = pick("#1F8A3D", "#32D74B")
+    val accent get() = pick("#0062CC", "#4DA3FF")         // the one accent for text: values, links, soft buttons (4.5:1 or more on page, card and tint, light and dark)
+    val accentFill get() = pick("#0062CC", "#0A66C2")     // the accent as a button background: white text on it is 4.5:1 or more
+    val good get() = pick("#17722F", "#32D74B")
     val bad get() = pick("#D70015", "#FF453A")
     val page get() = pick("#F2F2F7", "#000000")           // screen background
     val card get() = pick("#FFFFFF", "#1C1C1E")           // grouped surface
@@ -74,6 +76,7 @@ class Kit(private val c: Context) {
         text = t; textSize = type.size; setTextColor(color)
         typeface = Typeface.create(type.face, if (type.bold) Typeface.BOLD else Typeface.NORMAL)
         if (type == Type.LARGE) letterSpacing = -0.01f
+        if (type == Type.LARGE || type == Type.TITLE || type == Type.SECTION) isAccessibilityHeading = true   // TalkBack can jump from title to title
         if (type == Type.BODY || type == Type.SMALL) setLineSpacing(0f, 1.12f)
     }
 
@@ -85,7 +88,14 @@ class Kit(private val c: Context) {
         return ScrollView(c).apply {
             setBackgroundColor(Ui.page); isVerticalScrollBarEnabled = false; clipToPadding = false
             addView(body)
-            setOnApplyWindowInsetsListener { v, i -> @Suppress("DEPRECATION") v.setPadding(i.systemWindowInsetLeft, i.systemWindowInsetTop, i.systemWindowInsetRight, i.systemWindowInsetBottom); i }
+            setOnApplyWindowInsetsListener { v, i ->
+                if (android.os.Build.VERSION.SDK_INT >= 30) {
+                    val b = i.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+                    v.setPadding(b.left, b.top, b.right, b.bottom); android.view.WindowInsets.CONSUMED
+                } else {
+                    @Suppress("DEPRECATION") v.setPadding(i.systemWindowInsetLeft, i.systemWindowInsetTop, i.systemWindowInsetRight, i.systemWindowInsetBottom); i
+                }
+            }
         }
     }
 
@@ -100,7 +110,7 @@ class Kit(private val c: Context) {
     fun primary(label: String, onClick: () -> Unit) = Button(c).apply {
         text = label; isAllCaps = false; textSize = Type.HEAD.size; typeface = Typeface.create(Type.HEAD.face, Typeface.NORMAL)
         minHeight = dp(52); minimumHeight = dp(52); stateListAnimator = null; elevation = 0f
-        setTextColor(Ui.onAccent); background = fill(Ui.accent, Ui.RADIUS_BUTTON)
+        setTextColor(Ui.onAccent); background = fill(Ui.accentFill, Ui.RADIUS_BUTTON)
         setOnClickListener { onClick() }
     }
 
@@ -175,7 +185,7 @@ class Kit(private val c: Context) {
     /** Top of a sub-page: a quiet back link, then the large title. */
     fun header(title: String, onBack: () -> Unit, backLabel: String = "Home"): LinearLayout = LinearLayout(c).apply {
         orientation = LinearLayout.VERTICAL
-        addView(quiet("\u2039 $backLabel", onClick = onBack).apply { minWidth = dp(64); setPadding(0, 0, dp(Ui.S2), 0); gravity = Gravity.START or Gravity.CENTER_VERTICAL },
+        addView(quiet("\u2039 " + Translations.label(backLabel), onClick = onBack).apply { contentDescription = Translations.label("Back") + ", " + Translations.label(backLabel); minWidth = dp(64); setPadding(0, 0, dp(Ui.S2), 0); gravity = Gravity.START or Gravity.CENTER_VERTICAL },
             LinearLayout.LayoutParams(-2, dp(48)))
         addView(text(title, Type.LARGE), lp(top = Ui.S1))
     }
@@ -212,15 +222,25 @@ class Kit(private val c: Context) {
             orientation = LinearLayout.VERTICAL
             addView(text(title))
             addView(text(summary, Type.CAPTION, Ui.soft).apply { setPadding(0, dp(2), 0, 0) })
-        }), text("\u203A", Type.TITLE, Ui.edge))
+        }), text("\u203A", Type.TITLE, Ui.edge).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })
+        r.contentDescription = "$title. $summary"
         r.minimumHeight = dp(64); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
+        r.isClickable = true; r.setOnClickListener { onClick() }
+        parent.addView(r, lp())
+    }
+
+    /** A row of a group where exactly one choice is on: the title and a check mark. TalkBack hears "selected". */
+    fun choiceRow(parent: LinearLayout, title: String, selected: Boolean, onClick: () -> Unit) {
+        val r = row(grow(text(title)), text(if (selected) "\u2713" else "", Type.TITLE, Ui.accent).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })
+        r.contentDescription = if (selected) title + ", " + Translations.label("selected") else title
+        r.minimumHeight = dp(52); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
         r.isClickable = true; r.setOnClickListener { onClick() }
         parent.addView(r, lp())
     }
 
     /** Home status: a coloured dot, a large word, one quiet line. */
     fun status(parent: LinearLayout, headline: String, line: String, color: Int, fill: LinearLayout.() -> Unit = {}) {
-        val dot = View(c).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) } }
+        val dot = View(c).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) } }
         parent.addView(row(dot.apply { layoutParams = LinearLayout.LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(12) } }, text(headline, Type.TITLE)), lp(top = Ui.S3))
         parent.addView(text(line, Type.SMALL, Ui.soft), lp(top = Ui.S1))
         val extra = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
@@ -230,10 +250,15 @@ class Kit(private val c: Context) {
 
     /** One onboarding step: a thin progress bar, a quiet step label, a large title, a plain line, one main button, one quiet one. */
     fun onboarding(parent: LinearLayout, progress: Float, stepLabel: String, title: String, line: String,
-                   primaryLabel: String?, onPrimary: () -> Unit, secondaryLabel: String? = null, onSecondary: () -> Unit = {}) {
-        val track = FrameBar(progress)
+                   primaryLabel: String?, onPrimary: () -> Unit, secondaryLabel: String? = null, onSecondary: () -> Unit = {}, focusFirst: Boolean = false) {
+        val track = FrameBar(progress).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
         parent.addView(track, lp(h = dp(4), top = Ui.S3))
-        parent.addView(text(stepLabel, Type.SECTION, Ui.accent), lp(top = Ui.S6))
+        val label = text(stepLabel, Type.SECTION, Ui.accent).apply { contentDescription = "$stepLabel. $title" }   // first thing TalkBack reads: where you are and what it is
+        parent.addView(label, lp(top = Ui.S6))
+        if (focusFirst) label.post {   // the step appears: TalkBack moves to it and reads it
+            val am = c.getSystemService(android.view.accessibility.AccessibilityManager::class.java)
+            if (am.isTouchExplorationEnabled) label.performAccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
+        }
         parent.addView(text(title, Type.LARGE), lp(top = Ui.S1))
         parent.addView(text(line, Type.BODY, Ui.soft), lp(top = Ui.S2))
         if (primaryLabel != null) parent.addView(primary(primaryLabel, onPrimary), lp(top = Ui.S6))
@@ -250,7 +275,10 @@ class Kit(private val c: Context) {
 
     /** The finished and coming steps, small and quiet. */
     fun stepList(parent: LinearLayout, items: List<Pair<String, String>>) {
-        parent.addView(text(items.joinToString("\n") { (mark, name) -> "$mark  $name" }, Type.CAPTION, Ui.soft).apply { setLineSpacing(0f, 1.3f) }, lp(top = Ui.S6))
+        parent.addView(text(items.joinToString("\n") { (mark, name) -> "$mark  $name" }, Type.CAPTION, Ui.soft).apply {
+            setLineSpacing(0f, 1.3f)
+            contentDescription = items.joinToString(". ") { (mark, name) -> Translations.label(if (mark == "\u2713") "done" else "skipped") + " " + name }
+        }, lp(top = Ui.S6))
     }
 
     /** A tinted button for one value (a timer length). */

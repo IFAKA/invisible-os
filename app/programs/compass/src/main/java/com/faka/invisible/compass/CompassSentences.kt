@@ -10,13 +10,13 @@ private fun f(text: String) = Phrase.fixed(text)
 
 object CompassVoice {
     /** The menu label. */
-    val TITLE = f("Compass")
-    val INTRO = f("Compass. Click: heading. Two clicks: find north.")
-    val LEAVE = f("Hold three seconds to leave.")
-    val FINDING = f("Finding north.")
-    val STOPPED = f("Stopped.")
-    val WAIT = f("One moment.")
-    val NO_SENSOR = f("This phone has no compass.")
-    val UNSURE = f("Not sure. Move the phone in a figure eight.")
+    val TITLE get() = f("Compass")
+    val INTRO get() = f("Compass. Click: heading. Two clicks: find north.")
+    val LEAVE get() = f("Hold three seconds to leave.")
+    val FINDING get() = f("Finding north.")
+    val STOPPED get() = f("Stopped.")
+    val WAIT get() = f("One moment.")
+    val NO_SENSOR get() = f("This phone has no compass.")
+    val UNSURE get() = f("Not sure. Move the phone in a figure eight.")
     fun heading(name: String, degrees: Int) = f("$name, $degrees degrees.")
 }

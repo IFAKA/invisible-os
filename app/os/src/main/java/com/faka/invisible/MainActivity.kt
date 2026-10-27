@@ -21,6 +21,9 @@ import android.widget.Toast
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
+import com.faka.invisible.voicekit.MenuLanguage
+import com.faka.invisible.voicekit.Translations
+import com.faka.invisible.voicekit.Voice
 
 
 /** Setup checklist, then the settings of the launcher (the menu you hear). Plain views, rebuilt on every change. */
@@ -32,6 +35,10 @@ class MainActivity : Activity() {
 
 
     private val k by lazy { Kit(this) }
+    /** A screen label in the menu language. */
+    private fun tr(text: String) = Translations.label(text)
+    private var announceStep = true      // say the setup step when the screen opens and when we come back from Settings
+    private var lostNote = false         // Button access was turned off since last time: say it once
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -45,6 +52,7 @@ class MainActivity : Activity() {
         previewReady = intent.getBooleanExtra("ready", false)
         if (intent.getBooleanExtra("disclosure", false)) disclosure = true   // for screenshots
         intent.getStringExtra("open")?.let { openGroups = it.split(',').toSet() }
+        lostNote = ButtonAccess.check(this)
         render()
         warmTree()   // the Menu page opens at once
     }
@@ -52,6 +60,8 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java))
+        announceStep = true
+        if (!lostNote) lostNote = ButtonAccess.check(this)
         render()
     }
 
@@ -64,7 +74,7 @@ class MainActivity : Activity() {
     private fun slider(label: String, valueText: String, max: Int, now: Int, apply: (Int) -> LauncherSettings) = k.slider(label, valueText, max, now) { change(apply(it)) }
 
     // ---- screens: Home shows one thing to do and a few doors; each door opens one small page ----
-    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), VOICE("Voice and speed"), AI("AI on the phone"), HELP("Help") }
+    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), AI("AI on the phone"), HELP("Help") }
     private var page = Page.HOME
 
     private fun open(p: Page) { page = p; render(); (body.parent as? ScrollView)?.scrollTo(0, 0); k.enter(body) }
@@ -74,16 +84,17 @@ class MainActivity : Activity() {
 
     private fun render() {
         body.removeAllViews()
-        if (page != Page.HOME) body.addView(k.header(page.title, { open(Page.HOME) }))
+        if (page != Page.HOME) body.addView(k.header(tr(page.title), { open(Page.HOME) }))
         when (page) {
             Page.HOME -> home()
             Page.TASKS -> tasksPage()
             Page.MENU -> menuPage()
             Page.VOICE -> voicePage()
+            Page.EMERGENCY -> emergencyPage()
             Page.AI -> aiPage()
             Page.HELP -> helpPage()
         }
-        body.addView(k.text("Version ${BuildConfig.VERSION_NAME}" + if (page == Page.HELP) " (${BuildConfig.BUILD_STAMP})" else "", Type.CAPTION, Ui.soft).apply { gravity = Gravity.CENTER },
+        body.addView(k.text(tr("Version {0}").replace("{0}", BuildConfig.VERSION_NAME) + if (page == Page.HELP) " (${BuildConfig.BUILD_STAMP})" else "", Type.CAPTION, Ui.soft).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S4) })
     }
 
@@ -105,6 +116,7 @@ class MainActivity : Activity() {
             "calendar" -> ask(Manifest.permission.READ_CALENDAR)
             "contacts" -> ask(Manifest.permission.READ_CONTACTS)
             "calls" -> requestPermissions(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.ANSWER_PHONE_CALLS), 1)
+            "calllog" -> ask(Manifest.permission.READ_CALL_LOG)
             "sms" -> ask(Manifest.permission.SEND_SMS)
             "location" -> ask(Manifest.permission.ACCESS_COARSE_LOCATION)
             "usage" -> startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
@@ -138,49 +150,47 @@ class MainActivity : Activity() {
         val tested = a11y && sp.getBoolean("button_tested", false)
         val steps = Setup.steps(SetupState(a11y, tested, notif, assist, granted(Manifest.permission.POST_NOTIFICATIONS), granted(Manifest.permission.READ_CALENDAR),
             granted(Manifest.permission.ACCESS_COARSE_LOCATION), usageOn(), android.os.Build.VERSION.SDK_INT, sp.getStringSet("setup_skipped", emptySet()) ?: emptySet(),
-            contacts = granted(Manifest.permission.READ_CONTACTS), calls = granted(Manifest.permission.CALL_PHONE) && granted(Manifest.permission.ANSWER_PHONE_CALLS), sms = granted(Manifest.permission.SEND_SMS)))
+            contacts = granted(Manifest.permission.READ_CONTACTS), calls = granted(Manifest.permission.CALL_PHONE) && granted(Manifest.permission.ANSWER_PHONE_CALLS), sms = granted(Manifest.permission.SEND_SMS), callLog = granted(Manifest.permission.READ_CALL_LOG)))
         val next = if (previewReady) -1 else Setup.current(steps)
         val stepKey = if (next >= 0) steps[next].id else if (!EventLog.running) "stopped" else "ready"
-        if (stepKey != lastStep) { lastStep = stepKey; body.post { k.enter(body) } }
+        val changed = stepKey != lastStep
+        if (changed) { lastStep = stepKey; body.post { k.enter(body) } }
         if (next >= 0) {
             val t = steps[next]
-            val perm = t.id in setOf("post", "calendar", "location", "contacts", "calls", "sms")
-            val line = if (t.id == "test") (if (a11y) "Press your earbud button once. This screen will say when it hears you." else t.reason) else t.reason + " You turn it on once."
-            k.onboarding(body, (next + 1f) / steps.size, Setup.label(next, steps.size) + if (t.optional) " \u00B7 Optional" else "", t.title, line,
-                if (t.id == "test") null else if (perm) "Allow" else "Turn on", { doStep(t.id) },
-                if (t.optional) "Skip" else null, { sp.edit().putStringSet("setup_skipped", (sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + t.id).apply(); render() })
+            val perm = t.id in Setup.PERMISSION_STEPS
+            val action = if (t.id == "test") null else if (perm) "Allow" else "Turn on"
+            val line = if (t.id == "test") tr(if (a11y) "Press your earbud button once. This screen will say when it hears you." else t.reason) else tr(t.reason) + tr(" You turn it on once.")
+            if ((changed || announceStep) && !previewReady) {   // the app's own voice, for a person who cannot see the screen
+                if (lostNote) { Actions.announce(Voice.BUTTON_ACCESS_OFF, false); ButtonAccess.told(this); lostNote = false }
+                Actions.announce(Voice.setupStep(next + 1, steps.size, t.title, action), true)
+            }
+            announceStep = false
+            k.onboarding(body, (next + 1f) / steps.size, tr(Setup.label(next, steps.size)) + if (t.optional) " \u00B7 " + tr("Optional") else "", tr(t.title), line,
+                action?.let { tr(it) }, { doStep(t.id) },
+                if (t.optional) tr("Skip") else null, { sp.edit().putStringSet("setup_skipped", (sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + t.id).apply(); render() },
+                focusFirst = changed)
             val before = steps.take(next).filter { it.passed }
-            if (before.isNotEmpty()) k.stepList(body, before.map { (if (it.skipped) "\u2013" else "\u2713") to it.title })
+            if (before.isNotEmpty()) k.stepList(body, before.map { (if (it.skipped) "\u2013" else "\u2713") to tr(it.title) })
             return
         }
+        announceStep = false
         if (!EventLog.running) {
-            k.status(body, "Stopped", "The app is not listening to the button.", Ui.bad) {
-                addView(k.primary("Start") { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) })
+            k.status(body, tr("Stopped"), tr("The app is not listening to the button."), Ui.bad) {
+                addView(k.primary(tr("Start")) { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) })
             }
         } else {
-            k.status(body, "Ready", "Turn the screen off. Hold your earbud button to hear the menu.", Ui.good)
+            k.status(body, tr("Ready"), tr("Turn the screen off. Hold your earbud button to hear the menu."), Ui.good)
         }
         val n = Actions.tasks().size
         k.group(body) {
-            k.navRow(this, "Tasks", if (n == 0) "None yet" else "$n to do") { open(Page.TASKS) }
-            k.navRow(this, "Your menu", "Pin, move or hide what you hear") { open(Page.MENU) }
-            k.navRow(this, "Voice and speed", "Voice ${"%.1f".format(s.speechRate)}x, pause ${"%.1f".format(s.itemGapMs / 1000f)} s") { open(Page.VOICE) }
-            k.navRow(this, "AI on the phone", if (!s.ai) "Off" else if (ModelDownload.ready(this@MainActivity)) "On" else "On, model not downloaded") { open(Page.AI) }
-            k.navRow(this, "Help", "Button gestures and practice") { open(Page.HELP) }
+            k.navRow(this, tr("Tasks"), if (n == 0) tr("None yet") else tr("{0} to do").replace("{0}", "$n")) { open(Page.TASKS) }
+            k.navRow(this, tr("Your menu"), tr("Pin, move or hide what you hear")) { open(Page.MENU) }
+            k.navRow(this, tr("Voice and speed"), tr("Language") + " " + MenuLanguage.names[MenuLanguage.code] + ", " + tr("Voice").lowercase() + " ${"%.1f".format(s.speechRate)}x") { open(Page.VOICE) }
+            k.navRow(this, tr("Emergency contact"), Actions.emergencyContact().ifEmpty { tr("Not set") }) { open(Page.EMERGENCY) }
+            k.navRow(this, tr("AI on the phone"), if (!s.ai) "Off" else if (ModelDownload.ready(this@MainActivity)) "On" else "On, model not downloaded") { open(Page.AI) }
+            k.navRow(this, tr("Help"), tr("Button gestures and practice")) { open(Page.HELP) }
         }
-        card("Emergency contact", "Gets a text when you pick Emergency in Phone. Leave empty for no text.") {
-            val box = k.input("Phone number").apply {
-                minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_CLASS_PHONE; setText(Actions.emergencyContact())
-            }
-            val note = k.text("", Type.CAPTION, Ui.good).apply { setPadding(0, k.dp(Ui.S1), 0, 0); visibility = View.GONE }
-            addView(box, LinearLayout.LayoutParams(-1, -2))
-            addView(k.btn("Save") {
-                Actions.setEmergencyContact(box.text.toString())
-                note.visibility = View.VISIBLE; note.text = if (Actions.emergencyContact().isEmpty()) "Saved. No emergency contact." else "Saved."
-            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
-            addView(note)
-        }
-        if (EventLog.running) body.addView(k.quiet("Stop listening", Ui.bad) { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
+        if (EventLog.running) body.addView(k.quiet(tr("Stop listening"), Ui.bad) { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
         card("Claude bridge", "Answer Claude Code on your laptop with the button. Run bridge/server.py on the laptop, then type the address it prints and the token. Leave empty to turn it off.") {
             val url = k.input("Address, e.g. http://100.64.0.5:8765").apply { minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI; setText(Actions.claudeUrl()) }
             val tok = k.input("Token").apply { minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD; setText(Actions.claudeToken()) }
@@ -191,6 +201,22 @@ class MainActivity : Activity() {
                 Actions.setClaudeBridge(url.text.toString(), tok.text.toString())
                 note.text = if (Actions.claudeUrl().isEmpty()) "Saved: Claude bridge is off." else "Saved. Pick Claude in the menu, or wait: the phone tells you when Claude asks."
             }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+            addView(note)
+        }
+    }
+
+    /** The emergency contact: its own small page. */
+    private fun emergencyPage() {
+        card(tr("Phone number"), tr("Gets a text when you pick Emergency in Phone. Leave empty for no text.")) {
+            val box = k.input(tr("Phone number")).apply {
+                minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_CLASS_PHONE; setText(Actions.emergencyContact())
+            }
+            val note = k.text("", Type.CAPTION, Ui.good).apply { setPadding(0, k.dp(Ui.S1), 0, 0); visibility = View.GONE; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
+            addView(box, LinearLayout.LayoutParams(-1, -2))
+            addView(k.btn(tr("Save")) {
+                Actions.setEmergencyContact(box.text.toString())
+                note.visibility = View.VISIBLE; note.text = if (Actions.emergencyContact().isEmpty()) tr("Saved. No emergency contact.") else tr("Saved.")
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
             addView(note)
         }
     }
@@ -367,14 +393,18 @@ class MainActivity : Activity() {
     }
 
     private fun voicePage() {
-        card("Speed", "Find what feels right. You can change it any time.") {
-            addView(slider("Pause between options", "%.1f s".format(s.itemGapMs / 1000f), 39, ((s.itemGapMs - 100) / 100).toInt()) {
+        k.group(body, tr("Menu language"), tr("What the phone says and shows. Messages keep their own language.")) {
+            k.choiceRow(this, tr("Automatic"), s.menuLanguage == MenuLanguage.AUTO) { change(s.copy(menuLanguage = MenuLanguage.AUTO)) }
+            MenuLanguage.supported.forEach { c -> k.choiceRow(this, MenuLanguage.names[c] ?: c, s.menuLanguage == c) { change(s.copy(menuLanguage = c)) } }
+        }
+        card(tr("Speed"), tr("Find what feels right. You can change it any time.")) {
+            addView(slider(tr("Pause between options"), "%.1f s".format(s.itemGapMs / 1000f), 39, ((s.itemGapMs - 100) / 100).toInt()) {
                 s.copy(itemGapMs = 100L + it * 100) })
-            addView(slider("Voice speed", "%.1f x".format(s.speechRate), 12, ((s.speechRate - 0.6f) * 10).toInt()) {
+            addView(slider(tr("Voice speed"), "%.1f x".format(s.speechRate), 12, ((s.speechRate - 0.6f) * 10).toInt()) {
                 s.copy(speechRate = 0.6f + it / 10f) })
-            addView(slider("Time to cancel a send", "%.1f s".format(s.undoMs / 1000f), 13, ((s.undoMs - 1500) / 500).toInt()) {
+            addView(slider(tr("Time to cancel a send"), "%.1f s".format(s.undoMs / 1000f), 13, ((s.undoMs - 1500) / 500).toInt()) {
                 s.copy(undoMs = 1500L + it * 500) })
-            addView(slider("Rounds before it goes quiet", "${s.silentLoops}", 4, s.silentLoops - 1) { s.copy(silentLoops = it + 1) })
+            addView(slider(tr("Rounds before it goes quiet"), "${s.silentLoops}", 4, s.silentLoops - 1) { s.copy(silentLoops = it + 1) })
         }
 
         card("Timer", "Tap a time to change it, like the clock app. These are the choices you hear. \"Last used\" is always added.") {

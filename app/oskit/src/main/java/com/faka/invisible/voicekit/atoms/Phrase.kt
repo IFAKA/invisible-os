@@ -24,7 +24,9 @@ class Phrase private constructor(val text: String, val lang: String?, val isFixe
     operator fun plus(o: Phrase) = Phrase(text + o.text, lang ?: o.lang, isFixed && o.isFixed)
 
     companion object {
-        @KitOnly fun fixed(text: String): Phrase = Phrase(text, null, true)
+        @KitOnly fun fixed(text: String): Phrase { val (t, l) = Translations.resolve(text); return Phrase(t, l, true) }
+        /** A sentence with a name or other content inside ("Calling Ana"): translated like a fixed one, but counted as content. */
+        @KitOnly fun mixed(text: String): Phrase { val (t, l) = Translations.resolve(text); return Phrase(t, l, false) }
         /** User or world text, spoken as it is. Never pass a literal sentence here (checkVoiceKit rejects it): add it to Sentences.kt. */
         fun content(text: String, lang: String? = null): Phrase = Phrase(text, lang, false)
         /** Phrases joined with a space. */
