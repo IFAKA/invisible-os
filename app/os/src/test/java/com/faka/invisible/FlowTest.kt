@@ -150,6 +150,28 @@ class FlowTest {
         assertEquals(ControllerMode.Screen.HUB, f.screen())
     }
 
+    // ---- tree_program_back_returns_to_tree ----
+    @Test fun tree_program_back_returns_to_tree() {
+        val f = flow()
+        f.r.installed = listOf("com.android.deskclock" to "Clock", "com.google.android.calendar" to "Calendar", "com.miui.weather2" to "Weather",
+            "com.google.android.keep" to "Keep", "com.google.android.apps.tasks" to "Google Tasks", "com.miui.notes" to "Notes")
+            .map { InstalledApp(it.first, it.second) }
+        var i = f.mark(); f.press("900")
+        f.heardStart("Plan", i, 20_000); f.advance(600); f.press("120"); f.advance(400)
+        assertEquals(ControllerMode.Screen.TREE, f.screen())
+        i = f.mark(); f.heardStart("Time", i, 20_000); f.advance(600); f.press("120"); f.advance(400)
+        assertEquals(ControllerMode.Screen.TREE, f.screen())
+        i = f.mark(); f.heardStart("Timer", i, 20_000); f.advance(600); f.press("120"); f.advance(400)
+        assertEquals(ControllerMode.Screen.TIMER_PICK, f.screen())
+        val back = "100,150,100,150,100"
+        f.press(back); f.advance(400)   // triple click = back to the list it was picked in
+        assertEquals(ControllerMode.Screen.TREE, f.screen())
+        f.press(back); f.advance(400)
+        assertEquals(ControllerMode.Screen.TREE, f.screen())   // Plan list
+        f.press(back); f.advance(400)
+        assertEquals(ControllerMode.Screen.HUB, f.screen())
+    }
+
     // ---- voice_speed_applied ----
     @Test fun voice_speed_applied() {
         // the phone sets the slider to 1.4 and wakes; the engine gets slider + a use bonus, 1.4 to 1.6
