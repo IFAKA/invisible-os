@@ -24,7 +24,7 @@ PROJECTS = [{"name": "alpha-proj", "path": "/tmp/alpha", "uses": 10}, {"name": "
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def _ok(self):
-        if self.headers.get("Authorization") != "Bearer " + TOKEN:
+        if self.headers.get("Authorization") != "Bearer " + getattr(self.server, "token", TOKEN):
             self.send_response(401); self.end_headers(); return False
         return True
     def _json(self, obj, code=200):
@@ -33,14 +33,15 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self._ok(): return
         u = urlparse(self.path); q = parse_qs(u.query)
-        if u.path == "/rooms": self._json({"seq": 1, "rooms": ROOMS})
+        if u.path == "/rooms": self._json({"seq": 1, "rooms": getattr(self.server, "rooms", ROOMS)})
         elif u.path == "/room/last": self._json({"text": "Alpha last message. The design doc is ready."})
         elif u.path == "/room/screen": self._json({"text": "$ claude\n> working on the design doc\n  done"})
         elif u.path == "/projects": self._json({"projects": PROJECTS})
         elif u.path == "/areas": self._json({"areas": [{"name": "hardware", "path": "/tmp/fake/hardware", "uses": 9}]})
         elif u.path == "/events":
-            if FIRE_DONE:
-                name = FIRE_DONE.pop(0)
+            fire = getattr(self.server, "fire", FIRE_DONE)
+            if fire:
+                name = fire.pop(0)
                 self._json({"seq": 2, "items": [{"type": "room", "kind": "room", "id": "%7", "name": name, "state": "done",
                                                  "project": "p", "summary": "", "options": [], "seq": 2}]})
             else:
@@ -55,11 +56,15 @@ class H(BaseHTTPRequestHandler):
         elif self.path == "/project/open": self._json({"ok": True, "id": "%9"})
         else: self._json({"ok": True})
 
-def start(host="0.0.0.0", port=8799, token="fake-token"):
-    """Start in a background thread; returns the server (call .shutdown() to stop)."""
+def start(host="0.0.0.0", port=8799, token="fake-token", rooms=None, fire=None):
+    """Start in a background thread; returns the server (call .shutdown() to stop).
+    Each server has its own token, and optionally its own [rooms] and its own [fire] list (names of windows that finished); with several servers in one test give each its own."""
     global TOKEN
     TOKEN = token; POSTS.clear()
     srv = ThreadingHTTPServer((host, port), H); srv.daemon_threads = True
+    srv.token = token
+    if rooms is not None: srv.rooms = rooms
+    if fire is not None: srv.fire = fire
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
 

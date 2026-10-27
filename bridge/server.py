@@ -200,7 +200,7 @@ def main():
     os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(URL_FILE, "w") as f:
         f.write("http://%s:%d\n" % (host, a.port))
-    print("Paste this address and the token into the phone app (home screen, Claude bridge).")
+    print("Paste this address and the token into the phone app (home screen, Computers, Add a computer).")
     print("Token (also in %s):\n  %s" % (TOKEN_FILE, token))
     sys.stdout.flush()
     try:

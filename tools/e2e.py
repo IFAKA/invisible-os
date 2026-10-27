@@ -280,8 +280,36 @@ def rooms_new_project():
         try: reset()
         except Fail: pass
 
+def computers_two():
+    """Two computers (two fake bridges): an idle phone says "<computer>, <window>, done" for the second one, and the Laptop tool lists both computers, then opens the second one's rooms."""
+    sys.path.insert(0, os.path.join(HERE, "..", "bridge")); import fake_rooms
+    home = os.path.expanduser("~/.config/invisible-bridge/")
+    real_url = open(home + "url").read().strip() if os.path.exists(home + "url") else ""
+    real_tok = open(home + "token").read().strip() if os.path.exists(home + "token") else ""
+    host = re.sub(r"^https?://", "", real_url).split(":")[0].split("/")[0] or "0.0.0.0"
+    work_rooms = [{"id": "%5", "name": "Zeta", "project": "zeta-proj", "path": "/tmp/zeta", "kind": "claude", "state": "working",
+                   "need": "", "options": [], "actions": ["stop", "readall", "screen", "write"]}]
+    work_fire = []
+    a = fake_rooms.start(host, 8796, "tok-home", fire=[])
+    b = fake_rooms.start(host, 8797, "tok-work", rooms=work_rooms, fire=work_fire)
+    try:
+        bcast("--es", "computers", f"'Home|http://{host}:8796|tok-home;Work|http://{host}:8797|tok-work'")   # quoted: the phone shell would cut at ; and |
+        reset(); i = mark()
+        work_fire.append("Omega")
+        need("Work, Omega, done", i, 25)
+        j = mark(); bcast("--es", "start", "claude")
+        heard_start("Home, needs you", j, 25)
+        k = mark(); heard_start("Work", k, 15); press("120")
+        need("Zeta, working", k, 15)
+        return "idle phone said: Work, Omega, done; the tool listed Home, needs you / Work and opened Work's rooms"
+    finally:
+        a.shutdown(); b.shutdown()
+        bcast("--es", "bridge", real_url, "--es", "token", real_tok)
+        try: reset()
+        except Fail: pass
+
 SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, screen_mirrors_menu, practice_end_to_end,
-             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, voice_speed_applied, rooms_go, rooms_done_spoken, rooms_new_project]
+             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, voice_speed_applied, rooms_go, rooms_done_spoken, rooms_new_project, computers_two]
 
 def main():
     args = sys.argv[1:]

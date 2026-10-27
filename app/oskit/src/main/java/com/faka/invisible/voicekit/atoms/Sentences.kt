@@ -86,6 +86,10 @@ object Voice {
     /** A laptop window finished while the phone was idle: its name only; the full message is read when the room is opened. */
     fun roomDone(name: String) = f("$name, done")
     fun roomsDone(name: String, more: Int) = f("$name, done. $more more windows done")
+    /** The same lines when the phone knows 2 or more computers: the computer first. */
+    fun roomDoneOn(computer: String, name: String) = f("$computer, $name, done")
+    fun roomsDoneOn(computer: String, name: String, more: Int) = f("$computer, $name, done. $more more windows done")
+    fun computerNeeds(computer: String) = f("$computer, needs you")
     val NOTIF_DONE get() = f("Done")
     val NOTIF_FAILED get() = f("It did not work")
     val APP_MUTED get() = f("App muted")

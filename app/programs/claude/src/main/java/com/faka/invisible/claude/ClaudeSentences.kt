@@ -11,7 +11,7 @@ private fun f(text: String) = Phrase.fixed(text)
 object ClaudeVoice {
     /** The menu label. */
     val TITLE = f("Laptop")
-    val NOT_SET = f("Claude is not set up. In the app, type the bridge address and token.")
+    val NOT_SET = f("Claude is not set up. In the app, add a computer.")
     val LISTENING = f("Listening for Claude. Hold three seconds to leave.")
     val NOTHING = f("Nothing waiting.")
     val READ_AGAIN = f("Read again")
@@ -38,6 +38,7 @@ object ClaudeVoice {
     fun started(name: String) = f("Started $name.")
     val NOTHING_TO_READ = f("Nothing to read.")
     fun room(name: String, state: String) = f("$name, ${RoomState.word(state)}")
+    fun computerNeeds(name: String) = f("$name, needs you")
     fun sentTo(name: String) = f("Sent to $name")
     fun opened(name: String) = f("Opened $name")
     fun sure(label: String) = f("$label?")

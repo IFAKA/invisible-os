@@ -235,6 +235,20 @@ class Kit(private val c: Context) {
         parent.addView(r, lp())
     }
 
+    /** A navRow that starts with a coloured dot (green = reachable, grey = not, or not known yet). */
+    fun dotRow(parent: LinearLayout, dot: Int, title: String, summary: String, onClick: () -> Unit) {
+        val d = View(c).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(dot) } }
+        val r = row(d.apply { layoutParams = LinearLayout.LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(12) } }, grow(LinearLayout(c).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(text(title))
+            addView(text(summary, Type.CAPTION, Ui.soft).apply { setPadding(0, dp(2), 0, 0) })
+        }), text("\u203A", Type.TITLE, Ui.edge).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })
+        r.contentDescription = "$title. $summary"
+        r.minimumHeight = dp(64); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
+        r.isClickable = true; r.setOnClickListener { onClick() }
+        parent.addView(r, lp())
+    }
+
     /** A row of a group where exactly one choice is on: the title and a check mark. TalkBack hears "selected". */
     fun choiceRow(parent: LinearLayout, title: String, selected: Boolean, onClick: () -> Unit) {
         val r = row(grow(text(title)), text(if (selected) "\u2713" else "", Type.TITLE, Ui.accent).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })

@@ -12,7 +12,10 @@ The laptop is a shop. Claude Code is a worker who sometimes needs a yes or no. `
 ## Set up (3 steps)
 1. Run `./install.sh`. It prints the text to add to `~/.claude/settings.json`. It changes nothing itself.
 2. Run `python3 server.py`. It prints the address and a secret token. The token is saved in `~/.config/invisible-bridge/token` (only you can read it).
-3. On the phone, open the app home screen, find "Claude bridge", type the address and the token. Then in the earbud menu choose Claude.
+3. On the phone, open the app home screen, open "Computers", "Add a computer": type a name (Home, Work), the address and the token. Then in the earbud menu choose Laptop.
+
+## More than one computer
+Each computer (or each Mac user) runs its own `server.py`, with its own token. Two bridges on the same Mac need two ports: the first uses 8765, start the second with `python3 server.py --port 8766` (or `INVISIBLE_BRIDGE_PORT=8766`). Add each one in the app under "Computers" with its own name. The phone listens to all of them. With two or more computers it says the name first ("Work, site, done"), and the Laptop tool first asks which computer.
 
 The phone and the laptop must reach each other (same Wi-Fi, or Tailscale). Anyone with the token can answer for you, so keep it private.
 

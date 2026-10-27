@@ -58,6 +58,7 @@ class MainActivity : Activity() {
         ScreenMirror.onChange = { if (page == Page.HOME) EventLog.refresh() }
         intent.getStringExtra("page")?.let { n -> Page.values().firstOrNull { it.name.equals(n, true) }?.let { page = it } }   // for screenshots: adb ... --es page menu --es open /Tools
         if (page == Page.LAPTOP) laptop.start()
+        if (page == Page.COMPUTERS) computersPage.start()
         previewReady = intent.getBooleanExtra("ready", false)
         if (intent.getBooleanExtra("disclosure", false)) disclosure = true   // for screenshots
         intent.getStringExtra("open")?.let { openGroups = it.split(',').toSet() }
@@ -84,15 +85,16 @@ class MainActivity : Activity() {
     private fun slider(label: String, valueText: String, max: Int, now: Int, apply: (Int) -> LauncherSettings) = k.slider(label, valueText, max, now) { change(apply(it)) }
 
     // ---- screens: Home shows one thing to do and a few doors; each door opens one small page ----
-    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), LAPTOP("Laptop"), AI("AI on the phone"), HELP("Help") }
+    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), COMPUTERS("Computers"), LAPTOP("Laptop"), AI("AI on the phone"), HELP("Help") }
     private var page = Page.HOME
 
     private val laptop by lazy { LaptopPage(this, k, body) { render() } }
+    private val computersPage by lazy { ComputersPage(this, k, body, { render() }) { name -> page = Page.LAPTOP; laptop.startAt(name); render() } }
 
-    private fun open(p: Page) { page = p; if (p == Page.LAPTOP) laptop.start(); render(); (body.parent as? ScrollView)?.scrollTo(0, 0); k.enter(body) }
+    private fun open(p: Page) { page = p; if (p == Page.LAPTOP) laptop.start(); if (p == Page.COMPUTERS) computersPage.start(); render(); (body.parent as? ScrollView)?.scrollTo(0, 0); k.enter(body) }
 
     @Deprecated("Back goes to Home first, then leaves")
-    override fun onBackPressed() { if (page != Page.HOME) open(Page.HOME) else super.onBackPressed() }
+    override fun onBackPressed() { if (page == Page.COMPUTERS && computersPage.inside) computersPage.back() else if (page != Page.HOME) open(Page.HOME) else super.onBackPressed() }
 
     private var lastDraw = 0L
     private var drawQueued = false
@@ -107,7 +109,8 @@ class MainActivity : Activity() {
         val keep = page == Page.HOME && ScreenMirror.active && !settingsOpen && root.getChildAt(0) === mirrorHost && mirrorHost != null
         if (!keep && root.getChildAt(0) !== scroll) { root.removeAllViews(); root.addView(scroll) }
         body.removeAllViews(); cardParent = null
-        if (page == Page.LAPTOP && laptop.inRoom) body.addView(k.header(laptop.title(), { laptop.leaveRoom() }, "Rooms"))
+        if (page == Page.LAPTOP && laptop.inRoom) body.addView(k.header(laptop.title(), { laptop.leaveRoom() }, laptop.backLabel()))
+        else if (page == Page.COMPUTERS && computersPage.inside) body.addView(k.header(tr(page.title), { computersPage.back() }, "Computers"))
         else if (page != Page.HOME) body.addView(k.header(tr(page.title), { open(Page.HOME) }))
         when (page) {
             Page.HOME -> home()
@@ -115,6 +118,7 @@ class MainActivity : Activity() {
             Page.MENU -> menuPage()
             Page.VOICE -> voicePage()
             Page.EMERGENCY -> emergencyPage()
+            Page.COMPUTERS -> computersPage.draw()
             Page.LAPTOP -> laptop.draw()
             Page.AI -> aiPage()
             Page.HELP -> helpPage()
@@ -231,23 +235,13 @@ class MainActivity : Activity() {
             k.navRow(this, tr("Your menu"), tr("Pin, move or hide what you hear")) { open(Page.MENU) }
             k.navRow(this, tr("Voice and speed"), tr("Language") + " " + MenuLanguage.names[MenuLanguage.code] + ", " + tr("Voice").lowercase() + " ${"%.1f".format(s.speechRate)}x") { open(Page.VOICE) }
             k.navRow(this, tr("Emergency contact"), Actions.emergencyContact().ifEmpty { tr("Not set") }) { open(Page.EMERGENCY) }
-            if (Actions.claudeUrl().isNotBlank()) k.navRow(this, tr("Laptop"), "Rooms of your laptop: read, answer") { open(Page.LAPTOP) }
+            val pcs = Actions.computers()
+            k.navRow(this, tr("Computers"), if (pcs.isEmpty()) tr("Add a computer") else pcs.joinToString(", ") { it.name }) { open(Page.COMPUTERS) }
+            if (pcs.isNotEmpty()) k.navRow(this, tr("Laptop"), tr("Rooms of your laptop: read, answer")) { open(Page.LAPTOP) }
             k.navRow(this, tr("AI on the phone"), if (!s.ai) "Off" else if (ModelDownload.ready(this@MainActivity)) "On" else "On, model not downloaded") { open(Page.AI) }
             k.navRow(this, tr("Help"), tr("Button gestures and practice")) { open(Page.HELP) }
         }
         if (EventLog.running) list.addView(k.quiet(tr("Stop listening"), Ui.bad) { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
-        card("Claude bridge", "Answer Claude Code on your laptop with the button. Run bridge/server.py on the laptop, then type the address it prints and the token. Leave empty to turn it off.") {
-            val url = k.input("Address, e.g. http://100.64.0.5:8765").apply { minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI; setText(Actions.claudeUrl()) }
-            val tok = k.input("Token").apply { minLines = 1; maxLines = 1; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD; setText(Actions.claudeToken()) }
-            val note = k.text("", Type.CAPTION, Ui.good).apply { setPadding(0, k.dp(Ui.S1), 0, 0) }
-            addView(url, LinearLayout.LayoutParams(-1, -2))
-            addView(tok, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
-            addView(k.btn("Save", true) {
-                Actions.setClaudeBridge(url.text.toString(), tok.text.toString())
-                note.text = if (Actions.claudeUrl().isEmpty()) "Saved: Claude bridge is off." else "Saved. Pick Claude in the menu, or wait: the phone tells you when Claude asks."
-            }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
-            addView(note)
-        }
     }
 
     /** The emergency contact: its own small page. */
