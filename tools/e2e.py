@@ -159,7 +159,7 @@ def click_on(*texts):
     Timed on the phone, not here: a SAY line can reach the laptop late over Wi-Fi, and a click sent from here would then land on the next item."""
     d = max(0.0, PRESS_END[0] - time.time())
     if d: time.sleep(d)
-    i = mark(); bcast("--es", "presson", "|".join(texts), "--es", "press", "120")
+    i = mark(); bcast("--es", "presson", "'" + "|".join(texts) + "'", "--es", "press", "120")   # quoted: the phone shell would cut at spaces and |
     if not wait(lambda t: t.startswith("presson "), i, "E2E", 10): raise Fail("presson hook did not answer")
 def clicked(text, i, timeout=15.0):
     """Wait until `text` was spoken and the phone clicked it."""
