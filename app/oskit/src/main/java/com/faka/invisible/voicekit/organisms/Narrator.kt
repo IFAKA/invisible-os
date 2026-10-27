@@ -16,7 +16,7 @@ class Narrator(private val speech: SpeechPort, private val tones: TonePort, priv
 
     private var sayAt = 0L
     fun say(p: Phrase, queue: Boolean = false, fast: Boolean = false, slow: Boolean = false) {
-        Trace.ev("say", "[${p.lang}]${if (queue) " queued" else ""}${if (fast) " fast" else ""} ${p.text}")
+        Trace.ev("say", "[${p.lang ?: "-"}]${if (queue) " queued" else ""}${if (fast) " fast" else ""} ${p.text}")
         sayAt = SystemClock.uptimeMillis()
         speech.speak(p, queue, fast, slow)
     }
