@@ -32,12 +32,13 @@ def bcast(*extra):
     adb("shell", "am", "broadcast", "-n", RECV, *extra)
 
 # ---- log reader: one logcat process for the whole run; events are (time, kind, text) ----
-events = []
+events = []; LOGCAT = []
 lock = threading.Lock()
 LINE = re.compile(r"^\s*([\d.]+)\s+\d+\s+\d+\s+D\s+(SAY|E2E|Invisible)\s*:\s*(.*)$")
 
 def reader():
     p = subprocess.Popen(["adb", "-s", SERIAL, "logcat", "-T", "1", "-v", "epoch", "-s", "SAY:D", "E2E:D", "Invisible:D"], stdout=subprocess.PIPE, text=True, bufsize=1)
+    LOGCAT.append(p)
     for line in p.stdout:
         m = LINE.match(line.rstrip("\n"))
         if not m: continue
@@ -99,6 +100,12 @@ def need(text, i, timeout=15.0):
     if r is None: raise Fail(f"never heard {text!r}; heard: " + " | ".join(since(i, "SAY")[:8]))
     return r
 
+def heard_start(text, i, timeout=15.0):
+    """Wait until `text` is spoken AND the voice has started it: a click before that does not pick it."""
+    need(text, i, timeout)
+    with lock: k = max(n for n, (_, kd, t) in enumerate(events[i:], i) if kd == "SAY" and text.lower() in t.lower())
+    if wait(lambda t: t == "speech started", k, "E2E", 6) is None: raise Fail(f"{text!r} was logged but the voice never started it")
+
 # ---- scenarios ----
 def wake_reads_home_menu():
     reset(); i = mark(); press("900")
@@ -110,21 +117,21 @@ def wake_reads_home_menu():
 
 def click_picks():
     reset(); show("PHONE"); i = mark()
-    need("Emergency", i)
+    heard_start("Emergency", i)
     press("120")   # a click right after hearing an item picks it
     need("Call the emergency number", i)
     wait_screen("EMERGENCY")
     return "Emergency picked"
 
 def triple_click_goes_back():
-    reset(); show("PHONE"); i = mark(); need("Emergency", i); press("120"); wait_screen("EMERGENCY")
-    j = mark(); need("No, go back", j)
+    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i); press("120"); wait_screen("EMERGENCY")
+    j = mark(); heard_start("No, go back", j)
     press("100,150,100,150,100")
     wait_screen("PHONE")
     return "Emergency -> Phone"
 
 def click_hold_closes():
-    reset(); show("PHONE"); i = mark(); need("Emergency", i)
+    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i)
     press("120,150,900")
     wait_closed()
     return "menu closed"
@@ -142,6 +149,7 @@ def practice_end_to_end():
         s = state()
         if s.get("active") == "true" and s.get("screen") == "HUB" and s.get("running") == "false": break
     else: raise Fail(f"home menu did not open after the practice: {s}")
+    wait(lambda t: True, j, "SAY", 10)
     h = list(dict.fromkeys(since(j, "SAY")))
     if not h: raise Fail("home menu opened but nothing was said")
     return "practice done, home says " + h[0]
@@ -154,8 +162,8 @@ def phone_list():
     return "Emergency, Call a contact"
 
 def emergency_confirm_goes_back():
-    reset(); show("PHONE"); i = mark(); need("Emergency", i); press("120"); wait_screen("EMERGENCY")
-    j = mark(); need("No, go back", j)
+    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i); press("120"); wait_screen("EMERGENCY")
+    j = mark(); heard_start("No, go back", j)
     if any("yes, call" in t.lower() for t in since(j, "SAY")): raise Fail("Yes was read before our click; refusing to click")   # safety: never risk the call
     press("120")   # the click lands on "No, go back"
     wait_screen("PHONE")
@@ -205,6 +213,7 @@ def main():
     chosen = [f for f in SCENARIOS if not only or any(o in f.__name__ for o in only)]
     if not SERIAL: sys.exit("no phone connected (adb mdns services; adb connect IP:PORT)")
     threading.Thread(target=reader, daemon=True).start()
+    import atexit; atexit.register(lambda: LOGCAT and LOGCAT[0].terminate())
     time.sleep(0.5)
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
     lines = []; fails = 0; t_all = time.time()

@@ -218,7 +218,7 @@ object Actions {
         taskMemory = PhraseMemory(if (mf.exists()) mf.readLines() else emptyList()) { lines -> try { mf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "task_memory.txt write failed", e) } }
         taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList(), onAdd = { taskMemory.record(it.text, it.lang) }) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
         VoiceKit.init(app, handler, { speechRate() }, object : SpeechListener {
-            override fun started() { mode.onSpeechStarted() }
+            override fun started() { mode.onSpeechStarted(); Log.d("E2E", "speech started") }
             override fun ended() { mode.onSpeechDone(); running?.takeIf { it.active }?.speechDone() }
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
