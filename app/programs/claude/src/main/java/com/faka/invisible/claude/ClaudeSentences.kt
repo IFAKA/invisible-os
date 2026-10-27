@@ -72,7 +72,7 @@ object RoomText {
         "go" to "Go ahead", "yes" to "Yes", "commit" to "Commit", "push" to "Push", "compact" to "Compact",
         "explain" to "Explain simpler", "recommend" to "What do you recommend", "research" to "Research first",
         "progress" to "Where are we", "hold" to "Hold", "stop" to "Stop", "clear" to "Clear",
-        "hear" to "Hear it again", "readall" to "Read all", "write" to "Write", "again" to "Run again", "screen" to "Screen")
+        "hear" to "Hear it again", "show" to "Show on phone", "preview" to "Start preview", "readall" to "Read all", "write" to "Write", "again" to "Run again", "screen" to "Screen")
     /** [go] = what a plain "go" approves (from the story): "Go: commit the fix". Quoted options stay as they are. */
     fun label(a: RoomAction, go: String = ""): String {
         val g = go.squash()

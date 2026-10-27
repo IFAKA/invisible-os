@@ -501,6 +501,7 @@ object Actions {
         override fun active() = activeComputer()
         override fun switchTo(name: String) = setActive(name)
         override fun testDone() { handler.post { say(Voice.roomDone("Test"), false) } }
+        override fun showOnPhone(computer: Computer, room: com.faka.invisible.claude.Room) { ChangesNotice.post(app, computer, room) }
         override fun write(sendTo: (String) -> Boolean) {
             handler.post { launchWrite(sendTo, null) { Programs.byId("hub:claude")?.let { startProgramEntry(it) } } }
         }

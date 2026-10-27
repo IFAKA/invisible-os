@@ -7,8 +7,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /** The phone's side of the laptop bridge (bridge/server.py). Blocking: call it from a background thread, never the main thread. */
-class BridgeClient(base: String, private val token: String) {
-    private val base = base.trim().trimEnd('/').let { if (it.startsWith("http://") || it.startsWith("https://")) it else "http://$it" }
+class BridgeClient(base: String, internal val token: String) {
+    internal val base = base.trim().trimEnd('/').let { if (it.startsWith("http://") || it.startsWith("https://")) it else "http://$it" }
 
     class Reply(val seq: Int, val events: List<ClaudeEvent>, val rooms: List<RoomEvent> = emptyList())
 
@@ -37,8 +37,8 @@ class BridgeClient(base: String, private val token: String) {
         call("POST", "/answer", JSONObject().put("id", id).put("choice", choice).toString(), 10_000).first
 
     private fun strings(a: JSONArray?) = if (a == null) emptyList() else (0 until a.length()).map { a.optString(it) }
-    private fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
-    private fun json(path: String, body: String? = null, method: String = "GET", timeoutMs: Int = 8000): JSONObject {
+    internal fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+    internal fun json(path: String, body: String? = null, method: String = "GET", timeoutMs: Int = 8000): JSONObject {
         val (code, text) = call(method, path, body, timeoutMs)
         if (code != 200) throw IOException("HTTP $code")
         return try { JSONObject(text) } catch (e: org.json.JSONException) { throw IOException("bad reply") }
@@ -82,7 +82,7 @@ class BridgeClient(base: String, private val token: String) {
     /** POST /project/open: a new tmux window with claude; mode is "continue" or "new". */
     @Throws(IOException::class) fun openProject(path: String, mode: String): Boolean = json("/project/open", JSONObject().put("path", path).put("mode", mode).toString(), "POST", 10_000).optBoolean("ok")
 
-    private fun call(method: String, path: String, body: String?, timeoutMs: Int): Pair<Int, String> {
+    internal fun call(method: String, path: String, body: String?, timeoutMs: Int): Pair<Int, String> {
         val c = URL(base + path).openConnection() as HttpURLConnection
         try {
             c.requestMethod = method; c.connectTimeout = 4000; c.readTimeout = timeoutMs
@@ -91,6 +91,18 @@ class BridgeClient(base: String, private val token: String) {
             val code = c.responseCode
             val stream = if (code in 200..299) c.inputStream else c.errorStream
             return code to (stream?.use { it.readBytes().toString(Charsets.UTF_8) } ?: "")
+        } finally { c.disconnect() }
+    }
+
+    /** GET [path] as raw bytes (a picture); null body = the laptop said no. Blocking. */
+    @Throws(IOException::class)
+    internal fun bytes(path: String, timeoutMs: Int = 15_000): ByteArray {
+        val c = URL(base + path).openConnection() as HttpURLConnection
+        try {
+            c.connectTimeout = 4000; c.readTimeout = timeoutMs
+            c.setRequestProperty("Authorization", "Bearer $token")
+            if (c.responseCode != 200) throw IOException("HTTP ${c.responseCode}")
+            return c.inputStream.use { it.readBytes() }
         } finally { c.disconnect() }
     }
 }

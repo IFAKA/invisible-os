@@ -97,3 +97,8 @@ Option, off by default: quiet hours where the earcon does not play (rooms still 
 ## How we know it works
 - Replay: share of your replies sendable by one click. Today's honest number: 14% exact (fixed list + quoted options), 20% with the intent menu, 25% with Stop.
 - Real use only (the replay cannot tell): how often you use it away from the laptop, and whether the wait before you reply drops from 92 s.
+
+## Show on phone (built 2026-10-28)
+Problem: a web project is easier to judge by looking. From the earbud you can say "Show on phone" in a window's options; the phone buzzes once, and when you tap the notice you get three tabs: Live (the dev site, through the bridge), Changes (the git diff), Pictures (images Claude handled).
+A picture: the laptop is a shop with a back door. The bridge is the door keeper: it takes your phone's request, walks to the dev server in the window's room, and brings the page back. Contract and limits: `ROOMS-API.md` "Show on phone"; code `bridge/preview.py`.
+Choices: the dev port is found from the listening TCP ports of the pane's process tree (no guessing, no config); Start preview only starts a package.json "dev"/"start" script, in a detached tmux window, after a "No, go back / Yes" ask; the token goes in the first address and then in a cookie, and never reaches the dev site; dw.json (Commerce Cloud) is read only for its hostname, the secrets in it are never read or sent. Not checked on a real phone: the notification tap, the WebView cookie, pull to reload.

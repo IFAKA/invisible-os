@@ -258,6 +258,61 @@ class Kit(private val c: Context) {
         parent.addView(r, lp())
     }
 
+    /** Tabs: a row of equal soft buttons, the [selected] one filled. [onSelect] gets the index. */
+    fun tabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit): LinearLayout = LinearLayout(c).apply {
+        orientation = LinearLayout.HORIZONTAL
+        labels.forEachIndexed { i, l ->
+            val b = Button(c).apply {
+                text = l; isAllCaps = false; textSize = Type.SMALL.size; minHeight = dp(44); minimumHeight = dp(44)
+                stateListAnimator = null; elevation = 0f; isSelected = i == selected
+                setTextColor(if (i == selected) Ui.onAccent else Ui.accent); background = fill(if (i == selected) Ui.accentFill else Ui.tint, Ui.RADIUS_BUTTON)
+                contentDescription = if (i == selected) l + ", " + Translations.label("selected") else l
+                setOnClickListener { onSelect(i) }
+            }
+            addView(b, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) leftMargin = dp(Ui.S1) })
+        }
+    }
+
+    /** One line of fixed-width text in [color] (a line of a patch); long lines scroll sideways with the others. */
+    fun monoLine(t: String, color: Int = Ui.ink) = TextView(c).apply {
+        text = t; textSize = 13f; setTextColor(color); typeface = Typeface.MONOSPACE; setHorizontallyScrolling(true); setPadding(dp(Ui.S1), 0, dp(Ui.S1), 0)
+    }
+
+    /** A picture from its bytes (png, jpeg, webp, gif); fits the width. Null when the bytes are not an image. */
+    fun picture(bytes: ByteArray, description: String): View? {
+        val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        return android.widget.ImageView(c).apply { setImageBitmap(bmp); adjustViewBounds = true; scaleType = android.widget.ImageView.ScaleType.FIT_CENTER; contentDescription = description }
+    }
+
+    /**
+     * A web page. Cookies are on (the bridge sets one on the first load). A pull down from the top reloads it. [onProblem] gets a
+     * plain sentence when the main page fails or the server answers with an error status.
+     */
+    @android.annotation.SuppressLint("SetJavaScriptEnabled")
+    fun web(url: String, onProblem: (String) -> Unit): View {
+        val wv = android.webkit.WebView(c)
+        wv.settings.javaScriptEnabled = true; wv.settings.domStorageEnabled = true
+        android.webkit.CookieManager.getInstance().setAcceptCookie(true)
+        wv.setBackgroundColor(Ui.page)
+        wv.webViewClient = object : android.webkit.WebViewClient() {
+            override fun onReceivedError(v: android.webkit.WebView, r: android.webkit.WebResourceRequest, e: android.webkit.WebResourceError) { if (r.isForMainFrame) onProblem(e.description.toString()) }
+            override fun onReceivedHttpError(v: android.webkit.WebView, r: android.webkit.WebResourceRequest, e: android.webkit.WebResourceResponse) { if (r.isForMainFrame && e.statusCode >= 500) onProblem(e.reasonPhrase ?: "Error ${e.statusCode}") }
+        }
+        wv.loadUrl(url)
+        return object : android.widget.FrameLayout(c) {
+            private var startY = -1f
+            private var fired = false
+            init { addView(wv, LayoutParams(-1, -1)) }
+            override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> { startY = if (wv.scrollY == 0) e.y else -1f; fired = false }
+                    MotionEvent.ACTION_MOVE -> if (startY >= 0f && !fired && e.y - startY > dp(96)) { fired = true; wv.reload() }
+                }
+                return false
+            }
+        }
+    }
+
     /** A page that never scrolls itself: it fills the window and keeps the system bars clear. Put a [mirrorScreen] in it. */
     private var barsSeen: IntArray? = null   // the system bars the last screen got: a new screen starts with them, so its first frame is already in place (it used to start too high and drop)
     fun fixedScreen(a: Activity): LinearLayout {

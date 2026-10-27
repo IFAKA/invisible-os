@@ -28,6 +28,8 @@ class FlowRoomsTest {
         override fun write(sendTo: (String) -> Boolean) {}
         override fun writeSeq(cues: List<Phrase>, finish: (List<String>) -> Phrase) { cues.forEach { cueSeen.add(it.text) } }
         override fun testDone() {}
+        val shown = ArrayList<Pair<String, String>>()   // (computer, room id) of every Show on phone
+        override fun showOnPhone(computer: Computer, room: Room) { shown.add(computer.name to room.id) }
         val cueSeen = ArrayList<String>()
         companion object { val cueSeen = ArrayList<String>() }
     }
@@ -132,6 +134,52 @@ class FlowRoomsTest {
         rig.needLive("Hear it again", k)   // and then the options again, from the first
         assertEquals(1, before)
         assertFalse("never sent to the laptop", s.posts.any { it.first == "/room/act" })
+    }
+
+    // ---- show on phone ----
+    private fun showRooms() = listOf(
+        FakeRooms.room("%1", "Web", "web-proj", "claude", "done", "", listOf("show", "readall"), "Changed the page. Take a look."),
+        FakeRooms.room("%2", "Fresh", "fresh-proj", "claude", "done", "", listOf("preview", "readall"), "Made the site."),
+    )
+
+    @Test fun show_on_phone_says_sent_and_calls_the_port() {
+        val s = server(rooms = showRooms()); val rig = RoboRig(); val c = Computer("Home", s.url, s.token); val port = Port(listOf(c), c)
+        start(rig, port)
+        val i = rig.mark(); rig.needLive("web-proj, Web, done", i); rig.advance(60); rig.press("120")
+        val j = rig.mark(); rig.needLive("Hear it again", j); rig.advance(60)
+        rig.needLive("Show on phone", j); rig.advance(60); rig.press("120")
+        rig.needLive("Sent to phone.", j)
+        assertEquals(listOf("Home" to "%1"), port.shown)
+        assertFalse("it is not an act on the laptop", s.posts.any { it.first == "/room/act" })
+        assertFalse("show alone does not start anything", s.posts.any { it.first == "/room/preview/start" })
+    }
+
+    @Test fun start_preview_asks_first_then_starts_then_sends_to_phone() {
+        val s = server(rooms = showRooms()); val rig = RoboRig(); val c = Computer("Home", s.url, s.token); val port = Port(listOf(c), c)
+        start(rig, port)
+        val i = rig.mark(); rig.needLive("fresh-proj, Fresh, done", i); rig.advance(60); rig.press("120")
+        // the list started at the first window; walk to the second with one click-click? the windows list reads Web first, then Fresh
+        val j = rig.mark(); rig.needLive("Start preview", j); rig.advance(60); rig.press("120")
+        val k = rig.mark(); rig.needLive("Start the preview?", k); rig.needLive("No, go back", k); rig.advance(60)
+        rig.needLive("Yes", k); rig.advance(60)
+        assertTrue("nothing started before the Yes", s.posts.none { it.first == "/room/preview/start" })
+        rig.press("120")
+        rig.needLive("Sent to phone.", k)
+        assertTrue("fake server got ${s.posts}", s.posts.any { (p, b) -> p == "/room/preview/start" && b.optString("id") == "%2" })
+        assertEquals(listOf("Home" to "%2"), port.shown)
+    }
+
+    @Test fun notification_is_posted_with_the_window_and_opens_changes() {
+        val ctx = org.robolectric.RuntimeEnvironment.getApplication()
+        val room = Room("%1", "Web", "web-proj", "claude", "done", "", emptyList(), emptyList())
+        ChangesNotice.post(ctx, Computer("Home", "http://x", "t"), room)
+        val nm = org.robolectric.Shadows.shadowOf(ctx.getSystemService(android.app.NotificationManager::class.java))
+        val n = nm.allNotifications.single()
+        assertEquals("Web: see changes", n.extras.getString(android.app.Notification.EXTRA_TITLE))
+        val open = org.robolectric.Shadows.shadowOf(n.contentIntent).savedIntent
+        assertEquals(ChangesActivity::class.java.name, open.component?.className)
+        assertEquals("%1", open.getStringExtra(ChangesNotice.EXTRA_ROOM))
+        assertEquals("Home", open.getStringExtra(ChangesNotice.EXTRA_COMPUTER))
     }
 
     // ---- rooms_new_project ----

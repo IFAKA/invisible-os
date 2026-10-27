@@ -50,6 +50,7 @@
                 <data android:scheme="https" android:host="invisible-os.vercel.app" android:path="/pair" />
             </intent-filter>
         </activity>
+        <activity android:name=".ChangesActivity" android:exported="false" android:label="Changes" android:launchMode="singleTask" />   <!-- Show on phone: opened by the notification "<window>: see changes" -->
         <activity android:name=".HandsFreeActivity" android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:showWhenLocked="true" android:excludeFromRecents="true" android:noHistory="true">

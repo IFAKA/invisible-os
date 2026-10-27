@@ -31,6 +31,8 @@ interface RoomsPort {
     fun writeSeq(cues: List<Phrase>, finish: (List<String>) -> Phrase)
     /** Say "Test, done" the way the OS says a finished window, so you can check the voice and the volume. */
     fun testDone()
+    /** Show on phone: post the notification "<window>: see changes" (one buzz); tapping it opens the Changes screen of [room] on [computer]. */
+    fun showOnPhone(computer: Computer, room: Room) {}
 }
 
 /** Timers on the host's handler, one set per run. */
@@ -242,18 +244,32 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
             a.id == RoomAction.HEAR -> showActions(r, storyIntro ?: intro(r))
             a.id == "readall" -> readAll(r)
             a.id == "write" -> write(r)
-            a.needsConfirm -> { pending = a; onBack = { showActions(r, null) }; showList(listOf(Choice.No, Choice.Yes), ClaudeVoice.sure(RoomText.label(a))) }
+            a.needsConfirm -> { pending = a; onBack = { showActions(r, null) }; showList(listOf(Choice.No, Choice.Yes), if (a.id == "preview") ChangesVoice.START_PREVIEW else ClaudeVoice.sure(RoomText.label(a))) }
             else -> act(r, a)
         }
     }
 
     private fun act(r: Room, a: RoomAction) {
+        if (a.id == "show" || a.id == "preview") { showOnPhone(r, a.id == "preview"); return }
         scanner.stop(); awaitItem = false; host.stopSpeech()
         phase = Phase.SENDING
         bg({ client.act(r.id, a.id) }) { ok ->
             if (ok == true) { phase = Phase.SENT; say(ClaudeVoice.sentTo(RoomState.nameOf(r))) }
             else if (ok == null) unreachable { showActions(r, null) }
             else { reopen = { showActions(r, null) }; phase = Phase.STUCK; say(ClaudeVoice.FAILED) }
+        }
+    }
+
+    /** Show on phone: ([start] = Start preview first, which waits for the dev server) then the OS posts the notification. */
+    private fun showOnPhone(r: Room, start: Boolean) {
+        scanner.stop(); awaitItem = false; host.stopSpeech()
+        phase = Phase.SENDING
+        bg({ !start || client.startPreview(r.id) }) { ok ->
+            when (ok) {
+                true -> { port.showOnPhone(listenTo, r); phase = Phase.SENT; say(ChangesVoice.SENT_TO_PHONE) }
+                null -> unreachable { showActions(r, null) }
+                else -> { reopen = { showActions(r, null) }; phase = Phase.STUCK; say(ChangesVoice.NOT_STARTED) }
+            }
         }
     }
 

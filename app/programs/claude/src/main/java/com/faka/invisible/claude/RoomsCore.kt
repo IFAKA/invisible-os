@@ -80,9 +80,9 @@ data class RoomAction(val id: String) {
     val option: String? get() = if (id.startsWith("option:")) id.removePrefix("option:").squash().ifEmpty { null } else null
     val makeTarget: String? get() = if (id.startsWith("make:")) id.removePrefix("make:").squash().ifEmpty { null } else null
     /** Push and Clear ask "No, go back" / "Yes" first. */
-    val needsConfirm get() = id == "push" || id == "clear"
+    val needsConfirm get() = id == "push" || id == "clear" || id == "preview"
     /** Handled on the phone, not sent with POST /room/act. */
-    val onPhone get() = id == "readall" || id == "screen" || id == "write" || id == HEAR
+    val onPhone get() = id == "readall" || id == "screen" || id == "write" || id == HEAR || id == "show" || id == "preview"
     /** True for something the earbud list can show (the screen view is the "screen" action itself). */
     val earbud get() = id != "screen" && id.isNotBlank()
 

@@ -18,6 +18,7 @@ import urllib.request
 
 from core import shorten
 from story import StoryCache, first_sentence, ollama_model
+from preview import Preview
 
 STATES = ["needs", "failed", "done", "working", "idle"]
 SHELLS = {"zsh", "bash", "sh", "fish", "-zsh", "-bash", "-sh", "-fish"}
@@ -38,7 +39,7 @@ ACTION_TEXT = {
 CLAUDE_ACTIONS = ["go", "yes", "commit", "push", "compact", "explain", "recommend", "research", "progress", "hold", "stop",
                   "clear", "readall", "screen", "write"]
 
-PINNED = {"stop", "readall", "screen", "write"}   # keep their place in the list; learning only reorders the others
+PINNED = {"stop", "readall", "screen", "write", "show", "preview"}   # keep their place in the list; learning only reorders the others
 HALF_LIFE_DAYS = 14.0
 LEARN = 1.0   # one fresh pick is worth one place in the fixed order
 
@@ -266,6 +267,7 @@ class Rooms:
         self._zsh_cache = (0.0, {})
         self._proj_cache = (0.0, [])
         self._picks_cache = (-1.0, [])
+        self.preview = Preview(self)   # Show on phone (preview.py)
 
     @classmethod
     def from_env(cls, pending=None, asks=None):
@@ -444,6 +446,10 @@ class Rooms:
             base = ["option:" + o for o in room["options"]] + CLAUDE_ACTIONS
         else:
             base = ["again"] + ["make:" + t for t in self._make_targets(room["path"])] + ["stop", "screen", "write"]
+        try:
+            base = self.preview.add_action(base, room)   # "show" / "preview" (Show on phone)
+        except Exception:
+            pass
         return learned_order(base, self.picks_for(room["id"], room["path"]))
 
     # -- all rooms --

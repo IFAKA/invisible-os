@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core import Store  # noqa: E402
 from rooms import Rooms  # noqa: E402
+import preview  # noqa: E402
 
 CONFIG_DIR = os.path.expanduser("~/.config/invisible-bridge")
 TOKEN_FILE = os.path.join(CONFIG_DIR, "token")
@@ -132,10 +133,17 @@ def make_handler(store, token, rooms):
                 return {}
 
         def do_GET(self):
+            if self.path.startswith("/preview/") or preview.is_fallback(urlparse(self.path).path, self.headers):
+                return preview.serve_preview(self, token, rooms.preview)   # its own auth: token in the address, a cookie or the header
             if not self._auth():
                 return
             u = urlparse(self.path)
             q = parse_qs(u.query)
+            got = preview.handle_get(self._send, rooms, u.path, q)   # Show on phone: /room/diff /room/pictures /room/picture /room/preview
+            if got is not False:
+                if got is not True:
+                    self.send_response(200); self.send_header("Content-Type", got[0]); self.send_header("Content-Length", str(len(got[1]))); self.end_headers(); self.wfile.write(got[1])
+                return
             if u.path == "/events":
                 since = int(q.get("since", ["0"])[0])
                 wait = min(float(q.get("wait", ["25"])[0]), 55)
@@ -169,6 +177,8 @@ def make_handler(store, token, rooms):
                 return
             b = self._body()
             path = urlparse(self.path).path
+            if preview.handle_post(self._send, rooms, path, b):
+                return
             if path == "/answer":
                 ok = store.answer(b.get("id"), b.get("choice"))
                 self._send(200 if ok else 409, {"ok": ok})
