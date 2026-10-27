@@ -319,12 +319,12 @@ object Actions {
     fun resetDev(practiceDone: Boolean) = handler.post {
         backAfterEnd = null
         running?.stop(); running = null
-        mode.exit(false); narrator.stopSpeech()
+        mode.exit(false); com.faka.invisible.voicekit.ScreenMirror.clear(); narrator.stopSpeech()
         prefs().edit().putBoolean(PracticeProgram.DONE_KEY, practiceDone).apply()
         Log.d("E2E", "reset done")
     }
     fun showDev(name: String) = handler.post { mode.devShow(name); Log.d("E2E", "show $name") }
-    fun stateDev() = handler.post { Log.d("E2E", "state ${mode.devState()} running=${running != null} rate=${mode.settings.speechRate}") }
+    fun stateDev() = handler.post { Log.d("E2E", "state ${mode.devState()} running=${running != null} rate=${mode.settings.speechRate} mirror=${com.faka.invisible.voicekit.ScreenMirror.active}:${com.faka.invisible.voicekit.ScreenMirror.items.size}:${com.faka.invisible.voicekit.ScreenMirror.lastPress?.replace(" ", "_")}") }
     fun rateDev(r: Float) = handler.post { saveSettings(mode.settings.copy(speechRate = r)); Log.d("E2E", "rate set $r") }
     fun startDev(name: String) = handler.post { Programs.byDevName(name)?.let { startProgramEntry(it) } }
 
@@ -347,10 +347,10 @@ object Actions {
     fun startWriteDev() { startDev("write") }
 
     /** The OS rule for every game: when a game gives the phone back, the OS says goodbye with its own close sound. A game never plays it. */
-    private fun gameEnded() { handler.post { narrator.beep(Tone.EXIT) } }
+    private fun gameEnded() { com.faka.invisible.voicekit.ScreenMirror.clear(); handler.post { narrator.beep(Tone.EXIT) } }
 
     /** Starts a program of the registry. The host is what it may ask of the OS; when it ends, the OS plays the close sound. */
-    private fun startProgramEntry(e: ProgramEntry) = startProgram(e.create())
+    private fun startProgramEntry(e: ProgramEntry) { com.faka.invisible.voicekit.ScreenMirror.setTitle(e.title.text); startProgram(e.create()) }
 
     private fun startProgram(p: Program) {
         running?.stop()
@@ -366,7 +366,7 @@ object Actions {
             override fun resumeMusic() = resumeMusicNow()
             override fun log(line: String) { Log.d(TAG, line); EventLog.add(line) }
             override fun outputDevice() = outputDeviceKey()
-            override fun ended() { if (running === p) running = null; val back = backAfterEnd; backAfterEnd = null; if (back == null || !back()) gameEnded() }
+            override fun ended() { if (running === p) running = null; com.faka.invisible.voicekit.ScreenMirror.clear(); val back = backAfterEnd; backAfterEnd = null; if (back == null || !back()) gameEnded() }
         })
     }
 

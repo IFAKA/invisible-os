@@ -244,6 +244,21 @@ class Kit(private val c: Context) {
         parent.addView(r, lp())
     }
 
+    /** The OS list being read, mirrored: one row per item, the item being read highlighted and scrolled into view. Not touchable. */
+    fun mirrorList(parent: LinearLayout, items: List<String>, current: Int) {
+        val box = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
+        items.forEachIndexed { i, t ->
+            val on = i == current
+            val r = text(t, if (on) Type.TITLE else Type.BODY, if (on) Ui.accent else Ui.ink).apply {
+                setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1)); minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL
+                if (on) { background = fill(Ui.field, Ui.RADIUS_ROW); contentDescription = t + ", " + Translations.label("selected") }
+            }
+            box.addView(r, lp(top = 2))
+            if (on) r.post { r.requestRectangleOnScreen(android.graphics.Rect(0, -dp(48), r.width, r.height + dp(48)), false) }
+        }
+        parent.addView(box, lp(top = Ui.S2))
+    }
+
     /** Home status: a coloured dot, a large word, one quiet line. */
     fun status(parent: LinearLayout, headline: String, line: String, color: Int, fill: LinearLayout.() -> Unit = {}) {
         val dot = View(c).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) } }

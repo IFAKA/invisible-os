@@ -15,7 +15,7 @@ object EventLog {
 
     /** The setup screen's "Test your button": called for every gesture that reaches the OS (from any thread). */
     @Volatile var lastGesture: String? = null
-    fun pressed(g: com.faka.invisible.voicekit.Gesture) { lastGesture = g.name; refresh() }
+    fun pressed(g: com.faka.invisible.voicekit.Gesture) { lastGesture = g.name; com.faka.invisible.voicekit.ScreenMirror.pressed(com.faka.invisible.voicekit.ScreenMirror.gestureText(g.name)); refresh() }
 
     fun add(text: String) {
         main.post {

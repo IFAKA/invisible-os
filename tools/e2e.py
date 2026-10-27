@@ -136,6 +136,18 @@ def click_hold_closes():
     wait_closed()
     return "menu closed"
 
+def screen_mirrors_menu():
+    reset(); show("PHONE"); i = mark(); heard_start("Emergency", i)
+    s = state()
+    if not s.get("mirror", "").startswith("true:") or s["mirror"].split(":")[1] == "0": raise Fail(f"mirror empty while a list is read: {s}")
+    press("120")
+    t0 = time.time()
+    while state().get("mirror", "").split(":")[-1] != "click":
+        if time.time() - t0 > 8: raise Fail(f"mirror did not show the click: {state()}")
+    press("120,150,900"); wait_closed()
+    if state().get("mirror", "").split(":")[0] != "false": raise Fail(f"mirror still on after close: {state()}")
+    return "mirror shows the list and the click, and clears on close"
+
 def practice_end_to_end():
     reset(False); i = mark(); press("900")
     need("click once now", i, 20)
@@ -268,7 +280,7 @@ def rooms_new_project():
         try: reset()
         except Fail: pass
 
-SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, practice_end_to_end,
+SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, screen_mirrors_menu, practice_end_to_end,
              phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, voice_speed_applied, rooms_go, rooms_done_spoken, rooms_new_project]
 
 def main():

@@ -22,6 +22,7 @@ import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import com.faka.invisible.voicekit.MenuLanguage
+import com.faka.invisible.voicekit.ScreenMirror
 import com.faka.invisible.voicekit.Translations
 import com.faka.invisible.voicekit.Voice
 
@@ -47,7 +48,8 @@ class MainActivity : Activity() {
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(k.dp(Ui.S2), k.dp(Ui.S2), k.dp(Ui.S2), k.dp(Ui.S4)) }
         setContentView(k.screen(this, body))
         if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java))
-        EventLog.onChange = { render() }
+        EventLog.onChange = { renderSoon() }
+        ScreenMirror.onChange = { if (page == Page.HOME) EventLog.refresh() }
         intent.getStringExtra("page")?.let { n -> Page.values().firstOrNull { it.name.equals(n, true) }?.let { page = it } }   // for screenshots: adb ... --es page menu --es open /Tools
         if (page == Page.LAPTOP) laptop.start()
         previewReady = intent.getBooleanExtra("ready", false)
@@ -66,7 +68,7 @@ class MainActivity : Activity() {
         render()
     }
 
-    override fun onDestroy() { EventLog.onChange = null; super.onDestroy() }
+    override fun onDestroy() { EventLog.onChange = null; ScreenMirror.onChange = null; super.onDestroy() }
 
     private fun change(n: LauncherSettings) { s = n; Actions.saveSettings(n); render() }
 
@@ -84,6 +86,15 @@ class MainActivity : Activity() {
 
     @Deprecated("Back goes to Home first, then leaves")
     override fun onBackPressed() { if (page != Page.HOME) open(Page.HOME) else super.onBackPressed() }
+
+    private var lastDraw = 0L
+    private var drawQueued = false
+    /** Redraw, at most about 5 times a second (the mirror changes with every item). */
+    private fun renderSoon() {
+        val wait = 200 - (android.os.SystemClock.uptimeMillis() - lastDraw)
+        if (wait <= 0) { lastDraw = android.os.SystemClock.uptimeMillis(); render() }
+        else if (!drawQueued) { drawQueued = true; body.postDelayed({ drawQueued = false; lastDraw = android.os.SystemClock.uptimeMillis(); render() }, wait) }
+    }
 
     private fun render() {
         body.removeAllViews()
@@ -179,7 +190,12 @@ class MainActivity : Activity() {
             return
         }
         announceStep = false
-        if (!EventLog.running) {
+        val mir = ScreenMirror.state
+        if (mir.active && EventLog.running) {   // the OS is in use: show where the person is, instead of "Ready"
+            body.addView(k.text(mir.title.ifEmpty { tr("Home") }, Type.LARGE), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S3) })
+            k.mirrorList(body, mir.items, mir.index)
+            mir.lastPress?.let { body.addView(k.text(tr("Last press") + ": " + tr(it), Type.CAPTION, Ui.soft), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) }) }
+        } else if (!EventLog.running) {
             k.status(body, tr("Stopped"), tr("The app is not listening to the button."), Ui.bad) {
                 addView(k.primary(tr("Start")) { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) })
             }

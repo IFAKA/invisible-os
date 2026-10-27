@@ -52,6 +52,7 @@ class Scanner<T>(
     fun speakItem(i: Int) {
         list.moveTo(i)
         val o = list.items[i]
+        ScreenMirror.show(list.items.map { label(it).text }, i)
         out.say(i, label(o), spearcon(o))
     }
 

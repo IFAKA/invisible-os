@@ -332,10 +332,15 @@ class ControllerMode(
     private fun learning() = out.codeCount() < learnActions
 
     // ---- screens: earcon, then the intro (hint, message text), then the scan ----
+    /** The place for the app screen: the tree path (Talk > Mail), or the screen's name. */
+    private fun mirrorTitle(s: Screen): String =
+        if (s == Screen.HUB) "" else if (s == Screen.TREE) treePath.joinToString(" > ") { it.label } else s.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+
     private fun show(s0: Screen) {
         val s = notifGuard(s0)
         stopAll(); lookupId++
         screen = s; phase = Phase.INTRO
+        com.faka.invisible.voicekit.ScreenMirror.setTitle(mirrorTitle(s))
         if (!backNav) tn(tone(s)); backNav = false
         intro.clear()
         if (hintPending) { hintPending = false; intro += Intro(Voice.HINT, null, hint = true) }
@@ -1054,6 +1059,7 @@ class ControllerMode(
         stopAll(); lookupId++
         if (finding) { finding = false; timers.clear("find"); out.findPhone(false) }
         active = false
+        com.faka.invisible.voicekit.ScreenMirror.clear()
         if (pausedByUs) { pausedByUs = false; out.resumeMusic() }
         out.log("MODE exit")
         if (withTone) tn(Tone.EXIT)
