@@ -43,7 +43,7 @@ def reader():
         m = LINE.match(line.rstrip("\n"))
         if not m: continue
         kind, text = m.group(2), m.group(3)
-        if kind == "Invisible" and not text.startswith(("SPEAK[", "MSG ")): continue
+        if kind == "Invisible" and not text.startswith(("SPEAK[", "MSG ", "TRACE media")): continue
         with lock: events.append((time.time(), kind, text))
 
 def mark():
@@ -352,8 +352,23 @@ def computers_two():
         try: reset()
         except Fail: pass
 
+def idle_clicks_go_to_the_player():
+    """OS closed: 1, 2, 3 clicks are replayed to another app's player as play/pause, next, previous (dry: traced, not sent)."""
+    reset(); bcast("--ez", "replaydry", "true")
+    try:
+        got = []
+        for n, gap, word in ((1, "", r"(pause|play|play_pause)"), (2, "100,150,100", "next"), (3, "100,150,100,150,100", "previous")):
+            i = mark(); press(gap or "120")
+            hit = wait(lambda t: re.search(rf"replay {n}\b.*{word}|replay {n}: no other", t) is not None, i, "Invisible", 8)
+            if hit is None: raise Fail(f"{n} click(s) while idle were not replayed to a player")
+            if "pkg=com.faka.invisible" in hit: raise Fail("replayed to our own session")
+            got.append(hit[:48])
+        return " | ".join(got)
+    finally:
+        bcast("--ez", "replaydry", "false")
+
 SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, screen_mirrors_menu, screen_tap_picks, practice_end_to_end,
-             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, chat_arrival_spoken, live_app_first_on_home, voice_speed_applied, rooms_go, rooms_done_spoken, computers_two, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
+             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, chat_arrival_spoken, live_app_first_on_home, voice_speed_applied, rooms_go, rooms_done_spoken, computers_two, idle_clicks_go_to_the_player, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
 
 def main():
     args = sys.argv[1:]

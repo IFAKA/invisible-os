@@ -21,6 +21,7 @@ class AiTestReceiver : BroadcastReceiver() {
         if (i.hasExtra("browse")) { Actions.browseMusicDev(); return }
         i.getStringExtra("gesture")?.let { Actions.gestureDev(it); return }   // dev: a button gesture by name
         i.getStringExtra("fake")?.let { fake(c, it); return }   // dev (e2e): post a fake "call" / "chat" notification, or "clear" them
+        if (i.hasExtra("replaydry")) { Actions.replayDry = i.getBooleanExtra("replaydry", true); Log.d("E2E", "replaydry ${Actions.replayDry}"); return }
         if (i.hasExtra("reset")) { Actions.resetDev(i.getBooleanExtra("reset", true)); fake(c, "clear"); return }   // dev (e2e): known state; --ez reset false = practice not done yet
         i.getStringExtra("show")?.let { Actions.showDev(it); return }
         if (i.hasExtra("rate")) { Actions.rateDev(i.getFloatExtra("rate", 0.9f)); return }

@@ -627,7 +627,7 @@ object Actions {
         return torchOn
     }
 
-    private var pausedPkg: String? = null
+    private var pausedPkgs: List<String> = emptyList()
 
     /** The live apps for the front of home: media sessions that play or were paused lately, and ongoing notifications that are not static. */
     private fun liveAppsNow(): List<LiveApp> {
@@ -730,42 +730,82 @@ object Actions {
         } catch (e: Throwable) { Log.e(TAG, "play liked failed", e) }
     }
 
+    /** Every media session, newest first, ours included; null = notification access is off (the system refuses). */
+    private fun sessionsOrNull(): List<android.media.session.MediaController>? = try {
+        app.getSystemService(MediaSessionManager::class.java).getActiveSessions(ComponentName(app, ControllerNotificationListener::class.java))
+    } catch (e: SecurityException) { null }
+
+    private fun playersOf(cs: List<android.media.session.MediaController>) =
+        cs.map { MediaReplay.Player(it.packageName, it.playbackState?.state ?: 0, it.packageName == app.packageName) }
+
+    private fun mediaKey(code: Int) = listOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP).map { android.view.KeyEvent(it, code) }
+
+    /** The OS opens: pause every player that is playing (not ours), remember which, and check a moment later that each one really stopped. */
     private fun pauseMusicNow(): Boolean {
-        val c = otherSessions().firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
-        if (c == null) { Log.d(TAG, "MODE no music to pause"); com.faka.invisible.oskit.Trace.ev("music", "pause: no playing session (others=${otherSessions().joinToString { it.packageName + ":" + it.playbackState?.state }})"); return false }
-        c.transportControls.pause()
-        pausedPkg = c.packageName
-        Log.d(TAG, "MODE pause music ${c.packageName}"); com.faka.invisible.oskit.Trace.ev("music", "pause sent pkg=${c.packageName}")
+        val cs = sessionsOrNull() ?: run { Trace.ev("music", "pause: NOTIFICATION ACCESS IS OFF, the player list cannot be read (turn it on in setup)"); return false }
+        val playing = MediaReplay.playing(playersOf(cs))
+        if (playing.isEmpty()) { Trace.ev("music", "pause: nothing playing (sessions: ${playersOf(cs).joinToString { it.pkg + ":" + it.state }})"); return false }
+        val ctl = cs.filter { c -> playing.any { it.pkg == c.packageName } }
+        ctl.forEach { it.transportControls.pause() }
+        pausedPkgs = ctl.map { it.packageName }
+        Trace.ev("music", "pause sent pkg=${pausedPkgs.joinToString()}")
+        handler.postDelayed({
+            if (pausedPkgs.isEmpty()) return@postDelayed   // already resumed: nothing to check
+            ctl.forEach { c ->
+                val st = c.playbackState?.state ?: 0
+                if (MediaReplay.isPlaying(st)) {   // the player ignored pause(): send the real pause key to it
+                    mediaKey(MediaReplay.KEY_PAUSE).forEach { c.dispatchMediaButtonEvent(it) }
+                    Trace.ev("music", "pause ignored by ${c.packageName} (state=$st), sent the pause key")
+                } else Trace.ev("music", "pause confirmed ${c.packageName} state=$st")
+            }
+        }, 600)
         return true
     }
 
+    /** The OS closes: play again only what we paused, and only if nothing else started meanwhile. */
     private fun resumeMusicNow() {
-        val pkg = pausedPkg ?: return
-        pausedPkg = null
-        val all = otherSessions()
-        val other = all.firstOrNull { it.packageName != pkg && it.playbackState?.state == PlaybackState.STATE_PLAYING }
-        if (other != null) { Log.d(TAG, "MODE resume skipped, ${other.packageName} is playing"); com.faka.invisible.oskit.Trace.ev("music", "resume skipped: ${other.packageName} is playing"); return }
-        val c = all.firstOrNull { it.packageName == pkg }
-        if (c == null) { Log.d(TAG, "MODE resume skipped, $pkg session gone"); com.faka.invisible.oskit.Trace.ev("music", "resume skipped: $pkg session gone"); return }
-        c.transportControls.play()
-        Log.d(TAG, "MODE resume music $pkg"); com.faka.invisible.oskit.Trace.ev("music", "resume sent pkg=$pkg")
+        val pkgs = pausedPkgs; pausedPkgs = emptyList()
+        if (pkgs.isEmpty()) return
+        val cs = sessionsOrNull() ?: run { Trace.ev("music", "resume skipped: notification access is off"); return }
+        val others = cs.filter { it.packageName != app.packageName }
+        val intruder = others.firstOrNull { it.packageName !in pkgs && MediaReplay.isPlaying(it.playbackState?.state ?: 0) }
+        if (intruder != null) { Trace.ev("music", "resume skipped: ${intruder.packageName} is playing"); return }
+        pkgs.forEach { pkg ->
+            val c = others.firstOrNull { it.packageName == pkg }
+            when {
+                c == null -> Trace.ev("music", "resume skipped: $pkg session gone")
+                MediaReplay.isPlaying(c.playbackState?.state ?: 0) -> Trace.ev("music", "resume skipped: $pkg already playing")
+                else -> { c.transportControls.play(); Trace.ev("music", "resume sent pkg=$pkg") }
+            }
+        }
     }
 
+    /**
+     * An earbud click count while the OS is closed: do what a headset does, to the player that really plays (or played last).
+     * Never our own session. Without notification access (no player list) or with no session, the key goes straight to the music app.
+     */
+    /** Dev (e2e): replay clicks are only traced, never sent to the real player. */
+    @Volatile var replayDry = false
+
     private fun forwardToMusic(what: Forward) {
-        try {
-            val msm = app.getSystemService(MediaSessionManager::class.java)
-            val c = msm.getActiveSessions(ComponentName(app, ControllerNotificationListener::class.java))
-                .firstOrNull { it.packageName != app.packageName }
-            if (c == null) { Log.d(TAG, "FORWARD none (no other media session)"); com.faka.invisible.oskit.Trace.ev("media", "replay ${what.name.lowercase()}: no other media session"); return }
-            val t = c.transportControls
-            when (what) {
-                Forward.PLAY_PAUSE -> if (c.playbackState?.state == PlaybackState.STATE_PLAYING) t.pause() else t.play()
-                Forward.NEXT -> t.skipToNext()
-                Forward.PREVIOUS -> t.skipToPrevious()
-            }
-            Log.d(TAG, "FORWARD ${what.name.lowercase()} to ${c.packageName}"); com.faka.invisible.oskit.Trace.ev("media", "replay ${what.name.lowercase()} pkg=${c.packageName}")
-        } catch (e: SecurityException) {
-            Log.d(TAG, "FORWARD none (notification access is OFF)")
-        }
+        val a = when (what) { Forward.PLAY_PAUSE -> MediaReplay.Action.PLAY_PAUSE; Forward.NEXT -> MediaReplay.Action.NEXT; Forward.PREVIOUS -> MediaReplay.Action.PREVIOUS }
+        val clicks = a.ordinal + 1
+        val cs = sessionsOrNull()
+        if (cs == null) { Trace.ev("media", "replay $clicks: NOTIFICATION ACCESS IS OFF, no player list"); keyToMusicApp(a, clicks); return }
+        val pick = MediaReplay.choose(playersOf(cs))
+        val c = pick?.let { p -> cs.firstOrNull { it.packageName == p.pkg } }
+        if (pick == null || c == null) { Trace.ev("media", "replay $clicks: no other player session"); keyToMusicApp(a, clicks); return }
+        val t = c.transportControls
+        val cmd = MediaReplay.command(a, pick)
+        if (!replayDry) when (cmd) { "pause" -> t.pause(); "play" -> t.play(); "next" -> t.skipToNext(); else -> t.skipToPrevious() }
+        Trace.ev("media", "replay $clicks -> $cmd pkg=${pick.pkg} state=${pick.state}${if (replayDry) " (dry)" else ""}")
+    }
+
+    /** The fallback: send the headset key to the first music app that is installed (its own media button receiver wakes it). */
+    private fun keyToMusicApp(a: MediaReplay.Action, clicks: Int) {
+        val pkg = musicApps.firstOrNull { app.packageManager.getLaunchIntentForPackage(it) != null } ?: run { Trace.ev("media", "replay $clicks: no music app installed"); return }
+        if (replayDry) { Trace.ev("media", "replay $clicks -> ${a.name.lowercase()} key to $pkg (dry)"); return }
+        mediaKey(MediaReplay.keyFor(a)).forEach { app.sendBroadcast(Intent(Intent.ACTION_MEDIA_BUTTON).setPackage(pkg).putExtra(Intent.EXTRA_KEY_EVENT, it)) }
+        Trace.ev("media", "replay $clicks -> ${a.name.lowercase()} key sent to $pkg")
     }
 }
