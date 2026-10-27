@@ -309,7 +309,7 @@ def computers_two():
         except Fail: pass
 
 SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, screen_mirrors_menu, practice_end_to_end,
-             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, voice_speed_applied, rooms_go, rooms_done_spoken, rooms_new_project, computers_two]
+             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, voice_speed_applied, rooms_go, rooms_done_spoken, computers_two, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
 
 def main():
     args = sys.argv[1:]
