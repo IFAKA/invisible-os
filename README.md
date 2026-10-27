@@ -1,14 +1,33 @@
-# Invisible OS: control your Android phone with one earbud button, screen off
+<div align="center">
 
-Website: the landing page is in [`site/`](site/) (static, deployed on Vercel).
+<img src="docs/social.png" alt="Invisible OS: your phone, without looking" width="100%">
 
-**Invisible OS** is a small operating system for your ears, built as an open-source Android app: a menu, apps, games and a keyboard you use with no screen. It turns the single button on any wired or Bluetooth earbud or headset into a hands-free, eyes-free controller. Reply to WhatsApp messages, set a timer, change volume and hear your status, all with the screen off and the phone in your pocket.
+# Invisible OS
 
-It uses **auto-scan** (also called single-switch scanning, the method used in assistive technology): the phone speaks the options one by one, and you click when you hear the one you want. One button is enough. No microphone, no voice recognition, no cloud.
+**Your phone. Without looking.**<br>
+One earbud button. The phone speaks. You click.
+
+[**Website**](https://invisible-os.vercel.app) &nbsp;·&nbsp; [**Get it**](#install) &nbsp;·&nbsp; [**How it works**](#how-it-works) &nbsp;·&nbsp; [**Laptop**](#laptop-your-agents-in-your-ear)
+
+</div>
+
+<br>
+
+Invisible OS is an open-source Android app: a small operating system for your ears. A menu, apps, games and a keyboard, all with the screen off and the phone in your pocket. It turns the one button on any wired or Bluetooth earbud into the whole interface.
+
+## How it works
+
+1. **Turn the screen off.** The phone keeps working. It just stops asking for your eyes.
+2. **Your ears become the screen.** The phone speaks its menu, one item at a time.
+3. **Your button becomes the mouse.** Click when you hear the one you want.
+
+This is *auto-scan* (single-switch scanning, the method used in assistive technology). One button is enough.
+
+**No microphone. No cloud. No account.** The app never listens. Everything stays on the phone.
 
 > Keywords: Android accessibility app, headset button controller, earbud button actions, screen-off phone control, eyes-free phone, hands-free WhatsApp reply, single-switch scanning, auto-scan menu, blind and low-vision friendly, text-to-speech, Kotlin.
 
-## What you can do
+## The button
 
 | Gesture | Phone idle or music playing | Inside the menu |
 |---|---|---|
@@ -19,7 +38,7 @@ It uses **auto-scan** (also called single-switch scanning, the method used in as
 
 Menu items: **Messages** (read, reply, or turn a message into a task; Spanish or English), **Tasks** (a to-do list you add to and finish by ear), **Timer**, **Volume**, **Status** (time, battery, unread, next alarm, weather, next event, navigation step), **Games** (Duel, Echo, Guard), **Laptop** (see below), **More** (torch, do not disturb, find my phone, exit). Apps are also in a tree by what you want to do (Talk, Plan, Pay, Work, Watch and listen, Play, Go, Tools); a hold on the home list opens Find by first letters.
 
-## Features
+## Highlights
 
 - **Reply to WhatsApp, Teams and WeChat** notifications by earbud. Reply candidates are built from the message, and the language is detected on the device.
 - **Undo window.** After a send you have a few seconds to cancel with any click.
