@@ -45,7 +45,7 @@ object Actions {
     private const val BACK_DELAY_MS = 2200L   // after "Nothing written" has been said
     /** Speech rate at the start (1.0 = normal). It rises 0.1 per 20 successful picks, up to 1.8: blind users listen fast. */
     const val SPEECH_RATE = 0.9f
-    private fun speechRate() = (mode.settings.speechRate + minOf(0.2f, 0.1f * (prefs().getInt("codeCount", 0) / 20))).coerceAtMost(1.8f)   // use speeds the voice up a little, never more than +0.2x: the slider is what the user hears
+    private fun speechRate() = com.faka.invisible.logickit.SpeechRate.effective(mode.settings.speechRate, prefs().getInt("codeCount", 0))   // use speeds the voice up a little, never more than +0.2x: the slider is what the user hears
     @Volatile var accessibilityConnected = false
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var app: Context

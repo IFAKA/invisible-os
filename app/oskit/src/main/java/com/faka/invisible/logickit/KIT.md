@@ -44,6 +44,7 @@ Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rule
 | Weather and navigation sentences | `Weather`, the nav parser | Info.kt |
 | Local choice log and gesture log | `ChoiceLog`, `EventLog` | ChoiceLog.kt, EventLog.kt |
 | Earbud clicks while the OS is closed -> next/previous/play-pause for the real player; which player; who pauses on wake | `MediaReplay` (used by `Actions.forwardToMusic / pauseMusicNow`) | MediaReplay.kt |
+| The voice speed the engine uses (slider + use bonus, max 1.8) | `SpeechRate.effective` (used by `Actions.speechRate`) | SpeechRate.kt |
 | Speak, play, read the button, a list | the **Voice Kit** | voicekit/KIT.md |
 | Colors, rows, switches | the **UI Kit** | Ui.kt |
 
