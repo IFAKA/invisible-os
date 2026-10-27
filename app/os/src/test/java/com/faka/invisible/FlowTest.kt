@@ -49,6 +49,7 @@ class FlowTest {
     @Test fun click_picks() {
         val f = flow(); f.m.devShow("PHONE"); val i = f.mark()
         f.heardStart("Emergency", i)
+        f.advance(600)   // past the 500 ms grace after the item starts, so the click is for Emergency
         f.press("120")   // a click right after hearing an item picks it
         f.need("Call the emergency number", i)
         assertEquals(ControllerMode.Screen.EMERGENCY, f.screen())
@@ -57,7 +58,7 @@ class FlowTest {
     // ---- triple_click_goes_back ----
     @Test fun triple_click_goes_back() {
         val f = flow(); f.m.devShow("PHONE"); var i = f.mark()
-        f.heardStart("Emergency", i); f.press("120"); f.advance(400)
+        f.heardStart("Emergency", i); f.advance(600); f.press("120"); f.advance(400)
         assertEquals(ControllerMode.Screen.EMERGENCY, f.screen())
         i = f.mark(); f.heardStart("No, go back", i)
         f.press("100,150,100,150,100"); f.advance(400)
@@ -75,7 +76,7 @@ class FlowTest {
     @Test fun screen_mirrors_menu() {
         val f = flow(); f.m.devShow("PHONE"); f.heardStart("Emergency")
         assertTrue("mirror empty while a list is read", ScreenMirror.active && ScreenMirror.items.isNotEmpty())
-        f.press("120"); f.advance(400)
+        f.advance(600); f.press("120"); f.advance(400)
         assertEquals("click", ScreenMirror.lastPress)
         f.press("120,150,900"); f.advance(400)
         assertFalse("mirror still on after close", ScreenMirror.active)
@@ -96,14 +97,14 @@ class FlowTest {
     // ---- phone_list ----
     @Test fun phone_list() {
         val f = flow(); f.m.devShow("PHONE"); val i = f.mark()
-        f.need("Emergency", i); f.need("Call a contact", i)
-        assertEquals("Emergency", f.heard(i)[0])
+        f.need("Call a contact", i); f.need("Emergency", i)
+        assertEquals("Call a contact", f.heard(i)[0]); assertEquals("Emergency", f.heard(i).last())
     }
 
     // ---- emergency_confirm_goes_back ----
     @Test fun emergency_confirm_goes_back() {
         val f = flow(); f.m.devShow("PHONE"); var i = f.mark()
-        f.heardStart("Emergency", i); f.press("120"); f.advance(400)
+        f.heardStart("Emergency", i); f.advance(600); f.press("120"); f.advance(400)
         assertEquals(ControllerMode.Screen.EMERGENCY, f.screen())
         i = f.mark(); f.heardStart("No, go back", i)
         assertFalse("Yes was read before the safe answer", f.heard(i).any { it.contains("yes, call", true) })
