@@ -71,7 +71,15 @@ export default function Home() {
 
         <section id="faq" className={sec}>
           <Reveal><h2 className={h2}>Open source.<br />Used every day.</h2></Reveal>
-          <Reveal delay={0.1}><a href="https://github.com/IFAKA/invisible-os" className="mt-[3svh] inline-block rounded-full bg-[#0071e3] px-6 py-3 text-[17px] font-medium text-white hover:bg-[#0077ed]">Get it on GitHub</a></Reveal>
+          <Reveal delay={0.1}>
+            <div className="mt-[3svh] flex flex-col items-center gap-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/install-qr.png" alt="QR code: download Invisible OS for Android" width={176} height={176} className="rounded-xl" />
+              <p className="text-sm text-mute">Scan with your phone camera and install.</p>
+              <a href="https://github.com/IFAKA/invisible-os/releases/latest/download/invisible-os.apk" className="inline-block rounded-full bg-[#0071e3] px-6 py-3 text-[17px] font-medium text-white hover:bg-[#0077ed]">Download for Android</a>
+              <a href="https://github.com/IFAKA/invisible-os" className="text-sm text-mute underline">Source on GitHub</a>
+            </div>
+          </Reveal>
           <Reveal delay={0.2} className="mt-[4svh] w-full max-w-[680px] text-left"><Faq /></Reveal>
           <p className="mt-[3svh] text-xs text-mute">For people who cannot, or do not want to, look at the phone.</p>
         </section>

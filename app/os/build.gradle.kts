@@ -18,11 +18,12 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = (findProperty("appVersion") as String?) ?: "0.1.0"
         buildConfigField("String", "BUILD_STAMP", "\"$stamp\"")
         ndk { abiFilters += "arm64-v8a" }   // the phone is arm64; keeps sherpa-onnx + onnxruntime to one ABI
     }
-    val ksFile = rootProject.file("keystore.properties")
+    // Release key lives outside the repo: ~/.config/invisible-release/keystore.properties (made by tools/release.sh).
+    val ksFile = File(System.getProperty("user.home"), ".config/invisible-release/keystore.properties")
     if (ksFile.exists()) {
         val ks = Properties().apply { ksFile.inputStream().use { load(it) } }
         signingConfigs.create("release") {

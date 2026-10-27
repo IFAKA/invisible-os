@@ -66,21 +66,30 @@ Design and evidence: [bridge/DESIGN-ROOMS.md](bridge/DESIGN-ROOMS.md). API: [bri
 
 ## Install
 
-Requirements: Android 10 or newer (API 29+), Android SDK and a phone with USB debugging.
+Invisible OS never listens. It has no microphone permission. It has no account and no ads. It works offline.
+
+<img src="docs/install-qr.png" alt="QR code: download Invisible OS" width="220">
+
+1. Scan with your phone camera and install.
+2. Open Invisible OS, allow Button access.
+3. Hold your earbud button.
+
+No QR? Open this link on your phone: <https://github.com/IFAKA/invisible-os/releases/latest/download/invisible-os.apk>
+
+Android will warn about installing from outside the Play Store: that is normal for open-source apps. Needs Android 10 or newer.
+
+On some phones (Xiaomi / HyperOS and others) also allow the app to run in the background and turn off battery optimization for it, or the system may stop it when the screen is off. The app shows a checklist for the other settings (Notification access, Assistant).
+
+### Build from source
+
+You need the Android SDK and a phone with USB debugging.
 
 ```sh
-cd app
-./gradlew assembleDebug
+cd app && ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-or run `app/run.sh` (build, install, start). Then open the app and turn on the three items in the setup card:
-
-1. **Button access** (accessibility service) to hear the earbud button.
-2. **Notification access** to read and reply to new messages.
-3. **Assistant** so a long press works on the lock screen. Then open the "Complete action using" box once (`adb shell am start -a android.speech.action.VOICE_SEARCH_HANDS_FREE`), tap **Invisible**, then **Always**. Without this, Google and Invisible both claim the hold and the lock screen cannot show the chooser.
-
-On some phones (Xiaomi / HyperOS and others) also allow the app to run in the background and turn off battery optimization for it, or the system may stop it when the screen is off.
+or run `app/run.sh` (build, install, start). Maintainers: `tools/release.sh VERSION` builds the signed release APK (it does not publish).
 
 ## Share the APK
 

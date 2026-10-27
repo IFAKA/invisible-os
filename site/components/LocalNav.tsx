@@ -17,7 +17,7 @@ export default function LocalNav() {
         </nav>
         <div className="flex items-center gap-5">
           <SoundToggle />
-          <a href="https://github.com/IFAKA/invisible-os" className="rounded-full bg-[#0071e3] px-3.5 py-1.5 font-medium text-white hover:bg-[#0077ed]">Get it</a>
+          <a href="https://github.com/IFAKA/invisible-os/releases/latest/download/invisible-os.apk" className="rounded-full bg-[#0071e3] px-3.5 py-1.5 font-medium text-white hover:bg-[#0077ed]">Get it</a>
         </div>
       </div>
     </header>

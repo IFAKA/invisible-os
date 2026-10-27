@@ -265,5 +265,39 @@ def render(m, quiet=2):
     return "\n".join(lines)
 
 
+def png(m, scale=10, quiet=4):
+    """PNG bytes (black on white, 1 bit gray) of the matrix. Pure Python (zlib)."""
+    import struct
+    import zlib
+    n = len(m)
+    size = (n + 2 * quiet) * scale
+    rows = []
+    for y in range(size):
+        r = y // scale - quiet
+        bits = [1] * size   # 1 = white
+        if 0 <= r < n:
+            for x in range(size):
+                c = x // scale - quiet
+                if 0 <= c < n and m[r][c]:
+                    bits[x] = 0
+        out = bytearray()
+        for i in range(0, size, 8):
+            b = 0
+            for k in range(8):
+                b = (b << 1) | (bits[i + k] if i + k < size else 1)
+            out.append(b)
+        rows.append(b"\x00" + bytes(out))
+
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 1, 0, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"".join(rows), 9)) + chunk(b"IEND", b""))
+
+
 if __name__ == "__main__":
-    print(render(encode(" ".join(sys.argv[1:]) or "hello")))
+    a = sys.argv[1:]
+    if len(a) >= 3 and a[0] == "--png":   # python3 qr.py --png out.png "text"
+        with open(a[1], "wb") as f:
+            f.write(png(encode(" ".join(a[2:]))))
+    else:
+        print(render(encode(" ".join(a) or "hello")))

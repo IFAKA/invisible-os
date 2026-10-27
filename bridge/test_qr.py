@@ -66,6 +66,26 @@ class QrTest(unittest.TestCase):
     def test_utf8(self):
         self.assertEqual(decode(qr.encode("Facundo ñ é")), "Facundo ñ é")
 
+    def test_png_round_trip(self):
+        import struct
+        import zlib
+        m = qr.encode("https://example.com/x")
+        d = qr.png(m, scale=3, quiet=4)
+        self.assertEqual(d[:8], b"\x89PNG\r\n\x1a\n")
+        w, h = struct.unpack(">II", d[16:24])
+        n = len(m)
+        self.assertEqual((w, h), ((n + 8) * 3, (n + 8) * 3))
+        i = d.index(b"IDAT")
+        ln = struct.unpack(">I", d[i - 4:i])[0]
+        raw = zlib.decompress(d[i + 4:i + 4 + ln])
+        stride = 1 + (w + 7) // 8
+        for r in range(n):
+            row = raw[(r + 4) * 3 * stride + 1:(r + 4) * 3 * stride + stride]
+            for c in range(n):
+                px = 12 + c * 3
+                dark = not (row[px // 8] >> (7 - px % 8)) & 1
+                self.assertEqual(dark, bool(m[r][c]))
+
     def test_size_and_finders(self):
         m = qr.encode("hi")
         self.assertEqual(len(m), 21)
