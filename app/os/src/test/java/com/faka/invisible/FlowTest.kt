@@ -82,6 +82,19 @@ class FlowTest {
         assertFalse("mirror still on after close", ScreenMirror.active)
     }
 
+    // ---- mark_matches_click ----
+    @Test fun mark_matches_click() {
+        val f = flow(); f.m.devShow("PHONE"); val i = f.mark(); f.heardStart("Emergency", i)
+        f.advance(600)
+        val e = ScreenMirror.index
+        assertEquals("Emergency", ScreenMirror.items[e])
+        val n = (e + 1) % ScreenMirror.items.size; val next = ScreenMirror.items[n]; val j = f.mark()
+        f.need(next, j); f.advance(100)   // the next item has just started: a click still means Emergency
+        assertEquals("the mark is ahead of what a click picks", e, ScreenMirror.index)
+        f.advance(600)   // past the grace: a click means the next one
+        assertEquals(n, ScreenMirror.index)
+    }
+
     // ---- screen_tap_picks ----
     @Test fun screen_tap_picks() {
         val f = flow(); f.m.devShow("GAMES"); f.heardStart("Duel")

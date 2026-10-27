@@ -196,7 +196,7 @@ class ControllerMode(
     private val intro = ArrayDeque<Intro>()
     private var curIntro: Intro? = null
     private val scanOut = object : ScanOut {
-        override fun say(index: Int, label: Phrase, spearcon: Boolean) { awaitStart = index; say(label, spearcon) }
+        override fun say(index: Int, label: Phrase, spearcon: Boolean) { awaitStart = index; say(label, spearcon); markPick() }
         override fun sayFast(word: Phrase) { speechOpen = true; out.speak(word, false, false) }
         override fun tone(t: Tone) { tn(t) }
         override fun leave() { leaveSilent() }
@@ -458,6 +458,13 @@ class ControllerMode(
         if (awaitStart < 0) return
         history.add(awaitStart to clock()); awaitStart = -1
         if (history.size > 8) history.removeAt(0)
+        markPick(); timers.set("markpick", graceMs + 1) { markPick() }
+    }
+
+    /** The app screen marks the option a click would choose now (see [bind]), not the one just starting: they differ for [graceMs] after an item starts. */
+    private fun markPick() {
+        if (phase != Phase.SCAN) return
+        bind(clock())?.let { com.faka.invisible.voicekit.ScreenMirror.point(it) }
     }
 
     private fun itemDone() {
