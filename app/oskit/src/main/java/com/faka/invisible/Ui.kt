@@ -259,14 +259,17 @@ class Kit(private val c: Context) {
     }
 
     /** A page that never scrolls itself: it fills the window and keeps the system bars clear. Put a [mirrorScreen] in it. */
+    private var barsSeen: IntArray? = null   // the system bars the last screen got: a new screen starts with them, so its first frame is already in place (it used to start too high and drop)
     fun fixedScreen(a: Activity): LinearLayout {
         a.window.statusBarColor = Ui.page; a.window.navigationBarColor = Ui.page
         return LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.page)
-            setPadding(dp(Ui.S2), dp(Ui.S2), dp(Ui.S2), dp(Ui.S2))
+            val b0 = barsSeen ?: intArrayOf(0, 0, 0, 0)
+            setPadding(b0[0] + dp(Ui.S2), b0[1] + dp(Ui.S2), b0[2] + dp(Ui.S2), b0[3] + dp(Ui.S2))
             setOnApplyWindowInsetsListener { v, i ->
                 if (android.os.Build.VERSION.SDK_INT >= 30) {
                     val b = i.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout() or android.view.WindowInsets.Type.ime())
+                    barsSeen = intArrayOf(b.left, b.top, b.right, b.bottom)
                     v.setPadding(b.left + dp(Ui.S2), b.top + dp(Ui.S2), b.right + dp(Ui.S2), b.bottom + dp(Ui.S2)); android.view.WindowInsets.CONSUMED
                 } else i
             }
@@ -305,7 +308,7 @@ class Kit(private val c: Context) {
      */
     fun mirrorScreen(parent: LinearLayout, title: String, items: List<String>, current: Int, lastPress: String?,
                      onPick: (Int, String) -> Unit, backLabel: String, onBack: () -> Unit, closeLabel: String, onClose: () -> Unit, moreLabel: String, onMore: () -> Unit): MirrorView {
-        status(parent, title, Translations.label("Invisible OS is open."), Ui.good, Ui.S1)   // the same header as the idle home (dot, word, line): going between them moves nothing
+        status(parent, title, Translations.label("Invisible OS is open."), Ui.good, Ui.S1, align = true)   // the same header as the idle home (dot, word, line): going between them moves nothing
         val box = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
         val rows = items.mapIndexed { i, t ->
             text(t, Type.BODY).apply {
@@ -327,7 +330,8 @@ class Kit(private val c: Context) {
     }
 
     /** Home status: a coloured dot, a large word, one quiet line. */
-    fun status(parent: LinearLayout, headline: String, line: String, color: Int, top: Int = Ui.S3, fill: LinearLayout.() -> Unit = {}) {
+    fun status(parent: LinearLayout, headline: String, line: String, color: Int, top: Int = Ui.S3, align: Boolean = false, fill: LinearLayout.() -> Unit = {}) {
+        if (align) parent.addView(View(c), LinearLayout.LayoutParams(1, dp(48)))   // the room of a page's "‹ Home" line: the title then sits at the same height as on every page
         val dot = View(c).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) } }
         parent.addView(row(dot.apply { layoutParams = LinearLayout.LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(12) } }, text(headline, Type.LARGE)), lp(top = top))
         parent.addView(text(line, Type.SMALL, Ui.soft), lp(top = Ui.S1))

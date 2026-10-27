@@ -84,6 +84,7 @@ class MainActivity : Activity() {
         super.onResume()
         if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java))
         announceStep = true
+        Handler(Looper.getMainLooper()).postDelayed({ render() }, 2600)   // if the service did not start, say so then
         if (!lostNote) lostNote = ButtonAccess.check(this)
         render()
     }
@@ -129,6 +130,9 @@ class MainActivity : Activity() {
     /** Pages whose top (back, title) stays; only the list under it scrolls. The others scroll as one (long text, the laptop rooms). */
     private val fixedPages = setOf(Page.TASKS, Page.MENU, Page.MENUMORE, Page.VOICE, Page.EMERGENCY, Page.AI)
 
+    private val bornAt = android.os.SystemClock.uptimeMillis()
+    /** The button service takes a moment to start: for the first 2.5 s the app is "listening", so "Stopped" never flashes at launch. */
+    private fun listening() = EventLog.running || android.os.SystemClock.uptimeMillis() - bornAt < 2500
     private var drawnPage: Page? = null
     private var drawnKind: List<Any>? = null
     /** Redraw, but keep the scroll place: every redraw rebuilds the page, which would throw a scrolled list back to the top (the layout jumps). */
@@ -136,7 +140,7 @@ class MainActivity : Activity() {
         val y = if (drawnPage == page && ::body.isInitialized) (body.parent as? ScrollView)?.scrollY ?: 0 else 0
         drawnPage = page
         val mirrored = ScreenMirror.active && !settingsOpen && EventLog.running
-        val kind = listOf(page, mirrored, EventLog.running, if (mirrored && page == Page.HOME) ScreenMirror.state.title + "\u0000" + ScreenMirror.state.items.joinToString("\u0001") else "")   // a new list (Back, Close, a pick) fades; the mark moving does not
+        val kind = listOf(page, mirrored, listening(), if (mirrored && page == Page.HOME) ScreenMirror.state.title + "\u0000" + ScreenMirror.state.items.joinToString("\u0001") else "")   // a new list (Back, Close, a pick) fades; the mark moving does not
         if (kind != drawnKind && drawnKind != null) android.transition.TransitionManager.beginDelayedTransition(root, android.transition.Fade().setDuration(160))   // a new kind of screen fades in; it does not snap
         drawnKind = kind
         draw()
@@ -240,7 +244,7 @@ class MainActivity : Activity() {
             contacts = granted(Manifest.permission.READ_CONTACTS), calls = granted(Manifest.permission.CALL_PHONE) && granted(Manifest.permission.ANSWER_PHONE_CALLS), sms = granted(Manifest.permission.SEND_SMS), callLog = granted(Manifest.permission.READ_CALL_LOG)))
         val steps = Setup.firstRun(allSteps)   // a new user is asked ONLY for these; every other permission is asked when a feature first needs it
         val next = if (previewReady) -1 else Setup.current(steps)
-        val stepKey = if (next >= 0) steps[next].id else if (!EventLog.running) "stopped" else "ready"
+        val stepKey = if (next >= 0) steps[next].id else if (!listening()) "stopped" else "ready"
         val changed = stepKey != lastStep
         if (changed) { lastStep = stepKey; if (next >= 0) body.post { k.enter(body) } }
         if (next >= 0) {
@@ -275,12 +279,12 @@ class MainActivity : Activity() {
                 tr("Settings"), { settingsOpen = true; render() }).also { mirror = it; mirrorKey = key; mirrorHost = fixed }
             root.removeAllViews(); root.addView(fixed)
             return
-        } else if (!EventLog.running) {
-            k.status(fixed, tr("Stopped"), tr("The app is not listening to the button."), Ui.bad, Ui.S1) {
+        } else if (!listening()) {
+            k.status(fixed, tr("Stopped"), tr("The app is not listening to the button."), Ui.bad, Ui.S1, align = true) {
                 addView(k.primary(tr("Start")) { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) })
             }
         } else {
-            k.status(fixed, tr("Ready"), tr("Hold your earbud button to open Invisible OS."), Ui.good, Ui.S1) {
+            k.status(fixed, tr("Ready"), tr("Hold your earbud button to open Invisible OS."), Ui.good, Ui.S1, align = true) {
                 addView(k.primary(tr("Open Invisible OS")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) })
             }
         }
