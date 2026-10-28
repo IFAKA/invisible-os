@@ -23,5 +23,13 @@ object Habits {
     fun decode(text: String?): Set<Long> = text.orEmpty().split(',').mapNotNull { it.trim().toLongOrNull() }.toSet()
 
     /** The habit names from one saved text (one per line); blank lines go, repeats go. Empty = the starter list. */
+    /** The saved text after adding [name] (blank or already there: unchanged). Starts from the shown list, so the starter list becomes real. */
+    fun added(text: String?, name: String): String {
+        val n = name.squash(); val now = names(text)
+        return if (n.isEmpty() || now.any { it.equals(n, true) }) now.joinToString("\n") else (now + n).joinToString("\n")
+    }
+    /** The saved text after removing [name]. Removing the last one leaves "", which shows the starter list again. */
+    fun removed(text: String?, name: String): String = names(text).filter { it != name }.joinToString("\n")
+
     fun names(text: String?): List<String> = text.orEmpty().lines().map { it.squash() }.filter { it.isNotEmpty() }.distinct().ifEmpty { STARTER }
 }

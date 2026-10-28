@@ -46,6 +46,8 @@ interface ModeOutput {
     fun notifDismiss(key: String): Boolean = false
     fun notifDismissAll(pkg: String?): Int = 0   // null = every app; returns how many were cleared (ongoing ones are kept)
     fun notifMute(pkg: String) {}
+    fun notifExtras(n: Notif): List<ModuleAction> = emptyList()   // extra actions the app's module offers (after Open app)
+    fun notifRunExtra(n: Notif, index: Int): Boolean = false
     fun installedApps(): List<InstalledApp> = emptyList()   // every launchable app (the leaves of the tree), this app left out
     fun resetLearning(pkg: String?): Int = 0   // forget the picks and launches of one app or program (null = all); returns how many picks went
     fun appUse(): Map<String, AppUse> = emptyMap()   // launches per app in the last month and week
@@ -975,7 +977,10 @@ class ControllerMode(
             Opt("notif:mute", Menu.MUTE_APP) {
                 pick("notif:mute"); out.notifMute(n.pkg); say(Voice.APP_MUTED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
             },
-            Opt("notif:open", Menu.OPEN_APP) { pick("notif:open"); openApp() })
+            Opt("notif:open", Menu.OPEN_APP) { pick("notif:open"); openApp() }) +
+            (if (n.hidden) emptyList() else out.notifExtras(n).mapIndexed { i, x ->
+                Opt("notif:extra", Phrase.content(x.label, "en")) { pick("notif:extra"); done(out.notifRunExtra(n, i)) }
+            })
     }
 
     private fun notifDone(ok: Boolean) { say(if (ok) Voice.NOTIF_DONE else Voice.NOTIF_FAILED); phase = Phase.WAIT; waitNext = { show(if (liveOpen()) Screen.NOTIF_ACTIONS else Screen.NOTIF_LIST) } }

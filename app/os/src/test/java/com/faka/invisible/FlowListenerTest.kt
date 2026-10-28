@@ -81,6 +81,8 @@ class FlowListenerTest {
         m.onConnected(ctx, object : NotificationHost {
             override fun arrival(pkg: String, sender: String, text: String, lang: String, visibility: Int) { arrived = listOf(pkg, sender, text, lang); got.countDown() }
             override fun detectLanguage(text: String) = "en"
+            override fun dismiss(key: String) = true
+            override fun remindIn(minutes: Int) = true
         })
         m.onPosted(sbn(7002, n), true)
         assertTrue("the module never announced the message", got.await(10, TimeUnit.SECONDS))

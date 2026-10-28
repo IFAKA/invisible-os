@@ -26,7 +26,14 @@ interface NotificationHost {
     fun arrival(pkg: String, sender: String, text: String, lang: String, visibility: Int)
     /** Blocking, off the main thread: the language code of [text] ("und" if unknown). */
     fun detectLanguage(text: String): String
+    /** Swipes the notification [key] away; true if it went. */
+    fun dismiss(key: String): Boolean
+    /** Starts a [minutes]-minute reminder (the OS timer); true if it was set. */
+    fun remindIn(minutes: Int): Boolean
 }
+
+/** An extra action a module offers for a notification (after Dismiss, Mute, Open app). [run] returns true if it worked. */
+class ModuleAction(val label: String, val run: (Notif, NotificationHost) -> Boolean)
 
 
 /**
@@ -45,6 +52,9 @@ interface NotificationModule {
     fun summary(n: Notif): String = read(n)
 
     /** True for a channel of this app that is only noise: it is not kept in the mailbox. */
+    /** Extra named actions for this notification, shown after the OS's own ones. */
+    fun extraActions(n: Notif): List<ModuleAction> = emptyList()
+
     fun skips(channel: String): Boolean = false
 
     fun onConnected(ctx: android.content.Context, host: NotificationHost) {}

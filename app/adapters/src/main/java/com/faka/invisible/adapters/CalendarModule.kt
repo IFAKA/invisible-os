@@ -5,10 +5,11 @@ import com.faka.invisible.oskit.*
 /**
  * Google Calendar: an event notification is read as "<title>, in 20 min, <place>". The text looks like
  * "In 20 minutes · Room 2", "En 20 minutos • Sala 2" or "10:00 - 11:00 · Room 2". Dismiss and Open app are the
- * OS's own actions (the adapter has no actions of its own, so there is no snooze here).
+ * OS's own actions (the one extra action is "Snooze 10 min": dismiss it and start a 10 minute reminder).
  */
 class CalendarModule : NotificationModule {
     companion object {
+        const val SNOOZE_MIN = 10
         const val PKG = "com.google.android.calendar"
         private val SPLIT = Regex("\\s*[·•\\n|]\\s*")
         private val IN = Regex("^(?:in|en|dentro de)\\s+(?:about\\s+|unos\\s+|aprox\\.?\\s+)?(\\d+)\\s*(min\\w*|h\\w*|hours?|horas?)\\b.*$", RegexOption.IGNORE_CASE)
@@ -37,5 +38,14 @@ class CalendarModule : NotificationModule {
     }
 
     override fun matches(pkg: String) = pkg == PKG
+    override fun extraActions(n: Notif): List<ModuleAction> = listOf(ModuleAction("Snooze 10 min") { _, host -> snooze(n, host) })
+
+    /** Sets the reminder first; only if that worked is the notification dismissed (so a snooze is never lost). */
+    fun snooze(n: Notif, host: NotificationHost): Boolean {
+        if (!host.remindIn(SNOOZE_MIN)) return false
+        host.dismiss(n.key)
+        return true
+    }
+
     override fun read(n: Notif): String = phrase(n.title, n.text)
 }

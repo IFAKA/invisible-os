@@ -24,6 +24,9 @@ import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import com.faka.invisible.logickit.AiChoice
+import com.faka.invisible.logickit.Habits
+import com.faka.invisible.habits.HabitsProgram
+import com.faka.invisible.oskit.Trace
 import com.faka.invisible.voicekit.MenuLanguage
 import com.faka.invisible.voicekit.ScreenMirror
 import com.faka.invisible.voicekit.Translations
@@ -100,7 +103,7 @@ class MainActivity : Activity() {
     private fun slider(label: String, valueText: String, max: Int, now: Int, apply: (Int) -> LauncherSettings) = k.slider(label, valueText, max, now) { change(apply(it)) }
 
     // ---- screens: Home shows one thing to do and a few doors; each door opens one small page ----
-    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), MENUMORE("Order, Today and Phone"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), COMPUTERS("Computers"), LAPTOP("Laptop"), AI("AI"), HELP("Help") }
+    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), MENUMORE("Order, Today and Phone"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), HABITS("Habits"), COMPUTERS("Computers"), LAPTOP("Laptop"), AI("AI"), HELP("Help") }
     private var page = Page.HOME
 
     private val laptop by lazy { LaptopPage(this, k, body) { render() } }
@@ -130,7 +133,7 @@ class MainActivity : Activity() {
     }
 
     /** Pages whose top (back, title) stays; only the list under it scrolls. The others scroll as one (long text, the laptop rooms). */
-    private val fixedPages = setOf(Page.TASKS, Page.MENU, Page.MENUMORE, Page.VOICE, Page.EMERGENCY, Page.AI)
+    private val fixedPages = setOf(Page.TASKS, Page.HABITS, Page.MENU, Page.MENUMORE, Page.VOICE, Page.EMERGENCY, Page.AI)
 
     private val bornAt = android.os.SystemClock.uptimeMillis()
     /** The button service takes a moment to start: for the first 2.5 s the app is "listening", so "Stopped" never flashes at launch. */
@@ -176,6 +179,7 @@ class MainActivity : Activity() {
             Page.MENUMORE -> menuMorePage()
             Page.VOICE -> voicePage()
             Page.EMERGENCY -> emergencyPage()
+            Page.HABITS -> habitsPage()
             Page.COMPUTERS -> computersPage.draw()
             Page.LAPTOP -> laptop.draw()
             Page.AI -> aiPage()
@@ -309,6 +313,7 @@ class MainActivity : Activity() {
             k.navRow(this, tr("Tasks"), if (n == 0) tr("None yet") else tr("{0} to do").replace("{0}", "$n")) { open(Page.TASKS) }
             k.navRow(this, tr("Your menu"), tr("Pin, move or hide what you hear")) { open(Page.MENU) }
             k.navRow(this, tr("Voice and speed"), tr("Language") + " " + MenuLanguage.names[MenuLanguage.code] + ", " + tr("Voice").lowercase() + " ${"%.1f".format(s.speechRate)}x") { open(Page.VOICE) }
+            k.navRow(this, tr("Habits"), Habits.names(sp.getString(HabitsProgram.LIST_KEY, null)).joinToString(", ")) { open(Page.HABITS) }
             k.navRow(this, tr("Emergency contact"), Actions.emergencyContact().ifEmpty { tr("Not set") }) { open(Page.EMERGENCY) }
             val pcs = Actions.computers()
             k.navRow(this, tr("Computers"), if (pcs.isEmpty()) tr("Add a computer") else pcs.joinToString(", ") { it.name }) { open(Page.COMPUTERS) }
@@ -332,6 +337,24 @@ class MainActivity : Activity() {
                 note.visibility = View.VISIBLE; note.text = if (Actions.emergencyContact().isEmpty()) tr("Saved. No emergency contact.") else tr("Saved.")
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
             addView(note)
+        }
+    }
+
+    /** The habits the Habits tool reads: add one by typing it, remove one with its button. Saved in the prefs key the tool reads. */
+    private fun habitsPage() {
+        val saved = sp.getString(HabitsProgram.LIST_KEY, null)
+        fun save(text: String) { sp.edit().putString(HabitsProgram.LIST_KEY, text).apply(); Trace.ev("habits", "list ${Habits.names(text).size}"); render() }
+        k.card(pageTop!!, tr("Add a habit"), tr("Hold the button and pick \"Habits\" to check them off each day."), true) {
+            val input = k.input(tr("A habit, like Water"))
+            addView(input, LinearLayout.LayoutParams(-1, -2))
+            addView(k.btn(tr("Add habit"), true) { save(Habits.added(saved, input.text.toString())) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
+        }
+        Habits.names(saved).forEachIndexed { i, name ->
+            val item = k.row(k.grow(k.text(name).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }),
+                k.btn(tr("Remove")) { save(Habits.removed(saved, name)) }.apply { minWidth = k.dp(96) })
+            item.setPadding(k.dp(12), 0, k.dp(8), 0)
+            k.surface(item)
+            body.addView(item, LinearLayout.LayoutParams(-1, k.dp(60)).apply { topMargin = k.dp(if (i == 0) 14 else 8) })
         }
     }
 

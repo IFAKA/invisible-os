@@ -96,6 +96,8 @@ class ModeTest {
             override fun notifDismiss(key: String): Boolean { log.add("ndismiss $key"); groups = groups.map { it.copy(items = it.items.filter { n -> n.key != key }) }.filter { it.items.isNotEmpty() }; return true }
             override fun notifDismissAll(pkg: String?): Int { log.add("nclear ${pkg ?: "all"}"); val n = groups.filter { pkg == null || it.pkg == pkg }.sumOf { it.items.size }; groups = groups.filter { pkg != null && it.pkg != pkg }; return n }
             override fun notifMute(pkg: String) { log.add("nmute $pkg"); mutedPkgs += pkg; groups = groups.filter { it.pkg != pkg }; muted++ }
+            override fun notifExtras(n: Notif) = if (n.pkg == "com.mail") listOf(ModuleAction("Snooze 10 min") { _, _ -> true }) else emptyList()
+            override fun notifRunExtra(n: Notif, index: Int): Boolean { log.add("nextra ${n.key} $index"); return true }
             override fun notifMutedCount() = muted
             override fun notifUnmuteAll() { log.add("nunmute"); muted = 0 }
             override fun startNotifReply(key: String, index: Int) { log.add("nreply $key $index") }
@@ -619,6 +621,15 @@ class ModeTest {
         r.wake(); r.pick("Mail"); r.pick("Bob. two"); r.advance(1500); r.pick("Dismiss"); r.clearLog(); r.advance(6000)
         val said = r.spoken().filter { it.startsWith("say") }
         assertTrue(said.toString(), said.first().endsWith("Cy. three"))   // not "Ann. one" again
+    }
+
+    @Test fun moduleExtraActionComesAfterOpenAppAndRuns() {
+        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("today"))
+        val ns = listOf(Notif("k1", "com.mail", "Mail", "Ann", "one", 5))
+        r.groups = listOf(NotifGroup("com.mail", "Mail", "com.mail", ns))
+        r.installed = listOf(InstalledApp("com.mail", "Mail"), InstalledApp("com.google.android.apps.maps", "Maps"))
+        r.wake(); r.pick("Mail"); r.advance(1500); r.clearLog(); r.pick("Snooze 10 min")
+        assertTrue(r.spoken().toString(), r.log.contains("nextra k1 0"))
     }
 
     @Test fun goingBackToAListReadsItFromTheItemYouWereOn() {

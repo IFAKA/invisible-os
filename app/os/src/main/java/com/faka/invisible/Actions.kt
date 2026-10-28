@@ -145,6 +145,13 @@ object Actions {
             override fun notifDismiss(key: String) = ControllerNotificationListener.dismiss(key)
             override fun notifDismissAll(pkg: String?) = ControllerNotificationListener.dismissAll(pkg)
             override fun notifMute(pkg: String) = ControllerNotificationListener.mute(pkg)
+            override fun notifExtras(n: Notif) = ControllerNotificationListener.modules.forNotif(n).extraActions(n)
+            override fun notifRunExtra(n: Notif, index: Int): Boolean {
+                val x = ControllerNotificationListener.modules.forNotif(n).extraActions(n).getOrNull(index) ?: return false
+                val ok = x.run(n, ControllerNotificationListener.host)
+                Trace.ev("notif", "extra ${x.label} ${n.pkg} ok=$ok")
+                return ok
+            }
             override fun notifAppHint(pkg: String) = try { app.packageManager.getApplicationInfo(pkg, 0).category } catch (e: Exception) { -1 }
             override fun installedApps() = DeviceApps.installedNow(app)
             override fun appUse() = DeviceApps.useNow(app)
@@ -628,6 +635,9 @@ object Actions {
     // Timer: try the clock app (no UI). If Android refuses, run our own timer that rings with tone + voice.
     private var ownTimer: Runnable? = null
     private var ringing: Runnable? = null
+
+    /** A reminder for an adapter (Calendar snooze): the OS timer; it speaks "timer set" and rings like any timer. */
+    fun remindIn(minutes: Int): Boolean { handler.post { startTimerNow(minutes) }; return true }
 
     private fun startTimerNow(minutes: Int) {
         val intent = Intent(AlarmClock.ACTION_SET_TIMER)

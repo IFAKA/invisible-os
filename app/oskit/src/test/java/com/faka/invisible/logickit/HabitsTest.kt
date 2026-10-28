@@ -4,6 +4,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class HabitsTest {
+    @Test fun addAndRemoveNames() {
+        assertEquals("Water\nWalk\nRead\nStretch", Habits.added(null, "  Stretch "))
+        assertEquals("Water\nWalk\nRead", Habits.added(null, "walk"))   // repeat: unchanged
+        assertEquals("Water\nWalk\nRead", Habits.added(null, "  "))
+        assertEquals("Water\nRead", Habits.removed("Water\nWalk\nRead", "Walk"))
+        assertEquals(Habits.STARTER, Habits.names(Habits.removed("Solo", "Solo")))   // empty = starter again
+    }
     @Test fun streakCountsDaysInARow() {
         assertEquals(3, Habits.streak(setOf(10L, 9L, 8L, 5L), 10))
         assertEquals(0, Habits.streak(emptySet(), 10))

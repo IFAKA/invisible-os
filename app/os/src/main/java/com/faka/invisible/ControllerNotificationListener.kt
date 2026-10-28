@@ -23,9 +23,12 @@ class ControllerNotificationListener : NotificationListenerService() {
         private val chat get() = Adapters.chat
         val store get() = chat.store
         /** What the adapters may ask of the OS. */
+        val host get() = adapterHost
         private val adapterHost = object : NotificationHost {
             override fun arrival(pkg: String, sender: String, text: String, lang: String, visibility: Int) = Actions.arrival(pkg, sender, text, lang, visibility)
             override fun detectLanguage(text: String) = detector.detect(text)
+            override fun dismiss(key: String) = ControllerNotificationListener.dismiss(key)
+            override fun remindIn(minutes: Int) = Actions.remindIn(minutes)
         }
         /** The mailbox: every app's notifications (not ongoing, not group summaries), see [NotificationStore]. */
         val notifs = NotificationStore(muted = { mutes.isMuted(it) })
