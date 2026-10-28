@@ -41,12 +41,28 @@ class MediaKeyIntake(
         .setActions(PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE)
         .setState(st, 0, 1f).build()
 
+    /** [n] quick presses made out of one key: each press lasts 50 ms, one every 140 ms (well inside the click gap). */
+    private fun clicks(n: Int) {
+        val base = SystemClock.uptimeMillis()
+        for (i in 0 until n) {
+            val t = base + i * 140L
+            handler.postDelayed({ port.key("media", true, 0, t, t) }, i * 140L)
+            handler.postDelayed({ port.key("media", false, 0, t, t + 50) }, i * 140L + 50)
+        }
+    }
+
     fun start() {
         session = MediaSession(app, "Invisible").apply {
             setCallback(object : MediaSession.Callback() {
                 override fun onMediaButtonEvent(i: Intent): Boolean {
                     val e = i.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java) ?: return false
                     // Our session says PLAYING, so an earbud tap (Bluetooth AVRCP) arrives as PAUSE (or PLAY): it is the same button.
+                    // Earbuds count double and triple taps themselves and send one key: Next = 2 clicks, Previous = 3.
+                    val multi = when (e.keyCode) { KeyEvent.KEYCODE_MEDIA_NEXT -> 2; KeyEvent.KEYCODE_MEDIA_PREVIOUS -> 3; else -> 0 }
+                    if (multi > 0) {
+                        if (e.action == KeyEvent.ACTION_DOWN) { Trace.ev("media", "key code=${e.keyCode} = $multi clicks"); clicks(multi) }
+                        return true
+                    }
                     val tap = e.keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE || e.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY
                     if (!ButtonInput.isButton(e) && !tap) return false
                     Trace.ev("media", "key action=${e.action} code=${e.keyCode} repeat=${e.repeatCount}")
