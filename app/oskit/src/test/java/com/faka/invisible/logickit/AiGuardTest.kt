@@ -84,4 +84,14 @@ class AiGuardTest {
         val p = AiGuard.digestPrompt(listOf(Triple("A".repeat(50), "t", "x".repeat(300))))
         assertTrue(p.contains("Below are 1 phone notifications")); assertTrue(p.count { it == 'x' } <= 120 + 2)
     }
+
+    @Test fun completionsFitTheTypedLettersAndInventNothing() {
+        val raw = """Here: {"completions": ["how are you", "hay fever", "what is up", "hey Bob you", "how are you"]} done"""
+        assertEquals(listOf("how are you", "hay fever", "what is up", "hey Bob you", "how are you"), AiGuard.parseCompletions(raw))
+        assertEquals(listOf("how are you", "hay fever"), AiGuard.makeCompletions("hay", "Ana: hi", "en") { raw })
+        assertEquals(listOf("hey Bob you"), AiGuard.makeCompletions("hby", "Bob: hi", "en") { raw })   // Bob is in the chat, so it is not invented
+        assertTrue(AiGuard.makeCompletions("hay", "", "en") { throw RuntimeException("x") }.isEmpty())
+        assertTrue(AiGuard.makeCompletions("hay", "", "en") { "no json" }.isEmpty())
+        assertTrue(AiGuard.completePrompt("hay", "en", "Ana: hi").contains("Ana: hi"))
+    }
 }

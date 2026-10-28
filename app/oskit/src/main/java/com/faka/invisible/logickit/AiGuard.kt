@@ -120,6 +120,39 @@ object AiGuard {
 
     fun parseShort(raw: String): String = stringField(raw, "short").squash().replace(markdown, "").squash()
 
+    const val COMPLETE_WORDS = 12
+
+    fun completePrompt(typed: String, lang: String, context: String = ""): String {
+        val language = if (lang == "es") "Spanish" else "English"
+        return "${earlierBlock(context)}Someone is typing a message on a phone with one button, so every letter is slow. So far they typed: \"${typed.take(200)}\"\n" +
+            "The typed letters are EITHER the start of the word they mean (\"hel\" = \"help\") OR the first letters of the next words (\"hay\" = \"how are you\"). " +
+            "Write up to 5 whole texts they most likely mean, most likely first, in $language, as JSON: {\"completions\": [...]}. " +
+            "Each text starts with the words already typed, is natural and short, at most $COMPLETE_WORDS words. " +
+            "Use only facts, numbers and names that are in the earlier messages. Never invent.\nOutput only the JSON."
+    }
+
+    /** The strings of {"completions": [...]} in the model's reply; empty if it is not the JSON asked for. */
+    fun parseCompletions(raw: String): List<String> {
+        val m = Regex("\\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL).find(raw.substringAfter("\"completions\"", "")) ?: return emptyList()
+        return Regex("\"((?:[^\"\\\\]|\\\\.)*)\"").findAll(m.groupValues[1]).map { unescape(it.groupValues[1]).squash().replace(markdown, "").squash() }.filter { it.isNotEmpty() }.toList()
+    }
+
+    /** Up to 5 completions of [typed] that fit it, are short and invent nothing (checked against [typed] and [context]); empty on any failure. */
+    fun makeCompletions(typed: String, context: String, lang: String, model: (String) -> String): List<String> {
+        val t = typed.squash()
+        if (t.isEmpty()) return emptyList()
+        val items = try { parseCompletions(model(completePrompt(t, lang, context))) } catch (_: Exception) { return emptyList() }
+        val hay = (t + "\n" + context.squash().take(CONTEXT_CHARS)).lowercase()
+        val out = ArrayList<String>()
+        for (x in items) {
+            val c = x.squash().trim(' ', '"', '\'')
+            if (c.isEmpty() || c.words().size > COMPLETE_WORDS || out.any { it.equals(c, true) } || !Completion.fits(c, t)) continue
+            if (riskyTokens(c).any { !inSource(it, hay) }) continue
+            out += c
+        }
+        return out.take(5)
+    }
+
     /** A 1-2 sentence version of [text] that passes the guard (names and numbers are checked against [text] and [context] together), or "". */
     fun makeShort(text: String, context: String, model: (String) -> String): String {
         if (text.squash().isEmpty()) return ""
