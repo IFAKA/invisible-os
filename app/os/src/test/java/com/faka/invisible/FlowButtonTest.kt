@@ -149,6 +149,31 @@ class FlowButtonTest {
         assertEquals(1, host.ended)
     }
 
+    // ---- what you hear is what you see: the screen's item is the item whose sound starts now ----
+    @Test fun home_letters_screen_shows_the_item_at_its_onset() {
+        val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)
+        val apps = object : ActionSource {
+            override val id = "apps"
+            override fun actions() = listOf(HomeAction(ActionKind.OPEN, "WhatsApp", "com.whatsapp", 30.0), HomeAction(ActionKind.OPEN, "Maps", "com.maps", 20.0))
+        }
+        val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun level() = com.faka.invisible.logickit.LoopLevel.TOP; override fun save(offsets: List<Double>) {} }
+        val p = HomeLetters(listOf(apps), ActionRanker(), audio, audio, store, { true }, {})
+        ScreenMirror.clear()
+        val seen = ArrayList<Pair<Long, String>>()
+        ScreenMirror.onChange = { ScreenMirror.state.loop?.let { l -> if (l.at >= 0) seen.add(rig.now() to l.ring[l.at].text) } }
+        try {
+            rig.running = p; p.start(host)
+            var guard = 0; while (seen.size < 40 && guard++ < 4000) rig.advance(25)
+            assertTrue("the screen followed the loop: ${seen.size}", seen.size >= 40)
+            assertTrue("a guess is drawn: ${seen.take(3)}", seen.any { it.second == "Open WhatsApp" })
+            for ((t, text) in seen) {
+                val near = audio.heard(text).minOf { Math.abs(it - t) }
+                assertTrue("'$text' drawn at $t but heard ${audio.heard(text).take(4)}", near <= 30.0)
+            }
+            assertTrue("the letters above are drawn", ScreenMirror.state.loop!!.header.first().startsWith("Letters"))
+        } finally { ScreenMirror.onChange = null; ScreenMirror.clear(); p.stop() }
+    }
+
     @Test fun home_letters_hold_three_seconds_leaves_and_click_hold_is_only_clicking() {
         fun make(): Triple<RoboRig, RoboRig.Host, HomeLetters> {
             val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)

@@ -62,7 +62,7 @@ class HomeLetters(
     private val level = LoopLevel(store.level()) { store.saveLevel(it) }
     private val loop = LetterLoop<String>(audio, timers, pace = level.pace, seed = learned, params = seeded.second,
         log = { event, fields -> Trace.ev("home", "loop $event ${fields.joinToString(" ")}") },
-        onChosen = { chosen(it) }, onIdle = { idle() })
+        onChosen = { chosen(it) }, onIdle = { idle() }).also { it.view = ScreenMirror.loopView }
 
     override fun start(host: ProgramHost) {
         this.host = host; active = true; startedAt = audio.nowMs()
@@ -99,8 +99,8 @@ class HomeLetters(
         val top = ranked.take(ACTIONS)
         shown = top.map { it.action }; shownRanked = ranked
         val items = build(top, ranker.nextLetters(ranked, letters), letters.isNotEmpty())
+        ScreenMirror.loopHeader(listOf(if (letters.isEmpty()) "Letters: -" else "Letters: $letters", "Type letters to ask for something"))
         loop.start(items)
-        host.screen(listOf("Type letters to ask for something", if (letters.isEmpty()) "Letters: -" else "Letters: $letters", "Hearing: " + items.take(5).joinToString(", ") { it.say.text } + "..."), 2)
         Trace.ev("home", "round letters=$letters actions=${top.joinToString("/") { it.action.key }} items=${items.size}")
     }
 

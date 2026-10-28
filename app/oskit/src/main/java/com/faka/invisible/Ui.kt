@@ -384,6 +384,49 @@ class Kit(private val c: Context) {
         return MirrorView(rows, scroller, press).also { it.update(current, lastPress) }
     }
 
+    /** The letter loop on screen, updated in place (nothing is rebuilt per item, so nothing jumps). */
+    inner class LoopSceneView(private val head: List<TextView>, private val before: TextView, private val big: TextView, private val after: TextView, private val note: TextView) {
+        fun update(s: com.faka.invisible.voicekit.ScreenMirror.LoopSnap) {
+            head.forEachIndexed { i, t -> t.text = s.header.getOrNull(i) ?: "" }
+            val ring = s.ring; val n = ring.size
+            fun near(from: Int, step: Int) = (1..3).filter { it < n }.map { ring[Math.floorMod(from + step * it, n)].text }
+            val ch = s.chosen
+            if (n == 0 || (s.at < 0 && ch == null)) {
+                before.text = ""; after.text = if (n == 0) "" else ring.take(3).joinToString("   ") { it.text }
+                big.text = ""; note.text = ""; return
+            }
+            val at = s.at.coerceIn(0, n - 1)
+            before.text = near(at, -1).reversed().joinToString("   ")
+            after.text = near(at, 1).joinToString("   ")
+            val now = ch ?: ring[at]
+            big.text = now.text
+            big.setTextColor(if (ch != null) Ui.good else Ui.accent)
+            note.text = if (ch != null) Translations.label("Picked") else if (now.isGuess) Translations.label("A whole guess") else ""
+        }
+    }
+
+    /**
+     * What you hear is what you see: the item sounding now BIG in the middle (letter or whole word), the two or three before and after it small
+     * above and below, [header] rows on top (what was typed), the item just taken in green. Centered, fixed sizes: only the texts change ([LoopSceneView.update]).
+     */
+    fun loopScreen(parent: LinearLayout, title: String, snap: com.faka.invisible.voicekit.ScreenMirror.LoopSnap): LoopSceneView {
+        status(parent, title, Translations.label("Invisible OS is open."), Ui.good, Ui.S1)
+        fun centred(t: TextView, type: Type, color: Int) = t.apply { gravity = Gravity.CENTER; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; textSize = type.size; setTextColor(color) }
+        val head = List(3) { i -> centred(text("", if (i == 0) Type.TITLE else Type.SMALL, if (i == 0) Ui.ink else Ui.soft), if (i == 0) Type.TITLE else Type.SMALL, if (i == 0) Ui.ink else Ui.soft).apply { minHeight = dp(if (i == 0) 32 else 22) } }
+        head.forEach { parent.addView(it, lp(top = Ui.S1)) }
+        val mid = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
+        val before = centred(text("", Type.BODY, Ui.soft), Type.BODY, Ui.soft).apply { minHeight = dp(28); maxLines = 1 }
+        val big = centred(text("", Type.LARGE, Ui.accent), Type.LARGE, Ui.accent).apply {
+            textSize = 72f; minHeight = dp(120); setPadding(0, dp(Ui.S1), 0, dp(Ui.S1))
+            if (android.os.Build.VERSION.SDK_INT >= 26) setAutoSizeTextTypeUniformWithConfiguration(24, 72, 2, android.util.TypedValue.COMPLEX_UNIT_SP)
+        }
+        val after = centred(text("", Type.BODY, Ui.soft), Type.BODY, Ui.soft).apply { minHeight = dp(28); maxLines = 1 }
+        val note = centred(text("", Type.SMALL, Ui.soft), Type.SMALL, Ui.soft).apply { minHeight = dp(22) }
+        mid.addView(before, lp()); mid.addView(big, LinearLayout.LayoutParams(-1, dp(140))); mid.addView(after, lp()); mid.addView(note, lp(top = Ui.S1))
+        parent.addView(mid, LinearLayout.LayoutParams(-1, 0, 1f))
+        return LoopSceneView(head, before, big, after, note).also { it.update(snap) }
+    }
+
     /** Home status: a coloured dot, a large word, one quiet line. */
     fun status(parent: LinearLayout, headline: String, line: String, color: Int, top: Int = Ui.S3, align: Boolean = false, fill: LinearLayout.() -> Unit = {}) {
         if (align) parent.addView(View(c), LinearLayout.LayoutParams(1, dp(48)))   // the room of a page's "‹ Home" line: the title then sits at the same height as on every page

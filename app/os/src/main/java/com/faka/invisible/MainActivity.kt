@@ -38,7 +38,7 @@ class MainActivity : Activity() {
     private lateinit var body: LinearLayout
     private lateinit var root: android.widget.FrameLayout   // holds the scrolling pages, or the fixed mirror of the OS
     private lateinit var scroll: ScrollView
-    private var mirror: Kit.MirrorView? = null; private var mirrorKey = ""; private var mirrorHost: View? = null
+    private var mirror: Kit.MirrorView? = null; private var loopScene: Kit.LoopSceneView? = null; private val LOOP_KEY = "\u0002loop"; private var mirrorKey = ""; private var mirrorHost: View? = null
     private lateinit var scrollBody: LinearLayout   // the body of the scrolling pages
     private var pageTop: LinearLayout? = null         // fixed pages: the part above the scrolling list
     private var settingsOpen = false   // the person left the mirror to use the settings
@@ -276,6 +276,14 @@ class MainActivity : Activity() {
         if (!mir.active) settingsOpen = false
         val fixed = k.fixedScreen(this)   // the home never scrolls as a whole: the status is fixed, the doors are the list
         if (mir.active && EventLog.running && !settingsOpen) {   // the OS is in use: the app is its picture, and a second way to drive it
+            val snap = mir.loop
+            if (snap != null) {   // the letter loop: drawn from the items as they sound, updated in place
+                if (mirrorKey == LOOP_KEY && root.getChildAt(0) === mirrorHost) { loopScene?.update(snap); return }
+                loopScene = k.loopScreen(fixed, mir.title.ifEmpty { tr("Home") }, snap)
+                mirrorKey = LOOP_KEY; mirrorHost = fixed; mirror = null
+                root.removeAllViews(); root.addView(fixed)
+                return
+            }
             val key = mir.title + "\u0000" + mir.items.joinToString("\u0001")
             if (mirrorKey == key && root.getChildAt(0) === mirrorHost) { mirror?.update(mir.index, mir.lastPress); return }   // same list: only the mark moves
             k.mirrorScreen(fixed, mir.title.ifEmpty { tr("Home") }, mir.items, mir.index, mir.lastPress,

@@ -462,7 +462,7 @@ object Actions {
     private var ownScreen = false
     private val spoken = ArrayList<String>()
     private fun mirrorSaid(t: String) {
-        if (ownScreen || running == null || t.isBlank()) return
+        if (ownScreen || running == null || t.isBlank() || com.faka.invisible.voicekit.ScreenMirror.state.loop != null) return
         spoken.add(t); while (spoken.size > 5) spoken.removeAt(0)
         com.faka.invisible.voicekit.ScreenMirror.show(spoken.toList(), spoken.size - 1)
     }

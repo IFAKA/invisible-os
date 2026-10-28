@@ -83,7 +83,7 @@ class LoopProgram(
     private val level = LoopLevel(store.level()) { store.saveLevel(it) }
     private val loop = LetterLoop<String>(audio, timers, pace = level.pace, seed = learned, params = seeded.second,
         log = { event, fields -> out.log(event, *fields.toTypedArray()) },
-        onChosen = { chosen(it) }, onIdle = { idle() })
+        onChosen = { chosen(it) }, onIdle = { idle() }).also { it.view = ScreenMirror.loopView }
 
     fun start() {
         if (frame.kind == FieldKind.PASSWORD) { out.say(TypeVoice.PASSWORD); onEnded(); return }   // never spoken, never saved
@@ -125,18 +125,17 @@ class LoopProgram(
         val offered = shown.map { it.first }; phrases = offered
         val all = mixed.words
         val items = LoopItems.build(all, written, prefix, lm.skipShortFirst, offered, history.isNotEmpty(), endsSentence, { bigrams ?: LetterBigrams(all.map { it.first }).also { bigrams = it } }, shown.map { LoopItems.phraseChance(it.second) })
+        showScreen()
         loop.start(items)
-        showScreen(items)
         out.log("round", prefix, written.size, items.size, items.take(5).joinToString("/") { it.key })
     }
 
-    private fun showScreen(items: List<LoopItem<String>>) {
+    /** The rows above the loop view (what was typed); the items come from the loop itself (`loop.view`), as they sound. */
+    private fun showScreen() {
         val rows = ArrayList<String>()
         rows.add(text().ifEmpty { "Nothing written yet" })
         if (prefix.isNotEmpty()) rows.add("Spelling: $prefix")
-        val mark = rows.size
-        rows.add("Hearing: " + items.take(6).joinToString(", ") { it.say.text } + "...")
-        out.screen(rows, mark)
+        ScreenMirror.loopHeader(rows)
     }
 
     /** What Send sends: the written words plus the letters spelled so far. */

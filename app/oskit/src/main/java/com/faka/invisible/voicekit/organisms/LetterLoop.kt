@@ -52,6 +52,21 @@ class LoopFocus(
     }
 }
 
+/** One item of the order a round plays in, as the screen shows it: [key] (the caller's), [text] (the words said), [isGuess] (a whole guess read alone). */
+class LoopShown(val key: Any?, val text: String, val isGuess: Boolean)
+
+/**
+ * What you hear is what you see: the loop tells this view about every item at the moment its sound starts (its onset on the audio clock, the same
+ * time the click model gets). All calls on the main thread. [round] = the order of the items of the cycle now playing (a new focus round is a new round);
+ * [shown] = item [index] of that order starts to sound; [chosen] = item [index] was taken; [idle] = nothing plays now.
+ */
+interface LoopView {
+    fun round(items: List<LoopShown>) {}
+    fun shown(index: Int, item: LoopShown) {}
+    fun chosen(index: Int, item: LoopShown) {}
+    fun idle() {}
+}
+
 /** What the loop needs to make sound. The Android side is `engines/LoopSound`; tests use a fake one with fake time. All calls on the main thread. */
 interface LoopAudio {
     /** Frames per second of [nowFrame] and of the clips. */
@@ -109,6 +124,8 @@ class LetterLoop<K>(
     /** The focus round after a click that does not choose; null = the whole loop plays on. */
     private val focus: LoopFocus? = LoopFocus(),
 ) {
+    /** The screen's copy of what is heard (null = none). Set it before [start]. */
+    var view: LoopView? = null
     private enum class State { OFF, PREPARING, RUNNING, PAUSED }
     private var state = State.OFF
     private var gen = 0
@@ -128,6 +145,9 @@ class LetterLoop<K>(
     private var fullScores: Map<K, Double> = emptyMap()     // what the model thought of every item when the focus round began
     private var roundWall = 0.0                             // first sound of the round (the whole loop's)
     private var roundPeriod = 0.0
+    private var order: List<LoopShown> = emptyList()      // the items of the cycle playing, by onset: what the view shows
+    private var orderKeys: List<K> = emptyList()
+    private var orderAt: List<Double> = emptyList()
     private var plays: List<Triple<FloatArray, Long, Double>> = emptyList()   // clip, frame offset in the cycle, pan
     /** Times of the items in the cycle, ms after the cycle start (key to time); what the model got. Read by tests and traces. */
     var onsets: Map<K, Double> = emptyMap(); private set
@@ -160,7 +180,8 @@ class LetterLoop<K>(
     fun stop() { halt(); state = State.OFF }
 
     private fun halt() {
-        gen++; timers.clear(TIMER)
+        gen++; timers.clear(TIMER); timers.clear(VIEW)
+        if (state == State.RUNNING) view?.idle()
         if (state == State.RUNNING || state == State.PREPARING) audio.clear()   // a sound that is not the loop's (the confirm) is never cut
         if (state != State.OFF) state = State.PAUSED
     }
@@ -222,8 +243,29 @@ class LetterLoop<K>(
         model = m; lastActiveMs = startWall.toLong()
         state = State.RUNNING
         schedule(0); schedule(1)
+        showOrder(live, at)
         log("loop-start", listOf(live.size, periodMs.toLong(), startWall.toLong()))
         next(0)
+    }
+
+    /** Tell the view the order of this cycle and put each item's onset on a timer (one chain: the next onset is set when one fires). */
+    private fun showOrder(live: List<LoopItem<K>>, at: Map<K, Double>) {
+        val v = view ?: return
+        val sorted = live.sortedBy { at.getValue(it.key) }
+        order = sorted.map { LoopShown(it.key, it.say.text, it.guess) }
+        orderKeys = sorted.map { it.key }; orderAt = sorted.map { at.getValue(it.key) }
+        v.round(order)
+        viewNext(0, 0, gen)
+    }
+
+    private fun viewNext(cycle: Int, i: Int, g: Int) {
+        val v = view ?: return
+        val due = startWall + cycle * periodMs + orderAt[i]
+        timers.set(VIEW, max(0L, Math.round(due - audio.nowMs()))) {
+            if (g != gen || state != State.RUNNING) return@set
+            v.shown(i, order[i])
+            if (i + 1 < order.size) viewNext(cycle, i + 1, g) else viewNext(cycle + 1, 0, g)
+        }
     }
 
     /** A click that did not choose: play only the likely items for a while. */
@@ -288,7 +330,9 @@ class LetterLoop<K>(
         val rank = items.indexOfFirst { it.key == key }
         val item = items[rank]
         val c = LoopChoice(key, rank, ((timeMs - roundWall) / roundPeriod).toInt(), (timeMs - roundWall).toLong(), clicks)
+        val shownAt = orderKeys.indexOf(key)
         halt(); state = State.PAUSED; focused = false
+        view?.let { v -> if (shownAt >= 0) v.chosen(shownAt, order[shownAt]) else v.chosen(rank, LoopShown(key, item.say.text, item.guess)) }
         audio.confirm()
         if (item.undo) m.undo() else m.learn(key)
         prev = m; model = null
@@ -296,5 +340,5 @@ class LetterLoop<K>(
         onChosen(c)
     }
 
-    private companion object { const val TIMER = "loop:cycle" }
+    private companion object { const val TIMER = "loop:cycle"; const val VIEW = "loop:view" }
 }
