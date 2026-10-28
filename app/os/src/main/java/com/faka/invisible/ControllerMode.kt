@@ -153,6 +153,7 @@ class ControllerMode(
     private val gapMs: Long = Pacing.GAP_MS,   // the gesture fires this long after its last press
     private val freshMs: Long = 120_000,       // a message this young goes first in the wake queue
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
+    private val wakeReadsFresh: Boolean = false, // off: a wake always opens the hub (tests that need the message screen turn it on)
 ) {
     enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_APPS, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL, CALL_IN, CALL_ACTIVE, CONTACTS, EMERGENCY, RESET_ASK }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
@@ -341,12 +342,12 @@ class ControllerMode(
         showQueueItemOrHub(); wmark("shown")
     }
 
-    /** Wake opens the hub. Only urgent things go first: a finished timer, then a message that arrived in the last 2 min.
-     *  All other unread messages wait behind the hub item "Messages, N unread". */
+    /** Wake opens the hub. Only a finished timer goes first. Messages wait in "Notifications, N" on the hub: they never take over a wake
+     *  (the owner opened the OS and got a Teams message instead of the home list). [wakeReadsFresh] brings the old "message that arrived in the last 2 min goes first" back. */
     private fun buildQueue(): MutableList<Msg?> {
         val now = clock()
-        val ms = unread().filter { hid(it) !in handled && it.at > 0 && now - it.at <= queueMs }
-        val recent = ms.filter { it.at > 0 && now - it.at <= freshMs }.maxByOrNull { it.at }
+        val recent = if (wakeReadsFresh) unread().filter { hid(it) !in handled && it.at > 0 && now - it.at <= queueMs }
+            .filter { now - it.at <= freshMs }.maxByOrNull { it.at } else null
         val q = mutableListOf<Msg?>()
         if (out.timerRinging()) q += null
         if (recent != null) q += recent

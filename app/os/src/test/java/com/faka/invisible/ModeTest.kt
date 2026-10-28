@@ -17,7 +17,7 @@ import org.junit.Test
 private val OLD_HUB = LauncherSettings.DEFAULT_HUB - "alarm" - "calculator" - "write" - "compass" - "whereami" - "claude" - "sum" - "reset"
 
 class ModeTest {
-    internal class Rig(ranker: OptionRanker = OptionRanker.DEFAULT, gap: Long? = 800, reactionText: String = "") {
+    internal class Rig(ranker: OptionRanker = OptionRanker.DEFAULT, gap: Long? = 800, reactionText: String = "", wakeFresh: Boolean = true) {
         val log = ArrayList<String>()
         var playing = false
         var msgs = listOf<Msg>()
@@ -129,7 +129,7 @@ class ModeTest {
         }, object : Timers {
             override fun set(key: String, delayMs: Long, task: () -> Unit) { timers[key] = (now + delayMs) to task }
             override fun clear(key: String) { timers.remove(key) }
-        }, { now }, ranker, pauseMs = gap)
+        }, { now }, ranker, pauseMs = gap, wakeReadsFresh = wakeFresh)
         init { m.settings = LauncherSettings(hub = listOf("messages", "music", "timer", "phone", "today", "games")) }   // the older timing tests count menu items
         fun withTasks() = apply { m.settings = LauncherSettings(hub = OLD_HUB) }
         fun withInfo() = apply { m.settings = LauncherSettings(hub = OLD_HUB - "tasks") }
@@ -283,6 +283,12 @@ class ModeTest {
         val r = Rig(); r.favs = listOf("Ana")
         r.msgs = listOf(bob.copy(at = r.now - 60_000), ana.copy(at = r.now - 250_000)); r.wake(); r.advance(450)
         assertTrue(r.log.contains("say[en] Bob: what time is it"))
+    }
+
+    @Test fun wakeOpensTheHubEvenWhenAMessageJustArrived() {
+        val r = Rig(wakeFresh = false)
+        r.msgs = listOf(bob.copy(at = r.now - 10_000)); r.wake(); r.advance(450)
+        assertEquals(ControllerMode.Screen.HUB, r.m.screen)
     }
 
     @Test fun queueHoldsOnlyLastFiveMinutes() {
