@@ -33,6 +33,7 @@ import org.junit.Test
  *  rooms_new_project             FlowRoomsTest.rooms_new_project                 fully
  *  computers_two                 FlowRoomsTest.computers_two                     fully
  *  idle_clicks_go_to_the_player  FlowTest.idle_clicks_go_to_the_player           partly: choosing the real player / sending the key is the phone's
+ *  write_loop_picks              FlowButtonTest.write_loop_picks                 partly: real button path and the real loop on a fake sound clock; the phone scenario in e2e.py is not built yet
  */
 class FlowTest {
     private fun flow(): Flow = Flow()

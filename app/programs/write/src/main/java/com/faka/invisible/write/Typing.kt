@@ -63,7 +63,7 @@ class TypeProgram(
     private val timers: Timers,
     private val frame: Frame = Frame(),   // the place being typed into; the default is a plain text place
     private val onEnded: () -> Unit,
-) : RawButton {
+) : Typer {
     companion object {
         const val POINT = "point"   // the decimal point is offered and spoken as this word
         const val REPLAY_MS = 7000L
@@ -71,9 +71,8 @@ class TypeProgram(
         const val MENU_GAP_MS = 2000L
         const val MENU_LOOPS = 2
         const val WORD_PAGES = 4
-        const val ALPHABET = "abcdefghijklmnopqrstuvwxyzñ"
-        const val ALPHABET_BY_USE = "eaosrnidltcumpbgvyqhfzjñxkw"   // common letters in Spanish and English
-        val LETTER_RE = Regex("[a-záéíóúüñ']+")
+        const val ALPHABET = LetterRank.ALPHABET
+        val LETTER_RE = LetterRank.LETTER_RE
     }
 
     private val written = ArrayList<String>()
@@ -121,7 +120,7 @@ class TypeProgram(
         show()
     }
 
-    fun stop() { if (active) { active = false; waiting = false; pending = null; menu = false; menuScan.stop(); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:replay") } }
+    override fun stop() { if (active) { active = false; waiting = false; pending = null; menu = false; menuScan.stop(); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:replay") } }
 
     /** What Done sends: the written words plus the letters spelled so far. */
     private fun willSend(): String = if (frame.digits) text() else (written + listOfNotNull(prefix.ifEmpty { null })).joinToString(" ").replaceFirstChar { it.uppercase() }
@@ -134,19 +133,7 @@ class TypeProgram(
         val recent = written.takeLast(3).toSet()   // a word just written is not offered again at once
         val all = lm.ranked(written.takeLast(8))   // at the start of a word, a short word or a contraction is hard to hear alone: those come through letters
         return if (letters) {
-            val mass = LinkedHashMap<Char, Double>()
-            for ((w, lp) in all) if (w.length > prefix.length && w.startsWith(prefix) && LETTER_RE.matches(w)) mass.merge(w[prefix.length], Math.exp(lp), Double::plus)
-            if (mass.isEmpty() && all.isEmpty()) return ALPHABET.toList().sorted().map { it.toString() }   // no word list at all: A to Z, so where a letter is can be predicted
-            val prior = { c: Char -> 1e-12 * (ALPHABET.length - ALPHABET_BY_USE.indexOf(c).let { i -> if (i < 0) ALPHABET.length else i }) }   // common letters first: only breaks ties and orders letters with no weight
-            if (mass.isEmpty()) {   // no word starts so (a name): which letter follows the last one, from the word list
-                val grams = bigrams ?: LetterBigrams(all.map { it.first }).also { bigrams = it }
-                val prev = prefix.last()
-                val total = ALPHABET.sumOf { grams.weight(prev, it) }.let { if (it > 0) it else 1.0 }
-                return ALPHABET.toList().sortedByDescending { grams.weight(prev, it) / total + prior(it) }.map { it.toString() }
-            }
-            // the whole alphabet is ranked: the model's chance among the letters of this prefix first (masses are tiny, so they are made to sum to 1), the prior breaks ties
-            val total = mass.values.sum()
-            ALPHABET.toList().sortedByDescending { (mass[it] ?: 0.0) / total + prior(it) }.map { it.toString() }
+            LetterRank.letters(all, prefix) { bigrams ?: LetterBigrams(all.map { it.first }).also { bigrams = it } }.map { it.first.toString() }
         } else all.asSequence().filter { it.first !in recent }.filter { it.first.startsWith(prefix) && LETTER_RE.matches(it.first) && (prefix.isNotEmpty() || !lm.skipShortFirst || (it.first.length >= 3 && '\'' !in it.first)) }.take(WORD_PAGES * 2).map { it.first }.toList()
     }
 
@@ -175,7 +162,7 @@ class TypeProgram(
     /** The same words the player hears, on the app screen: the text so far, the letters being spelled, and the pair on offer. */
     private var leftRow = -1; private var rightRow = -1   // the rows of the pair on the app screen; -1 = not showing a pair
     /** A tap on the app screen: the left or right word of the pair, as the click or the hold would pick it. */
-    fun tapRow(row: Int) {
+    override fun tapRow(row: Int) {
         if (!active || waiting || pending != null || menu) return
         timers.clear("t:gap"); timers.clear("t:hold"); out.silence(); out.hush()
         if (row == leftRow) choose(true) else if (row == rightRow) choose(false)

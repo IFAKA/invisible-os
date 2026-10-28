@@ -29,6 +29,8 @@ internal class RoboRig {
     /** The program that owns the raw button now (the OS's `running`), null = the menu / idle. */
     var running: Program? = null
     var exits = 0
+    /** A raw-button owner that is not a [Program] (Write's typer). */
+    var rawOwner: RawButton? = null
 
     val speech = object : SpeechPort {
         override fun speak(p: Phrase, queue: Boolean, fast: Boolean, slow: Boolean) { said.add(p.text) }
@@ -44,10 +46,10 @@ internal class RoboRig {
         override fun findLoop(on: Boolean) {}
     }
     val target = object : ButtonTarget {
-        override fun raw(): RawButton? = (running as? RawButton)?.takeIf { it.active }
+        override fun raw(): RawButton? = ((running as? RawButton) ?: rawOwner)?.takeIf { it.active }
         override val menuActive get() = false
         override fun gesture(g: Gesture, durationMs: Long) {}
-        override fun exitProgram() { exits++; running?.takeIf { it.active }?.let { if (it.exitOnClickHold) it.stop() } }
+        override fun exitProgram() { exits++; (running as? Program)?.takeIf { it.active }?.let { if (it.exitOnClickHold) it.stop() } }
     }
     val narrator = Narrator(speech, tones, handler)
     val buttons = ButtonInput(handler, narrator, target)

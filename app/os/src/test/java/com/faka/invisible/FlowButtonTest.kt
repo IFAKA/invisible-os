@@ -1,7 +1,8 @@
 package com.faka.invisible
 
 import com.faka.invisible.practice.PracticeProgram
-import com.faka.invisible.voicekit.Pacing
+import com.faka.invisible.voicekit.*
+import com.faka.invisible.write.*
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -46,5 +47,66 @@ class FlowButtonTest {
         rig.running = p; p.start(host)
         rig.press("3200"); rig.advance(Pacing.GAP_MS)
         assertEquals(1, host.ended)
+    }
+
+    /** The loop's sound on the rig's clock: records what is scheduled (text, frame), no real output. */
+    private class RigLoopAudio(val rig: RoboRig) : LoopAudio, Timers {
+        override val sampleRate = 24000
+        val played = ArrayList<Pair<String, Long>>()
+        private val textOf = java.util.IdentityHashMap<FloatArray, String>()
+        private val tasks = HashMap<String, Runnable>()
+        var confirms = 0
+        override fun prepare(texts: List<String>, then: (Map<String, FloatArray>) -> Unit) {
+            then(texts.associateWith { t -> FloatArray(200 * sampleRate / 1000).also { textOf[it] = t } })
+        }
+        override fun nowFrame() = rig.now() * sampleRate / 1000
+        override fun nowMs() = rig.now()
+        override fun wallMsOf(frame: Long) = frame * 1000.0 / sampleRate + 40.0   // 40 ms of output delay
+        override fun play(clip: FloatArray, atFrame: Long, pan: Double) { played.add((textOf[clip] ?: "?") to atFrame) }
+        override fun clear() { played.clear() }
+        override fun confirm() { confirms++ }
+        override fun set(key: String, delayMs: Long, task: () -> Unit) {
+            tasks.remove(key)?.let { rig.handler.removeCallbacks(it) }
+            val r = Runnable { tasks.remove(key); task() }; tasks[key] = r; rig.handler.postDelayed(r, delayMs)
+        }
+        override fun clear(key: String) { tasks.remove(key)?.let { rig.handler.removeCallbacks(it) } }
+        fun heard(text: String) = played.filter { it.first == text }.map { wallMsOf(it.second) }.sorted()
+    }
+
+    // ---- write_loop_picks: the new Write on the letter loop (real button path; the phone-only part is e2e "not built yet") ----
+    @Test fun write_loop_picks() {
+        val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)
+        var sent: String? = null; val reads = ArrayList<String>()
+        val lm = object : Ranker { override fun ranked(context: List<String>) = listOf("hello" to -2.0, "hi" to -3.0, "yes" to -4.0, "no" to -5.0) }
+        val out = object : TypeOut {
+            override fun pair(left: String, right: String?) {}
+            override fun hush() {}
+            override fun prefetch(words: List<String>) {}
+            override fun say(text: Phrase) { rig.said.add(text.text) }
+            override fun cue(c: TypeCue) {}
+            override fun readBack(text: String) { reads.add(text); rig.said.add(text) }
+            override fun finished(text: String) { sent = text }
+        }
+        val p = LoopProgram(lm, out, audio, audio, Frame(), object : LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }) { host.ended() }
+        rig.rawOwner = p; p.start()
+        var guard = 0
+        fun clickOn(text: String, done: () -> Boolean) {
+            while (audio.played.isEmpty() && guard++ < 2000) rig.advance(50)
+            var n = 0
+            while (!done() && n++ < 12) {
+                val at = audio.heard(text)
+                val cyc = if (at.size > 1) at[1] - at[0] else 1000.0
+                var t = at.first() + 50; while (t < rig.now()) t += cyc
+                while (rig.now() < t.toLong()) rig.advance(5)
+                rig.press("80"); rig.advance(60)
+            }
+            assertTrue("never picked $text; heard ${rig.said.takeLast(6)}", done())
+        }
+        clickOn("hello") { p.text() == "Hello" }
+        clickOn("Send") { reads.isNotEmpty() }
+        assertEquals("Hello", reads.last()); assertNull(sent)
+        rig.press("100"); rig.advance(200)   // a click sends it
+        assertEquals("Hello", sent); assertEquals(1, host.ended)
+        assertTrue(audio.confirms >= 2)
     }
 }

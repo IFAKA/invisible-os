@@ -78,7 +78,7 @@ private class WriteOut(val host: ProgramHost) : TypeOut {
 
 /** Both Write and Sum: a [TypeProgram] is the keyboard; this class wires it to the host. The raw button goes to it while it is active. */
 abstract class TypeShell : Program {
-    protected var typer: TypeProgram? = null
+    protected var typer: Typer? = null
     protected lateinit var host: ProgramHost
     @Volatile protected var stopped = false
     override val active get() = typer?.active == true
@@ -86,6 +86,7 @@ abstract class TypeShell : Program {
     override fun down(time: Long) { typer?.down(time) }
     override fun up(time: Long) { typer?.up(time) }
     override fun assistHold() { typer?.assistHold() }
+    override fun speechDone() { typer?.speechDone() }
     override fun tap(row: Int) { typer?.tapRow(row) }
     /** Replacing a run: no close sound (the next program starts at once). */
     override fun stop() { stopped = true; typer?.stop() }
@@ -99,6 +100,7 @@ class WriteProgram(
     /** The place of that reply (the message being answered); the screen is off and shows no chat. */
     private val replyFrame: Frame? = null,
 ) : TypeShell() {
+    private companion object { const val DENSITY_KEY = "write_click_density" }   // how late this person clicks, newest first (a small JSON list)
     @Volatile private var chatLang: String? = null   // the language of the place being written into; null = not known
     @Volatile private var phraseReq = 0
 
@@ -182,8 +184,26 @@ class WriteProgram(
                 host.handler.postDelayed({ if (text.isEmpty()) host.speak(TypeVoice.EMPTY, false) else host.speak(Phrase.content(text), false) }, 700)
             }
         }
-        typer = TypeProgram(BucketRanker(lm, buckets, frame), out, HandlerTimers(host.handler), frame) { typer = null; VoiceKit.narrator.hush(); host.ended() }.also { it.start() }
+        val ranker = BucketRanker(lm, buckets, frame)
+        val timers = HandlerTimers(host.handler)
+        val sound = if (frame.digits) null else LoopSound(VoiceKit.narrator.words, host.handler, { VoiceKit.narrator.swapEars() }).takeIf { it.open() }   // numbers and a phone that cannot open the stream keep the pair keyboard
+        if (sound == null) {
+            typer = TypeProgram(ranker, out, timers, frame) { typer = null; VoiceKit.narrator.hush(); host.ended() }.also { it.start() }
+            return
+        }
+        loopSound = sound; host.pauseMusic()
+        val store = object : LoopStore {
+            override fun load() = LoopDensity.decode(host.prefs.getString(DENSITY_KEY, null))
+            override fun save(offsets: List<Double>) { host.prefs.edit().putString(DENSITY_KEY, LoopDensity.encode(offsets)).apply() }
+        }
+        typer = LoopProgram(ranker, out, sound, timers, frame, store) { closeSound(); typer = null; VoiceKit.narrator.hush(); host.ended() }.also { it.start() }
     }
+
+    private var loopSound: LoopSound? = null
+    private fun closeSound() { loopSound?.let { it.close(); loopSound = null; host.resumeMusic() } }
+
+    /** Replacing a run: no close sound (the next program starts at once). */
+    override fun stop() { super.stop(); closeSound() }
 }
 
 /** Sum prices: the number keyboard (digits and a point) in a loop. Each price is added; empty Done or a long hold ends and reads the total. */
