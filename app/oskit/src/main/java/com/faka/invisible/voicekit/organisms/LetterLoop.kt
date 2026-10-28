@@ -104,7 +104,11 @@ class LetterLoop<K>(
     /** Stop for good: no sound, no timers. */
     fun stop() { halt(); state = State.OFF }
 
-    private fun halt() { gen++; timers.clear(TIMER); audio.clear(); if (state != State.OFF) state = State.PAUSED }
+    private fun halt() {
+        gen++; timers.clear(TIMER)
+        if (state == State.RUNNING || state == State.PREPARING) audio.clear()   // a sound that is not the loop's (the confirm) is never cut
+        if (state != State.OFF) state = State.PAUSED
+    }
 
     private fun begin(clips: Map<String, FloatArray>) {
         val live = items.filter { clips[it.say.text] != null }
