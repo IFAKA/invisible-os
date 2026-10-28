@@ -602,15 +602,14 @@ class ModeTest {
         assertTrue(r.taskStore.all().isEmpty()); assertTrue(r.log.contains("say All done"))
     }
 
-    @Test fun addTaskIsTheFirstOptionWhenThereAreOffers() {
+    @Test fun addTaskIsTheLastOptionAndTasksComeFirst() {
         val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.offers = listOf(Task(0, "Call mum", "es"))
-        r.wake(); r.pick("Tasks, 1"); r.advance(1000)
-        assertTrue(r.log.contains("say Add task"))
-        assertFalse(r.log.contains("say[es] Buy milk"))   // not yet: Add task is spoken first
+        r.wake(); r.pick("Tasks, 1"); r.advance(2500)
+        assertTrue(r.log.indexOf("say[en] Buy milk") in 0 until r.log.indexOf("say Add task"))   // reading is the common job: the task is spoken before Add task
     }
 
     @Test fun addTaskIsThereOnDayOneWithStarters() {
-        val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1000)
+        val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(6000)
         assertTrue(r.log.contains("say Add task"))
         r.pick("Add task"); r.advance(3000); assertTrue(r.log.contains("say[en] Buy groceries"))
     }

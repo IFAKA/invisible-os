@@ -568,13 +568,14 @@ class ControllerMode(
                 val notifs = out.notifGroups().sumOf { it.items.size }
                 val digest = if (notifs > 0) out.notifDigest() else ""
                 val notifOpt = if (notifs > 0) listOf(Opt("notifs:all", if (digest.isEmpty()) Menu.notifications(notifs) else Menu.notificationsDigest(notifs, digest)) { pick("notifs:all"); show(Screen.NOTIF_APPS) }) else emptyList()   // all waiting notifications, right after the live apps
-                val (pinned, rest) = treeOptions(root).partition { o -> AppTree.PINNED.any { o.key == it } }   // the pinned Laptop tool comes right after Notifications, before the suggestions
-                liveOpts + notifOpt + pinned + front.filter { f -> pinned.none { it.key == f.key } } + rest + unmuteOption() + Opt("phone:emergency", Menu.EMERGENCY) { pick("phone:emergency"); show(Screen.EMERGENCY) }   // the home list is the tree's top; only the small Suggested slot in front adapts; Emergency is always the last item
+                val tasksOpt = if (out.tasks().isNotEmpty()) listOfNotNull(all["hub:tasks"]) else emptyList()   // open tasks: one home entry "Tasks, N" right after Notifications
+                val (pinned, rest0) = treeOptions(root).partition { o -> AppTree.PINNED.any { o.key == it } }
+                val rest = if (tasksOpt.isEmpty()) rest0 else rest0.filter { it.key != "hub:tasks" }   // the pinned Laptop tool comes right after Notifications, before the suggestions
+                liveOpts + notifOpt + tasksOpt + pinned + front.filter { f -> pinned.none { it.key == f.key } } + rest + unmuteOption() + Opt("phone:emergency", Menu.EMERGENCY) { pick("phone:emergency"); show(Screen.EMERGENCY) }   // the home list is the tree's top; only the small Suggested slot in front adapts; Emergency is always the last item
             }
             Screen.TASK -> {   // "Add task" first, then this page of tasks (a click right after hearing one = done), then "More tasks"
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)
                 val opts = ArrayList<Opt>()
-                opts += Opt("task:add", Menu.ADD_TASK) { pick("task:add"); show(Screen.TASK_ADD) }
                 for (t in page) opts += Opt("task:done", Voice.cut(t.text, MAX_SPOKEN, t.lang == "es", t.lang.ifEmpty { out.songLang(t.text) ?: "en" })) {
                     pick("task:done")
                     startPending(Voice.TASK_DONE_UNDO, { out.completeTask(t.id); true }, onCancel = { show(Screen.TASK) }, after = {
@@ -584,6 +585,7 @@ class ControllerMode(
                     })
                 }
                 if (taskIdx + TASK_PAGE < taskList.size) opts += Opt("task:more", Menu.MORE_TASKS) { pick("task:more"); taskIdx += TASK_PAGE; show(Screen.TASK) }
+                opts += Opt("task:add", Menu.ADD_TASK) { pick("task:add"); show(Screen.TASK_ADD) }   // last: reading is the common job
                 opts
             }
             Screen.TASK_ADD -> phraseOptions(taskChoices(), "taskadd") { t ->
