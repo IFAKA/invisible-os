@@ -16,10 +16,23 @@ object Storeroom {
 
     fun opens(pkg: String, use: Map<String, AppUse>, picks: (String) -> Int): Int { val u = use[pkg]; return (u?.month ?: 0) + 2 * (u?.week ?: 0) + picks("app:$pkg") }
 
+    /** The package without its first two parts (type and maker): `app.morphe.android.apps.youtube.music` and `com.google.android.apps.youtube.music` both give `android.apps.youtube.music`. */
+    private fun core(pkg: String): String? = pkg.split('.').drop(2).takeIf { it.size >= 2 }?.joinToString(".")
+
+    /** pkg -> job. The table first; else the job of a copy of the same app (a patched or cloned app has another maker in front, same core); else the shared core as its own job. */
+    fun jobs(installed: List<InstalledApp>): Map<String, String> {
+        val family = installed.map { it.pkg }.filter { it !in AppWeights.PLUMBING }.groupBy { core(it) ?: it }.filter { it.value.size > 1 }
+        val out = HashMap<String, String>()
+        for ((core, g) in family) { val job = g.firstNotNullOfOrNull { AppCategories.JOBS[it] } ?: "app:$core"; g.forEach { out[it] = job } }
+        for (a in installed) AppCategories.JOBS[a.pkg]?.let { out[a.pkg] = it }
+        return out
+    }
+
     /** pkg -> why it is stored, for the apps that are. */
     fun decide(installed: List<InstalledApp>, use: Map<String, AppUse>, picks: (String) -> Int, pinned: Set<String>, now: Long): Map<String, String> {
         val opens = installed.associate { it.pkg to opens(it.pkg, use, picks) }
-        val top = installed.filter { it.pkg !in AppWeights.PLUMBING && it.pkg in AppCategories.JOBS }.groupBy { AppCategories.JOBS.getValue(it.pkg) }.mapValues { (_, g) -> g.maxOf { opens.getValue(it.pkg) } }
+        val jobs = jobs(installed)
+        val top = installed.filter { it.pkg !in AppWeights.PLUMBING && it.pkg in jobs }.groupBy { jobs.getValue(it.pkg) }.mapValues { (_, g) -> g.maxOf { opens.getValue(it.pkg) } }
         val out = LinkedHashMap<String, String>()
         for (a in installed) {
             val p = a.pkg; val n = opens.getValue(p)
@@ -27,7 +40,7 @@ object Storeroom {
             if (use.isEmpty()) continue
             if (always(p) || p in pinned || (a.installedAt > 0 && now - a.installedAt < NEW_DAYS * 86_400_000L)) continue
             if (n == 0) { out[p] = "0 opens"; continue }
-            val job = AppCategories.JOBS[p] ?: continue
+            val job = jobs[p] ?: continue
             val t = top.getValue(job)
             if (n * JOB_RATIO < t) out[p] = "same job ($job): $n opens, top $t"
         }

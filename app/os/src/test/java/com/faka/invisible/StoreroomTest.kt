@@ -16,6 +16,16 @@ class StoreroomTest {
         val r = run(listOf(app("com.spotify.music"), app("com.miui.player"), app("org.oxycblt.auxio")), use)
         assertTrue("com.miui.player" in r); assertFalse("org.oxycblt.auxio" in r); assertFalse("com.spotify.music" in r)
     }
+    @Test fun patchedCopyJoinsTheJobOfTheOriginal() {
+        // the copy has no table line: it takes the job of the original (music), so Spotify's heavy use stores it
+        val use = mapOf("com.spotify.music" to AppUse(100, 0), "com.google.android.apps.youtube.music" to AppUse(0, 0), "app.morphe.android.apps.youtube.music" to AppUse(4, 0))
+        val r = run(listOf(app("com.spotify.music"), app("com.google.android.apps.youtube.music"), app("app.morphe.android.apps.youtube.music")), use)
+        assertTrue("app.morphe.android.apps.youtube.music" in r)
+    }
+    @Test fun copiesOfAnUnlistedAppShareAJob() {
+        val use = mapOf("com.a.android.tool.x" to AppUse(100, 0), "app.b.android.tool.x" to AppUse(3, 0))
+        assertTrue("app.b.android.tool.x" in run(listOf(app("com.a.android.tool.x"), app("app.b.android.tool.x")), use))
+    }
     @Test fun alwaysKept() = assertTrue(run(listOf(app("com.android.camera"), app("com.x.camera2"), app("com.android.settings"), app(busy.first)), mapOf(busy)).isEmpty())
     @Test fun newInstallKept() {
         val r = run(listOf(app("com.new", now - 3 * 86_400_000L), app("com.old", now - 30 * 86_400_000L), app(busy.first)), mapOf(busy))
