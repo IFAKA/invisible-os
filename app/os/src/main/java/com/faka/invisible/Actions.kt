@@ -117,7 +117,7 @@ object Actions {
             override fun musicToggle(kind: String, then: (String) -> Unit) = toggleNow(kind, then)
             override fun musicRadio() = radioNow()
             override fun searchMusic() = launchWrite({ q -> searchAndPlay(q); true }, null, backTo = { mode.resumeAt(ControllerMode.Screen.MUSIC_PLAY, "music:search") })
-            override fun isMusicApp(pkg: String) = pkg in musicApps
+            override fun isMusicApp(pkg: String) = pkg in musicApps || AppCategories.categoryOf(pkg) == "Watch and listen/Music"
             override fun playMusic(liked: Boolean) = playQuickPicks(liked)
             override fun songLang(text: String) = ControllerNotificationListener.voiceFor(text)
             override fun pauseMusic() = pauseMusicNow()

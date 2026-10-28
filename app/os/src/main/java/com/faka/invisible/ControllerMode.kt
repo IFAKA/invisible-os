@@ -691,8 +691,10 @@ class ControllerMode(
     private fun liveOpen() = notifKey?.let { out.liveNotif(it) } != null   // the open notification is a live (ongoing) one: it is not in an app's list
 
     /** A live app on home: "<App>, playing" / "<App>, live" / "<App>, <its short line>". It opens its notification with the actions (pause, next, lap...), or the Music page for a music app. */
+    /** A music app (any, by its place in the tree) is heard as "Music": the job, not the maker's name. */
+    private fun liveName(l: LiveApp) = if (AppCategories.categoryOf(l.pkg) == "Watch and listen/Music") "Music" else l.app
     private fun liveLabel(l: LiveApp): Phrase =
-        if (l.line.isNotEmpty()) Phrase.content(l.app + ", " + l.line, out.songLang(l.line)) else Menu.liveState(l.app, l.state)
+        if (l.line.isNotEmpty()) Phrase.content(liveName(l) + ", " + l.line, out.songLang(l.line)) else Menu.liveState(liveName(l), l.state)
     private fun liveOption(l: LiveApp) = Opt("live:${l.pkg}", liveLabel(l)) {
         pick("app:${l.pkg}"); notifPkg = l.pkg; notifFromAll = false
         val key = l.notifKey
