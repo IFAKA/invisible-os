@@ -26,7 +26,7 @@ class LoopAiTest {
             override fun log(event: String, vararg fields: Any?) { logs.add(event + " " + fields.joinToString(" ")) }
             override fun finished(text: String) { result = text }
             override fun sources(req: Request, then: (String, List<Guess>) -> Unit) { sources.forEach { s -> s.ask(req) { then(s.id, it) } } }
-        }, audio, audio, frame, object : LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }, Mixer()) {}
+        }, audio, audio, frame, object : LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }, Mixer()) {}
     }
 
     private fun running() { var n = 0; while (audio.played.isEmpty() && n++ < 200) audio.advance(250) }
@@ -71,7 +71,7 @@ class LoopAiTest {
             override fun readBack(text: String) {}
             override fun finished(text: String) {}
             override fun sources(req: Request, then: (String, List<Guess>) -> Unit) { late = then }
-        }, audio, audio, Frame(), object : LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }, Mixer()) {}
+        }, audio, audio, Frame(), object : LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }, Mixer()) {}
         q.start(); running(); audio.advance(1000)
         late!!("lists", listOf(Guess("see you soon")))
         audio.advance(50)

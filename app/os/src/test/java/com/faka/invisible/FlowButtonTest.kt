@@ -88,7 +88,7 @@ class FlowButtonTest {
             override fun readBack(text: String) { reads.add(text); rig.said.add(text) }
             override fun finished(text: String) { sent = text }
         }
-        val p = LoopProgram(lm, out, audio, audio, Frame(), object : LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }) { host.ended() }
+        val p = LoopProgram(lm, out, audio, audio, Frame(), object : LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }) { host.ended() }
         rig.rawOwner = p; p.start()
         var guard = 0
         fun clickOn(text: String, done: () -> Boolean) {
@@ -120,7 +120,7 @@ class FlowButtonTest {
                 HomeAction(ActionKind.OPEN, "WhatsApp", "com.whatsapp", 30.0), HomeAction(ActionKind.OPEN, "Weather", "com.weather", 3.0),
                 HomeAction(ActionKind.OPEN, "Maps", "com.maps", 20.0), HomeAction(ActionKind.START, "Timer", "hub:timer", 5.0))
         }
-        val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }
+        val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }
         var hint = true
         val p = HomeLetters(listOf(apps), ActionRanker(), audio, audio, store, { hint }, { hint = true })
         rig.running = p; p.start(host)
@@ -150,7 +150,7 @@ class FlowButtonTest {
     @Test fun home_letters_hold_three_seconds_leaves_and_click_hold_is_only_clicking() {
         fun make(): Triple<RoboRig, RoboRig.Host, HomeLetters> {
             val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)
-            val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }
+            val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }
             val p = HomeLetters(emptyList(), ActionRanker(), audio, audio, store, { true }, {})
             rig.running = p; p.start(host); return Triple(rig, host, p)
         }
@@ -168,7 +168,7 @@ class FlowButtonTest {
     @Test fun home_letters_one_click_then_the_assistant_signal_does_not_end_it() {
         val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)
         val apps = object : ActionSource { override val id = "apps"; override fun actions() = listOf(HomeAction(ActionKind.OPEN, "WhatsApp", "com.whatsapp", 30.0)) }
-        val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }
+        val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }
         val p = HomeLetters(listOf(apps), ActionRanker(), audio, audio, store, { true }, {})
         rig.running = p; p.start(host)
         rig.advance(1500)
@@ -195,7 +195,7 @@ class FlowButtonTest {
             override fun finished(text: String) {}
         }
         var ended = 0
-        val p = LoopProgram(lm, out, audio, audio, Frame(), object : LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }) { ended++ }
+        val p = LoopProgram(lm, out, audio, audio, Frame(), object : LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }) { ended++ }
         rig.rawOwner = p; p.start()
         rig.advance(6000)
         rig.press("2"); rig.advance(614); rig.buttons.assistHold(); rig.advance(2000)

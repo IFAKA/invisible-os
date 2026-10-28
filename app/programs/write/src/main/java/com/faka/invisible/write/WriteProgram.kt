@@ -1,6 +1,7 @@
 package com.faka.invisible.write
 
 import com.faka.invisible.logickit.ClickProfile
+import com.faka.invisible.logickit.LoopLevel
 import android.content.Context
 import android.util.Log
 import com.faka.invisible.logickit.ChatLang
@@ -213,6 +214,8 @@ class WriteProgram(
             override fun load() = LoopDensity.decode(host.prefs.getString(DENSITY_KEY, null))
             override fun save(offsets: List<Double>) { host.prefs.edit().putString(DENSITY_KEY, LoopDensity.encode(offsets)).apply() }
             override fun profile() = ClickProfile.fromJson(host.prefs.getString(ClickProfile.KEY, null))
+            override fun level() = host.prefs.getInt(LoopLevel.KEY, 0)
+            override fun saveLevel(level: Int) { host.prefs.edit().putInt(LoopLevel.KEY, level).apply() }
         }
         typer = LoopProgram(ranker, out, sound, timers, frame, store, mixer) { closeSound(); typer = null; VoiceKit.narrator.hush(); host.ended() }.also { it.start() }
     }

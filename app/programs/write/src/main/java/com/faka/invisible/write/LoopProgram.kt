@@ -2,6 +2,8 @@ package com.faka.invisible.write
 
 import com.faka.invisible.logickit.ClickModel
 import com.faka.invisible.logickit.ClickProfile
+import com.faka.invisible.logickit.LoopLevel
+import com.faka.invisible.oskit.Trace
 import com.faka.invisible.voicekit.*
 
 /** What the shell needs of a keyboard: the raw button, a tap on the screen, a stop. Both [TypeProgram] (numbers) and [LoopProgram] (text) are one. */
@@ -17,6 +19,9 @@ interface LoopStore {
     fun save(offsets: List<Double>)
     /** What the Click test measured (prefs "click_profile"), if the person did it. */
     fun profile(): ClickProfile? = null
+    /** The beginner pace level of this person ([com.faka.invisible.logickit.LoopLevel]), shared by Write and the home letters. */
+    fun level(): Int = 0
+    fun saveLevel(level: Int) {}
 }
 
 /** Where the loop's click model starts: Write's own learned clicks win (real typing); else the Click test; else Nomon's values. */
@@ -75,7 +80,8 @@ class LoopProgram(
 
     private val learned = store.load()
     private val seeded = LoopSeed.choose(learned, store.profile())
-    private val loop = LetterLoop<String>(audio, timers, seed = learned, params = seeded.second,
+    private val level = LoopLevel(store.level()) { store.saveLevel(it) }
+    private val loop = LetterLoop<String>(audio, timers, pace = level.pace, seed = learned, params = seeded.second,
         log = { event, fields -> out.log(event, *fields.toTypedArray()) },
         onChosen = { chosen(it) }, onIdle = { idle() })
 
@@ -83,6 +89,7 @@ class LoopProgram(
         if (frame.kind == FieldKind.PASSWORD) { out.say(TypeVoice.PASSWORD); onEnded(); return }   // never spoken, never saved
         active = true
         out.log("seed", "from=" + seeded.first)
+        Trace.ev("loop", level.describe())
         askPhrases()
         speakThen(listOf(TypeVoice.LOOP_START, TypeVoice.LOOP_START2)) { round() }
     }
@@ -143,6 +150,7 @@ class LoopProgram(
         out.log("choice", c.key, c.rank, c.cycles, c.ms, c.clicks)
         store.save(loop.offsets())
         val key = c.key
+        if (level.chose(key == LoopItems.UNDO)) { loop.pace = level.pace; Trace.ev("loop", level.describe()) }
         when {
             key.startsWith("l:") -> { push(); prefix += key.substring(2); endsSentence = false; askSources(); say(TypeVoice.spelled(prefix.takeLast(5))) }
             key.startsWith("w:") -> {

@@ -252,6 +252,8 @@ object Actions {
             override fun load() = com.faka.invisible.write.LoopDensity.decode(prefs().getString("write_click_density", null))   // the same learned clicks as Write: it is the same person and button
             override fun save(offsets: List<Double>) { prefs().edit().putString("write_click_density", com.faka.invisible.write.LoopDensity.encode(offsets)).apply() }
             override fun profile() = ClickProfile.fromJson(prefs().getString(ClickProfile.KEY, null))
+            override fun level() = prefs().getInt(LoopLevel.KEY, 0)
+            override fun saveLevel(level: Int) { prefs().edit().putInt(LoopLevel.KEY, level).apply() }
         }
         val sources = listOf(AppsActions { leaves }, SongsActions({ songsPlayed.all() }), ChatsActions { ControllerNotificationListener.notifs.all() }, ContactsActions({ PhoneCalls.contacts(app) }))
         val ranker = ActionRanker(homeTrust::trust, homeTrust::scored, { prefs().getInt("home_pick_$it", 0) })

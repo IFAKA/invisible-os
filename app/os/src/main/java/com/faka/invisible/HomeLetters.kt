@@ -59,7 +59,8 @@ class HomeLetters(
 
     private val learned = store.load()
     private val seeded = LoopSeed.choose(learned, store.profile())
-    private val loop = LetterLoop<String>(audio, timers, seed = learned, params = seeded.second,
+    private val level = LoopLevel(store.level()) { store.saveLevel(it) }
+    private val loop = LetterLoop<String>(audio, timers, pace = level.pace, seed = learned, params = seeded.second,
         log = { event, fields -> Trace.ev("home", "loop $event ${fields.joinToString(" ")}") },
         onChosen = { chosen(it) }, onIdle = { idle() })
 
@@ -67,6 +68,7 @@ class HomeLetters(
         this.host = host; active = true; startedAt = audio.nowMs()
         host.pauseMusic()
         Trace.ev("home", "request start seed=${seeded.first}")
+        Trace.ev("loop", level.describe())
         if (hintSeen()) { Trace.ev("home", "hint skipped (heard before)"); round() }
         else { setHintSeen(); Trace.ev("home", "hint spoken"); speakThen(Voice.HOME_LETTERS_HINT) { round() } }
     }
@@ -117,6 +119,7 @@ class HomeLetters(
         if (!active) return
         store.save(loop.offsets()); idleRounds = 0
         val key = c.key
+        if (level.chose(key == UNDO)) { loop.pace = level.pace; Trace.ev("loop", level.describe()) }
         when {
             key.startsWith("a:") -> {
                 val a = shown.firstOrNull { "a:" + it.key == key } ?: return
