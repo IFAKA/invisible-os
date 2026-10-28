@@ -64,9 +64,16 @@ object Actions {
             val n = try { taskStore.addAll(text) { try { ControllerNotificationListener.voiceFor(it) } catch (e: Throwable) { "" } } }
                 catch (e: Throwable) { Log.e(TAG, "addTasks failed", e); 0 }
             handler.post { done(n) }
+            prepareTaskAi()
         }.start()
     }
-    fun completeTask(id: Long) = taskStore.done(id)
+    /** Ask the AI for the tasks' summary and short lines now (in the background, one at a time), so they are ready at the next wake. Call off the main thread. */
+    private fun prepareTaskAi() {
+        val ts = try { taskStore.all() } catch (e: Throwable) { return }
+        aiHelp.tasksSummary(ts.map { it.text })
+        ts.forEach { aiHelp.taskLine(it.text) }
+    }
+    fun completeTask(id: Long) = taskStore.done(id).also { Thread { prepareTaskAi() }.start() }
     fun moveTask(from: Int, to: Int) = taskStore.move(from, to)
     private val modeTimers = HashMap<String, Runnable>()
     var choices = ChoiceLog()
@@ -96,8 +103,8 @@ object Actions {
             override fun replyOffers() = replyMemory.offers(3, emptySet())
             override fun rememberReply(text: String, lang: String) = replyMemory.record(text, lang)
             override fun taskOffers() = taskMemory.offers(5, taskStore.all().map { it.text.lowercase() }.toSet())
-            override fun addTask(text: String, lang: String) = (taskStore.add(text, lang) != null).also { EventLog.refresh() }
-            override fun completeTask(id: Long) { taskStore.done(id); EventLog.refresh() }
+            override fun addTask(text: String, lang: String) = (taskStore.add(text, lang) != null).also { EventLog.refresh(); Thread { prepareTaskAi() }.start() }
+            override fun completeTask(id: Long) { taskStore.done(id); EventLog.refresh(); Thread { prepareTaskAi() }.start() }
             override fun nowPlaying(): String? = otherSessions().firstNotNullOfOrNull { c ->
                 c.metadata?.let { md ->
                     val title = md.getString(android.media.MediaMetadata.METADATA_KEY_TITLE)
@@ -251,6 +258,7 @@ object Actions {
         rooms.restart()
         com.faka.invisible.claude.BridgeClient.aiOn = { mode.settings.ai }   // off: the laptop sends no model text either
         aiHelp   // starts listening to notification changes
+        Thread { prepareTaskAi() }.start()   // the tasks' AI lines are ready before the first wake
     }
 
     /** The program of the registry that runs now (at most one). */

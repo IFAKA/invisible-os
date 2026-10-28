@@ -579,8 +579,9 @@ class ControllerMode(
             Screen.TASK -> {   // this page of tasks (a click right after hearing one = done; a hold then release reads one in full), "More tasks", then "Add task"
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)
                 val opts = ArrayList<Opt>()
+                val listLang = taskList.map { it.lang.ifEmpty { out.songLang(it.text) ?: "en" } }.groupingBy { it }.eachCount().let { c -> c.maxByOrNull { it.value }?.takeIf { it.value * 10 >= taskList.size * 7 }?.key }   // a list that is 70% one language is read all in it
                 for (t in page) {
-                    val lang = t.lang.ifEmpty { out.songLang(t.text) ?: "en" }
+                    val lang = listLang ?: t.lang.ifEmpty { out.songLang(t.text) ?: "en" }
                     val line = out.taskLine(t.text)
                     val whole = Voice.cut(t.text, TASK_FULL_CHARS, t.lang == "es", lang)
                     opts += Opt("task:done", if (line.isEmpty()) Voice.cut(t.text, MAX_SPOKEN, t.lang == "es", lang) else Phrase.content(line, lang), if (line.isEmpty()) null else whole) {

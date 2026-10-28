@@ -49,6 +49,7 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
     }
 
     private val lock = Any()
+    private val askLock = Any()
     private var digestKey = ""        // the set the cached line (or the failure) is for
     private var digestLine = ""
     private var asking: String? = null
@@ -148,7 +149,7 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
             go = (s == null || (s.isEmpty() && now() >= retryAt.getOrDefault(k, 0L))) && shortBusy.add(k)
         }
         if (go) run {
-            val r = ask()
+            val r = synchronized(askLock) { ask() }   // one question at a time: 18 at once made the computer time out
             Trace.ev("ai", "$what [${source()}] -> '$r'")
             synchronized(lock) { shorts[k] = r; shortBusy.remove(k); retryAt[k] = now() + RETRY_MS }
         }
