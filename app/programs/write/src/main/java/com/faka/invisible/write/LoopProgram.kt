@@ -278,6 +278,7 @@ class LoopProgram(
         val at = downAt; downAt = -1
         val held = time - at >= Pacing.HOLD_MS
         out.log("press", if (held) "hold" else "click", time - at, at)
+        if (time - at >= Pacing.LEAVE_MS) { finish(""); return }   // hold 3 s leaves, in every phase
         if (held) { hold(); return }
         click(at)
     }

@@ -61,8 +61,8 @@ class TtsSpeech(
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) { if (id == lastUtt) handler.post { listener.started() } }
                     override fun onDone(id: String?) { if (id?.startsWith("wc_") == true) words.made(id) else if (id?.startsWith("sy_") == true) spearconMade(id.removePrefix("sy_")) else ended(id) }
-                    @Deprecated("old api") override fun onError(id: String?) { ended(id) }
-                    override fun onStop(id: String?, interrupted: Boolean) {}   // flushed by a newer utterance or a click
+                    @Deprecated("old api") override fun onError(id: String?) { if (id?.startsWith("wc_") == true) words.made(id) else ended(id) }   // a word clip that failed must still free its waiters, or that word is never made again
+                    override fun onStop(id: String?, interrupted: Boolean) { if (id?.startsWith("wc_") == true) words.made(id) }   // flushed by a newer utterance or a click: free the waiters (the loop letters hung here)
                 })
             }
         }
