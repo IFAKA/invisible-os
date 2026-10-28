@@ -17,7 +17,7 @@ data class LauncherSettings(
     val undoMs: Long = 3000,
     val speechRate: Float = 0.9f,
     val learnOrder: Boolean = true,
-    val ai: Boolean = false,   // reply sentences and task wording from the model on the phone (needs the 2.6 GB download)
+    val ai: Boolean = true,   // AI for every job (computer first, then the phone model); key s_ai_all: the old s_ai meant phone-only and was off
     val pinned: Set<String> = emptySet(),   // tree entries forced to the first menu
     val hidden: Set<String> = emptySet(),   // tree entries removed from the tree (apps by package, OS programs as "hub:x")
     val moved: Map<String, String> = emptyMap(),   // package -> group it was moved to
@@ -81,7 +81,7 @@ object SettingsStore {
             undoMs = p.getLong("s_undo", d.undoMs).coerceIn(1500, 8000),
             speechRate = p.getFloat("s_rate", d.speechRate).coerceIn(0.6f, 1.8f),
             learnOrder = p.getBoolean("s_learn", d.learnOrder),
-            ai = p.getBoolean("s_ai", d.ai),
+            ai = p.getBoolean("s_ai_all", d.ai),
             spearcons = p.getBoolean("s_spearcons", d.spearcons),
             menuLanguage = p.getString("s_menu_lang", d.menuLanguage) ?: d.menuLanguage,
             pinned = p.getString("s_pinned", "")!!.split(',').filter { it.isNotEmpty() }.toSet(),
@@ -229,6 +229,6 @@ object SettingsStore {
     fun save(p: SharedPreferences, s: LauncherSettings) {
         p.edit().putString("s_hub", s.hub.joinToString(",")).putString("s_info", s.info.joinToString(",")).putString("s_phone", s.phone.joinToString(",")).putString("s_timers", s.timers.joinToString(","))
             .putLong("s_gap2", s.itemGapMs).putInt("s_loops", s.silentLoops).putLong("s_undo", s.undoMs)
-            .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).putBoolean("s_ai", s.ai).putString("s_menu_lang", s.menuLanguage).putString("s_pinned", s.pinned.joinToString(",")).putString("s_hidden", s.hidden.joinToString(",")).putString("s_moved", s.moved.entries.joinToString(",") { it.key + "=" + it.value }).putBoolean("s_groups_saved", true).putBoolean("s_apps_saved", true).putBoolean("s_status_phone_saved", true).apply()
+            .putFloat("s_rate", s.speechRate).putBoolean("s_learn", s.learnOrder).putBoolean("s_spearcons", s.spearcons).putBoolean("s_ai_all", s.ai).putString("s_menu_lang", s.menuLanguage).putString("s_pinned", s.pinned.joinToString(",")).putString("s_hidden", s.hidden.joinToString(",")).putString("s_moved", s.moved.entries.joinToString(",") { it.key + "=" + it.value }).putBoolean("s_groups_saved", true).putBoolean("s_apps_saved", true).putBoolean("s_status_phone_saved", true).apply()
     }
 }
