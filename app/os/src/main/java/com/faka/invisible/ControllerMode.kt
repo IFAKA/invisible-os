@@ -86,6 +86,8 @@ interface ModeOutput {
     fun setCodeCount(n: Int)
     fun waiting(): () -> Unit = {}   // a heartbeat while the person waits; call the result when done
     fun background(work: () -> Unit, done: () -> Unit) { work(); done() }   // heavy work off the main thread; [done] runs on the main thread
+    fun groupPicks(group: String): Int = 99   // apps picked inside this home group so far (persisted); under [GROUP_NAMES_UNTIL] the group speaks the names inside it
+    fun addGroupPick(group: String) {}
     fun findHintSeen(): Boolean = true   // "Find. Pick the first letter." is said only once
     fun setFindHintSeen() {}
     fun loadReactions(): String = ""   // saved reaction samples (see ReactionGap.encode)
@@ -336,7 +338,7 @@ class ControllerMode(
         pausedByUs = out.pauseMusic(); wmark("pauseMusic")
         queue = buildQueue(); qi = 0; wmark("buildQueue")
         fromHub = false; speechOpen = false
-        hintPending = learning(); wmark("learning")
+        hintPending = learning(); lostStreak = 0; lostHintSaid = false; lostHintPending = false; wmark("learning")
         accessWarn = out.notifAccessOff(); wmark("notifAccessOff")
         out.log("MODE enter")
         com.faka.invisible.oskit.Trace.ev("wake", "menu on pausedMusic=$pausedByUs queue=${queue.size}")
@@ -392,6 +394,7 @@ class ControllerMode(
         if (s == Screen.MESSAGE && m != null) out.prepareAiReplies(m)
         if (s == Screen.MESSAGE && m != null && hid(m) !in heard) intro += Intro(Phrase.content("${m.sender}: ${shortText(m)}", vl(m)), hid(m))
         if (s == Screen.FIND && findStack.size == 1 && !out.findHintSeen()) { out.setFindHintSeen(); intro += Intro(Voice.FIND_HINT, null, hint = true) }
+        if (s == Screen.HUB && lostHintPending) { lostHintPending = false; intro += Intro(Voice.HOLD_TO_FIND, null, hint = true) }
         if (s == Screen.TIMER_DONE) intro += Intro(Voice.TIMER_DONE, null)
         if (s == Screen.CALL_IN) intro += Intro(Voice.callFrom(out.callCaller() ?: "unknown"), null)
         if (s == Screen.CALL_ACTIVE) intro += Intro(Voice.CALL_ANSWERED, null)
@@ -727,11 +730,14 @@ class ControllerMode(
     private fun withUnread(n: TreeNode, u: Map<String, Int>): TreeNode {
         val a = n.app?.let { it.copy(unread = u[it.pkg] ?: 0) }
         val kids = n.children.map { withUnread(it, u) }
-        return TreeNode(n.label, kids, a, a?.unread ?: kids.sumOf { it.unread }, n.weight, n.rank)
+        return TreeNode(n.label, kids, a, a?.unread ?: kids.sumOf { it.unread }, n.weight, n.rank, n.hint, n.more)
     }
 
     private fun treeLabel(c: TreeNode): Phrase {
         val a = c.app
+        if (a == null && c.hint.isNotEmpty() && out.groupPicks(treePath.firstOrNull()?.label ?: c.label) < GROUP_NAMES_UNTIL) {   // a new user does not know the groups: say what is inside (until 3 picks there)
+            return Menu.groupScent(c.label, c.hint, c.more)
+        }
         val lang = if (a != null && !a.pkg.startsWith("hub:")) NameLang.voice(a.pkg, a.label) else null   // app names in their language; groups and OS programs stay English
         val counted = c.unread > 0 && !isMusic(c) && a?.pkg?.startsWith("hub:") == true   // app and group notifications are counted only inside Notifications
         return if (lang == null) { if (counted) Menu.treeCount(c.label, c.unread) else Menu.treeName(c.label) }
@@ -744,7 +750,7 @@ class ControllerMode(
         when {
             a != null && a.pkg in hubOpts -> hubOpts.getValue(a.pkg)
             a != null -> treeAppOption(c)
-            else -> Opt("tree:group", treeLabel(c)) { pick("group:${c.label}"); treePath.add(c); show(Screen.TREE) }
+            else -> Opt("tree:group", treeLabel(c)) { pick("group:${c.label}"); pickedInGroup = false; treePath.add(c); show(Screen.TREE) }
         }
     }
 
@@ -1079,7 +1085,8 @@ class ControllerMode(
             Screen.APP_OPEN -> treeUp()
             Screen.MUSIC -> show(musicBack)
             Screen.MUSIC_PLAY, Screen.VOLUME_DIAL -> show(musicHost)
-            Screen.TREE -> { treePath.removeLastOrNull(); treeUp() }
+            Screen.TREE -> { if (treePath.size == 1 && !pickedInGroup && !lostHintSaid && ++lostStreak >= 2) { lostHintSaid = true; lostHintPending = true; com.faka.invisible.oskit.Trace.ev("hint", "hold to find: left 2 groups without a pick") }
+                treePath.removeLastOrNull(); treeUp() }
             Screen.FIND -> { findStack.removeLastOrNull(); if (findStack.isEmpty()) show(Screen.HUB) else show(Screen.FIND) }
             Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR -> treeUp()   // opened from the tree: back to the list it was picked in
             Screen.ALARM_MIN -> show(Screen.ALARM_HOUR)
@@ -1184,11 +1191,15 @@ class ControllerMode(
     /** True once after the user picked a "Back" item: the click should sound like leaving (falling), not like entering. */
     fun consumeBackPick(): Boolean = backPicked.also { backPicked = false }
 
+    private var pickedInGroup = false; private var lostStreak = 0; private var lostHintSaid = false; private var lostHintPending = false
+
     private fun pick(intent: String, sender: String = "") {
         if (suggestedKeys.isNotEmpty() && screen == Screen.HUB) out.choice(screen.name, -1, if (intent in suggestedKeys) "suggest:hit" else "suggest:miss", intent)   // into the choice log, for tools/menu_report.py
         backPicked = intent.endsWith(":back") || intent == "volume:done"
         if (backPicked) backNav = true
         out.choice(screen.name, code, intent, sender, pickMs)
+        if (screen == Screen.TREE && treePath.isNotEmpty() && (intent.startsWith("app:") || intent.startsWith("hub:"))) out.addGroupPick(treePath[0].label)
+        if (!intent.startsWith("group:")) { pickedInGroup = true; lostStreak = 0 }
         if (intent != "none" && intent != "nothing") out.setCodeCount(out.codeCount() + 1)
     }
 
@@ -1248,6 +1259,7 @@ class ControllerMode(
         const val DIAL_STEP_MS = 450L   // volume dial: one step quieter every this long after a hold, until a press
         const val ITEM_GAP_MS = Pacing.ITEM_GAP_MS
         const val FIND_MS = 20_000L   // "Find my phone" rings this long
+        const val GROUP_NAMES_UNTIL = 3   // picks inside a home group, then it speaks its short name
         const val SPEARCON_AFTER = 30   // picks of one option, then it is scanned as a sped-up spearcon
         private const val MAX_SPOKEN = 160
         private const val TASK_FULL_CHARS = 600   // a task read in full after a hold

@@ -41,6 +41,7 @@ class ModeTest {
         var nav: String? = null
         var digest = ""; var shorts = mapOf<String, String>()
         var groups = listOf<NotifGroup>(); var muted = 0
+        var freshUser = false; val groupPickCount = HashMap<String, Int>()   // freshUser: groups speak the names inside them until 3 picks
         var installed = listOf<InstalledApp>(); val opened = ArrayList<String>(); val mutedPkgs = HashSet<String>(); val picksOf = HashMap<String, Int>()
         var weatherAnswer: String? = null     // null = the answer has not come yet
         var pendingWeather: ((Phrase) -> Unit)? = null
@@ -119,6 +120,8 @@ class ModeTest {
             override fun setLastTimer(minutes: Int) { last = minutes }
             override fun favourites() = favs
             override fun suggest(candidates: Collection<String>, now: Long, others: Collection<String>, accept: (String, Double, Int) -> Boolean) = suggested.filter { it in candidates }
+            override fun groupPicks(group: String) = if (freshUser) groupPickCount[group] ?: 0 else 99
+            override fun addGroupPick(group: String) { groupPickCount[group] = (groupPickCount[group] ?: 0) + 1 }
             override fun findHintSeen() = findSeen
             override fun setFindHintSeen() { findSeen = true }
             override fun loadReactions() = savedReactions

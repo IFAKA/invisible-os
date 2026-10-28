@@ -60,6 +60,7 @@ object Voice {
     // in menu: 1 = pick the option just spoken, 2 = one back, 3 = back, 4 = leave, click then hold = exit; any click cancels a pending send
     val HINT get() = f("Click when you hear it. Two clicks: back one. Three clicks: go up.")
     val DIAL_HINT get() = f("Hold: quieter, any press stops. Click: louder.")   // said while learning
+    val HOLD_TO_FIND get() = f("Hold to find by name.")   // said once per wake after two groups were left without a pick
     val FIND_HINT get() = f("Find. Pick the first letter.")   // said the first time only
     val GESTURE_HELP get() = f("Click when you hear the option. 2 clicks: back one. 3 clicks: go up; on home, leave. 4 clicks: leave. Click, then hold: exit.")
     fun timerSet(minutes: Int) = f("Timer $minutes minutes")
@@ -174,6 +175,9 @@ object Voice {
 object Menu {
     /** A group or OS program name in the tree (an English label, possibly with the unread count): said in the menu language. */
     fun treeName(label: String) = Phrase.mixed(label)
+    /** A group with the apps inside it, for a new user: "Talk: WhatsApp, Gmail, and 4 more". The app names are content, the rest fixed words. */
+    fun groupScent(label: String, names: List<String>, more: Int) =
+        Phrase.mixed("$label: ") + Phrase.content(names.joinToString(", ")) + (if (more > 0) Phrase.mixed(", and $more more") else Phrase.mixed(""))
     /** What the number after a name counts, in words ("WhatsApp, 2 notifications"): a bare number never says what it counts. */
     fun countText(n: Int) = if (n == 1) "1 notification" else "$n notifications"
     fun treeCount(label: String, n: Int) = Phrase.mixed("$label, ${countText(n)}")

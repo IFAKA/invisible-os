@@ -179,6 +179,40 @@ class FlowTest {
         assertEquals(ControllerMode.Screen.HUB, f.screen())
     }
 
+    private fun planApps(f: Flow) {
+        f.r.installed = listOf("com.android.deskclock" to "Clock", "com.google.android.calendar" to "Calendar", "com.miui.weather2" to "Weather",
+            "com.google.android.keep" to "Keep", "com.google.android.apps.tasks" to "Google Tasks", "com.miui.notes" to "Notes")
+            .map { InstalledApp(it.first, it.second) }
+    }
+
+    // ---- group_says_apps_inside ----
+    @Test fun group_says_apps_inside() {
+        val f = flow(); planApps(f); f.r.freshUser = true
+        val i = f.mark(); f.press("900")
+        f.need("Plan: ", i, 20_000)
+        assertTrue(f.heard(i).toString(), f.heard(i).any { Regex("Plan: .+, and \\d+ more").containsMatchIn(it) })
+        // after 3 picks inside Plan the short name comes back
+        f.r.groupPickCount["Plan"] = 3
+        f.press("100,150,100,150,100"); f.advance(1500)   // leave the menu
+        val j = f.mark(); f.press("900"); f.heardStart("Plan", j, 20_000); f.advance(600)
+        assertTrue(f.heard(j).toString(), f.heard(j).none { it.startsWith("Plan: ") })
+    }
+
+    // ---- lost_hint_hold_to_find ----
+    @Test fun lost_hint_hold_to_find() {
+        val f = flow(); planApps(f); f.r.freshUser = true
+        val back = "100,150,100,150,100"
+        var i = f.mark(); f.press("900")
+        for (round in 1..2) {
+            f.heardStart("Plan", i, 20_000); f.advance(600); f.press("120"); f.advance(400)
+            assertEquals(ControllerMode.Screen.TREE, f.screen())
+            f.press(back); f.advance(400)
+            assertEquals(ControllerMode.Screen.HUB, f.screen())
+            if (round == 1) { assertFalse(f.said("Hold to find by name", i)); i = f.mark() }
+        }
+        f.need("Hold to find by name", i, 5_000)
+    }
+
     // ---- voice_speed_applied ----
     @Test fun voice_speed_applied() {
         // the phone sets the slider to 1.4 and wakes; the engine gets slider + a use bonus, 1.4 to 1.6

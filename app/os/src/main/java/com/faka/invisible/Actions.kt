@@ -189,6 +189,8 @@ object Actions {
             override fun dndAllowed() = this@Actions.dndAllowed()
             override fun waiting() = narrator.waiting()
             override fun background(work: () -> Unit, done: () -> Unit) { Thread { work(); handler.post { done() } }.start() }
+            override fun groupPicks(group: String) = prefs().getInt("group_picks_$group", 0)
+            override fun addGroupPick(group: String) { prefs().edit().putInt("group_picks_$group", groupPicks(group) + 1).apply() }
             override fun findHintSeen() = prefs().getBoolean("find_hint_seen", false)
             override fun setFindHintSeen() { prefs().edit().putBoolean("find_hint_seen", true).apply() }
             override fun loadReactions() = prefs().getString("reactions", "") ?: ""

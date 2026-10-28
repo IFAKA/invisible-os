@@ -35,7 +35,10 @@ class AppTreeTest {
     private fun leaf(p: String, w: Double, unread: Int = 0) = AppLeaf(p, title(p), AppCategories.categoryOf(p), unread, w)
 
     /** A readable name from a package (the phone gives real labels): the last part that is not a filler word, capitalised. */
+    private val labels = mapOf("com.android.vending" to "Play Store", "com.android.thememanager" to "Themes", "com.google.android.apps.adm" to "Find My Device", "com.google.android.apps.subscriptions.red" to "Google One", "com.android.providers.downloads.ui" to "Downloads", "com.google.android.apps.nbu.files" to "Files by Google", "com.miui.calculator" to "Calculator", "com.mi.android.globalFileexplorer" to "File Manager", "com.xiaomi.scanner" to "Scanner", "com.google.android.apps.translate" to "Translate", "com.mi.globalminusscreen" to "App Vault", "com.miui.miservice" to "Services and feedback", "com.google.android.inputmethod.latin" to "Gboard", "com.microsoft.launcher" to "Microsoft Launcher", "com.miui.securitycenter" to "Security", "com.mi.globalbrowser" to "Mi Browser", "com.google.android.googlequicksearchbox" to "Google", "com.x8bit.bitwarden" to "Bitwarden", "com.google.android.apps.safetyhub" to "Personal Safety", "com.google.android.apps.authenticator2" to "Google Authenticator", "com.azure.authenticator" to "Microsoft Authenticator", "com.reddit.frontpage" to "Reddit", "com.zhiliaoapp.musically" to "TikTok", "com.facebook.katana" to "Facebook", "org.telegram.messenger" to "Telegram", "com.microsoft.teams" to "Teams", "com.zoom.videomeetings" to "Zoom", "com.google.android.contacts" to "Contacts", "com.google.android.apps.tachyon" to "Google Meet", "com.google.android.dialer" to "Phone dialer", "com.google.android.apps.messaging" to "Messages by Google", "com.google.android.gm" to "Gmail", "com.microsoft.office.outlook" to "Outlook", "com.google.android.youtube" to "YouTube", "com.miui.videoplayer" to "Mi Video", "com.netflix.mediaclient" to "Netflix", "com.google.android.videos" to "Google TV", "com.spotify.music" to "Spotify", "com.mi.earphone" to "Mi Earphones", "com.miui.player" to "Mi Music", "org.oxycblt.auxio" to "Auxio", "com.google.android.apps.youtube.music" to "YouTube Music", "com.miui.gallery" to "Gallery", "com.android.soundrecorder" to "Sound recorder", "com.google.android.apps.photos" to "Google Photos", "com.android.camera" to "Camera", "com.google.android.apps.maps" to "Google Maps", "com.miui.compass" to "Compass app", "com.amazon.mShop.android.shopping" to "Amazon", "com.alibaba.aliexpresshd" to "AliExpress", "com.ebay.mobile" to "eBay", "com.xiaomi.mipicks" to "GetApps", "com.citymapper.app.release" to "Citymapper", "com.ubercab" to "Uber", "com.miui.weather2" to "Weather", "com.android.deskclock" to "Clock", "com.google.android.apps.tasks" to "Google Tasks", "com.google.android.keep" to "Google Keep", "com.miui.notes" to "Notes", "com.google.android.apps.walletnfcrel" to "Google Wallet", "com.paypal.android.p2pmobile" to "PayPal", "com.nu.production" to "Nubank", "com.chase.sig.android" to "Chase", "com.microsoft.office.word" to "Word", "com.google.android.apps.docs.editors.docs" to "Google Docs", "com.google.android.apps.docs" to "Google Drive", "com.google.android.apps.bard" to "Gemini", "com.xiaomi.glgm" to "Game Center", "com.google.android.apps.fitness" to "Google Fit", "com.whatsapp" to "WhatsApp", "com.transferwise.android" to "Wise", "com.crtm.integrated" to "Metro Madrid", "com.tranzmate" to "Moovit", "com.cabify.rider" to "Cabify", "com.bbva.bbvacontigo" to "BBVA", "com.myfitnesspal.android" to "MyFitnessPal", "com.mercadopago.wallet" to "Mercado Pago", "com.coinbase.android" to "Coinbase", "com.binance.dev" to "Binance")   // the names a person sees on the phone
+
     private fun title(p: String): String {
+        labels[p]?.let { return it }
         val skip = setOf("android", "app", "apps", "es", "core", "ui", "mobile", "red", "wallet", "client", "integrated", "community", "wallet", "latin", "manager", "m", "main", "mshop", "v2")
         val parts = p.removePrefix("hub:").split('.')
         val w = parts.reversed().firstOrNull { it !in skip && it.length > 2 } ?: parts.last()
@@ -142,4 +145,34 @@ class AppTreeTest {
         assertEquals(1, one.children.size)
     }
 
+
+    // ---------- information scent: a group says the apps inside it ----------
+    @Test fun groupScentNamesTheTopAppsAndCountsTheRest() {
+        val l = listOf(AppLeaf("a", "Alpha", "Talk/Chat", 0, 50.0), AppLeaf("b", "Beta", "Talk/Chat", 0, 40.0), AppLeaf("c", "Gamma", "Talk/Mail", 0, 30.0),
+            AppLeaf("d", "Delta", "Talk/Mail", 0, 20.0), AppLeaf("e", "Eps", "Talk/Social", 0, 10.0), AppLeaf("g1", "Maps", "Go/Move", 0, 5.0), AppLeaf("g2", "Uber", "Go/Taxi", 0, 4.0), AppLeaf("g3", "Cabify", "Go/Taxi", 0, 3.0), AppLeaf("w1", "Chrome", "Tools/Web", 0, 900.0), AppLeaf("w2", "Files", "Tools/Utilities", 0, 800.0))
+        val t = AppTree.build(l)
+        val talk = t.children.first { it.label == "Talk" }
+        fun top(n: TreeNode): String = if (n.isApp) n.label else top(n.children.first())
+        assertEquals(talk.children.take(2).map { top(it) }, talk.hint)   // the top app of the first two entries, a sub-group gives its top app
+        assertEquals(AppTree.apps(talk).size - 2, talk.more)
+        val go = t.children.first { it.label == "Go" }
+        assertEquals(setOf("Maps", "Uber", "Cabify"), go.hint.toSet())   // 3 apps or fewer: all of them
+        assertEquals(0, go.more)
+        talk.children.filter { !it.isApp }.forEach { assertEquals(AppTree.apps(it).size, it.hint.size + it.more) }
+    }
+
+    @Test fun everyGroupHasAHintAndNoAppDoes() {
+        fun check(n: TreeNode) { for (c in n.children) { if (c.isApp) assertTrue(c.hint.isEmpty()) else { assertTrue(c.label, c.hint.isNotEmpty()); assertEquals(AppTree.apps(c).size, c.hint.size + c.more); check(c) } } }
+        check(AppTree.build(phone()))
+    }
+
+    /** For tools/tree_test.py: the tree as it is spoken, in both variants (short label, and group with the names inside), to app/build/tree_dump.json. */
+    @Test fun writeTreeDump() {
+        fun q(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        fun names(n: TreeNode) = if (n.isApp) n.label else n.label + ": " + n.hint.joinToString(", ") + (if (n.more > 0) ", and ${n.more} more" else "")
+        fun js(n: TreeNode): String = "{\"short\":${q(n.label)},\"names\":${q(names(n))},\"weight\":${n.weight},\"pkg\":${q(n.app?.pkg ?: "")},\"children\":[" + n.children.joinToString(",") { js(it) } + "]}"
+        val f = java.io.File("../build/tree_dump.json"); f.parentFile.mkdirs()
+        f.writeText(js(AppTree.build(phone())))
+        assertTrue(f.length() > 1000)
+    }
 }

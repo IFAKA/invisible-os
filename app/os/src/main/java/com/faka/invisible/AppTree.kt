@@ -9,7 +9,9 @@ package com.faka.invisible
 data class AppLeaf(val pkg: String, val label: String, val category: String, val unread: Int, val weight: Double, val rank: Int = 0, val live: Boolean = false)
 
 /** One list entry: a group ([children]) or an app ([app]). [unread] and [weight] are sums over the leaves below. */
-class TreeNode(val label: String, val children: List<TreeNode> = emptyList(), val app: AppLeaf? = null, val unread: Int = 0, val weight: Double = 0.0, val rank: Int = 0) {
+class TreeNode(val label: String, val children: List<TreeNode> = emptyList(), val app: AppLeaf? = null, val unread: Int = 0, val weight: Double = 0.0, val rank: Int = 0,
+               /** Groups only: the names of the best apps inside, heaviest first (at most 2, or all when the group holds 3 apps or fewer), and how many more apps there are. */
+               val hint: List<String> = emptyList(), val more: Int = 0) {
     val isApp get() = app != null
 }
 
@@ -100,8 +102,21 @@ object AppTree {
 
     private fun leafNode(a: AppLeaf) = TreeNode(a.label, app = a, unread = a.unread, weight = a.weight, rank = a.rank)
     private fun leafEntry(a: AppLeaf) = Entry(leafNode(a))
-    private fun node(label: String, kids: List<TreeNode>, weight: Double = kids.sumOf { it.weight }) =
-        TreeNode(label, kids, unread = kids.sumOf { it.unread }, weight = weight)
+    private fun node(label: String, kids: List<TreeNode>, weight: Double = kids.sumOf { it.weight }): TreeNode {
+        val (hint, more) = scent(kids)
+        return TreeNode(label, kids, unread = kids.sumOf { it.unread }, weight = weight, hint = hint, more = more)
+    }
+
+    private fun appCount(n: TreeNode): Int = if (n.isApp) 1 else n.children.sumOf { appCount(it) }
+
+    /** What a group says about itself (information scent): the top app of each of its first entries (a sub-group gives its top app), or every app when there are 3 or fewer. */
+    fun scent(kids: List<TreeNode>): Pair<List<String>, Int> {
+        val total = kids.sumOf { appCount(it) }
+        fun top(n: TreeNode): List<String> = if (n.isApp) listOf(n.label) else n.hint.take(1).ifEmpty { n.children.take(1).flatMap { top(it) } }
+        val all = if (total <= 3) kids.flatMap { if (it.isApp) listOf(it.label) else apps(it).map { a -> a.label } } else kids.flatMap { top(it) }
+        val names = all.distinct().take(if (total <= 3) 3 else 2)
+        return names to (total - names.size)
+    }
 
     // ---- the layout of one level assignment (0 = home, 1 = group list, 2 = sub-group list) ----
     private fun layout(ls: List<AppLeaf>, lv: Map<String, Int>, memo: MutableMap<List<Any>, List<Entry>>): Layout {

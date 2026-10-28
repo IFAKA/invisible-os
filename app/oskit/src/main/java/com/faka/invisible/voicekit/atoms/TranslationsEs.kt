@@ -10,6 +10,7 @@ private val SPOKEN_ES = mapOf(
     "Click when you hear it. Two clicks: back one. Three clicks: go up." to "Haz clic cuando lo oigas. Dos clics: uno atrás. Tres clics: sube.",
     "Hold: quieter, any press stops. Click: louder." to "Mantén: más bajo. Cualquier toque lo detiene. Clic: más alto.",
     "Find. Pick the first letter." to "Buscar. Elige la primera letra.",
+    "Hold to find by name." to "Mantén pulsado para buscar por nombre.",
     "Click when you hear the option. 2 clicks: back one. 3 clicks: go up; on home, leave. 4 clicks: leave. Click, then hold: exit." to
         "Haz clic cuando oigas la opción. 2 clics: uno atrás. 3 clics: sube; en inicio, salir. 4 clics: salir. Clic y mantén: cerrar.",
     "Timer {0} minutes" to "Temporizador de {0} minutos",
