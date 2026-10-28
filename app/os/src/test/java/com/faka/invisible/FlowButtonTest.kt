@@ -147,7 +147,7 @@ class FlowButtonTest {
         assertEquals(1, host.ended)
     }
 
-    @Test fun home_letters_hold_three_seconds_leaves_and_click_hold_exits() {
+    @Test fun home_letters_hold_three_seconds_leaves_and_click_hold_is_only_clicking() {
         fun make(): Triple<RoboRig, RoboRig.Host, HomeLetters> {
             val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)
             val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }
@@ -157,8 +157,50 @@ class FlowButtonTest {
         val (rig, host, p) = make()
         rig.press("3200"); rig.advance(Pacing.GAP_MS)
         assertEquals(1, host.ended); assertTrue(p.result is HomeResult.Leave)
+        // click then hold: the loop keeps running (Write works the same); nothing closes the OS
         val (rig2, host2, p2) = make()
-        rig2.press("120,150,900"); rig2.advance(Pacing.GAP_MS)
-        assertEquals(1, rig2.exits); assertEquals(1, host2.ended); assertTrue(p2.result is HomeResult.Exit)
+        rig2.advance(1000)
+        rig2.press("120,150,900"); rig2.advance(Pacing.GAP_MS + 2000)
+        assertEquals(0, rig2.exits); assertEquals(0, host2.ended); assertTrue(p2.active)
+    }
+
+    /** The real phone (trace 2026-10-28 21:47): one click reached the loop, then ~600 ms later the system's assistant signal arrived and was read as click-then-hold = exit. */
+    @Test fun home_letters_one_click_then_the_assistant_signal_does_not_end_it() {
+        val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)
+        val apps = object : ActionSource { override val id = "apps"; override fun actions() = listOf(HomeAction(ActionKind.OPEN, "WhatsApp", "com.whatsapp", 30.0)) }
+        val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }
+        val p = HomeLetters(listOf(apps), ActionRanker(), audio, audio, store, { true }, {})
+        rig.running = p; p.start(host)
+        rig.advance(1500)
+        rig.press("2")                       // the 2 ms click of the trace
+        rig.advance(614); rig.buttons.assistHold()   // the signal that followed it
+        rig.advance(2000)
+        assertTrue("the loop ended", p.active); assertEquals(0, host.ended); assertEquals(0, rig.exits)
+        assertEquals("the click did not reach the loop", 1, p.clicksSeen)
+        rig.press("3200"); rig.advance(Pacing.GAP_MS)
+        assertEquals(1, host.ended); assertTrue(p.result is HomeResult.Leave)   // hold 3 s still leaves
+    }
+
+    /** Write owns every press too: a click and the assistant signal after it do not leave Write; only hold 3 s does. */
+    @Test fun write_loop_one_click_then_the_assistant_signal_does_not_end_it() {
+        val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)
+        val lm = object : Ranker { override fun ranked(context: List<String>) = listOf("hello" to -2.0) }
+        val out = object : TypeOut {
+            override fun pair(left: String, right: String?) {}
+            override fun hush() {}
+            override fun prefetch(words: List<String>) {}
+            override fun say(text: Phrase) { rig.said.add(text.text) }
+            override fun cue(c: TypeCue) {}
+            override fun readBack(text: String) {}
+            override fun finished(text: String) {}
+        }
+        var ended = 0
+        val p = LoopProgram(lm, out, audio, audio, Frame(), object : LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }) { ended++ }
+        rig.rawOwner = p; p.start()
+        rig.advance(6000)
+        rig.press("2"); rig.advance(614); rig.buttons.assistHold(); rig.advance(2000)
+        assertTrue(p.active); assertEquals(0, ended); assertEquals(0, rig.exits)
+        rig.press("120,150,900"); rig.advance(Pacing.GAP_MS + 1000)
+        assertTrue("click then hold must not leave Write", p.active); assertEquals(0, rig.exits)
     }
 }

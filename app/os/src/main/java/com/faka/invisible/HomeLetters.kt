@@ -22,7 +22,7 @@ sealed class HomeResult {
  * ACTIONS first (up to 3: "Open WhatsApp", "Play Billie Jean", "Reply to Ana"), then the letters, then Undo. A click on an action runs it; a click on a
  * letter narrows the actions that fit; Undo takes the last letter back. The actions come from [ActionSource]s mixed by [ActionRanker]
  * (shares learned from picks, priors from use counts). Every app and program is reachable by its letters, so this replaces Find's letter ranges
- * (Reset learning still walks [NameFinder]). A program of the OS: it owns the raw button; hold 3 s leaves to home, click then hold closes the OS.
+ * (Reset learning still walks [NameFinder]). A program of the OS: it owns the raw button; hold 3 s leaves to home. Click then hold does NOT close the OS here (like Write): the earbud's long-press signal arrives about 600 ms after a plain click and was read as an exit.
  */
 class HomeLetters(
     private val sources: List<ActionSource>,
@@ -47,6 +47,10 @@ class HomeLetters(
     private var shownRanked: List<ActionRanker.Ranked> = emptyList()
     private var startedAt = 0L
     override var active = false; private set
+    /** A loop owns every press: a click then a hold is ordinary clicking (the earbud sends its long-press signal about 600 ms after a click), so only a hold of 3 s leaves. */
+    override val exitOnClickHold = false
+    /** Clicks that reached the loop (read by tests and the trace). */
+    var clicksSeen = 0; private set
     /** Read by the OS when the program has ended. */
     var result: HomeResult = HomeResult.Exit; private set
 
@@ -147,7 +151,7 @@ class HomeLetters(
         val len = time - at
         if (len >= LEAVE_MS) { Trace.ev("home", "request leave letters=$letters"); finish(HomeResult.Leave); return }
         if (len >= Pacing.HOLD_MS) return   // a plain hold does nothing here
-        if (phase == Phase.LOOP) loop.click(at)
+        if (phase == Phase.LOOP) { clicksSeen++; loop.click(at) }
     }
 
     private companion object {
