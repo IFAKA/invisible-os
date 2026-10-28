@@ -100,11 +100,22 @@ def earlier_block(context):
 TASK_WORDS = 12   # the guard limit for a task line; the prompt asks for 8
 
 
+TASK_EXAMPLES = ('Example. item: Juego de cables puente macho-macho, 3,29 EUR, Diotronic -> {"short": "Comprar cables puente macho-macho"}\n'
+                 'Example. item: Call the bank about the card statement before Friday -> {"short": "Call the bank about the card"}\n')
+PRICE = re.compile(r"[,;]?\s*~?\d+(?:[.,]\d+)?\s*(?:\u20ac|eur(?:os?)?)\.?", re.I)
+
+
+def clean_task(s):
+    """A task line without prices (the model is told to leave them out, small models forget)."""
+    return squash(PRICE.sub("", s)).rstrip(",;. ")
+
+
 def build_task_prompt(text):
-    return ("Below is a to-do item.\n---\n%s\n---\n"
-            "Write what to do, for a blind listener, as JSON: {\"short\": \"...\"}.\n"
-            "short: one short action phrase, at most 8 words, in the same language as the item, plain words, no markdown. Keep the key thing. "
-            "Use only names and numbers that are in the item. Never invent.\nOutput only the JSON." % str(text)[:1500])
+    return ("Below is a to-do item, in any language.\n---\n%s\n---\n"
+            "Write the action to do, as JSON: {\"short\": \"...\"}.\n"
+            "short: a short action phrase, 3 to 7 words, in the SAME language as the item (never translate: Spanish stays Spanish), starting with a verb "
+            "(Comprar, Llamar, Buy, Call). Say only what to do and the thing; leave out prices, shop names, sizes and details. "
+            "Use only names and numbers that are in the item. Never invent.\n%sOutput only the JSON." % (str(text)[:1500], TASK_EXAMPLES))
 
 
 TASKS_WORDS = 20   # the guard limit for the summary of a whole to-do list; the prompt asks for 12
@@ -148,6 +159,8 @@ def make_short(text, model, context="", kind=""):
         return ""
     try:
         s = parse_short(model(build_short_prompt(text, context, kind)))
+        if kind == "task":
+            s = clean_task(s)
     except Exception:
         return ""
     ok, _ = check_story(s, text, squash(context)[:CONTEXT_CHARS], limit={"task": TASK_WORDS, "tasks": TASKS_WORDS}.get(kind, SHORT_WORDS))

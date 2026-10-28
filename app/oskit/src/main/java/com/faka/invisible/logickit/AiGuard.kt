@@ -66,15 +66,22 @@ object AiGuard {
             "short: one or two sentences, at most $ASK_SHORT_WORDS words, plain words, no markdown. Say who wants what, when, and any number or place. " +
             "Use only facts, numbers and names that are in the message or the earlier messages. Never invent.\nOutput only the JSON."
 
-    const val TASK_ASK_WORDS = 8
     const val TASK_WORDS = 12
+
+    private const val TASK_EXAMPLES = "Example. item: Juego de cables puente macho-macho, 3,29 EUR, Diotronic -> {\"short\": \"Comprar cables puente macho-macho\"}\n" +
+        "Example. item: Call the bank about the card statement before Friday -> {\"short\": \"Call the bank about the card\"}\n"
+    private val price = Regex("[,;]?\\s*~?\\d+(?:[.,]\\d+)?\\s*(?:\u20ac|eur(?:os?)?)\\.?", RegexOption.IGNORE_CASE)
+
+    /** A task line without prices (the model is told to leave them out, small models forget). */
+    fun cleanTask(s: String): String = s.replace(price, "").squash().trimEnd(',', ';', '.', ' ')
 
     /** One short action phrase for a to-do item, in its own language. */
     fun taskPrompt(text: String): String =
-        "Below is a to-do item.\n---\n${text.take(1500)}\n---\n" +
-            "Write what to do, for a blind listener, as JSON: {\"short\": \"...\"}.\n" +
-            "short: one short action phrase, at most $TASK_ASK_WORDS words, in the same language as the item, plain words, no markdown. Keep the key thing. " +
-            "Use only names and numbers that are in the item. Never invent.\nOutput only the JSON."
+        "Below is a to-do item, in any language.\n---\n${text.take(1500)}\n---\n" +
+            "Write the action to do, as JSON: {\"short\": \"...\"}.\n" +
+            "short: a short action phrase, 3 to 7 words, in the SAME language as the item (never translate: Spanish stays Spanish), starting with a verb " +
+            "(Comprar, Llamar, Buy, Call). Say only what to do and the thing; leave out prices, shop names, sizes and details. " +
+            "Use only names and numbers that are in the item. Never invent.\n${TASK_EXAMPLES}Output only the JSON."
 
     const val TASKS_WORDS = 20
 
@@ -123,7 +130,7 @@ object AiGuard {
     /** The short action phrase for a to-do item that passes the guard, or "". */
     fun makeTaskLine(text: String, model: (String) -> String): String {
         if (text.squash().isEmpty()) return ""
-        val s = try { parseShort(model(taskPrompt(text))) } catch (_: Exception) { return "" }
+        val s = try { cleanTask(parseShort(model(taskPrompt(text)))) } catch (_: Exception) { return "" }
         return if (checkStory(s, text, "", TASK_WORDS).first) s else ""
     }
 

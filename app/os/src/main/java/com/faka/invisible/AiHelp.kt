@@ -9,6 +9,7 @@ import com.faka.invisible.logickit.AiSource
 import com.faka.invisible.logickit.squash
 import com.faka.invisible.logickit.words
 import com.faka.invisible.oskit.Notif
+import com.faka.invisible.oskit.Trace
 import java.io.IOException
 
 /**
@@ -54,6 +55,7 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
     private var latest: List<Notif> = emptyList()
     private val shorts = HashMap<String, String>()   // text + context -> short ("" = no answer)
     private val shortBusy = HashSet<String>()
+    private val retryAt = HashMap<String, Long>()   // key -> when an empty answer may be asked again
     private var downUntil = 0L
 
     private fun computer(): Computer? = active()?.takeIf { it.url.isNotBlank() && it.token.isNotBlank() }
@@ -137,29 +139,37 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
         return s.orEmpty()
     }
 
+    /** The cached answer for [k], or "" while it is asked in the background (an empty answer is asked again after a minute: the computer may have been off). */
+    private fun cachedAsk(k: String, what: String, ask: () -> String): String {
+        val s: String?
+        val go: Boolean
+        synchronized(lock) {
+            s = shorts[k]
+            go = (s == null || (s.isEmpty() && now() >= retryAt.getOrDefault(k, 0L))) && shortBusy.add(k)
+        }
+        if (go) run {
+            val r = ask()
+            Trace.ev("ai", "$what [${source()}] -> '$r'")
+            synchronized(lock) { shorts[k] = r; shortBusy.remove(k); retryAt[k] = now() + RETRY_MS }
+        }
+        return s.orEmpty()
+    }
+
     /** A short action phrase for the to-do item [text] when the AI made one, else "" (a short item, no AI, or no answer yet: asks now if it has not yet). */
     fun taskLine(text: String): String {
         val t = text.squash()
         if (t.words().size <= TASK_SHORT_WORDS || source() == AiSource.NONE) return ""
-        val k = "task\u0001" + t + "\u0001" + source()
-        val s = synchronized(lock) { shorts[k] }
-        if (s == null && synchronized(lock) { k !in shorts && shortBusy.add(k) }) run {
-            val r = chain("", { it.isEmpty() }, { it.taskLine(t) }, { p -> AiGuard.makeTaskLine(t) { p.generate(it) } })
-            synchronized(lock) { shorts[k] = r; shortBusy.remove(k) }
+        return cachedAsk("task\u0001" + t + "\u0001" + source(), "task line ${t.take(40)}") {
+            chain("", { it.isEmpty() }, { c -> c.taskLine(t) }, { p -> AiGuard.makeTaskLine(t) { p.generate(it) } })
         }
-        return s.orEmpty()
     }
 
     /** What the to-do list [texts] is mostly about, when the AI made it, else "" (fewer than 4 tasks, no AI, or no answer yet: asks now if it has not yet). */
     fun tasksSummary(texts: List<String>): String {
         if (texts.size < TASKS_SUMMARY_MIN || source() == AiSource.NONE) return ""
-        val k = "tasks\u0001" + texts.joinToString("\u0002") + "\u0001" + source()
-        val s = synchronized(lock) { shorts[k] }
-        if (s == null && synchronized(lock) { k !in shorts && shortBusy.add(k) }) run {
-            val r = chain("", { it.isEmpty() }, { it.tasksSummary(texts) }, { p -> AiGuard.makeTasksSummary(texts) { p.generate(it) } })
-            synchronized(lock) { shorts[k] = r; shortBusy.remove(k) }
+        return cachedAsk("tasks\u0001" + texts.joinToString("\u0002") + "\u0001" + source(), "tasks summary ${texts.size} tasks") {
+            chain("", { it.isEmpty() }, { c -> c.tasksSummary(texts) }, { p -> AiGuard.makeTasksSummary(texts) { p.generate(it) } })
         }
-        return s.orEmpty()
     }
 
     /** True when some AI can write replies now. */
@@ -178,5 +188,5 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
         }
     }
 
-    private companion object { const val DOWN_MS = 60_000L; const val TASK_SHORT_WORDS = 8; const val TASKS_SUMMARY_MIN = 4 }
+    private companion object { const val DOWN_MS = 60_000L; const val TASK_SHORT_WORDS = 4; const val TASKS_SUMMARY_MIN = 4; const val RETRY_MS = 60_000L }
 }
