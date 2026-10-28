@@ -13,17 +13,24 @@ Ranker: a pure-python port of the real next-word LSTM (NextWord.kt, int8 "ULM1" 
   context is cached in app/logs/write/lm-cache-*.pkl. --verify compares with app/programs/write/build/lm-top5.txt, which
   the JVM test NextWordDumpTest writes (cd app && ./gradlew :programs:write:testDebugUnitTest --offline --tests '*NextWordDumpTest*').
 Step costs (measured from the owner's write_usage.tsv): next pair 2.9 s, pick 3.1 s, menu trip 9.4 s.
-Designs: today (the bug: fixed letter order, Space via menu), fixed (letters by the model's chance), loop (placeholder
-  for the Ticker/Nomon-style letter loop; a letter costs its spoken position * item_ms + reaction_ms)."""
+Designs: today (the bug: fixed letter order, Space via menu), fixed (letters by the model's chance), loop (the real letter loop
+  simulated: a person clicks on every pass of the item he wants at onset + N(click-mean, click-sd) ms, misses a pass with chance
+  --miss, makes a stray click with chance --false per item and pass; the clicks go into a Python port of ClickModel.kt
+  (tools/click_model.py); wrong picks are undone through the Undo item; one person per seed keeps learning through all the texts;
+  s/char = mean over --seeds seeds with a 95% interval). --sweep prints the table for sd 40/60/100 and threshold ln 99 / ln 19.
+  --verify-click compares the Python ClickModel with the Kotlin dump (cd app && ./gradlew :oskit:testDebugUnitTest --offline --tests '*ClickModelDumpTest*')."""
 import argparse, array, bisect, datetime, hashlib, heapq, io, json, math, multiprocessing as mp
-import operator, os, pickle, random, re, struct, sys, time, urllib.request, zipfile
+import operator, os, pickle, statistics, random, re, struct, sys, time, urllib.request, zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import click_model as cm
 ROOT = os.path.join(HERE, "..")
 LM_DIR = os.path.join(ROOT, "app/programs/write/src/main/assets/lm")
 LOGDIR = os.path.join(ROOT, "app/logs/write")
 PHRASES = os.path.join(LOGDIR, "phrases2.txt")
 KOTLIN_DUMP = os.path.join(ROOT, "app/programs/write/build/lm-top5.txt")
+KOTLIN_CLICK = os.path.join(ROOT, "app/oskit/build/click-dump.txt")
 PHRASE_URL = "https://www.yorku.ca/mack/PhraseSets.zip"
 
 NEXT, PICK, MENU = 2.9, 3.1, 9.4          # seconds, measured
@@ -104,6 +111,31 @@ def lm_table(lm, contexts, log):
         log("lstm: %d new contexts in %.1f s (cache %s, %d total)" % (len(need), time.time() - t0, os.path.basename(path), len(table)))
     return table
 
+def verify_click():
+    if not os.path.exists(KOTLIN_CLICK): print("no Kotlin dump: run ClickModelDumpTest first (see --help)"); return 2
+    keys = list("ABCDE"); noon = dict(zip(keys, [0, 600, 1200, 1800, 2400.])); prior = dict(zip(keys, [.4, .25, .15, .1, .1]))
+    rounds = [[1300, 4300], [100], [1750, 2100, 5100], [2650], [1900], [1300], [1450], [200], [1350], [1800, 4800], [1400], [2600], [700, 1250, 1390]]
+    mine = []
+    for name, pr in (("p99", cm.Params()), ("p19", cm.Params(win_diff=math.log(19)))):
+        m = cm.ClickModel(3000.0, pr); k = 0
+        for ri, r in enumerate(rounds):
+            m.start(prior, noon, 0.0, {"E": m.params.win_diff_high})
+            for c in r:
+                win = m.click(float(c)); k += 1; g = m.posteriors()
+                mine.append((name, k, win, [g[x] for x in keys]))
+                if win:
+                    m.learn(m.chosen())
+                    if ri == len(rounds) - 2 and name == "p99": m.undo()
+                    break
+    theirs = [l.split() for l in open(KOTLIN_CLICK)]
+    if len(theirs) != len(mine): print("MISMATCH: %d clicks vs Kotlin %d" % (len(mine), len(theirs))); return 1
+    worst = 0.0
+    for (name, k, win, post), t in zip(mine, theirs):
+        if t[0] != name or int(t[1]) != k or bool(int(t[2])) != win: print("MISMATCH at %s %d (win flag or order)" % (name, k)); return 1
+        worst = max(worst, max(abs(a - float(b)) for a, b in zip(post, t[3:])))
+    print("click model: Python matches Kotlin on %d clicks, worst posterior difference %.2e (%s)" % (len(mine), worst, "OK" if worst < 1e-6 else "MISMATCH"))
+    return 0 if worst < 1e-6 else 1
+
 def verify(lm, log):
     if not os.path.exists(KOTLIN_DUMP): return "not checked (no Kotlin dump)"
     bad = []
@@ -181,36 +213,136 @@ def design_fixed(ctx, word, bg, prm):
     t = add(MENU_COST, spell(ctx, word, lambda c, p: letter_order_fixed(c, p, bg)))
     return add(t, MENU_COST)
 
-def design_loop(ctx, word, bg, prm):
-    """The real Write loop (LoopItems.kt + LetterLoop.kt): items in the order the app speaks them, two channels (item k: voice k%2,
-    channel B half an item later), the cycle = the longer channel. Order: up to 3 word guesses, then letters by chance (bigrams for an
-    unknown prefix), then Space (only with a prefix), Undo, Send last. A pick costs: wait to the item's first onset + reaction, plus
-    (clicks - 1) more whole cycles (the click model wants about 2 clicks for a letter among 175 ms neighbours; a word guess with a
-    high chance 1), plus the short spoken echo of the prefix. Undo and Send are never needed here (no mistakes, no send)."""
-    item, react = prm["item_ms"] / 1000, prm["reaction_ms"] / 1000
-    say, clicks = prm["say_ms"] / 1000, prm["loop_clicks"]
-    t = (0.0, 0); prefix = ""
-    def cost(order, i, sure):
-        n = len(order) + 2   # + Undo, Send at the end (Space is already in order)
-        period = math.ceil(n / 2) * item
-        onset = (i // 2) * item + (i % 2) * item / 2
-        return onset + react + ((1 if sure else clicks) - 1) * period + say
-    while True:
-        words = ctx.top_words(prefix, True)[:3]
-        m = ctx.mass(prefix); b = bg.get(prefix[-1] if prefix else "^", {})
-        probs = {w: p for w, p in ctx.with_prefix(prefix)}
-        letters = sorted(BYUSE, key=lambda c: -(m.get(c, 0.0) + 1e-6 * b.get(c, 0.0)))
-        order = [("W", w) for w in words] + [("L", c) for c in letters] + ([("S", " ")] if prefix else [])
-        if word in words:
-            i = words.index(word)
-            return add(t, (cost(order, i, probs.get(word, 0) > 0.5), 1))   # a word pick adds its own space
-        want = " " if prefix == word else word[len(prefix)]
-        i = next(k for k, (kind, x) in enumerate(order) if x == want and kind != "W")
-        t = add(t, (cost(order, i, False), 1))
-        if prefix == word: return t
-        prefix += want
+ALPHABET = "abcdefghijklmnopqrstuvwxyzñ"
+TIE = {c: 1e-12 * (27 - (BYUSE.index(c) if c in BYUSE else 27)) for c in ALPHABET}
+PHRASE_Q, CONTROL_P = 0.15, 0.02
+_items_cache = {}
 
-DESIGNS = {"today": design_today, "fixed": design_fixed, "loop": design_loop}
+def loop_items(ctx, ckey, bg, written_n, prefix, can_undo, floor=1e-6):
+    """The items of one round in spoken order with their chances: port of LoopItems.build + LetterRank.letters (no whole-text phrases).
+    Returns [(key, prior, risky)]; keys: ('w', word) ('l', c) 'space' 'undo' 'send'."""
+    k = (ckey, prefix, can_undo, written_n > 0, floor)
+    if k in _items_cache: return _items_cache[k]
+    fits = ctx.with_prefix(prefix)
+    mass = sum(p for _, p in fits)
+    guesses = ctx.top_words(prefix, True)[:3]
+    pm = dict(fits)
+    p_words = [pm[w] / mass if mass > 0 else 0.0 for w in guesses]
+    m = ctx.mass(prefix)
+    if m:
+        tot = sum(m.values()); chance = {c: m.get(c, 0.0) / tot for c in ALPHABET}
+    else:
+        g = bg.get(prefix[-1] if prefix else "^", {}); tot = sum(g.get(c, 0.0) for c in ALPHABET) or 1.0
+        chance = {c: g.get(c, 0.0) / tot for c in ALPHABET}
+    letters = sorted(ALPHABET, key=lambda c: -(chance[c] + TIE[c]))
+    left = max(1.0 - sum(p_words), 0.2)
+    has_text = written_n > 0 or bool(prefix)
+    send_p = 0.005 if not has_text else CONTROL_P
+    controls = (CONTROL_P if prefix else 0.0) + (CONTROL_P if can_undo else 0.0) + send_p
+    kk = max(1.0 - controls, 0.3)
+    out = [(("w", w), p_words[i] * kk, False) for i, w in enumerate(guesses)]
+    out += [(("l", c), chance[c] * left * kk + floor, False) for c in letters]
+    if prefix: out.append(("space", CONTROL_P, False))
+    if can_undo: out.append(("undo", CONTROL_P, True))
+    out.append(("send", send_p, True))
+    _items_cache[k] = out
+    return out
+
+def _common(a, b):
+    n = 0
+    while n < min(len(a), len(b)) and a[n] == b[n]: n += 1
+    return a[:n]
+
+def simulate_session(texts, ctxs, bg, prm, seed):
+    """One person typing all [texts] one after the other with the real loop. Returns (seconds, chars, picks, wrong_picks)."""
+    rng = random.Random(seed)
+    item = prm["item_ms"]; say = prm["say_ms"]; lead = 120.0
+    thr = math.log(prm["threshold"]); params = cm.Params(win_diff=thr)
+    if prm["profile_seed"]: params.mu0 = prm["click_mean"] / 1000; params.sigma0 = prm["click_sd"] / 1000
+    prev = None; seconds = 0.0; chars = 0; picks = 0; wrong = 0; failed = 0
+    for t in texts:
+        chars += len(t); target = t.split(); written = []; prefix = ""; hist = []; rounds = 0; sec0 = seconds; picks0 = picks; wrong0 = wrong
+        while True:
+            rounds += 1
+            if rounds > 3 * len(t) + 30: failed += 1; seconds = sec0; picks = picks0; wrong = wrong0; chars -= len(t); break   # stuck (the model keeps picking the wrong item): give up this text
+            # where is the person: consistent with the target?
+            ok = written == target[:len(written)] and (prefix == "" or (len(written) < len(target) and target[len(written)].startswith(prefix)))
+            if not ok and not hist: raise RuntimeError("lost %r %r %r" % (t, written, prefix))
+            if ok and len(written) == len(target): break
+            if ok: ckey = tuple(written[-8:]); ipre = prefix
+            else:   # a wrong state: its own contexts are not in the table (a Python LSTM step costs seconds), so the round is built for the right words with the common prefix; only the Undo item matters here
+                good = 0
+                while good < min(len(written), len(target)) and written[good] == target[good]: good += 1
+                ckey = tuple(target[:good][-8:]); ipre = ""
+                if good == len(written) and good < len(target): ipre = _common(prefix, target[good])
+                if good == len(target): ckey = tuple(target[-8:][:-1]); ipre = ""
+            items = loop_items(ctxs[ckey], ckey, bg, len(written), ipre, bool(hist), prm["letter_floor"])
+            if ok:
+                w = target[len(written)]
+                words = [it[0] for it in items if it[0][0] == "w"]
+                if ("w", w) in [x for x in words]: want = ("w", w)
+                elif prefix == w: want = "space"
+                else: want = ("l", w[len(prefix)])
+            else: want = "undo"
+            keys = [it[0] for it in items]; n = len(keys)
+            if os.environ.get('BENCH_DEBUG'): print(t, written, repr(prefix), ok, want, len(hist), file=sys.stderr)
+            period = math.ceil(n / 2) * item
+            onset = {k: (i // 2) * item + (i % 2) * item / 2 for i, k in enumerate(keys)}
+            m = cm.ClickModel(period, params)
+            if prev is not None: m.inherit(prev)
+            elif prm["seed_offsets"]: m.seed(prm["seed_offsets"])
+            m.start({k: max(p, 1e-9) for k, p, _ in items}, onset, 0.0, {k: m.params.win_diff_high for k, _, r in items if r})
+            chosen = None; at = 0.0; cyc = 0
+            while chosen is None:
+                if cyc > 60: chosen = "GIVEUP"; break
+                ev = []
+                for k in keys:
+                    base = onset[k] + cyc * period
+                    if k == want and rng.random() >= prm["miss"]: ev.append(max(0.0, base + rng.gauss(prm["click_mean"], prm["click_sd"])))
+                    if prm["false_per_item"] and rng.random() < prm["false"]: ev.append(base + rng.random() * item)
+                if not prm["false_per_item"] and rng.random() < prm["false"]: ev.append(rng.random() * period + cyc * period)   # one stray click in this pass of the loop
+                ev.sort()
+                for e in ev:
+                    at = e
+                    if m.click(e): chosen = m.chosen(); break
+                cyc += 1
+            if chosen == "GIVEUP": seconds += (lead + 60 * period) / 1000; continue
+            seconds += (lead + at + say) / 1000; picks += 1
+            if chosen == want: pass
+            else: wrong += 1
+            if chosen == "undo": m.undo()
+            else: m.learn(chosen)
+            prev = m
+            # the effect of the choice on the text
+            if chosen == "undo":
+                if hist: written, prefix = hist.pop()
+            elif chosen == "send": seconds += 3.0   # read back, one hold to cancel
+            elif chosen == "space": hist.append((list(written), prefix)); written = written + [prefix]; prefix = ""
+            elif chosen[0] == "w": hist.append((list(written), prefix)); written = written + [chosen[1]]; prefix = ""
+            else: hist.append((list(written), prefix)); prefix += chosen[1]
+            if os.environ.get('BENCH_DEBUG2') and not chosen == want: print('WRONG', t, written, repr(prefix), 'want', want, 'got', chosen, 'cyc', cyc, 'mu', round(statistics.mean(m.ys[:20]),3) if m.ys else None, 'sd', round(statistics.pstdev(m.ys[:20]),3) if len(m.ys)>2 else None, 'ks', round(m.ksigma,3), file=sys.stderr)
+    return seconds, chars, picks, wrong, failed
+
+_G = {}
+def _session(args):
+    name, seed = args
+    return simulate_session(_G["sets"][name], _G["ctxs"], _G["bg"], _G["prm"], seed)
+
+def run_loop(sets, ctxs, bg, prm, seeds, log):
+    """mean and 95% interval over seeds of s/char and wrong picks per 100 chars, per text set."""
+    _G.update(sets=sets, ctxs=ctxs, bg=bg, prm=prm); res = {}
+    tasks = [(n, s) for n in sets for s in range(seeds)]
+    with mp.get_context("fork").Pool() as pool: outs = pool.map(_session, tasks, chunksize=1)
+    for n in sets:
+        allrows = [o for (nn, _), o in zip(tasks, outs) if nn == n]; rows = [r for r in allrows if r[1] > 0]   # a person who finished no text has no s/char
+        if not rows: res[n] = {"spc": float("nan"), "spc_ci": 0.0, "wrong": float("nan"), "wrong_ci": 0.0, "picks_per_char": float("nan"), "failed_texts": sum(r[4] for r in allrows), "seeds": seeds}; continue
+        spc = [r[0] / r[1] for r in rows]; wr = [100.0 * r[3] / r[1] for r in rows]; pk = [r[2] / r[1] for r in rows]
+        ci = lambda v: 1.96 * statistics.stdev(v) / math.sqrt(len(v)) if len(v) > 1 else 0.0
+        res[n] = {"spc": statistics.mean(spc), "spc_ci": ci(spc), "wrong": statistics.mean(wr), "wrong_ci": ci(wr), "picks_per_char": statistics.mean(pk), "failed_texts": sum(r[4] for r in allrows), "seeds": seeds}
+        log("loop %s %s %s" % (n, json.dumps(prm), json.dumps(res[n])))
+    return res
+
+DESIGNS = {"today": design_today, "fixed": design_fixed}
 
 # ---------------------------------------------------------------- run
 def main():
@@ -218,31 +350,50 @@ def main():
     ap.add_argument("--all", action="store_true", help="all 500 phrases")
     ap.add_argument("--n", type=int, default=50); ap.add_argument("--seed", type=int, default=2003)
     ap.add_argument("--item-ms", type=int, default=350); ap.add_argument("--reaction-ms", type=int, default=400)
-    ap.add_argument("--say-ms", type=int, default=800); ap.add_argument("--loop-clicks", type=int, default=2)
+    ap.add_argument("--say-ms", type=int, default=800)
+    ap.add_argument("--click-mean", type=float, default=180.0, help="ms a click comes after the item's onset")
+    ap.add_argument("--click-sd", type=float, default=60.0, help="ms spread of the click")
+    ap.add_argument("--miss", type=float, default=0.05, help="chance the person misses a pass of the item he wants")
+    ap.add_argument("--false", type=float, default=0.02, help="chance of one stray click per pass of the loop")
+    ap.add_argument("--false-per-item", action="store_true", help="--false is the chance per item and pass (about 0.6 stray clicks per loop at 0.02: nothing works); default: per pass of the whole loop")
+    ap.add_argument("--letter-floor", type=float, default=1e-6, help="the least chance of a letter in LoopItems (Kotlin: 1e-6)")
+    ap.add_argument("--threshold", type=float, default=99.0, help="the model picks when its lead is ln THRESHOLD (Kotlin: 99)")
+    ap.add_argument("--seeds", type=int, default=10, help="simulated persons (same seeds for every setting)")
+    ap.add_argument("--profile-seed", action="store_true", help="the model starts from the person's mean and spread (Click test seed)")
+    ap.add_argument("--sweep", action="store_true", help="the loop at sd 40/60/100 x threshold 99/19, on all 500 phrases")
+    ap.add_argument("--verify-click", action="store_true", help="compare the Python ClickModel with the Kotlin dump and stop")
     ap.add_argument("--no-cache", action="store_true"); ap.add_argument("--verify", action="store_true")
     a = ap.parse_args()
+    if a.verify_click: sys.exit(verify_click())
+    if a.sweep: a.all = True
     t0 = time.time(); os.makedirs(LOGDIR, exist_ok=True)
     logpath = os.path.join(LOGDIR, "bench-%s.log" % datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
     lf = open(logpath, "w")
     def log(s): lf.write(s + "\n"); lf.flush()
     phrases = load_phrases(log)
     sample = phrases if a.all else random.Random(a.seed).sample(phrases, min(a.n, len(phrases)))
-    prm = {"item_ms": a.item_ms, "reaction_ms": a.reaction_ms, "say_ms": a.say_ms, "loop_clicks": a.loop_clicks}
+    prm = {"item_ms": a.item_ms, "reaction_ms": a.reaction_ms, "say_ms": a.say_ms}
     lm = LM()
-    key = hashlib.sha256(json.dumps([open(__file__).read(), lm.model_hash, lm.vhash, OWNER, sample, prm, [NEXT, PICK, MENU]]).encode()).hexdigest()[:16]
+    srcs = open(__file__).read() + open(os.path.join(HERE, "click_model.py")).read()
+    key = hashlib.sha256(json.dumps([srcs, lm.model_hash, lm.vhash, OWNER, sample, prm, [NEXT, PICK, MENU]]).encode()).hexdigest()[:16]
     cpath = os.path.join(LOGDIR, "bench-cache.json")
     cache = json.load(open(cpath)) if os.path.exists(cpath) else {}
     port = verify(lm, log) if (a.verify or os.path.exists(KOTLIN_DUMP)) else "not checked"
+    sets = {"owner": OWNER, "phrases%d" % len(sample): sample}
+    contexts = []
+    for texts in sets.values():
+        for t in texts:
+            ws = t.split()
+            contexts += [tuple(ws[max(0, i - 8):i]) for i in range(len(ws))]
+    table = None; bg = None
+    def tables():
+        nonlocal table, bg
+        if table is None: table = lm_table(lm, contexts, log); bg = bigrams(lm)
+        return table, bg
     if key in cache and not a.no_cache:
         res = cache[key]; log("cached result %s" % key)
     else:
-        sets = {"owner": OWNER, "phrases%d" % len(sample): sample}
-        contexts = []
-        for texts in sets.values():
-            for t in texts:
-                ws = t.split()
-                contexts += [tuple(ws[max(0, i - 8):i]) for i in range(len(ws))]
-        table = lm_table(lm, contexts, log); bg = bigrams(lm)
+        table, bg = tables()
         res = {}
         for sname, texts in sets.items():
             for dname, fn in DESIGNS.items():
@@ -265,8 +416,27 @@ def main():
             r = res["%s/%s" % (sname, dname)]
             parts.append("%s: %.3f chars/s, %.1f s/char, %.2f actions/char" % (sname, r["chars"] / r["sec"], r["sec"] / r["chars"], r["actions"] / r["chars"]))
         print("%-5s %s" % (dname, " | ".join(parts)))
+    # the loop: simulated persons
+    configs = [(sd, thr) for thr in (99.0, 19.0) for sd in (40.0, 60.0, 100.0)] if a.sweep else [(a.click_sd, a.threshold)]
+    for sd, thr in configs:
+        lp = dict(prm, click_mean=a.click_mean, click_sd=sd, miss=a.miss, false=a.false, false_per_item=a.false_per_item, letter_floor=a.letter_floor, threshold=thr, profile_seed=a.profile_seed, seed_offsets=None)
+        lkey = hashlib.sha256(json.dumps([srcs, lm.model_hash, lm.vhash, OWNER, sample, lp, a.seeds, "loop"]).encode()).hexdigest()[:16]
+        if lkey in cache and not a.no_cache: lres = cache[lkey]; log("cached loop %s" % lkey)
+        else:
+            t, b = tables(); lres = run_loop(sets, CtxMap(lm, t), b, lp, a.seeds, log)
+            cache[lkey] = lres; json.dump(cache, open(cpath, "w"))
+        parts = ["%s: %.2f s/char (+-%.2f), %.1f wrong picks/100 chars, %d texts given up" % (n, r["spc"], r["spc_ci"], r["wrong"], r["failed_texts"]) for n, r in lres.items()]
+        print("loop  sd=%g ln%g mean=%g miss=%g false=%g seeds=%d | %s" % (sd, thr, a.click_mean, a.miss, a.false, a.seeds, " | ".join(parts)))
     print("lstm port: %s; run %.1f s; log %s" % (port, time.time() - t0, os.path.relpath(logpath, ROOT)))
     log("done in %.1f s" % (time.time() - t0))
+
+class CtxMap(dict):
+    """context tuple -> Ctx, built on first use; a context the table lacks (a wrong word was picked) is computed here."""
+    def __init__(self, lm, table): super().__init__(); self.lm = lm; self.table = table
+    def __missing__(self, c):
+        lp = self.table.get(c)
+        if lp is None: lp = self.lm.logprobs(list(c))
+        self[c] = Ctx(self.lm, lp, set(c[-3:])); return self[c]
 
 _ctxcache = {}
 if __name__ == "__main__": main()
