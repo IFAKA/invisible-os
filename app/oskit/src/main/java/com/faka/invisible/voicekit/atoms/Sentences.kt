@@ -61,7 +61,7 @@ object Voice {
     val HINT get() = f("Click when you hear it. Two clicks: back one. Three clicks: go up.")
     val DIAL_HINT get() = f("Hold: quieter, any press stops. Click: louder.")   // said while learning
     val FIND_HINT get() = f("Find. Pick the first letter.")   // said the first time only
-    val GESTURE_HELP get() = f("Click when you hear the option. 2 clicks: back one. 3 clicks: go up. 4 clicks: leave. Click, then hold: exit.")
+    val GESTURE_HELP get() = f("Click when you hear the option. 2 clicks: back one. 3 clicks: go up; on home, leave. 4 clicks: leave. Click, then hold: exit.")
     fun timerSet(minutes: Int) = f("Timer $minutes minutes")
     val TIMER_DONE get() = f("Timer done")
     // calls

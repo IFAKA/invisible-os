@@ -10,8 +10,8 @@ private val SPOKEN_ES = mapOf(
     "Click when you hear it. Two clicks: back one. Three clicks: go up." to "Haz clic cuando lo oigas. Dos clics: uno atrás. Tres clics: sube.",
     "Hold: quieter, any press stops. Click: louder." to "Mantén: más bajo. Cualquier toque lo detiene. Clic: más alto.",
     "Find. Pick the first letter." to "Buscar. Elige la primera letra.",
-    "Click when you hear the option. 2 clicks: back one. 3 clicks: go up. 4 clicks: leave. Click, then hold: exit." to
-        "Haz clic cuando oigas la opción. 2 clics: uno atrás. 3 clics: sube. 4 clics: salir. Clic y mantén: cerrar.",
+    "Click when you hear the option. 2 clicks: back one. 3 clicks: go up; on home, leave. 4 clicks: leave. Click, then hold: exit." to
+        "Haz clic cuando oigas la opción. 2 clics: uno atrás. 3 clics: sube; en inicio, salir. 4 clics: salir. Clic y mantén: cerrar.",
     "Timer {0} minutes" to "Temporizador de {0} minutos",
     "Timer done" to "Temporizador listo",
     "Call from {0}" to "Llamada de {0}",
@@ -430,7 +430,7 @@ private val SCREEN_ES = mapOf(
     "So the app can hear your earbud button." to "Para que la app oiga el botón de tus audífonos.",
     "Press your earbud button once. This screen will say when it hears you." to "Pulsa una vez el botón de tus audífonos. Esta pantalla dirá cuándo te oye.",
     "So it can read your new messages to you." to "Para leerte tus mensajes nuevos.",
-    "So a long press works on the lock screen." to "Para que la pulsación larga funcione con la pantalla bloqueada.",
+    "So your earbud hold opens it. In the earbud app set the right earbud: one tap Play/Pause, two taps Next song, three taps Previous song, hold Voice assistant." to "Para que mantener el auricular lo abra. En la app del auricular, el derecho: un toque Reproducir/Pausa, dos Siguiente, tres Anterior, mantener Asistente de voz.",
     "So the app can show that it is listening." to "Para que la app muestre que está activa.",
     "So it can tell you your next event." to "Para decirte tu próximo evento.",
     "So it can tell you the weather where you are." to "Para decirte el clima donde estás.",
@@ -493,7 +493,7 @@ private val SCREEN_ES = mapOf(
     "Double tap {0}." to "Toca dos veces {0}.",
     "Step {0} of {1}. {2}. {3}" to "Paso {0} de {1}. {2}. {3}",
     "Hold your earbud button to open Invisible OS." to "Mantén pulsado el botón del auricular para abrir Invisible OS.",
-    "Tap Invisible, then Always." to "Toca Invisible y luego Siempre.",
+    "Pick Invisible OS as the digital assistant app." to "Elige Invisible OS como app de asistente digital.",
     "Choose Invisible" to "Elegir Invisible",
     "Open settings" to "Abrir ajustes",
     "Messages needs notification access" to "Mensajes necesita acceso a las notificaciones",

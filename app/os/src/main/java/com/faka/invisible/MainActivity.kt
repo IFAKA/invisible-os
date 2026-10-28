@@ -201,7 +201,7 @@ class MainActivity : Activity() {
         when (id) {
             "button" -> if (sp.getBoolean("a11y_agreed", false)) startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) else { disclosure = true; render() }
             "notif" -> startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            "assist" -> try { startActivity(Intent("android.speech.action.VOICE_SEARCH_HANDS_FREE")) } catch (e: Exception) { startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)) }   // shows "Complete action using": tap Invisible, then Always
+            "assist" -> startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))   // "Digital assistant app": pick Invisible OS (the earbud hold then reaches HandsFreeActivity)
             "post" -> ask(Manifest.permission.POST_NOTIFICATIONS)
             "calendar" -> ask(Manifest.permission.READ_CALENDAR)
             "contacts" -> ask(Manifest.permission.READ_CONTACTS)
@@ -300,7 +300,7 @@ class MainActivity : Activity() {
         if (need != null) k.status(list, tr(need.title), tr(need.reason), Ui.bad, Ui.S1) {
             addView(k.primary(tr(need.action)) { doStep(need.id) })
             if (previewNeed == null) addView(k.quiet(tr("Not now"), Ui.soft) { sp.edit().remove(Needs.PREF).apply(); render() })
-        } else if (offer != null) k.status(list, tr(offer.title) + " \u00B7 " + tr("Optional"), tr(offer.reason) + if (offer.id == "assist") " " + tr("Tap Invisible, then Always.") else "", Ui.accent, Ui.S1) {
+        } else if (offer != null) k.status(list, tr(offer.title) + " \u00B7 " + tr("Optional"), tr(offer.reason) + if (offer.id == "assist") " " + tr("Pick Invisible OS as the digital assistant app.") else "", Ui.accent, Ui.S1) {
             addView(k.primary(tr(if (offer.id == "assist") "Choose Invisible" else "Turn on")) { doStep(offer.id) })
             addView(k.quiet(tr("Not now"), Ui.soft) { sp.edit().putStringSet("setup_skipped", (sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + offer.id).apply(); render() })
         }

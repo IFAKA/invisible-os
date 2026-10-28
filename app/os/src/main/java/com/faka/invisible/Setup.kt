@@ -19,7 +19,7 @@ object Setup {
         add(SetupStep("button", "Button access", "So the app can hear your earbud button.", s.button, false))
         add(SetupStep("test", "Hold your earbud button", "Hold your earbud button. This screen will say when it hears you.", s.buttonTested, false))
         add(SetupStep("notif", "Notification access", "So it can read your new messages to you.", s.notifications, true))
-        add(SetupStep("assist", "Assistant", "So a long press works on the lock screen.", s.assistant, true))
+        add(SetupStep("assist", "Assistant", "So your earbud hold opens it. In the earbud app set the right earbud: one tap Play/Pause, two taps Next song, three taps Previous song, hold Voice assistant.", s.assistant, true))
         if (s.sdk >= 33) add(SetupStep("post", "Show notifications", "So the app can show that it is listening.", s.postNotifications, true))
         add(SetupStep("calendar", "Calendar", "So it can tell you your next event.", s.calendar, true))
         add(SetupStep("location", "Location", "So it can tell you the weather where you are.", s.location, true))
