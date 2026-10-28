@@ -58,6 +58,10 @@
                 <action android:name="android.speech.action.VOICE_SEARCH_HANDS_FREE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <intent-filter android:priority="999">   <!-- the system's voice-assist key and "Voice assistant" earbud hold start WEB_SEARCH -->
+                <action android:name="android.speech.action.WEB_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
         <service android:name=".ControllerNotificationListener" android:exported="true"
             android:label="Invisible OS"
