@@ -206,6 +206,7 @@ class TypeProgram(
         if (!active || downAt < 0) return
         timers.clear("t:hold")
         val long = time - downAt >= Pacing.HOLD_MS
+        out.log("press", if (long) "hold" else "click", time - downAt)
         val acted = armed
         downAt = -1; armed = false
         if (acted) return   // the hold already acted while the button was down
@@ -225,6 +226,7 @@ class TypeProgram(
     private fun holdAction() { if (waiting) return; if (pending != null) backToEdit() else if (menu) closeMenu() else choose(false) }
 
     private fun many(n: Int) {
+        out.log("clicks", n)
         if (waiting) return
         pending?.let { t -> if (n == 1) send(t) else { out.readBack(t); out.say(TypeVoice.CONFIRM) }; return }
         if (menu) { when (n) { 1 -> pickMenu(); 2 -> menuScan.prevIn(Pacing.SKIP_MS); else -> closeMenu() }; return }

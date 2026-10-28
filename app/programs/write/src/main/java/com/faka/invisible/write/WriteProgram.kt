@@ -7,6 +7,7 @@ import com.faka.invisible.logickit.PriceSum
 import com.faka.invisible.oskit.Program
 import com.faka.invisible.oskit.ProgramEntry
 import com.faka.invisible.oskit.ProgramHost
+import com.faka.invisible.oskit.Trace
 import com.faka.invisible.voicekit.*
 import java.io.File
 import java.util.concurrent.Executors
@@ -70,6 +71,7 @@ private class WriteOut(val host: ProgramHost) : TypeOut {
     override fun cue(c: TypeCue) { Log.d(TAG, "WRITE cue $c"); VoiceKit.narrator.play(TypeSounds.pcm(c)) }
     override fun finished(text: String) {}
     override fun log(event: String, vararg fields: Any?) {
+        Trace.ev("write", (listOf(event) + fields.map { it.toString().replace('\t', ' ').replace('\n', ' ') }).joinToString(" "))
         try { File(host.context.filesDir, "write_usage.tsv").appendText((listOf(System.currentTimeMillis(), event) + fields.map { it.toString().replace('\t', ' ').replace('\n', ' ') }).joinToString("\t") + "\n") } catch (e: Throwable) { Log.e(TAG, "usage log failed", e) }
     }
 }
@@ -119,6 +121,8 @@ class WriteProgram(
         val buckets = WriteShared.buckets(ctx)
         val frame = if (sendTo != null) (replyFrame ?: Frame()) else services.focusFrame()   // the place that has focus: app, kind of field, what is on the screen
         Log.d(TAG, "WRITE frame app=${frame.app} kind=${frame.kind} field=${frame.field} thread=${frame.thread} around=${frame.around.size} before=${frame.before.length}")
+        val path = if (sendTo != null) "reply" else if (frame.app.isEmpty()) "music-or-rooms" else "hub"   // what is known here: a reply has sendTo; no focused app is a music search or Rooms
+        Trace.ev("write", "start path=$path app=${frame.app} kind=${frame.kind} around=${frame.around.size}")
         chatLang = null
         Thread({   // the language of the place, from what is on the screen and in the field; unknown means nothing to translate
             val seen = (frame.around + frame.before).joinToString(" ")
@@ -133,7 +137,9 @@ class WriteProgram(
             override fun nextWords(text: String, then: (List<String>) -> Unit) {
                 if (!services.aiEnabled()) return
                 WriteShared.worker.execute {
-                    val r = try { services.nextWords(text, frame.brief()) } catch (e: Throwable) { Log.e(TAG, "next words failed", e); emptyList() }
+                    val t0 = System.currentTimeMillis()
+                    val r = try { services.nextWords(text, frame.brief()) } catch (e: Throwable) { Log.e(TAG, "next words failed", e); Trace.err("write nextWords", e); emptyList() }
+                    Trace.ev("write", "ai nextWords ${System.currentTimeMillis() - t0}ms ${r.size} words")
                     host.handler.post { then(r) }
                 }
             }
@@ -146,7 +152,9 @@ class WriteProgram(
                 val my = ++phraseReq; val frameNow = frame
                 WriteShared.worker.execute {   // one at a time; a request for an older text is dropped before it starts
                     if (my != phraseReq) return@execute
-                    val r = try { services.continuations(text, frameNow.brief()) } catch (e: Throwable) { Log.e(TAG, "endings failed", e); emptyList() }
+                    val t0 = System.currentTimeMillis()
+                    val r = try { services.continuations(text, frameNow.brief()) } catch (e: Throwable) { Log.e(TAG, "endings failed", e); Trace.err("write phrases", e); emptyList() }
+                    Trace.ev("write", "ai phrases ${System.currentTimeMillis() - t0}ms ${r.size} phrases")
                     if (r.isNotEmpty()) host.handler.post { then(r) }
                 }
             }
