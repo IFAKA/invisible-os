@@ -124,7 +124,7 @@ TASKS_WORDS = 20   # the guard limit for the summary of a whole to-do list; the 
 def build_tasks_prompt(text):
     return ("Below is a person's to-do list, one item per line.\n---\n%s\n---\n"
             "Say what the list is mostly about, for a blind listener, as JSON: {\"short\": \"...\"}.\n"
-            "short: the 2 or 3 main themes, at most 12 words, in English, plain words, no markdown, no counts. Example: mostly buying electronics parts, and a few calls. "
+            "short: a phrase of 4 to 10 words that starts with \"Mostly\", in English, no counts, no markdown. Example: Mostly buying electronics parts, and a few calls. "
             "Use only things that are in the list. Never invent.\nOutput only the JSON." % str(text)[:3000])
 
 
