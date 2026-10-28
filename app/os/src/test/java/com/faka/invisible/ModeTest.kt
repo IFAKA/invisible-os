@@ -599,6 +599,25 @@ class ModeTest {
         assertEquals(listOf("Call mum"), r.taskStore.all().map { it.text })
     }
 
+    @Test fun afterATaskIsDoneTheListContinuesWithTheNextOne() {
+        val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.taskStore.add("Call mum"); r.taskStore.add("Pay rent")
+        r.wake(); r.pick("Tasks, 3")
+        r.pick("Call mum"); r.advance(1500); r.pick("Yes, done"); r.advance(5000)
+        val said = r.spoken().filter { it.startsWith("say") }
+        val after = said.drop(said.indexOfLast { it.endsWith("Mark done?") || it.contains("Undo") || it.contains("undo") } + 1)
+        assertTrue(said.toString(), after.firstOrNull { it.contains("milk") || it.contains("rent") }?.endsWith("Pay rent") == true)   // not "Buy milk" again
+    }
+
+    @Test fun afterANotificationIsDismissedTheListContinuesWithTheNextOne() {
+        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("today"))
+        val ns = listOf(Notif("k1", "com.mail", "Mail", "Ann", "one", 5), Notif("k2", "com.mail", "Mail", "Bob", "two", 4), Notif("k3", "com.mail", "Mail", "Cy", "three", 3), Notif("k4", "com.mail", "Mail", "Di", "four", 2))
+        r.groups = listOf(NotifGroup("com.mail", "Mail", "com.mail", ns))
+        r.installed = listOf(InstalledApp("com.mail", "Mail"), InstalledApp("com.google.android.apps.maps", "Maps"))
+        r.wake(); r.pick("Mail"); r.pick("Bob. two"); r.advance(1500); r.pick("Dismiss"); r.clearLog(); r.advance(6000)
+        val said = r.spoken().filter { it.startsWith("say") }
+        assertTrue(said.toString(), said.first().endsWith("Cy. three"))   // not "Ann. one" again
+    }
+
     @Test fun lastTaskDoneSaysAllDone() {
         val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1500)
         r.pick("Buy milk"); r.advance(1500); r.pick("Yes, done"); r.advance(6000)

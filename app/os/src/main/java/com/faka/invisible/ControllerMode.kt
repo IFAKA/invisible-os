@@ -384,6 +384,7 @@ class ControllerMode(
         val s = notifGuard(s0)
         stopAll(); lookupId++
         screen = s; phase = Phase.INTRO; prebuilt = null; timers.clear("prebuild")
+        if (resume?.first != s) resume = null
         com.faka.invisible.oskit.Trace.ev("screen", "${s.name} title=${mirrorTitle(s)}")
         com.faka.invisible.voicekit.ScreenMirror.setTitle(mirrorTitle(s))
         com.faka.invisible.voicekit.ScreenMirror.show(emptyList(), 0)   // the list of the last screen is gone: what is said now fills the picture
@@ -456,7 +457,8 @@ class ControllerMode(
         wmark("beginScan"); val opts = prebuilt?.takeIf { screen == Screen.HUB } ?: buildOptions(); prebuilt = null; wmark("buildOptions")
         scanner.load(opts, listTitle())
         if (scanner.isEmpty) { leaveSilent(); return }
-        val first = devAt.takeIf { it >= 0 }?.coerceAtMost(opts.size - 1) ?: firstKey?.let { k -> opts.indexOfFirst { it.key == k } }?.takeIf { it > 0 } ?: 0
+        val resumeAt = resume?.takeIf { it.first == screen }?.second; resume = null
+        val first = devAt.takeIf { it >= 0 }?.coerceAtMost(opts.size - 1) ?: resumeAt?.coerceAtMost(opts.size - 1) ?: firstKey?.let { k -> opts.indexOfFirst { it.key == k } }?.takeIf { it > 0 } ?: 0
         firstKey = null; devAt = -1
         scanner.speakItem(first); wmark("speakItem called"); wakeT0 = 0
     }
@@ -602,10 +604,11 @@ class ControllerMode(
                 Opt("task:done", Menu.TASK_YES) {
                     val t = taskAsked?.first ?: run { show(Screen.TASK); return@Opt }
                     pick("task:done")
-                    startPending(Voice.TASK_DONE_UNDO, { out.completeTask(t.id); true }, onCancel = { show(Screen.TASK) }, after = {
+                    val at = (taskList.indexOf(t) - taskIdx).coerceAtLeast(0)   // its place on the page: the next task moves into it
+                    startPending(Voice.TASK_DONE_UNDO, { out.completeTask(t.id); true }, onCancel = { resume = Screen.TASK to at; show(Screen.TASK) }, after = {
                         taskList = taskList - t
                         if (taskList.isEmpty()) { say(Voice.ALL_DONE); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } }
-                        else { if (taskIdx >= taskList.size) taskIdx = 0; show(Screen.TASK) }
+                        else { if (taskIdx >= taskList.size) taskIdx = 0 else resume = Screen.TASK to at; show(Screen.TASK) }
                     })
                 })
             Screen.TASK_ADD -> phraseOptions(taskChoices(), "taskadd") { t ->
@@ -894,10 +897,11 @@ class ControllerMode(
     private fun openApp() { val p = notifPkg ?: return; pausedByUs = false; exit(false); out.openApp(p) }
 
     /** Every app that has notifications ("WhatsApp, 3 notifications"), newest first; "Clear all" comes first. */
+    private fun notifApps() = out.notifGroups().filter { it.items.isNotEmpty() }.groupBy { it.pkg }
+        .map { (pkg, gs) -> Triple(pkg, gs.first().app, gs.flatMap { it.items }) }.sortedByDescending { t -> t.third.maxOf { it.at } }
+
     private fun notifAppsOptions(): List<Opt> {
-        val byApp = out.notifGroups().filter { it.items.isNotEmpty() }.groupBy { it.pkg }
-        val apps = byApp.map { (pkg, gs) -> Triple(pkg, gs.first().app, gs.flatMap { it.items }) }.sortedByDescending { t -> t.third.maxOf { it.at } }
-        return apps.map { (pkg, name, items) ->
+        return notifApps().map { (pkg, name, items) ->
             val lang = NameLang.voice(pkg, name)
             val label = if (lang == null) Menu.treeCount(name, items.size) else Phrase.content(name + ", " + Menu.countText(items.size), lang)
             Opt("notifs:app", label) { pick("notifs:app"); notifPkg = pkg; notifFromAll = true; show(Screen.NOTIF_LIST) }   // one notification: the guard skips the list
@@ -915,16 +919,18 @@ class ControllerMode(
 
     private fun notifActionOptions(): List<Opt> {
         val n = openNotif() ?: return emptyList()
+        val itemAt = openItems().indexOfFirst { it.key == n.key }; val appAt = notifApps().indexOfFirst { it.first == n.pkg }
+        fun done(ok: Boolean) { if (ok && itemAt >= 0) resume = (if (notifFromAll && openItems().size < 2) Screen.NOTIF_APPS to appAt else Screen.NOTIF_LIST to itemAt); notifDone(ok) }
         val acts = if (n.hidden) emptyList() else n.actions.map { a ->   // a private notification offers no action labels either
             Opt("notif:action", Phrase.content(a.label, out.songLang(a.label))) {
                 pick("notif:action")
                 if (a.needsText) { pausedByUs = false; exit(false); out.startNotifReply(n.key, a.index) }
-                else notifDone(out.notifFire(n.key, a.index))
+                else done(out.notifFire(n.key, a.index))
             }
         }
         val readAll = if (longShort(n).isEmpty()) emptyList() else listOf(Opt("notif:readall", Menu.READ_ALL) { pick("notif:readall"); say(notifLine(n, 5000, true)); phase = Phase.WAIT; waitNext = { beginScan() } })   // the original, whole
         return readAll + acts + listOf(
-            Opt("notif:dismiss", Menu.DISMISS) { pick("notif:dismiss"); notifDone(out.notifDismiss(n.key)) },
+            Opt("notif:dismiss", Menu.DISMISS) { pick("notif:dismiss"); done(out.notifDismiss(n.key)) },
             Opt("notif:mute", Menu.MUTE_APP) {
                 pick("notif:mute"); out.notifMute(n.pkg); say(Voice.APP_MUTED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
             },
@@ -1214,6 +1220,8 @@ class ControllerMode(
 
     /** Dev (e2e): show a screen by name, waking the menu silently first. */
     private var devAt = -1
+    /** After an item is removed (dismissed, done) the list is read again from the place it left, not from the top: the screen it is for and the item number. */
+    private var resume: Pair<Screen, Int>? = null
     /** Dev (e2e): the next list starts at item [at] (a big number = the last one), so a test need not walk the items before it. */
     fun devShow(name: String, at: Int = -1) { devAt = at; if (!active) { active = true; queue = mutableListOf(); qi = 0; fromHub = false; speechOpen = false; hintPending = false; musicBack = Screen.HUB }; show(Screen.valueOf(name)) }
     /** Dev (e2e): "screen phase" of the menu, for the test log. */
