@@ -93,6 +93,8 @@ interface ModeOutput {
     fun loadReactions(): String = ""   // saved reaction samples (see ReactionGap.encode)
     fun saveReactions(text: String) {}
     fun programs(): List<ProgramEntry> = emptyList()   // the programs the OS lists (its registry), in menu order
+    fun homeLetters(leaves: List<AppLeaf>): Boolean = false   // start the home letters (a program that owns the button); false = not possible now, the old Find walk is used. The end comes back through [homeResult]
+    fun playSong(search: String) {}   // look the song up and play it in the music app
     fun startProgram(id: String) {}   // start the program with this menu id (a ProgramEntry.id); the program gets the raw button
     fun weather(done: (Phrase) -> Unit) { done(Voice.WEATHER_FAILED) }   // off the main thread inside; [done] runs on the main thread with ONE sentence
     fun nextEvent(done: (Phrase) -> Unit) { done(Voice.CALENDAR_FAILED) }   // same: the next calendar event sentence
@@ -159,7 +161,7 @@ class ControllerMode(
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
     private val wakeReadsFresh: Boolean = false, // off: a wake always opens the hub (tests that need the message screen turn it on)
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_CONFIRM, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_APPS, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL, CALL_IN, CALL_ACTIVE, CONTACTS, EMERGENCY, RESET_ASK }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_CONFIRM, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_APPS, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL, CALL_IN, CALL_ACTIVE, CONTACTS, EMERGENCY, RESET_ASK, CALL_ASK }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: Phrase, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: Phrase, val full: Phrase? = null, val run: () -> Unit) { var shown = label }   // [full]: read instead of [label] after a fast-scroll release (a task: its whole text)
@@ -258,7 +260,7 @@ class ControllerMode(
         }
         when (g) {
             Gesture.HOLD -> { stopAll(); out.choice(screen.name, 9, "exit", ""); exit(true) }
-            Gesture.CLICK_HOLD -> if (canFast) { if (screen == Screen.HUB) startFind() else startFast() }   // on home a hold is Find (fast scroll over a few items is little use)
+            Gesture.CLICK_HOLD -> if (canFast) { if (screen == Screen.HUB) { if (!startHomeLetters()) startFind() } else startFast() }   // on home a hold is the home letters (Find's walk is the fallback; fast scroll over a few items is little use)
             Gesture.CLICK_HOLD_END -> {}
             Gesture.QUAD -> { stopAll(); out.choice(screen.name, 4, "leave", ""); leaveSilent() }
             Gesture.TRIPLE -> { stopAll(); out.choice(screen.name, 3, "back", ""); back() }
@@ -370,7 +372,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_CONFIRM, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_APPS, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY, Screen.CONTACTS -> Tone.MORE; Screen.CALL_IN, Screen.CALL_ACTIVE, Screen.EMERGENCY, Screen.RESET_ASK -> Tone.TIMER; Screen.VOLUME, Screen.VOLUME_DIAL -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_CONFIRM, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_APPS, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY, Screen.CONTACTS -> Tone.MORE; Screen.CALL_IN, Screen.CALL_ACTIVE, Screen.EMERGENCY, Screen.RESET_ASK, Screen.CALL_ASK -> Tone.TIMER; Screen.VOLUME, Screen.VOLUME_DIAL -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -404,6 +406,7 @@ class ControllerMode(
         if (s == Screen.CALL_ACTIVE) intro += Intro(Voice.CALL_ANSWERED, null)
         if (s == Screen.EMERGENCY) intro += Intro(Voice.EMERGENCY_ASK, null)
         if (s == Screen.TASK_CONFIRM) taskAsked?.let { (_, line) -> intro += Intro(Voice.taskDoneAsk(line), null) }
+        if (s == Screen.CALL_ASK) callAsked?.let { intro += Intro(Menu.callAsk(it.name), null) }
         if (s == Screen.RESET_ASK) intro += Intro(resetName?.let { Voice.resetAsk(it) } ?: Voice.RESET_ASK_ALL, null)
         if (s == Screen.NOTIF_ACTIONS) openNotif()?.let { intro += Intro(notifIntro(it), null) }
         curIntro = null
@@ -637,6 +640,9 @@ class ControllerMode(
             Screen.EMERGENCY -> listOf(   // the safe answer is read first: a click right after hearing it picks it
                 Opt("emergency:no", Menu.EMERGENCY_NO) { pick("emergency:no"); show(Screen.PHONE) },
                 Opt("emergency:yes", Menu.EMERGENCY_YES) { pick("emergency:yes"); exit(false); out.speak(if (out.emergency()) Voice.EMERGENCY_CALLING else callFailure()) })
+            Screen.CALL_ASK -> listOf(   // a call from the home letters asks first; the safe answer is read first
+                Opt("call:no", Menu.EMERGENCY_NO) { pick("call:no"); show(Screen.HUB) },
+                Opt("call:yes", Menu.EMERGENCY_YES) { pick("call:yes"); val c = callAsked; exit(false); if (c != null) { if (out.dial(c)) out.speak(Voice.calling(c.name)) else out.speak(callFailure()) } })
             Screen.RESET_ASK -> listOf(   // the safe answer is read first
                 Opt("reset:no", Menu.EMERGENCY_NO) { pick("reset:no"); show(Screen.FIND) },
                 Opt("reset:yes", Menu.RESET_YES) { pick("reset:yes"); out.resetLearning(resetPkg); treeKey = null; treeCache = null; resetPkg = null; resetName = null; resetting = false; say(Voice.RESET_DONE); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } })
@@ -800,6 +806,37 @@ class ControllerMode(
         findPlanKey = key; findPlan = null
         val ls = homeLeaves; val box = arrayOfNulls<NameFinder.Node>(1)
         out.background({ box[0] = NameFinder.plan(ls) }) { if (findPlanKey === key) { findPlan = box[0]; out.log("FINDPLAN\n" + NameFinder.dump(box[0]!!)) } }
+    }
+
+    private var callAsked: Contact? = null   // the person a home action wants to call, until "Yes, call now"
+
+    /** A hold on home: the letter loop (a program) offers actions; its end comes back through [homeResult]. False = it could not start (no sound output): the Find walk is used. */
+    private fun startHomeLetters(): Boolean {
+        val leaves = homeLeaves
+        stopAll()
+        if (!out.homeLetters(leaves)) return false
+        out.choice(screen.name, 7, "find", "")   // for tools/menu_report.py: how often Find (the home letters) is used
+        return true
+    }
+
+    /** The home letters ended (main thread). An action does what the tree does for the same thing; leaving goes back to the home list. */
+    fun homeResult(r: HomeResult) {
+        if (!active) return
+        when (r) {
+            is HomeResult.Leave -> show(Screen.HUB)
+            is HomeResult.Exit -> exit(true)
+            is HomeResult.Act -> runHomeAction(r.action)
+        }
+    }
+
+    private fun runHomeAction(a: HomeAction) {
+        val intent = "home:${a.kind.name.lowercase()}"
+        when (a.kind) {
+            ActionKind.OPEN, ActionKind.START -> homeLeaves.firstOrNull { it.pkg == a.target }?.let { l -> leafOption(l).let { o -> out.choice(screen.name, code, intent, "", -1); o.run() } } ?: show(Screen.HUB)   // then exactly what the tree does
+            ActionKind.PLAY -> { pick(intent); exit(false); out.playSong(a.target) }
+            ActionKind.REPLY -> out.notifGroups().flatMap { it.items }.firstOrNull { it.key == a.target && !it.hidden }?.let { n -> pick(intent); notifPkg = n.pkg; notifKey = n.key; notifFromAll = false; show(Screen.NOTIF_ACTIONS) } ?: show(Screen.HUB)   // the message is read, then its actions (Reply among them)
+            ActionKind.CALL -> { pick(intent); callAsked = Contact(a.target.substringBefore('\n'), a.target.substringAfter('\n', "")); show(Screen.CALL_ASK) }   // the call asks "Yes, call now" first
+        }
     }
 
     private fun startFind(reset: Boolean = false) {
@@ -1111,6 +1148,7 @@ class ControllerMode(
             Screen.TASK_CONFIRM -> show(Screen.TASK)
             Screen.CONTACTS, Screen.EMERGENCY -> show(Screen.PHONE)
             Screen.RESET_ASK -> show(Screen.FIND)
+            Screen.CALL_ASK -> show(Screen.HUB)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()
             else -> leaveSilent()
         }

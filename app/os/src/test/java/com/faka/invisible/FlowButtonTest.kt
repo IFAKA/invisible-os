@@ -1,5 +1,6 @@
 package com.faka.invisible
 
+import com.faka.invisible.logickit.*
 import com.faka.invisible.practice.PracticeProgram
 import com.faka.invisible.voicekit.*
 import com.faka.invisible.write.*
@@ -108,5 +109,56 @@ class FlowButtonTest {
         rig.press("100"); rig.advance(200)   // a click sends it
         assertEquals("Hello", sent); assertEquals(1, host.ended)
         assertTrue(audio.confirms >= 2)
+    }
+
+    // ---- home_letters_open: a hold on home starts the letter loop; click on "w", then on "Open WhatsApp" (real button path, fake sound clock) ----
+    @Test fun home_letters_open() {
+        val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)
+        val apps = object : ActionSource {
+            override val id = "apps"
+            override fun actions() = listOf(
+                HomeAction(ActionKind.OPEN, "WhatsApp", "com.whatsapp", 30.0), HomeAction(ActionKind.OPEN, "Weather", "com.weather", 3.0),
+                HomeAction(ActionKind.OPEN, "Maps", "com.maps", 20.0), HomeAction(ActionKind.START, "Timer", "hub:timer", 5.0))
+        }
+        val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }
+        var hint = true
+        val p = HomeLetters(listOf(apps), ActionRanker(), audio, audio, store, { hint }, { hint = true })
+        rig.running = p; p.start(host)
+        fun clickOn(text: String, done: () -> Boolean) {
+            var guard = 0; val before = audio.played.size
+            while ((audio.played.isEmpty() || audio.heard(text).isEmpty()) && guard++ < 2000) rig.advance(50)
+            var n = 0
+            while (!done() && n++ < 12) {
+                val at = audio.heard(text)
+                val cyc = if (at.size > 1) at[1] - at[0] else 1000.0
+                var t = at.first() + 50; while (t < rig.now()) t += cyc
+                while (rig.now() < t.toLong() && !done()) rig.advance(5)
+                if (done()) break
+                rig.press("80"); rig.advance(60)
+            }
+            assertTrue("never picked $text; heard ${rig.said.takeLast(6)}", done())
+        }
+        clickOn("w") { p.letters() == "w" || host.ended > 0 }   // the letter, at its onset
+        assertEquals("w", p.letters())
+        rig.advance(1500)   // its name is read, then the loop starts again
+        clickOn("Open WhatsApp") { host.ended > 0 }
+        val r = p.result as HomeResult.Act
+        assertEquals("com.whatsapp", r.action.target)
+        assertEquals(1, host.ended)
+    }
+
+    @Test fun home_letters_hold_three_seconds_leaves_and_click_hold_exits() {
+        fun make(): Triple<RoboRig, RoboRig.Host, HomeLetters> {
+            val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)
+            val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun save(offsets: List<Double>) {} }
+            val p = HomeLetters(emptyList(), ActionRanker(), audio, audio, store, { true }, {})
+            rig.running = p; p.start(host); return Triple(rig, host, p)
+        }
+        val (rig, host, p) = make()
+        rig.press("3200"); rig.advance(Pacing.GAP_MS)
+        assertEquals(1, host.ended); assertTrue(p.result is HomeResult.Leave)
+        val (rig2, host2, p2) = make()
+        rig2.press("120,150,900"); rig2.advance(Pacing.GAP_MS)
+        assertEquals(1, rig2.exits); assertEquals(1, host2.ended); assertTrue(p2.result is HomeResult.Exit)
     }
 }

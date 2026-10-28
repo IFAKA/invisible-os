@@ -33,6 +33,7 @@ class ModeTest {
         var favs = listOf<String>()
         var suggested = listOf<String>()
         var findSeen = true
+        var homeOk = false; var homeStarts = 0; var homeLeaves = listOf<AppLeaf>(); val songsPlayed = ArrayList<String>()   // the home letters: a program in the real app
         var savedReactions = reactionText
         val pickTimes = ArrayList<Long>()   // time-to-pick of each list pick
         var now = 1_000_000L
@@ -122,6 +123,8 @@ class ModeTest {
             override fun suggest(candidates: Collection<String>, now: Long, others: Collection<String>, accept: (String, Double, Int) -> Boolean) = suggested.filter { it in candidates }
             override fun groupPicks(group: String) = if (freshUser) groupPickCount[group] ?: 0 else 99
             override fun addGroupPick(group: String) { groupPickCount[group] = (groupPickCount[group] ?: 0) + 1 }
+            override fun homeLetters(leaves: List<AppLeaf>): Boolean { homeStarts++; homeLeaves = leaves; return homeOk }
+            override fun playSong(search: String) { songsPlayed.add(search) }
             override fun findHintSeen() = findSeen
             override fun setFindHintSeen() { findSeen = true }
             override fun loadReactions() = savedReactions
@@ -1236,6 +1239,56 @@ class ModeTest {
         r.clearLog(); r.pick("M"); r.pick("Maps")
         assertEquals(ControllerMode.Screen.APP_OPEN, r.m.screen)
         assertTrue(r.log.any { it.endsWith("find:2") } && r.log.any { it.endsWith("app:com.google.android.apps.maps") })
+    }
+
+    // ---------- The home letters: a hold on home starts the letter loop (a program); its end comes back as an action ----------
+    @Test fun holdOnHomeStartsTheHomeLettersAndTheWalkOnlyWhenTheyCannotStart() {
+        val r = mail(); r.homeOk = true; r.wake(); hold(r)
+        assertEquals(1, r.homeStarts); assertTrue(r.m.screen != ControllerMode.Screen.FIND)
+        assertTrue(r.log.contains("choice HUB 7 find"))
+        assertTrue(r.homeLeaves.any { it.pkg == "com.google.android.apps.maps" })   // every app is reachable by its letters
+        val w = mail(); w.wake(); hold(w)   // no sound output: the old walk
+        assertEquals(ControllerMode.Screen.FIND, w.m.screen)
+    }
+
+    @Test fun anOpenActionDoesWhatTheTreeDoes() {
+        val r = mail(); r.homeOk = true; r.wake(); hold(r)
+        val maps = r.homeLeaves.first { it.pkg == "com.google.android.apps.maps" }
+        r.clearLog(); r.m.homeResult(HomeResult.Act(HomeAction(ActionKind.OPEN, maps.label, maps.pkg, 1.0), 0))
+        assertEquals(ControllerMode.Screen.APP_OPEN, r.m.screen)
+        assertTrue(r.log.any { it.endsWith("home:open") })
+    }
+
+    @Test fun leavingTheHomeLettersReadsHomeAgain() {
+        val r = mail(); r.homeOk = true; r.wake(); hold(r)
+        r.m.homeResult(HomeResult.Leave); r.advance(2000)
+        assertEquals(ControllerMode.Screen.HUB, r.m.screen); assertTrue(r.m.active)
+        r.m.homeResult(HomeResult.Exit); assertFalse(r.m.active)
+    }
+
+    @Test fun aPlayActionPlaysTheSong() {
+        val r = mail(); r.homeOk = true; r.wake(); hold(r)
+        r.m.homeResult(HomeResult.Act(HomeAction(ActionKind.PLAY, "Billie Jean", "Billie Jean Michael Jackson", 1.0), 0))
+        assertEquals(listOf("Billie Jean Michael Jackson"), r.songsPlayed)
+    }
+
+    @Test fun aReplyActionReadsTheMessageThenItsActionsAndNeverAPrivateOne() {
+        val r = mail(); r.homeOk = true; r.wake(); hold(r)
+        r.m.homeResult(HomeResult.Act(HomeAction(ActionKind.REPLY, "Bank", "k2", 1.0), 0))   // k2 is private
+        assertEquals(ControllerMode.Screen.HUB, r.m.screen)
+        r.m.homeResult(HomeResult.Act(HomeAction(ActionKind.REPLY, "Boss", "k1", 1.0), 0)); r.advance(1500)
+        assertEquals(ControllerMode.Screen.NOTIF_ACTIONS, r.m.screen)
+        assertTrue(r.spoken().contains("say Boss. Call me"))
+        assertFalse(r.spoken().any { it.contains("secret") })
+    }
+
+    @Test fun aCallActionAsksYesCallNowFirst() {
+        val r = mail(); r.homeOk = true; r.wake(); hold(r)
+        r.clearLog(); r.m.homeResult(HomeResult.Act(HomeAction(ActionKind.CALL, "Ana", "Ana\n+34123", 1.0), 0)); r.advance(1500)
+        assertEquals(ControllerMode.Screen.CALL_ASK, r.m.screen)
+        assertTrue(r.spoken().contains("say Call Ana?")); assertFalse(r.has("dial"))
+        assertEquals("say No, go back", r.spoken().filter { it.startsWith("say No") || it.startsWith("say Yes") }.first())   // the safe answer first
+        r.pick("Yes, call now"); assertTrue(r.has("dial +34123"))
     }
 
     @Test fun findHintIsSaidOnlyOnce() {

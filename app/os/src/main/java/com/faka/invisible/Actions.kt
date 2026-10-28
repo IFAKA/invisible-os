@@ -111,7 +111,7 @@ object Actions {
                     val artist = md.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST)
                     if (title.isNullOrBlank()) null else if (artist.isNullOrBlank()) title else "$title, $artist"
                 }
-            }
+            }.also { songsPlayed.record(it, System.currentTimeMillis()) }   // the home letters offer "Play <song>" for what was played
             override fun hasMusicApp() = musicApps.any { app.packageManager.getLaunchIntentForPackage(it) != null }
             override fun musicToggles() = otherSessions().firstOrNull { it.packageName in musicApps }?.playbackState?.customActions?.map { it.name.toString() } ?: emptyList()
             override fun musicToggle(kind: String, then: (String) -> Unit) = toggleNow(kind, then)
@@ -201,6 +201,8 @@ object Actions {
             override fun setLastTimer(minutes: Int) { prefs().edit().putInt("lastTimer", minutes).apply() }
             override fun programs() = Programs.all
             override fun startProgram(id: String) { Programs.byId(id)?.let { startProgramEntry(it) } }
+            override fun homeLetters(leaves: List<AppLeaf>) = startHomeLetters(leaves)
+            override fun playSong(search: String) { searchAndPlay(search) }
             override fun pickCount(intent: String) = choices.intentCount(intent)
             override fun favourites() = choices.favourites()
             override fun suggest(candidates: Collection<String>, now: Long, others: Collection<String>, accept: (String, Double, Int) -> Boolean) = Suggester.top(choices.history(), candidates, now, tags = context, others = others, accept = accept)
@@ -231,6 +233,29 @@ object Actions {
 
     /** The menu is English; it changes only when the owner picks another language. */
     private fun applyLanguage(s: LauncherSettings) = com.faka.invisible.voicekit.MenuLanguage.apply(s.menuLanguage)
+
+    // ---- the home letters (a hold on home): actions typed with the letter loop, see HomeLetters ----
+    private val songsPlayed by lazy { SongsPlayed(prefs().getString("songs_played", null)) { prefs().edit().putString("songs_played", it).apply() } }
+    private val homeTrust by lazy { SourceTrust(prefs().getString("home_trust", null)) { prefs().edit().putString("home_trust", it).apply() } }
+
+    private fun startHomeLetters(leaves: List<AppLeaf>): Boolean {
+        val sound = LoopSound(narrator.words, handler, { narrator.swapEars() }).takeIf { it.open() } ?: return false
+        songsPlayed.record(null, 0)
+        val store = object : com.faka.invisible.write.LoopStore {
+            override fun load() = com.faka.invisible.write.LoopDensity.decode(prefs().getString("write_click_density", null))   // the same learned clicks as Write: it is the same person and button
+            override fun save(offsets: List<Double>) { prefs().edit().putString("write_click_density", com.faka.invisible.write.LoopDensity.encode(offsets)).apply() }
+            override fun profile() = ClickProfile.fromJson(prefs().getString(ClickProfile.KEY, null))
+        }
+        val sources = listOf(AppsActions { leaves }, SongsActions({ songsPlayed.all() }), ChatsActions { ControllerNotificationListener.notifs.all() }, ContactsActions({ PhoneCalls.contacts(app) }))
+        val ranker = ActionRanker(homeTrust::trust, homeTrust::scored, { prefs().getInt("home_pick_$it", 0) })
+        val p = HomeLetters(sources, ranker, sound, HandlerTimers(handler), store,
+            { prefs().getBoolean("home_letters_hint_seen", false) }, { prefs().edit().putBoolean("home_letters_hint_seen", true).apply() },
+            picked = { a -> prefs().edit().putInt("home_pick_${a.key}", prefs().getInt("home_pick_${a.key}", 0) + 1).apply() },
+            closeAudio = { sound.close() })
+        backAfterEnd = { mode.homeResult(p.result); true }   // no OS close sound: the menu goes on (or closes itself)
+        startProgram(p)
+        return true
+    }
 
     private fun prefs() = app.getSharedPreferences("invisible", Context.MODE_PRIVATE)
 

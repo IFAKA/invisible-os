@@ -62,6 +62,7 @@ object Voice {
     val DIAL_HINT get() = f("Hold: quieter, any press stops. Click: louder.")   // said while learning
     val HOLD_TO_FIND get() = f("Hold to find by name.")   // said once per wake after two groups were left without a pick
     val FIND_HINT get() = f("Find. Pick the first letter.")   // said the first time only
+    val HOME_LETTERS_HINT get() = f("Type it with letters. Click on what you hear.")   // said the first time only
     val GESTURE_HELP get() = f("Click when you hear the option. 2 clicks: back one. 3 clicks: go up; on home, leave. 4 clicks: leave. Click, then hold: exit.")
     fun timerSet(minutes: Int) = f("Timer $minutes minutes")
     val TIMER_DONE get() = f("Timer done")
@@ -187,6 +188,12 @@ object Menu {
     fun liveState(app: String, state: String) = Phrase.mixed("$app, $state")
     /** The Laptop tool on home while Claude windows wait: "Claude, 2 need you". */
     fun roomsNeed(name: String, n: Int) = Phrase.mixed(if (n == 1) "$name, 1 needs you" else "$name, $n need you")
+    /** The actions of the home letters (a request typed at home): the verb is fixed, the name is content. */
+    fun openApp(name: String) = Phrase.mixed("Open $name")
+    fun startProgram(name: String) = Phrase.mixed("Start $name")
+    fun playSong(name: String) = Phrase.mixed("Play $name")
+    fun callName(name: String) = Phrase.mixed("Call $name")
+    fun callAsk(name: String) = Phrase.mixed("Call $name?")
     val MESSAGES get() = f("Messages")
     fun messages(unread: Int) = f("Messages, $unread unread")
     val DISMISS get() = f("Dismiss")
