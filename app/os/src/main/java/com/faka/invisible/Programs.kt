@@ -7,6 +7,7 @@ import com.faka.invisible.now.NowServices
 import com.faka.invisible.now.SwitchesEntry
 import com.faka.invisible.memory.MemoryProgram
 import com.faka.invisible.quiz.QuizProgram
+import com.faka.invisible.story.StoryProgram
 import com.faka.invisible.reaction.ReactionProgram
 import com.faka.invisible.habits.HabitsEntry
 import com.faka.invisible.counter.CounterEntry
@@ -49,6 +50,7 @@ object Programs {
         GuardProgram.entry,
         MemoryProgram.entry,
         QuizProgram.entry,
+        StoryProgram.entry,
         ReactionProgram.entry,
         DuelProgram.howTo,
         CompassProgram.entry,

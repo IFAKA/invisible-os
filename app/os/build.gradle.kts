@@ -52,6 +52,7 @@ dependencies {
     implementation(project(":programs:compass"))
     implementation(project(":programs:memory"))
     implementation(project(":programs:quiz"))
+    implementation(project(":programs:story"))
     implementation(project(":programs:reaction"))
     implementation(project(":programs:now"))
     implementation(project(":programs:clicktest"))

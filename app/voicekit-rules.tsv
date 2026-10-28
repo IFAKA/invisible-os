@@ -25,6 +25,7 @@ allow	CompassSentences.kt	phrase-make	the Compass's own fixed sentences (program
 allow	ReaderSentences.kt	phrase-make	the Reader fixed sentences (program-owned)
 allow	MemorySentences.kt	phrase-make	Memory's own fixed sentences (program-owned)
 allow	QuizSentences.kt	phrase-make	Quiz's own fixed sentences (program-owned)
+allow	StorySentences.kt	phrase-make	Story's own fixed sentences (program-owned)
 allow	ReactionSentences.kt	phrase-make	Reaction's own fixed sentences (program-owned)
 allow	ClickTestSentences.kt	phrase-make	the Click test's own fixed sentences (program-owned)
 allow	WriteSentences.kt	phrase-make	Write and Sum's own fixed sentences (program-owned)
