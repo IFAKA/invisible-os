@@ -210,6 +210,11 @@ private val SPOKEN_ES = mapOf(
     "Play" to "Jugar",
     "Go" to "Ir",
     "Tools" to "Herramientas",
+    // ---- Reader ----
+    "Reader" to "Lector",
+    "Nothing to read. Share a text to Invisible reader." to "Nada que leer. Comparte un texto con Invisible reader.",
+    "Saved for Reader." to "Guardado para el Lector.",
+    "End of text." to "Fin del texto.",
     // ---- Click test ----
     "Click test" to "Prueba de clic",
     "Click test. Click on the high bell. Hold three seconds to leave." to "Prueba de clic. Haz clic en la campana aguda. Mantén tres segundos para salir.",

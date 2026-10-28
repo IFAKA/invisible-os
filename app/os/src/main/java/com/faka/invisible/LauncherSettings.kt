@@ -25,7 +25,7 @@ data class LauncherSettings(
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "games" to "Games", "alarm" to "Set alarm", "calculator" to "Calculator", "write" to "Write", "compass" to "Compass", "whereami" to "Where am I", "claude" to "Claude (answer Claude Code on the laptop)", "sum" to "Sum prices", "reset" to "Reset learning (forget what the order learned)", "clicktest" to "Click test (how late and even you click)")
+        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "games" to "Games", "alarm" to "Set alarm", "calculator" to "Calculator", "write" to "Write", "compass" to "Compass", "whereami" to "Where am I", "claude" to "Claude (answer Claude Code on the laptop)", "sum" to "Sum prices", "reset" to "Reset learning (forget what the order learned)", "clicktest" to "Click test (how late and even you click)", "reader" to "Reader (read a shared text aloud)")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** Every key a saved menu has ever used, in a fixed order. Only the old migration steps use it; [cleanHub] drops what is no longer an app. */
@@ -72,7 +72,7 @@ object SettingsStore {
     fun load(p: SharedPreferences): LauncherSettings {
         val d = LauncherSettings()
         return LauncherSettings(
-            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withClickTest(p, withReset(p, withClaude(p, withWhere(p, withSum(p, withWriteCompass(p, withCalcAlarm(p, withApps(p, withNoMore(p, withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it))))))))))))))))) } ?: d.hub,
+            hub = p.getString("s_hub", null)?.split(',')?.let { LauncherSettings.cleanHub(withReader(p, withClickTest(p, withReset(p, withClaude(p, withWhere(p, withSum(p, withWriteCompass(p, withCalcAlarm(p, withApps(p, withNoMore(p, withOrder(p, withGroups(p, withNav(p, withInfo(p, withGames(p, withTasks(p, withPlaying(p, it)))))))))))))))))) } ?: d.hub,
             info = p.getString("s_info", null)?.split(',')?.let { LauncherSettings.cleanInfo(it) } ?: d.info,
             phone = p.getString("s_phone", null)?.split(',')?.let { LauncherSettings.cleanPhone(withStatus(p, it)) } ?: d.phone,
             timers = LauncherSettings.cleanTimers(p.getString("s_timers", null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: d.timers),
@@ -103,6 +103,14 @@ object SettingsStore {
         if (p.getBoolean("s_write_compass_saved", false)) return keys
         val moved = keys + listOf("write", "compass").filter { it !in keys }
         p.edit().putBoolean("s_write_compass_saved", true).putString("s_hub", moved.joinToString(",")).apply()
+        return moved
+    }
+
+    /** Once: a saved menu gets the Reader tool at the end. */
+    private fun withReader(p: SharedPreferences, keys: List<String>): List<String> {
+        if (p.getBoolean("s_reader_saved", false)) return keys
+        val moved = keys + listOf("reader").filter { it !in keys }
+        p.edit().putBoolean("s_reader_saved", true).putString("s_hub", moved.joinToString(",")).apply()
         return moved
     }
 

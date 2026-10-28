@@ -4,6 +4,7 @@ import com.faka.invisible.voicekit.*
 import com.faka.invisible.tell.TellVoice
 import com.faka.invisible.echo.EchoVoice
 import com.faka.invisible.clicktest.ClickTestVoice
+import com.faka.invisible.reader.ReaderVoice
 import com.faka.invisible.guard.GuardVoice
 import com.faka.invisible.compass.CompassVoice
 import com.faka.invisible.whereami.WhereVoice
@@ -83,7 +84,7 @@ class KitRulesTest {
                 for (p in phrases) if (!p.isFixed) bad += "${owner.javaClass.simpleName}.${f.name}: ${p.text}"
             }
         }
-        listOf<Any>(Voice, Menu, TellVoice, EchoVoice, GuardVoice, CompassVoice, ClickTestVoice, WhereVoice, TypeVoice).forEach { check(it) }
+        listOf<Any>(Voice, Menu, TellVoice, EchoVoice, GuardVoice, CompassVoice, ClickTestVoice, ReaderVoice, WhereVoice, TypeVoice).forEach { check(it) }
         assertTrue("sentences made outside Sentences.kt: $bad", bad.isEmpty())
     }
 
