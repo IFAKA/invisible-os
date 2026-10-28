@@ -209,6 +209,25 @@ class ClickModel<K>(
         learnScores(false)
     }
 
+    /** The click offsets learned so far in seconds, newest first (what a person keeps between sessions, see [seed]). */
+    fun offsets(): List<Double> = ys.toList()
+
+    /** Start from learned offsets (as [offsets] gave them, newest first), as if they had been learned in this order. */
+    fun seed(offsetsNewestFirst: List<Double>) {
+        for (y in offsetsNewestFirst.take(nHist + 1).reversed()) incScore(y)
+    }
+
+    /**
+     * Continue after [prev], a model of an earlier round that may have another cycle length (the items of a round
+     * change): the learned offsets and the waiting history (so [undo] and the learn delay still work) carry over.
+     * Call before [start].
+     */
+    fun inherit(prev: ClickModel<K>) {
+        seed(prev.ys)
+        clockHistory.clear(); clockHistory.addAll(prev.clockHistory)
+        winHistory.clear(); winHistory.addAll(prev.winHistory)
+    }
+
     /** The person undid the last choice: its clicks and the undo's own are dropped, not learned (:274). */
     fun undo() = learnScores(true)
 

@@ -62,6 +62,19 @@ object Pacing {
     /** The coach voice rate (the Duel talks slowly). */
     const val COACH_RATE = 0.75f
 
+    // ---- Write: the letter loop (Ticker layout: two voices, one per ear) ----
+    /** Time of one item (a letter) in the loop. A longer clip (a word) gets a longer slot. */
+    const val LOOP_ITEM_MS = 350
+    /** How fast the loop speaks, as a factor of normal speech (blind expert users, 1.75x). The word clips are made at [WORD_RATE], so they are shortened by [WORD_RATE] / [LOOP_SPEED]. */
+    const val LOOP_SPEED = 1.75
+    const val LOOP_RATIO = WORD_RATE / LOOP_SPEED
+    /** Quiet kept after a clip inside its slot. */
+    const val LOOP_GAP_MS = 40
+    /** The loop starts this long after it is asked (so the first onset is scheduled, not late). */
+    const val LOOP_LEAD_MS = 120
+    /** Cycles without a click before the loop reports idle. */
+    const val LOOP_IDLE_CYCLES = 4
+
     fun words(text: String) = text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
     fun words(p: Phrase) = words(p.text)
     fun speakMs(text: String) = SPEAK_BASE_MS + SPEAK_PER_WORD_MS * words(text)

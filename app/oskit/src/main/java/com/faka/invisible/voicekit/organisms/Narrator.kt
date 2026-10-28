@@ -27,6 +27,8 @@ class Narrator(private val speech: SpeechPort, private val tones: TonePort, priv
         Trace.ev("say", "first audio +${ms}ms"); Trace.time("speech start", ms, 600)
     }
     fun stopSpeech() = speech.stop()
+    /** The spoken words kept as sound (the letter loop plays them itself). */
+    val words get() = speech.words
     val speaking get() = speech.speaking
 
     fun beep(k: Tone, vol: Float = 1f) = tones.beep(k, vol)

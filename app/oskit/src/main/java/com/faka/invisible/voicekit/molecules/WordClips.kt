@@ -22,6 +22,17 @@ class WordClips(private val dir: File, private val synth: (text: String, file: F
         if (first && !synth(word, File(dir.apply { mkdirs() }, "w_$k.wav"), "wc_$k")) { waiting.remove(k)?.forEach { it() } }
     }
 
+    private val fastMem = ConcurrentHashMap<String, Spearcon.Pcm>()
+
+    /** The clip of [word] as it is now, or null if it is not made. */
+    fun clip(word: String): Spearcon.Pcm? = mem[key(word)]
+
+    /** The clip of [word] shortened to [ratio] of its length (pitch kept), cached. Takes some ms: call it off the main thread. Null if the clip is not made. */
+    fun fast(word: String, ratio: Double): Spearcon.Pcm? {
+        val k = key(word); val c = mem[k] ?: return null
+        return fastMem.getOrPut("$k@$ratio") { Spearcon.Pcm(c.rate, Spearcon.compress(c.samples, c.rate, ratio)) }
+    }
+
     /** TTS thread: the file of [id] ("wc_" + key) is written. */
     fun made(id: String) {
         val k = id.removePrefix("wc_")

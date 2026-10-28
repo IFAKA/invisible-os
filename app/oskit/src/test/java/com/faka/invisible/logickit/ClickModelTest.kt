@@ -90,4 +90,30 @@ class ClickModelTest {
         m.start(mapOf("A" to 0.99, "B" to 0.01), mapOf("A" to 0.0, "B" to 1500.0))
         assertNull(m.chosen())   // the handicap keeps a strong prior from winning alone
     }
+
+    /** A new model per round (the items and the cycle change) that inherits the last one learns exactly like one model. */
+    @Test fun inheritedModelsLearnLikeOneModel() {
+        val one = ClickModel<String>(3000.0)
+        var prev: ClickModel<String>? = null
+        for (r in rounds) {
+            one.start(prior, noon)
+            val m = ClickModel<String>(3000.0).also { n -> prev?.let { n.inherit(it) }; n.start(prior, noon) }
+            for (c in r) {
+                val w1 = one.click(c.toDouble()); val w2 = m.click(c.toDouble())
+                assertEquals(w1, w2)
+                keys.forEach { assertEquals(one.posteriors().getValue(it), m.posteriors().getValue(it), 1e-9) }
+                if (w1) { one.learn(one.chosen()!!); m.learn(m.chosen()!!); break }
+            }
+            prev = m
+        }
+        assertEquals(one.offsets(), prev!!.offsets())
+    }
+
+    @Test fun seededOffsetsMoveTheDensity() {
+        val a = ClickModel<String>(3000.0); val b = ClickModel<String>(3000.0)
+        b.seed(List(30) { 0.30 })   // this person clicks 300 ms late
+        a.start(prior, noon); b.start(prior, noon)
+        a.click(1500.0); b.click(1500.0)   // 300 ms after C
+        assertTrue(b.posteriors().getValue("C") > a.posteriors().getValue("C"))
+    }
 }
