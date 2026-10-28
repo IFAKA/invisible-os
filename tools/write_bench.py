@@ -97,6 +97,19 @@ class LM:
         return array.array("f", (v - lse for v in lg))
 
 _LM = None
+def _worker_init(parent):
+    """Low priority, and exit when the parent dies (no orphan workers eating the CPU)."""
+    import threading
+    os.nice(15)
+    def watch():
+        while os.getppid() == parent: time.sleep(2)
+        os._exit(1)
+    threading.Thread(target=watch, daemon=True).start()
+
+def _pool():
+    """Pool of half the cores (at least 2), niced, that stops with its parent."""
+    return mp.get_context("fork").Pool(max(2, (os.cpu_count() or 4) // 2), initializer=_worker_init, initargs=(os.getpid(),))
+
 def _work(words): return words, _LM.logprobs(list(words))
 
 def lm_table(lm, contexts, log):
@@ -107,7 +120,7 @@ def lm_table(lm, contexts, log):
     need = sorted(set(contexts) - set(table))
     if need:
         t0 = time.time(); _LM = lm
-        with mp.get_context("fork").Pool() as pool:
+        with _pool() as pool:
             for k, v in pool.imap_unordered(_work, need, chunksize=4): table[k] = v
         pickle.dump(table, open(path, "wb"))
         log("lstm: %d new contexts in %.1f s (cache %s, %d total)" % (len(need), time.time() - t0, os.path.basename(path), len(table)))
@@ -366,7 +379,7 @@ def run_loop(sets, ctxs, bg, prm, seeds, log):
     """mean and 95% interval over seeds of s/char and wrong picks per 100 chars, per text set."""
     _G.update(sets=sets, ctxs=ctxs, bg=bg, prm=prm); res = {}
     tasks = [(n, s) for n in sets for s in range(seeds)]
-    with mp.get_context("fork").Pool() as pool: outs = pool.map(_session, tasks, chunksize=1)
+    with _pool() as pool: outs = pool.map(_session, tasks, chunksize=1)
     for n in sets:
         allrows = [o for (nn, _), o in zip(tasks, outs) if nn == n]; rows = [r for r in allrows if r[1] > 0]   # a person who finished no text has no s/char
         if not rows: res[n] = {"spc": float("nan"), "spc_ci": 0.0, "wrong": float("nan"), "wrong_ci": 0.0, "picks_per_char": float("nan"), "failed_texts": sum(r[4] for r in allrows), "seeds": seeds}; continue
