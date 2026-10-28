@@ -273,6 +273,10 @@ object Actions {
         override fun aiEnabled() = mode.settings.ai && LocalAi.available(app)   // the keyboard's word guesses stay on the phone (latency)
         override fun nextWords(text: String, brief: String) = LocalAi.nextWords(app, text, "en", brief)
         override fun continuations(text: String, brief: String) = LocalAi.continuations(app, text, "en", brief)
+        override fun completions(typed: String, context: String, lang: String) = aiHelp.complete(typed, if (lang.startsWith("es")) "es" else "en", context)
+        override fun screenSuggestions() = ButtonAccessibilityService.inst?.screenSuggestions() ?: emptyList()
+        override fun lists(): List<String> =
+            PhoneCalls.contacts(app).map { it.name }.filter { it.isNotBlank() } + DeviceApps.installedNow(app).map { it.label }.filter { it.isNotBlank() }
         override fun detectLanguage(text: String) = MlKitLangDetector().detect(text)
     }
 

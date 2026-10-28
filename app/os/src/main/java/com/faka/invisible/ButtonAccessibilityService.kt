@@ -54,6 +54,28 @@ class ButtonAccessibilityService : AccessibilityService() {
         return Frame(app = app, kind = kind, field = id, hint = hint, thread = thread, around = texts.filter { it != thread }.distinct().takeLast(6), before = before, hasField = true)
     }
 
+    /**
+     * What the app in front lists as suggestions for the field (a search box shows them as a list under it): the visible, clickable, short texts of the
+     * window that are not the field itself, in the order of the screen, at most 10. Empty for a password field or our own window.
+     */
+    fun screenSuggestions(): List<String> {
+        val root = rootInActiveWindow ?: return emptyList()
+        if (root.packageName?.toString() == packageName) return emptyList()
+        val field = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+        if (field?.isPassword == true) return emptyList()
+        val own = field?.text?.toString().orEmpty()
+        val out = ArrayList<String>()
+        fun walk(n: AccessibilityNodeInfo?, depth: Int, inRow: Boolean) {
+            if (n == null || depth > 40 || out.size >= 10) return
+            val row = inRow || (n.isClickable && n.isVisibleToUser)
+            val tx = n.text?.toString()?.trim().orEmpty()
+            if (row && !n.isEditable && n.isVisibleToUser && tx.isNotEmpty() && tx.length <= 80 && tx != own) out.add(tx)
+            for (i in 0 until n.childCount) walk(n.getChild(i), depth + 1, row)
+        }
+        walk(root, 0, false)
+        return out.distinct()
+    }
+
     /** Puts [text] into the focused field of the other app. */
     fun setFieldText(text: String): Boolean {
         val f = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false

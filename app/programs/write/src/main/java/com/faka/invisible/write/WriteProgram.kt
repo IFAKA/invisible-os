@@ -27,6 +27,12 @@ interface WriteServices {
     fun nextWords(text: String, brief: String): List<String>
     /** Blocking: ways to finish [text]. */
     fun continuations(text: String, brief: String): List<String>
+    /** Blocking: up to 5 whole texts that the typed [typed] may mean (the start of a word or the first letters of the next words), from the AI (computer, else the phone model); [context] = the chat on the screen. Never called for a private place or a password. Default: none. */
+    fun completions(typed: String, context: String, lang: String): List<String> = emptyList()
+    /** Blocking: what the app in front shows as its own suggestions for the field (a search box lists them), read through the accessibility service. Default: none. */
+    fun screenSuggestions(): List<String> = emptyList()
+    /** Blocking: names the OS knows that may be typed (contacts, apps, songs played), best known first. Default: none. */
+    fun lists(): List<String> = emptyList()
     /** Blocking: the language code of [text] ("und" if unknown). */
     fun detectLanguage(text: String): String
 }
@@ -134,6 +140,10 @@ class WriteProgram(
             Log.d(TAG, "WRITE chat language $lang")
         }, "write-lang").start()
         val base = WriteOut(host)
+        val sourceList: List<GuessSource> = listOf(
+            SpelledSource(buckets), ScreenSource({ services.screenSuggestions() }), ListSource("lists", { services.lists() }),
+            CompleteSource({ typed, context -> services.completions(typed, context, chatLang ?: "en") }, 1000, { Trace.ev("write", it) }),
+        ).filter { it !is ScreenSource || sendTo == null }   // a reply or a search typed for the OS has no app screen to read
         val out = object : TypeOut by base {
             override fun suggestions() = buckets.suggestions(frame)
             override fun nextWords(text: String, then: (List<String>) -> Unit) {
@@ -160,6 +170,10 @@ class WriteProgram(
                     if (r.isNotEmpty()) host.handler.post { then(r) }
                 }
             }
+            override fun sources(req: Request, then: (String, List<Guess>) -> Unit) {
+                for (s in sourceList) s.ask(req) { g -> host.handler.post { then(s.id, g) } }
+            }
+            override fun spelledWords(words: List<String>) { buckets.learnSpelled(frame, words) }
             override fun written(text: String) { buckets.learn(frame, text.split(' ').filter { it.isNotEmpty() }, text) }
             override fun translate(text: String, then: (Translation) -> Unit) {
                 val target = chatLang
@@ -185,6 +199,7 @@ class WriteProgram(
             }
         }
         val ranker = BucketRanker(lm, buckets, frame)
+        val mixer = Mixer(buckets::trust, buckets::scored)
         val timers = HandlerTimers(host.handler)
         val sound = if (frame.digits) null else LoopSound(VoiceKit.narrator.words, host.handler, { VoiceKit.narrator.swapEars() }).takeIf { it.open() }   // numbers and a phone that cannot open the stream keep the pair keyboard
         if (sound == null) {
@@ -196,7 +211,7 @@ class WriteProgram(
             override fun load() = LoopDensity.decode(host.prefs.getString(DENSITY_KEY, null))
             override fun save(offsets: List<Double>) { host.prefs.edit().putString(DENSITY_KEY, LoopDensity.encode(offsets)).apply() }
         }
-        typer = LoopProgram(ranker, out, sound, timers, frame, store) { closeSound(); typer = null; VoiceKit.narrator.hush(); host.ended() }.also { it.start() }
+        typer = LoopProgram(ranker, out, sound, timers, frame, store, mixer) { closeSound(); typer = null; VoiceKit.narrator.hush(); host.ended() }.also { it.start() }
     }
 
     private var loopSound: LoopSound? = null

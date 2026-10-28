@@ -27,6 +27,10 @@ interface TypeOut {
     fun finished(text: String)   // the written text; "" = nothing written
     /** Ask the big model (slow, in the background) for ways to finish [text]; call [then] with them when ready. Default: none. */
     fun phrases(text: String, then: (List<String>) -> Unit) {}
+    /** Ask every source of guesses (AI completions, the app's own suggestions, lists...) about [req]; call [then] with the source id and its guesses, on the main thread, whenever one answers (maybe never). Default: none. */
+    fun sources(req: Request, then: (String, List<Guess>) -> Unit) {}
+    /** The words of a sent text that were spelled letter by letter (names, new words): kept to be offered again. Default: nothing. */
+    fun spelledWords(words: List<String>) {}
     /** Whole values you used in this place before (addresses, names, searches, numbers). Default: none. */
     fun suggestions(): List<String> = emptyList()
     /** Ask the big model (slow, background) for the next words after [text]; call [then] always, with the words or an empty list. Default: never. */

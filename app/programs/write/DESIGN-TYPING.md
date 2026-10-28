@@ -47,3 +47,10 @@ Picture: a waiter. He guesses your order from where you sit, you say yes or give
 8. Sources: computer AI (replies; a new "complete" job that reads letters as a prefix or as first letters of words, SpeakFaster), phone model when there is no computer, the app's suggestions on screen, lists (contacts, songs played, apps, words spelled before). Private notifications never reach any AI. Check: AI answer under 1 s in the trace; benchmark better again.
 9. Home as a request: letters at home give actions (open an app, play a song, call, reply). The tree stays for browsing. Check: Flow tests; e2e on the phone.
 10. One week of real use, then tune the loop speed and threshold on the recorded clicks (fast-search: halving, same recorded data). Check: seconds per character at or under 2.
+
+## Step 8 built (2026-10-28)
+- Sources (`Sources.kt`): `GuessSource` = ask(Request) -> guesses, async. History, spelled words, lists (contacts, apps), the app's own screen suggestions (`WriteServices.screenSuggestions`, read by the accessibility service), and `CompleteSource` (AI "complete": the letters are the start of the word or the first letters of the words; 1 s timeout; never for a private place, a password or a field that is not text or search). The word model plus `BucketRanker` is the source "lm" (the layer "base").
+- One mixer (`Mixer.kt`): chance = sum of share x chance of each source; shares = `BucketStore.trust` (start equal, learned from picks, a source with the picked item in its top 3 earns trust). New answers wait for the next cycle of the loop (`LetterLoop.msToNextCycle`).
+- AI job: `AiHelp.complete` (computer `/ai/complete`, else the phone model, same prompt and guard: `AiGuard.makeCompletions`, bridge `make_complete`).
+- Trace: `write ai complete 312ms 3`, `write source pick=complete rank=0`.
+- Not proven without the real computer and phone: the real AI answer time (must stay under 1 s), the real screen suggestions of YT Music. Songs played has no store yet (Write's own earlier searches are in the history source).

@@ -35,6 +35,7 @@ class LoopProgram(
     private val timers: Timers,
     private val frame: Frame = Frame(),
     private val store: LoopStore,
+    private val mixer: Mixer = Mixer(),
     private val onEnded: () -> Unit,
 ) : Typer {
     private enum class Phase { LOOP, SPEAKING, CONFIRM, WAITING }
@@ -71,7 +72,7 @@ class LoopProgram(
 
     override fun stop() {
         if (!active) return
-        active = false; pending = null; loop.stop(); timers.clear(AFTER)
+        active = false; pending = null; loop.stop(); timers.clear(AFTER); timers.clear(REFRESH)
     }
 
     // ---- what is said, and when the loop goes on ----
@@ -93,10 +94,13 @@ class LoopProgram(
 
     private fun round() {
         if (!active) return
+        timers.clear(REFRESH)
         phase = Phase.LOOP; roundClicks = 0
-        val offered = if (written.isEmpty() && prefix.isEmpty()) phrases.take(if (frame.kind == FieldKind.TEXT) 2 else 3) else emptyList()
-        val all = words()
-        val items = LoopItems.build(all, written, prefix, lm.skipShortFirst, offered, history.isNotEmpty(), endsSentence) { bigrams ?: LetterBigrams(all.map { it.first }).also { bigrams = it } }
+        val mixed = mixer.mix(Request(frame, written.toList(), prefix), words())   // what the sources said so far; a later answer waits for the next round
+        val shown = mixed.phrases.take(if (written.isEmpty() && prefix.isEmpty() && frame.kind != FieldKind.TEXT) 3 else 2)
+        val offered = shown.map { it.first }; phrases = offered
+        val all = mixed.words
+        val items = LoopItems.build(all, written, prefix, lm.skipShortFirst, offered, history.isNotEmpty(), endsSentence, { bigrams ?: LetterBigrams(all.map { it.first }).also { bigrams = it } }, shown.map { LoopItems.phraseChance(it.second) })
         loop.start(items)
         showScreen(items)
         out.log("round", prefix, written.size, items.size, items.take(5).joinToString("/") { it.key })
@@ -123,14 +127,15 @@ class LoopProgram(
         store.save(loop.offsets())
         val key = c.key
         when {
-            key.startsWith("l:") -> { push(); prefix += key.substring(2); endsSentence = false; say(TypeVoice.spelled(prefix.takeLast(5))) }
+            key.startsWith("l:") -> { push(); prefix += key.substring(2); endsSentence = false; askSources(); say(TypeVoice.spelled(prefix.takeLast(5))) }
             key.startsWith("w:") -> {
-                val w = key.substring(2); push()
+                val w = key.substring(2); push(); traceSource(w, true)
                 lm.picked(written.takeLast(8), w); written.add(w); prefix = ""; endsSentence = false
                 askPhrases(); say(Phrase.content(w))
             }
             key.startsWith("p:") -> {
-                push(); written.addAll(phrases[key.substring(2).toInt()].split(' ').filter { it.isNotEmpty() }); prefix = ""; endsSentence = true
+                push(); val t = phrases[key.substring(2).toInt()]; traceSource(t, false)
+                written.clear(); written.addAll(t.split(' ').filter { it.isNotEmpty() }); prefix = ""; endsSentence = true; askSources()
                 out.cue(TypeCue.PICK_LEFT); readThenRound()
             }
             key == LoopItems.SPACE -> { push(); val w = prefix; spelledWords.add(w); written.add(w); prefix = ""; endsSentence = false; askPhrases(); say(Phrase.content(w)) }
@@ -138,6 +143,9 @@ class LoopProgram(
             key == LoopItems.SEND -> sendNow()
         }
     }
+
+    /** `write source pick=<source> rank=N`: which source had the picked word or text, and where. */
+    private fun traceSource(text: String, isWord: Boolean) { val b = mixer.picked(text, isWord); out.log("source", "pick=${b?.first ?: "none"}", "rank=${b?.second ?: -1}") }
 
     private fun say(p: Phrase) { speakThen(listOf(p)) { round() } }
 
@@ -187,21 +195,32 @@ class LoopProgram(
     private fun finish(sent: String) {
         val original = if (sent.isEmpty()) "" else written.filter { it !in spelledWords }.joinToString(" ")   // spelled words are not learned
         stop()
-        if (sent.isNotEmpty()) { out.cue(TypeCue.DONE); if (original.isNotEmpty()) out.written(original) }
+        if (sent.isNotEmpty()) { out.cue(TypeCue.DONE); if (original.isNotEmpty()) out.written(original); out.spelledWords(spelledWords.toList()) }
         out.finished(sent)
         onEnded()
     }
 
     // ---- phrases from the big model, and what the next words may be ----
     private fun askPhrases() {
-        phrases = if (written.isEmpty()) out.suggestions() else emptyList()
+        if (written.isEmpty()) mixer.set("history", "", Guess.ranked(out.suggestions()))
         val g = ++phraseGen
         if (written.isEmpty() && frame.around.isNotEmpty()) out.phrases(text()) { r ->
             if (!active || g != phraseGen) return@phrases
-            phrases = r
+            mixer.set("replies", "", Guess.ranked(r))
             if (r.isNotEmpty() && phase == Phase.LOOP && !touched) round()   // answering a chat: the replies that fit it come first, as soon as they are ready, unless the player is already busy
         }
+        askSources()
         guess()
+    }
+
+    /** Ask the sources about what is typed now. An answer for a text that is no longer the one typed is dropped; one that fits waits for the next cycle of the loop (a cycle that is heard never changes). */
+    private fun askSources() {
+        val req = Request(frame, written.toList(), prefix)
+        out.sources(req) { id, g ->
+            if (!active || req.key != Request(frame, written.toList(), prefix).key || g.isEmpty()) return@sources
+            mixer.set(id, req.key, g)
+            if (phase == Phase.LOOP && roundClicks == 0 && loop.running) timers.set(REFRESH, loop.msToNextCycle()) { if (active && phase == Phase.LOOP && roundClicks == 0) round() }
+        }
     }
 
     private fun guess() {
@@ -250,5 +269,5 @@ class LoopProgram(
 
     override fun tapRow(row: Int) {}
 
-    private companion object { const val AFTER = "t:after" }
+    private companion object { const val AFTER = "t:after"; const val REFRESH = "t:refresh" }
 }

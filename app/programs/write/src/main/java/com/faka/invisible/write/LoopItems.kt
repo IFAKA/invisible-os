@@ -13,6 +13,11 @@ object LoopItems {
 
     /** Share of the chance kept for the two whole-text phrases, each. */
     private const val PHRASE_P = 0.15
+    private const val PHRASE_MIN = 0.05
+    private const val PHRASE_MAX = 0.3
+
+    /** The chance of a whole text from its chance in the mix of the sources ([Mixer]): the best ones get the most, none more than [PHRASE_MAX]. */
+    fun phraseChance(mixed: Double) = PHRASE_MIN + (PHRASE_MAX - PHRASE_MIN) * mixed.coerceIn(0.0, 1.0)
     private const val CONTROL_P = 0.02
     private const val SEND_AFTER_SENTENCE_P = 0.2
 
@@ -23,7 +28,7 @@ object LoopItems {
      */
     fun build(
         all: List<Pair<String, Double>>, written: List<String>, prefix: String, skipShortFirst: Boolean,
-        phrases: List<String>, canUndo: Boolean, endsSentence: Boolean, grams: () -> LetterBigrams,
+        phrases: List<String>, canUndo: Boolean, endsSentence: Boolean, grams: () -> LetterBigrams, phraseChances: List<Double> = emptyList(),
     ): List<LoopItem<String>> {
         val recent = written.takeLast(3).toSet()   // a word just written is not offered again at once
         val fits = all.filter { it.first.startsWith(prefix) && LetterRank.LETTER_RE.matches(it.first) }
@@ -33,13 +38,14 @@ object LoopItems {
         val pWords = guesses.map { if (mass > 0) Math.exp(it.second) / mass else 0.0 }
         val letters = LetterRank.letters(all, prefix, grams)
         val left = (1.0 - pWords.sum()).coerceAtLeast(0.2)
-        val phraseP = phrases.size * PHRASE_P
+        val phraseOf = { i: Int -> phraseChances.getOrNull(i) ?: PHRASE_P }
+        val phraseP = phrases.indices.sumOf { phraseOf(it) }
         val hasText = written.isNotEmpty() || prefix.isNotEmpty()
         val controls = (if (prefix.isNotEmpty()) CONTROL_P else 0.0) + (if (canUndo) CONTROL_P else 0.0) + sendP(hasText, endsSentence)
         val k = (1.0 - controls - phraseP).coerceAtLeast(0.3)
 
         val out = ArrayList<LoopItem<String>>()
-        phrases.forEachIndexed { i, t -> out.add(LoopItem(phrase(i), Phrase.content(t), PHRASE_P)) }
+        phrases.forEachIndexed { i, t -> out.add(LoopItem(phrase(i), Phrase.content(t), phraseOf(i))) }
         guesses.forEachIndexed { i, (w, _) -> out.add(LoopItem(word(w), Phrase.content(w), pWords[i] * k)) }
         for ((c, chance) in letters) out.add(LoopItem(letter(c), Phrase.content(c.toString()), chance * left * k + 1e-6))
         if (prefix.isNotEmpty()) out.add(LoopItem(SPACE, TypeVoice.SPACE, CONTROL_P, risky = false))

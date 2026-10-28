@@ -18,7 +18,11 @@ data class Frame(
     val around: List<String> = emptyList(),   // texts on the screen before the field (the last messages)
     val before: String = "",         // what is already in the field
     val hasField: Boolean = false,   // a real text field of another app has focus
+    val private: Boolean = false,    // a private notification is answered: nothing about it ever leaves the phone, no AI sees it
 ) {
+    /** May the letters typed here (and the chat) be sent to an AI? Never for a private place or a password; only plain text and search fields. */
+    val aiAllowed get() = !private && (kind == FieldKind.TEXT || kind == FieldKind.SEARCH)
+
     fun keys(): List<String> = listOfNotNull(
         if (thread.isNotBlank()) "t:$app/$thread" else null,
         if (field.isNotBlank()) "f:$app/$field" else null,
@@ -42,7 +46,7 @@ data class Frame(
          * A private notification has no kept text: only the app is known.
          */
         fun reply(app: String, title: String, text: String, hidden: Boolean): Frame =
-            Frame(app = app, thread = if (hidden) "" else title, around = if (hidden || text.isBlank()) emptyList() else listOf(text))
+            Frame(app = app, thread = if (hidden) "" else title, around = if (hidden || text.isBlank()) emptyList() else listOf(text), private = hidden)
     }
 }
 
@@ -77,6 +81,7 @@ class BucketStore(lines: List<String>, private val save: (List<String>) -> Unit 
     private val next = HashMap<String, HashMap<String, Int>>()      // "key\u0001prev" -> word -> count
     private val values = HashMap<String, LinkedHashMap<String, Int>>() // key -> whole value -> count
     private val hits = HashMap<String, IntArray>()                  // layer -> [hits, tries]
+    private val spelledCounts = HashMap<String, Int>()              // words that were spelled letter by letter (names, new words) -> times
 
     init {
         for (l in lines) {
@@ -86,6 +91,7 @@ class BucketStore(lines: List<String>, private val save: (List<String>) -> Unit 
                     "N" -> next.getOrPut(p[1] + "\u0001" + p[2]) { HashMap() }[p[3]] = p[4].toInt()
                     "V" -> values.getOrPut(p[1]) { LinkedHashMap() }[p[2]] = p[3].toInt()
                     "H" -> hits[p[1]] = intArrayOf(p[2].toInt(), p[3].toInt())
+                    "S" -> spelledCounts[p[1]] = p[2].toInt()
                 }
             } catch (_: Exception) {}
         }
@@ -107,6 +113,18 @@ class BucketStore(lines: List<String>, private val save: (List<String>) -> Unit 
         persist()
     }
 
+    /** Words spelled letter by letter in a text that was sent (a name, a new word): offered again by their first letters. Passwords are never learned. */
+    @Synchronized fun learnSpelled(frame: Frame, words: List<String>) {
+        if (frame.kind == FieldKind.PASSWORD) return
+        for (w in words.map { it.lowercase() }.filter { it.length >= 2 }) spelledCounts.merge(w, 1, Int::plus)
+        if (spelledCounts.size > MAX_VALUES * 4) spelledCounts.entries.sortedBy { it.value }.take(spelledCounts.size - MAX_VALUES * 4).forEach { spelledCounts.remove(it.key) }
+        persist()
+    }
+
+    /** Spelled words that start with [prefix], most often first. */
+    @Synchronized fun spelled(prefix: String, n: Int = 8): List<String> =
+        spelledCounts.entries.filter { it.key.startsWith(prefix.lowercase()) && it.key != prefix.lowercase() }.sortedByDescending { it.value }.take(n).map { it.key }
+
     /** Whole values used in this place before, most specific place first, then most used. */
     fun suggestions(frame: Frame, n: Int = 6): List<String> {
         val out = LinkedHashSet<String>()
@@ -126,6 +144,7 @@ class BucketStore(lines: List<String>, private val save: (List<String>) -> Unit 
         for ((k, m) in next) { val (key, prev) = k.split('\u0001'); for ((w, c) in m) out.add("N\t$key\t$prev\t$w\t$c") }
         for ((k, m) in values) for ((v, c) in m) out.add("V\t$k\t$v\t$c")
         for ((l, h) in hits) out.add("H\t$l\t${h[0]}\t${h[1]}")
+        for ((w, c) in spelledCounts) out.add("S\t$w\t$c")
         save(out)
     }
 

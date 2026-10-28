@@ -98,6 +98,9 @@ class LetterLoop<K>(
         audio.prepare(list.map { it.say.text }.distinct()) { clips -> if (g == gen && state == State.PREPARING) begin(clips) }
     }
 
+    /** Ms until the cycle now playing ends and the next one starts (0 when the loop is not running): the moment a new item list may take over without changing a cycle being heard. */
+    fun msToNextCycle(): Long = if (state != State.RUNNING || periodMs <= 0.0) 0L else Math.round(periodMs - ((audio.nowMs() - startWall).coerceAtLeast(0.0) % periodMs))
+
     /** Start the same round again after [onIdle]. */
     fun resume() { if (state == State.PAUSED) start(items) }
 
