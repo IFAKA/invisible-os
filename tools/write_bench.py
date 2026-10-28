@@ -182,22 +182,31 @@ def design_fixed(ctx, word, bg, prm):
     return add(t, MENU_COST)
 
 def design_loop(ctx, word, bg, prm):
-    """PLACEHOLDER for the Ticker/Nomon-style loop (plan steps 4 and 5 replace it): one loop of items, words and letters
-    ranked by chance, then Space; an item at 1-based position k costs k * item_ms + reaction_ms and is one action."""
+    """The real Write loop (LoopItems.kt + LetterLoop.kt): items in the order the app speaks them, two channels (item k: voice k%2,
+    channel B half an item later), the cycle = the longer channel. Order: up to 3 word guesses, then letters by chance (bigrams for an
+    unknown prefix), then Space (only with a prefix), Undo, Send last. A pick costs: wait to the item's first onset + reaction, plus
+    (clicks - 1) more whole cycles (the click model wants about 2 clicks for a letter among 175 ms neighbours; a word guess with a
+    high chance 1), plus the short spoken echo of the prefix. Undo and Send are never needed here (no mistakes, no send)."""
     item, react = prm["item_ms"] / 1000, prm["reaction_ms"] / 1000
+    say, clicks = prm["say_ms"] / 1000, prm["loop_clicks"]
     t = (0.0, 0); prefix = ""
+    def cost(order, i, sure):
+        n = len(order) + 2   # + Undo, Send at the end (Space is already in order)
+        period = math.ceil(n / 2) * item
+        onset = (i // 2) * item + (i % 2) * item / 2
+        return onset + react + ((1 if sure else clicks) - 1) * period + say
     while True:
-        words = ctx.top_words(prefix, True)
-        if word in words:
-            return add(t, ((words.index(word) + 1) * item + react, 1))    # a word pick adds its own space
+        words = ctx.top_words(prefix, True)[:3]
         m = ctx.mass(prefix); b = bg.get(prefix[-1] if prefix else "^", {})
-        items = [(m.get(c, 0.0) + 1e-6 * b.get(c, 0.0), "L", c) for c in BYUSE]
-        for k, w in enumerate(words): items.append((next(p for x, p in ctx.with_prefix(prefix) if x == w), "W", w))
-        if prefix: items.append((1e-3, "S", " "))   # Space: for a word the model does not know
-        items.sort(key=lambda x: -x[0])
+        probs = {w: p for w, p in ctx.with_prefix(prefix)}
+        letters = sorted(BYUSE, key=lambda c: -(m.get(c, 0.0) + 1e-6 * b.get(c, 0.0)))
+        order = [("W", w) for w in words] + [("L", c) for c in letters] + ([("S", " ")] if prefix else [])
+        if word in words:
+            i = words.index(word)
+            return add(t, (cost(order, i, probs.get(word, 0) > 0.5), 1))   # a word pick adds its own space
         want = " " if prefix == word else word[len(prefix)]
-        pos = next(k for k, (_, kind, x) in enumerate(items) if x == want and kind != "W") + 1
-        t = add(t, (pos * item + react, 1))
+        i = next(k for k, (kind, x) in enumerate(order) if x == want and kind != "W")
+        t = add(t, (cost(order, i, False), 1))
         if prefix == word: return t
         prefix += want
 
@@ -209,6 +218,7 @@ def main():
     ap.add_argument("--all", action="store_true", help="all 500 phrases")
     ap.add_argument("--n", type=int, default=50); ap.add_argument("--seed", type=int, default=2003)
     ap.add_argument("--item-ms", type=int, default=350); ap.add_argument("--reaction-ms", type=int, default=400)
+    ap.add_argument("--say-ms", type=int, default=800); ap.add_argument("--loop-clicks", type=int, default=2)
     ap.add_argument("--no-cache", action="store_true"); ap.add_argument("--verify", action="store_true")
     a = ap.parse_args()
     t0 = time.time(); os.makedirs(LOGDIR, exist_ok=True)
@@ -217,7 +227,7 @@ def main():
     def log(s): lf.write(s + "\n"); lf.flush()
     phrases = load_phrases(log)
     sample = phrases if a.all else random.Random(a.seed).sample(phrases, min(a.n, len(phrases)))
-    prm = {"item_ms": a.item_ms, "reaction_ms": a.reaction_ms}
+    prm = {"item_ms": a.item_ms, "reaction_ms": a.reaction_ms, "say_ms": a.say_ms, "loop_clicks": a.loop_clicks}
     lm = LM()
     key = hashlib.sha256(json.dumps([open(__file__).read(), lm.model_hash, lm.vhash, OWNER, sample, prm, [NEXT, PICK, MENU]]).encode()).hexdigest()[:16]
     cpath = os.path.join(LOGDIR, "bench-cache.json")
