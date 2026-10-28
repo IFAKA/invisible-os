@@ -178,3 +178,28 @@ class PlainTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ContextPromptTest(unittest.TestCase):
+    def test_request_in_prompt_and_cut(self):
+        p = story.build_prompt("claude", SRC, "ctx", "fix the parser " + "x" * 2000)
+        self.assertIn("The user's last request in this window", p)
+        self.assertLess(p.count("x"), story.REQUEST_CHARS)
+        self.assertNotIn("last request", story.build_prompt("claude", SRC, "ctx"))
+
+    def test_cache_key_includes_request_and_ai_off_skips_model(self):
+        self.assertNotEqual(story.StoryCache.key("%1", SRC, "a"), story.StoryCache.key("%1", SRC, "b"))
+        calls = []
+        c = story.StoryCache(lambda p: calls.append(p) or reply("x"))
+        self.assertEqual(c.peek("%1", "claude", SRC, "", "fb", "", False), {"story": "fb", "go": ""})
+        self.assertEqual(c.ask("%1", "claude", SRC, "", "fb", 0.1, "", False), {"story": "fb", "go": ""})
+        self.assertEqual(c.plain("rm -rf x", "", False), "")
+        self.assertEqual(calls, [])
+
+    def test_plain_prompt_why_and_guard(self):
+        p = story.build_plain_prompt("rm -rf build", "I will clear the build folder.")
+        self.assertIn("Why (Claude's words): I will clear the build folder.", p)
+        self.assertNotIn("Why (", story.build_plain_prompt("rm -rf build"))
+        self.assertEqual(story.check_plain("Deletes the Build folder", "rm -rf build", "I will clear the Build folder"), "Deletes the Build folder")
+        self.assertEqual(story.check_plain("Deletes the safe folder", "rm -rf build", "why"), "")
+        self.assertEqual(story.check_plain("Deletes it, it is safe", "rm -rf build", "It is safe"), "")

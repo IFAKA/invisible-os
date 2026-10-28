@@ -68,7 +68,15 @@ The phone keeps a profile per computer (`work` | `personal`, chosen with the Wor
 ## POST /room/choose {"id":"%3","picks":[2]}  -> {"ok":true}   moves the menu cursor to row 2 and presses Enter; with `multi` it toggles each pick (Space) and then submits. `{"id":..., "other":true}` only moves to the "Type something" row (the phone then sends the typed text with /room/send). 400 when the menu is gone or a pick is not a row.
 ## POST /ai/digest {"items":[{"app":"WhatsApp","title":"Ana","text":"..."}]} -> {"line":"3 chats, 2 deliveries, 3 junk"}
 The model only labels each item from a fixed set; the code counts, so the numbers always add up. `""` when there is no model, it fails, or a label is unknown. Only non-private notifications are sent (max 30).
-## POST /ai/short {"text":"..."} -> {"short":"..."}   1 to 2 sentences (at most 45 words) of a long message, behind the accuracy guard (`story.check_story`); `""` means read the original. Cached by text.
+## POST /ai/short {"text":"...", "context":"..."} -> {"short":"..."}   1 to 2 sentences (at most 45 words) of a long message, behind the accuracy guard (`story.check_story`); `""` means read the original. `context` (optional) = the 2-3 earlier messages of the same chat, up to 1000 chars, labelled "Earlier messages" in the prompt; names and numbers are checked against text and context together. Cached by text + context. The phone never sends private notifications, as text or as context.
+
+## POST /ai/replies {"text":"Ana: can you send the report?", "lang":"en"|"es", "context":"..."} -> {"replies":["...","...","..."], "tasks":["..."]}   3 short reply sentences (agree, decline, not sure; at most 12 words) and 0 to 3 to-do items (verb first, at most 9 words) for a message, from the same local model. Every item is guarded one by one (no number, name, file or quote that is not in text + context), repeats dropped; both lists empty = the phone uses its own model. Cached by text + lang + context (a failure is retried after 60 s).
+
+## The AI switch: `ai=0`
+`GET /rooms`, `/room/story` and `/room/last` take `?ai=0` when the phone's AI setting is off: no model text at all. Stories are the fallback text (the need line, else the first sentence), `ask.plain` is `""`, and nothing is cached or sent to the model. The phone also does not call `/ai/*` then. Without the flag the model is used as before.
+
+## Chat context for the window story and the approval line
+Window story: the prompt also holds "The user's last request in this window" (the last real user message of the window's Claude transcript, cut to 600 chars); it is part of the cache key and the guard counts its names and numbers as facts. Approval (`ask.plain`): the prompt also holds "Why (Claude's words)" (Claude's last sentence before the ask, 240 chars at most); the exact command is still shown by the phone, and the line may never say safe, harmless, fine or risky (`REASSURE_RE`).
 The phone-only action id `more` ("More") reads `/room/last` one paragraph at a time (a click = next, triple click = back to the options).
 
 ## Action ids

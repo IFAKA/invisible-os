@@ -168,6 +168,41 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class AiHttpTest(unittest.TestCase):
+    """POST /ai/replies and the ai=0 flag over HTTP, with a stub Rooms and a fake model."""
+
+    def test_replies_short_and_ai_flag(self):
+        import aitext
+        seen = []
+
+        class FakeRooms:
+            ai = aitext.AiText(lambda p: seen.append(p) or '{"replies": ["Yes", "No", "Maybe"], "tasks": ["Send the report"], "short": "x"}')
+            preview = None
+
+            def rooms(self, max_age=0.0, ai=True):
+                seen.append("rooms ai=%s" % ai)
+                return []
+
+            def projects(self):
+                return []
+        tmp = tempfile.mkdtemp()
+        token = server.load_token(os.path.join(tmp, "t"))
+        try:
+            srv = server.make_server("127.0.0.1", 0, core.Store(), token, rooms=FakeRooms())
+        except Exception:
+            self.skipTest("server needs a full Rooms")
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        url = "http://127.0.0.1:%d" % srv.server_address[1]
+        try:
+            got = fake_phone.call(url, token, "/ai/replies", {"text": "Ana: send the report", "lang": "en", "context": "Ana: hi"})
+            self.assertEqual(got, {"replies": ["Yes", "No", "Maybe"], "tasks": ["Send the report"]})
+            self.assertIn("Ana: hi", seen[0])
+            fake_phone.call(url, token, "/rooms?ai=0"); fake_phone.call(url, token, "/rooms")
+            self.assertEqual(seen[1:], ["rooms ai=False", "rooms ai=True"])
+        finally:
+            srv.shutdown()
+
+
 class PairCodeTest(unittest.TestCase):
     def test_pair_code_round_trip(self):
         import base64
@@ -310,12 +345,14 @@ class RoomsTmuxTest(unittest.TestCase):
     def set_status(self, win, line):
         open(os.path.join(self.status, win.lstrip("@")), "w").write(line + "\n")
 
-    def transcript(self, pane, sid, text):
+    def transcript(self, pane, sid, text, user=None):
         """Fake the pane->session record and a transcript with one assistant message."""
         out = subprocess.run(self.tm + ["display-message", "-p", "-t", pane, "#{session_name}_#{window_index}-#{pane_index}"],
                              capture_output=True, text=True).stdout.strip()
         _json.dump({"session_id": sid}, open(os.path.join(self.panes, out + ".json"), "w"))
         with open(os.path.join(self.claude, "projects", "p", sid + ".jsonl"), "w") as f:
+            if user:
+                f.write(_json.dumps({"type": "user", "message": {"role": "user", "content": user}}) + "\n")
             f.write(_json.dumps({"type": "assistant", "isSidechain": False, "message": {"role": "assistant", "content": [{"type": "text", "text": text}]}}) + "\n")
             f.write(_json.dumps({"type": "assistant", "isSidechain": True, "message": {"role": "assistant", "content": [{"type": "text", "text": "SIDE"}]}}) + "\n")
             f.write(_json.dumps({"type": "system", "subtype": "turn_duration"}) + "\n")
@@ -385,14 +422,14 @@ class RoomsTmuxTest(unittest.TestCase):
                          ("permission", "npm test -- --watch=false", ["Allow", "Deny", "Always allow"]))
         self.assertEqual(room["ask"]["plain"], "")   # the model runs in the background; /rooms never waits
         for _ in range(100):
-            if r.stories.plain("npm test -- --watch=false"):
+            if r.stories.plain("npm test -- --watch=false", "All done. What needs me: nothing."):
                 break
             time.sleep(0.02)
-        r.snap = (0.0, [])
+        r.snap = (0.0, [], True)
         self.assertEqual(self.by_id(r.rooms(), c2)["ask"]["plain"], "Runs the project tests")
         # the phone answers through the existing /answer
         self.assertTrue(st.answer(room["ask"]["id"], "Deny"))
-        r.snap = (0.0, [])
+        r.snap = (0.0, [], True)
         self.assertNotIn("ask", self.by_id(r.rooms(), c2))
 
     def test_ask_detail_is_exact_and_cut(self):
@@ -441,6 +478,52 @@ class RoomsTmuxTest(unittest.TestCase):
         self.assertIsNone(r.story_for("%999999"))
         bad = self.make(story_model=lambda p: '{"story": "Fixed 9 bugs.", "go": ""}')   # invents a number: the need line is used
         self.assertEqual(bad.story_for(c2, wait=3)["story"], self.by_id(bad.rooms(), c2)["need"])
+
+    def test_story_prompt_has_the_users_last_request_and_cache_key_too(self):
+        c2, c2win = self.cat2
+        self.transcript(c2, "s6b", "I fixed 3 bugs in build.py. Should I commit the fix?", user="please fix the Parser bugs in build.py")
+        self.set_status(c2win, "1 0 0 0 0 0 0")
+        prompts = []
+
+        def model(p):
+            prompts.append(p)
+            return '{"story": "Fixed 3 bugs in Parser. Commit the fix?", "go": "commit the fix"}'
+        r = self.make(story_model=model)
+        got = r.story_for(c2, wait=3)
+        self.assertEqual(got["story"], "Fixed 3 bugs in Parser. Commit the fix?")   # "Parser" is only in the request: the guard counts it
+        self.assertIn("The user's last request in this window", prompts[0])
+        self.assertIn("please fix the Parser bugs", prompts[0])
+        self.transcript(c2, "s6b", "I fixed 3 bugs in build.py. Should I commit the fix?", user="a different request")
+        r.story_for(c2, wait=3)
+        self.assertEqual(len(prompts), 2)   # same message, new request: not served from the cache
+
+    def test_ai_off_flag_gives_fallback_and_never_calls_the_model(self):
+        c2, c2win = self.cat2
+        self.transcript(c2, "s6c", "I fixed 3 bugs in build.py. Should I commit the fix?")
+        self.set_status(c2win, "1 0 0 0 0 0 0")
+        calls = []
+        r = self.make(story_model=lambda p: calls.append(p) or '{"story": "x", "go": ""}')
+        got = r.story_for(c2, wait=3, ai=False)
+        self.assertEqual(got["go"], "")
+        self.assertEqual(got["story"], self.by_id(r.rooms(ai=False), c2)["need"])
+        self.assertEqual(calls, [])
+
+    def test_approval_prompt_has_claudes_last_sentence(self):
+        c2, c2win = self.cat2
+        self.transcript(c2, "s6d", "The cache is stale. I will delete the build cache now.")
+        self.set_status(c2win, "0 0 0 0 0 0 0")
+        st = core.Store()
+        st.add("permission", "p", "rm", core.PERMISSION_OPTIONS, pane=c2, detail="rm -rf build/cache")
+        prompts = []
+        r = self.make(pending=st.pending_panes, asks=st.pending_asks, story_model=lambda p: prompts.append(p) or '{"plain": "Deletes build cache"}')
+        r.rooms()
+        for _ in range(100):
+            if prompts:
+                break
+            time.sleep(0.02)
+        asked = [p for p in prompts if "asks permission" in p]
+        self.assertTrue(asked and "Why (Claude's words)" in asked[0] and "I will delete the build cache now" in asked[0])
+        self.assertEqual(r.rooms(ai=False)[0]["ask"]["plain"] if r.rooms(ai=False)[0].get("ask") else "", "")
 
     def test_shell_failed_and_make_targets(self):
         sh, _ = self.shell

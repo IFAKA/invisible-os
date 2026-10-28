@@ -19,7 +19,7 @@ import urllib.request
 from aitext import AiText
 import choice as choicelib
 from core import shorten
-from story import StoryCache, first_sentence, ollama_model
+from story import StoryCache, first_sentence, ollama_model, squash
 from preview import Preview
 
 STATES = ["needs", "failed", "done", "working", "idle"]
@@ -169,6 +169,45 @@ def read_last_assistant_text(path):
     return None
 
 
+def _user_text(e):
+    """The typed text of one transcript entry that is a real user message (not a tool result, a meta line or a hook note), else ""."""
+    msg = e.get("message") or {}
+    if e.get("isSidechain") or e.get("isMeta") or not (e.get("type") == "user" or msg.get("role") == "user"):
+        return ""
+    content = msg.get("content")
+    texts = [content] if isinstance(content, str) else [c.get("text", "") for c in content or [] if isinstance(c, dict) and c.get("type") == "text"]
+    text = "\n".join(t for t in texts if t.strip()).strip()
+    return "" if text.startswith("<") or text.startswith("[Request interrupted") else text   # <command-name>, <system-reminder>...
+
+
+def read_last_user_text(path, chars=600):
+    """The user's last real request in a transcript (reads only the tail), cut to `chars`. "" if none."""
+    try:
+        size = os.path.getsize(path)
+        f = open(path, "rb")
+    except OSError:
+        return ""
+    with f:
+        for chunk in (1 << 20, 8 << 20, size):
+            start = max(0, size - chunk)
+            f.seek(start)
+            lines = f.read().decode("utf-8", "ignore").splitlines()
+            if start > 0:
+                lines = lines[1:]
+            for line in reversed(lines):
+                if '"user"' not in line:
+                    continue
+                try:
+                    text = _user_text(json.loads(line))
+                except ValueError:
+                    continue
+                if text:
+                    return squash(text)[:chars]
+            if start == 0:
+                break
+    return ""
+
+
 def makefile_targets(folder):
     for name in ("Makefile", "makefile", "GNUmakefile"):
         try:
@@ -265,8 +304,9 @@ class Rooms:
         self.stories = StoryCache(story_model)
         self.ai = AiText(story_model)   # /ai/digest, /ai/short
         self.lock = threading.Lock()
-        self.snap = (0.0, [])
+        self.snap = (0.0, [], True)
         self._msg_cache = {}      # transcript path -> (mtime, size, text)
+        self._req_cache = {}      # transcript path -> (mtime, size, the user's last request)
         self._zsh_cache = (0.0, {})
         self._proj_cache = (0.0, [])
         self._picks_cache = (-1.0, [])
@@ -324,19 +364,53 @@ class Rooms:
         except (OSError, ValueError):
             return None
 
-    def last_message(self, sid):
+    def _transcript(self, sid):
+        """The transcript file of a session id, or None."""
         if not sid or not re.match(r"^[\w.-]+$", sid):
             return None
-        path = None
         base = os.path.join(self.claude_dir, "projects")
         try:
             for d in os.listdir(base):
                 p = os.path.join(base, d, sid + ".jsonl")
                 if os.path.exists(p):
-                    path = p
-                    break
+                    return p
         except OSError:
             return None
+        return None
+
+    def _folder_transcripts(self, path):
+        """The newest transcripts of a project folder (~/.claude/projects/<path with / and . as ->), newest first."""
+        if not path:
+            return []
+        d = os.path.join(self.claude_dir, "projects", re.sub(r"[^A-Za-z0-9]", "-", path.rstrip("/") or "/"))
+        try:
+            files = [os.path.join(d, n) for n in os.listdir(d) if n.endswith(".jsonl")]
+            files.sort(key=lambda p: os.stat(p).st_mtime, reverse=True)
+        except OSError:
+            return []
+        return files[:3]
+
+    def last_request(self, row):
+        """The user's last request in this window's Claude transcript (cut to ~600 chars), "" if none. Cached by file mtime and size."""
+        for p in ([self._transcript(self.session_id(row))] if self.session_id(row) else []) + self._folder_transcripts(row["path"]):
+            if not p:
+                continue
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            c = self._req_cache.get(p)
+            if c and c[0] == st.st_mtime and c[1] == st.st_size:
+                text = c[2]
+            else:
+                text = read_last_user_text(p)
+                self._req_cache[p] = (st.st_mtime, st.st_size, text)
+            if text:
+                return text
+        return ""
+
+    def last_message(self, sid):
+        path = self._transcript(sid)
         if not path:
             return None
         st = os.stat(path)
@@ -350,15 +424,7 @@ class Rooms:
     def last_message_in_folder(self, path):
         """Last assistant text of the newest transcript of a project folder (~/.claude/projects/<path with / and . as ->).
         Used when a pane has no session slot yet, or its own transcript is still empty (a window started with `claude --continue`)."""
-        if not path:
-            return None
-        d = os.path.join(self.claude_dir, "projects", re.sub(r"[^A-Za-z0-9]", "-", path.rstrip("/") or "/"))
-        try:
-            files = [os.path.join(d, n) for n in os.listdir(d) if n.endswith(".jsonl")]
-            files.sort(key=lambda p: os.stat(p).st_mtime, reverse=True)
-        except OSError:
-            return None
-        for p in files[:3]:
+        for p in self._folder_transcripts(path):
             st = os.stat(p)
             c = self._msg_cache.get(p)
             if c and c[0] == st.st_mtime and c[1] == st.st_size:
@@ -375,7 +441,7 @@ class Rooms:
         return bool(re.match(r"^\d+(\.\d+)+$", cmd)) or cmd.lower() == "claude"
 
     # -- one room --
-    def build_room(self, row, asks):
+    def build_room(self, row, asks, ai=True):
         claude = self.is_claude(row["cmd"])
         project = os.path.basename(row["path"].rstrip("/")) or row["wname"]
         room = dict(id=row["id"], name=clean_title(row["title"], row["wname"]) if claude else row["wname"], project=project,
@@ -387,14 +453,16 @@ class Rooms:
         else:
             self._shell_state(room, row)
         room["actions"] = self._actions(room)
-        self._add_ask(room)
+        self._add_ask(room, ai)
         self._add_choice(room)
         source = room.get("_src", "")
         if room["state"] != "working":
-            room.update(self.stories.peek(row["id"], room["kind"], source, self._story_context(room), self._story_fallback(room, source)))
+            request = self.last_request(row) if ai and room["kind"] == "claude" and source else ""
+            room.update(self.stories.peek(row["id"], room["kind"], source, self._story_context(room), self._story_fallback(room, source),
+                                          request, ai))
         return room
 
-    def _add_ask(self, room):
+    def _add_ask(self, room, ai=True):
         """An open permission ask of this pane: the room needs you, and `ask` says what it wants (exact) and what it means (model, may be "")."""
         try:
             ask = (self.asks() or {}).get(room["id"])
@@ -404,7 +472,7 @@ class Rooms:
             return
         room["state"] = "needs"
         room["ask"] = {"id": ask["id"], "kind": ask.get("kind", "permission"), "what": str(ask["what"])[:200],
-                       "plain": self.stories.plain(ask["what"]), "options": list(ask["options"])}
+                       "plain": self.stories.plain(ask["what"], last_sentences(room.get("_src", ""), 1, 40), ai), "options": list(ask["options"])}
 
     def menu_of(self, pane):
         """The parsed menu (choice.parse_screen) on the screen of a pane now, or None."""
@@ -539,20 +607,20 @@ class Rooms:
         return learned_order(base, self.picks_for(room["id"], room["path"]))
 
     # -- all rooms --
-    def rooms(self, max_age=0.0):
+    def rooms(self, max_age=0.0, ai=True):
         with self.lock:
-            if self.clock() - self.snap[0] < max_age:
+            if self.clock() - self.snap[0] < max_age and self.snap[2] == ai:
                 return self.snap[1]
             try:
                 asks = self.pending() or {}
             except Exception:
                 asks = {}
-            rooms = [self.build_room(r, asks) for r in self._panes()]
+            rooms = [self.build_room(r, asks, ai) for r in self._panes()]
             rooms.sort(key=lambda r: (STATES.index(r["state"]), -r["_activity"]))
             for r in rooms:
                 del r["_activity"]
                 r.pop("_src", None)
-            self.snap = (self.clock(), rooms)
+            self.snap = (self.clock(), rooms, ai)
             return rooms
 
     def room_row(self, pane):
@@ -563,28 +631,29 @@ class Rooms:
                 return r
         return None
 
-    def last_text(self, pane):
+    def last_text(self, pane, ai=True):
         row = self.room_row(pane)
         if not row:
             return None
         msg = self.last_message(self.session_id(row)) if self.is_claude(row["cmd"]) else None
         text = strip_markdown(msg) if msg else ""
         if text:   # start the story now, so it is ready when the phone asks
-            room = self.build_room(row, {})
+            room = self.build_room(row, {}, ai)
             room.pop("_src", None)
         return text
 
-    def story_for(self, pane, wait=6.0):
+    def story_for(self, pane, wait=6.0, ai=True):
         """{story, go} of one room, waiting up to `wait` s for the model (GET /room/story). None when there is no such room."""
         row = self.room_row(pane)
         if not row:
             return None
-        room = self.build_room(row, self.pending() or {})
+        room = self.build_room(row, self.pending() or {}, ai)
         source = room.pop("_src", "")
         ctx, fb = self._story_context(room), self._story_fallback(room, source)
         if room["state"] == "working" and not source:
             return {"story": fb, "go": ""}
-        return self.stories.ask(pane, room["kind"], source, ctx, fb, wait)
+        request = self.last_request(row) if ai and room["kind"] == "claude" else ""
+        return self.stories.ask(pane, room["kind"], source, ctx, fb, wait, request, ai)
 
     def screen_text(self, pane):
         if not self.room_row(pane):

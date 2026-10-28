@@ -3,7 +3,7 @@
 
 Phone:  GET /events?since=N&wait=25   (long poll)      POST /answer {"id": "3", "choice": "Allow"}
 Tools:  GET /info /room/tools   POST /room/tool   (see ROOMS-API.md, tools.py)
-Rooms:  GET /rooms /room/last /room/screen /room/story /projects /areas   POST /room/act /room/send /room/choose /ai/digest /ai/short /project/open /project/new   (see ROOMS-API.md)
+Rooms:  GET /rooms /room/last /room/screen /room/story /projects /areas   POST /room/act /room/send /room/choose /ai/digest /ai/short /ai/replies /project/open /project/new   (see ROOMS-API.md)
 Hooks:  POST /ask {kind, project, summary, options, wait}  (blocks until answered)      POST /notify {kind, project, summary}
 All calls need the header  Authorization: Bearer <token>.
 """
@@ -147,6 +147,7 @@ def make_handler(store, token, rooms, tools=None):
                 return
             u = urlparse(self.path)
             q = parse_qs(u.query)
+            ai_on = q.get("ai", ["1"])[0] != "0"   # the phone's AI switch is off: no model text (ROOMS-API.md)
             got = preview.handle_get(self._send, rooms, u.path, q)   # Show on phone: /room/diff /room/pictures /room/picture /room/preview
             if got is not False:
                 if got is not True:
@@ -159,16 +160,16 @@ def make_handler(store, token, rooms, tools=None):
             elif u.path == "/ping":
                 self._send(200, {"ok": True})
             elif u.path == "/rooms":
-                self._send(200, {"seq": store.seq, "rooms": rooms.rooms(max_age=1.0)})
+                self._send(200, {"seq": store.seq, "rooms": rooms.rooms(max_age=1.0, ai=ai_on)})
             elif u.path in ("/room/last", "/room/screen"):
                 pane = q.get("id", [""])[0]
-                text = rooms.last_text(pane) if u.path == "/room/last" else rooms.screen_text(pane)
+                text = rooms.last_text(pane, ai_on) if u.path == "/room/last" else rooms.screen_text(pane)
                 if text is None:
                     self._send(404, {"error": "no such room"})
                 else:
                     self._send(200, {"text": text})
             elif u.path == "/room/story":
-                got = rooms.story_for(q.get("id", [""])[0])
+                got = rooms.story_for(q.get("id", [""])[0], ai=ai_on)
                 if got is None:
                     self._send(404, {"error": "no such room"})
                 else:
@@ -230,7 +231,9 @@ def make_handler(store, token, rooms, tools=None):
             elif path == "/ai/digest":
                 self._send(200, {"line": rooms.ai.digest(b.get("items"))})
             elif path == "/ai/short":
-                self._send(200, {"short": rooms.ai.short(b.get("text"))})
+                self._send(200, {"short": rooms.ai.short(b.get("text"), b.get("context"))})
+            elif path == "/ai/replies":
+                self._send(200, rooms.ai.replies(b.get("text"), b.get("lang"), b.get("context")))
             elif path == "/room/send":
                 ok = rooms.send(b.get("id"), b.get("text"))
                 self._send(200 if ok else 400, {"ok": ok})

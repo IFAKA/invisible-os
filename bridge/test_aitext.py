@@ -64,5 +64,78 @@ class ShortTest(unittest.TestCase):
         self.assertEqual(len(n), 1)
 
 
+CHAT = "Ana: can you pick up the cake from Dolce at 5?\nAna: it is for Leo's birthday"
+
+
+class ContextTest(unittest.TestCase):
+    def test_short_prompt_has_earlier_messages_and_guard_counts_them(self):
+        prompts = []
+
+        def m(p):
+            prompts.append(p)
+            return json.dumps({"short": "Dr. Perez moved it to Tuesday at 4 pm. This is for Leo."})
+        s = aitext.make_short(LONG, m, CHAT)
+        self.assertIn("Earlier messages in the same chat", prompts[0])
+        self.assertIn("cake from Dolce", prompts[0])
+        self.assertEqual(s, "Dr. Perez moved it to Tuesday at 4 pm. This is for Leo.")   # Leo is only in the context
+        self.assertEqual(aitext.make_short(LONG, m, ""), "")   # without the context, Leo is invented
+        self.assertNotIn("Earlier messages", aitext.build_short_prompt(LONG))
+
+    def test_short_cache_key_includes_context(self):
+        n = []
+
+        def m(p):
+            n.append(1)
+            return json.dumps({"short": "Appointment moved to Tuesday at 4 pm."})
+        ai = aitext.AiText(m)
+        ai.short(LONG, "a"); ai.short(LONG, "a"); ai.short(LONG, "b")
+        self.assertEqual(len(n), 2)
+
+    def test_context_is_cut(self):
+        p = aitext.build_short_prompt(LONG, "x" * 5000)
+        self.assertLess(p.count("x"), aitext.CONTEXT_CHARS + 5)
+
+
+class RepliesTest(unittest.TestCase):
+    MSG = "Ana: can you send me the report by Friday?"
+
+    def model(self, replies, tasks, seen=None):
+        def m(p):
+            if seen is not None:
+                seen.append(p)
+            return json.dumps({"replies": replies, "tasks": tasks})
+        return m
+
+    def test_ok(self):
+        seen = []
+        r = aitext.make_replies(self.MSG, "en", self.model(["Yes, by Friday", "No, sorry", "Not sure yet"], ["Send Ana the report by Friday"], seen), "Ana: hi")
+        self.assertEqual(r, {"replies": ["Yes, by Friday", "No, sorry", "Not sure yet"], "tasks": ["Send Ana the report by Friday"]})
+        self.assertIn("in English", seen[0]); self.assertIn("Ana: hi", seen[0])
+
+    def test_invented_items_are_dropped_one_by_one(self):
+        r = aitext.make_replies(self.MSG, "en", self.model(["Yes, by Friday", "I will send it at 9", "Ask Marco"], ["Call Marco"]))
+        self.assertEqual(r, {"replies": ["Yes, by Friday"], "tasks": []})
+        self.assertEqual(aitext.make_replies(self.MSG, "en", self.model(["At 9"], ["Call Marco"])), {})
+
+    def test_too_long_repeats_junk_and_no_model(self):
+        long = " ".join(["word"] * 13)
+        self.assertEqual(aitext.make_replies(self.MSG, "en", self.model([long, "Ok", "ok"], []))["replies"], ["Ok"])
+        self.assertEqual(aitext.make_replies(self.MSG, "en", lambda p: "nope"), {})
+        self.assertEqual(aitext.make_replies(self.MSG, "en", None), {})
+
+        def down(p):
+            raise OSError("x")
+        self.assertEqual(aitext.make_replies(self.MSG, "en", down), {})
+
+    def test_spanish_and_cache_with_context(self):
+        seen = []
+        ai = aitext.AiText(self.model(["Sí", "No", "No sé"], [], seen))
+        self.assertEqual(ai.replies(self.MSG, "es", "c")["replies"], ["Sí", "No", "No sé"])
+        ai.replies(self.MSG, "es", "c"); ai.replies(self.MSG, "es", "d")
+        self.assertEqual(len(seen), 2)
+        self.assertIn("in Spanish", seen[0])
+        self.assertEqual(aitext.AiText(None).replies(self.MSG, "en"), {"replies": [], "tasks": []})
+
+
 if __name__ == "__main__":
     unittest.main()

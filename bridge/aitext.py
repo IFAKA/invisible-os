@@ -18,6 +18,9 @@ MAX_ITEMS = 30
 MAX_GROUPS = 4
 SHORT_WORDS = 45   # the guard limit; the prompt asks for 30
 MAX_ENTRIES = 200
+CONTEXT_CHARS = 1000   # earlier messages of the same chat, as far as the model sees them
+REPLY_WORDS = 12
+TASK_WORDS = 9
 
 
 def build_digest_prompt(items):
@@ -89,11 +92,16 @@ def make_digest(items, model):
     return line if check_digest(line, len(items)) else ""
 
 
-def build_short_prompt(text):
-    return ("Below is a message sent to a person.\n---\n%s\n---\n"
+def earlier_block(context):
+    c = squash(context)[:CONTEXT_CHARS]
+    return ("Earlier messages in the same chat (oldest first, for background only):\n---\n%s\n---\n" % str(context).strip()[:CONTEXT_CHARS]) if c else ""
+
+
+def build_short_prompt(text, context=""):
+    return ("%sBelow is a message sent to a person.\n---\n%s\n---\n"
             "Write what it says for a blind listener, as JSON: {\"short\": \"...\"}.\n"
             "short: one or two sentences, at most %d words, plain words, no markdown. Say who wants what, when, and any number or place. "
-            "Use only facts, numbers and names that are in the message. Never invent.\nOutput only the JSON." % (str(text)[:3000], 30))
+            "Use only facts, numbers and names that are in the message or the earlier messages. Never invent.\nOutput only the JSON." % (earlier_block(context), str(text)[:3000], 30))
 
 
 def parse_short(text):
@@ -108,17 +116,73 @@ def parse_short(text):
     return re.sub(r"(\*\*|__|`|^#+\s*)", "", squash(v if isinstance(v, str) else ""))
 
 
-def make_short(text, model):
-    """Pure given `model`. A 1-2 sentence version of `text` that passes the accuracy guard, or ""."""
+def make_short(text, model, context=""):
+    """Pure given `model`. A 1-2 sentence version of `text` that passes the accuracy guard (names and numbers are checked against
+    `text` and `context` together), or ""."""
     text = str(text or "")
     if model is None or not squash(text):
         return ""
     try:
-        s = parse_short(model(build_short_prompt(text)))
+        s = parse_short(model(build_short_prompt(text, context)))
     except Exception:
         return ""
-    ok, _ = check_story(s, text, limit=SHORT_WORDS)
+    ok, _ = check_story(s, text, squash(context)[:CONTEXT_CHARS], limit=SHORT_WORDS)
     return s if ok else ""
+
+
+def build_replies_prompt(text, lang, context=""):
+    language = "Spanish" if lang == "es" else "English"
+    return ("%sSomeone sent you this message:\n---\n%s\n---\n"
+            "Write what you could answer, in %s, as JSON: {\"replies\": [...], \"tasks\": [...]}.\n"
+            "replies: exactly 3 short sentences you could send, at most %d words each: one agreeing, one declining, one not sure. "
+            "tasks: 0 to 3 to-do items for yourself that the message asks of you, each starting with a verb, at most %d words; an empty list if it asks nothing. "
+            "Use only facts, numbers and names that are in the message or the earlier messages. Never invent.\nOutput only the JSON."
+            % (earlier_block(context), str(text)[:2000], language, REPLY_WORDS, TASK_WORDS))
+
+
+def parse_replies(text):
+    """Pure. (replies, tasks) lists of strings from the model's reply; ([], []) if it is not the JSON asked for."""
+    m = re.search(r"\{.*\}", str(text or ""), re.S)
+    if not m:
+        return [], []
+    try:
+        o = json.loads(m.group(0))
+    except ValueError:
+        return [], []
+    if not isinstance(o, dict):
+        return [], []
+
+    def items(v):
+        return [re.sub(r"(\*\*|__|`|^#+\s*)", "", squash(x)) for x in v if isinstance(x, str)] if isinstance(v, list) else []
+    return items(o.get("replies")), items(o.get("tasks"))
+
+
+def check_items(items, source, context, limit, n=3):
+    """Pure. The items that are short and invent no number, name, file or quote (checked against source and context together), no repeats."""
+    hay = (str(source) + "\n" + str(context)).lower()
+    out = []
+    for it in items:
+        it = squash(it).strip(" \"'")
+        if not it or len(it.split()) > limit or it.lower() in [o.lower() for o in out]:
+            continue
+        if any(not _in_source(t, hay) for t in risky_tokens(it)):
+            continue
+        out.append(it)
+    return out[:n]
+
+
+def make_replies(text, lang, model, context=""):
+    """Pure given `model`. {"replies": [...], "tasks": [...]} (each item guarded), or {} (no model, failure, nothing usable)."""
+    text = str(text or "")
+    if model is None or not squash(text):
+        return {}
+    try:
+        r, t = parse_replies(model(build_replies_prompt(text, lang, context)))
+    except Exception:
+        return {}
+    ctx = squash(context)[:CONTEXT_CHARS]
+    r, t = check_items(r, text, ctx, REPLY_WORDS), check_items(t, text, ctx, TASK_WORDS)
+    return {"replies": r, "tasks": t} if r or t else {}
 
 
 class AiText:
@@ -151,6 +215,11 @@ class AiText:
             return ""
         return self._get(self._key("d", items), lambda: make_digest(items, self.model))
 
-    def short(self, text):
-        text = str(text or "")
-        return self._get(self._key("s", text), lambda: make_short(text, self.model))
+    def short(self, text, context=""):
+        text, context = str(text or ""), squash(context)[:CONTEXT_CHARS]
+        return self._get(self._key("s", [text, context]), lambda: make_short(text, self.model, context))
+
+    def replies(self, text, lang="en", context=""):
+        text, context, lang = str(text or ""), squash(context)[:CONTEXT_CHARS], "es" if lang == "es" else "en"
+        got = self._get(self._key("r", [text, lang, context]), lambda: make_replies(text, lang, self.model, context))
+        return {"replies": list(got.get("replies", [])), "tasks": list(got.get("tasks", []))} if got else {"replies": [], "tasks": []}

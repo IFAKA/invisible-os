@@ -107,21 +107,26 @@ def check_go(go, source, context=""):
     return go
 
 
-def build_prompt(kind, source, context=""):
+REQUEST_CHARS = 600   # the user's last request in a window, as far as the model sees it
+WHY_CHARS = 240       # Claude's last sentence before an ask
+
+
+def build_prompt(kind, source, context="", request=""):
     if kind == "shell":
         what = "the last lines of a terminal window"
         body = source[-3000:]
     else:
         what = "the last message of an AI coding assistant to its user"
         body = source[-4000:]
+    asked = ("The user's last request in this window:\n---\n%s\n---\n" % str(request)[:REQUEST_CHARS].strip()) if squash(request) else ""
     return (
-        "Below is %s%s.\n---\n%s\n---\n"
+        "Below is %s%s.\n---\n%s\n---\n%s"
         "Write the story for a blind listener, as JSON: {\"story\": \"...\", \"go\": \"...\"}.\n"
         "story: at most %d words, plain words, no markdown. In up to 3 short parts, only those that exist: what it was doing; "
         "what happened (done, failed, or a question); what it wants from the user (or: nothing needed). Start with the action, like \"Pushed the README.\"; do not write \"the AI\". Use only facts, numbers and names that are in the text. Never invent.\n"
         "go: ONLY if the text asks the user a yes/no question or to say \"go\", at most %d words saying what that \"go\" or \"yes\" approves (example: \"commit the fix\"). "
         "Otherwise an empty string.\n"
-        "Output only the JSON." % (what, (" (window: %s)" % context) if context else "", body, MAX_WORDS, GO_WORDS))
+        "Output only the JSON." % (what, (" (window: %s)" % context) if context else "", body, asked, MAX_WORDS, GO_WORDS))
 
 
 def parse_reply(text):
@@ -140,7 +145,7 @@ def parse_reply(text):
     return clean(o.get("story")), clean(o.get("go"))
 
 
-def make_story(kind, source, context, fallback, model):
+def make_story(kind, source, context, fallback, model, request=""):
     """Pure given `model`. (story, go, from_model). `fallback` is the story used when the model is off, fails, or breaks the guard
     (the room's need line, else the first sentence of the message)."""
     source = str(source or "")
@@ -148,13 +153,14 @@ def make_story(kind, source, context, fallback, model):
     if not squash(source) or model is None:
         return fb, "", False
     try:
-        story, go = parse_reply(model(build_prompt(kind, source, context)))
+        story, go = parse_reply(model(build_prompt(kind, source, context, request)))
     except Exception:   # Ollama down, timeout, bad answer
         return fb, "", False
-    ok, _ = check_story(story, source, context)
+    hay = (str(context) + "\n" + str(request)) if squash(request) else context   # names in the user's request are facts too
+    ok, _ = check_story(story, source, hay)
     if not ok:
         return fb, "", False
-    return story, check_go(go, source, context), True
+    return story, check_go(go, source, hay), True
 
 
 PLAIN_WORDS = 12
@@ -163,12 +169,13 @@ REASSURE_RE = re.compile(r"\b(safe\w*|harmless\w*|secure\w*|fine|ok|okay|trust\w
                          r"common|typical|innocent|benign|good|legit\w*|unsafe|dangerous|risky)\b", re.I)
 
 
-def build_plain_prompt(what):
-    return ("A coding assistant asks permission to do this on the user's computer:\n---\n%s\n---\n"
+def build_plain_prompt(what, why=""):
+    why = ("Why (Claude's words): %s\n" % squash(why)[:WHY_CHARS]) if squash(why) else ""
+    return ("A coding assistant asks permission to do this on the user's computer:\n---\n%s\n---\n%s"
             "Write what it does, for a blind listener, as JSON: {\"plain\": \"...\"}.\n"
             "plain: one line, at most %d words, plain words, starting with a verb (example: \"Deletes the build folder\"). "
             "Say only what it does. Never say whether it is safe, harmless, fine or risky. Use only names that are in the text.\n"
-            "Output only the JSON." % (str(what)[:1500], PLAIN_WORDS))
+            "Output only the JSON." % (str(what)[:1500], why, PLAIN_WORDS))
 
 
 def parse_plain(text):
@@ -184,23 +191,23 @@ def parse_plain(text):
     return re.sub(r"(\*\*|__|`|^#+\s*)", "", squash(v if isinstance(v, str) else ""))
 
 
-def check_plain(plain, what):
+def check_plain(plain, what, why=""):
     """Pure. The cleaned line, or "" when empty, longer than PLAIN_WORDS, reassuring, or naming something that is not in `what`."""
     plain = squash(plain)
     if not plain or len(_words(plain)) > PLAIN_WORDS or REASSURE_RE.search(plain):
         return ""
-    hay = str(what).lower()
+    hay = (str(what) + "\n" + squash(why)[:WHY_CHARS]).lower()
     if any(not _in_source(t, hay) for t in risky_tokens(plain)):
         return ""
     return plain
 
 
-def make_plain(what, model):
+def make_plain(what, model, why=""):
     """Pure given `model`. The one-line meaning of an ask, or "" (no model, failure, or the guard)."""
     if model is None or not squash(what):
         return ""
     try:
-        return check_plain(parse_plain(model(build_plain_prompt(what))), what)
+        return check_plain(parse_plain(model(build_plain_prompt(what, why))), what, why)
     except Exception:
         return ""
 
@@ -208,7 +215,7 @@ def make_plain(what, model):
 def ollama_model(url="http://127.0.0.1:11434/api/generate", model="gemma3:4b", timeout=TIMEOUT):
     def call(prompt):
         body = json.dumps({"model": model, "prompt": prompt, "stream": False, "format": "json", "keep_alive": "30m",
-                           "options": {"temperature": 0, "num_predict": 110}}).encode()
+                           "options": {"temperature": 0, "num_predict": 160}}).encode()
         req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read()).get("response", "")
@@ -228,8 +235,8 @@ class StoryCache:
         self.plain_busy = set()
 
     @staticmethod
-    def key(pane, source):
-        return (pane, hashlib.sha1(str(source).encode("utf-8", "ignore")).hexdigest())
+    def key(pane, source, request=""):
+        return (pane, hashlib.sha1((str(source) + "\x00" + squash(request)[:REQUEST_CHARS]).encode("utf-8", "ignore")).hexdigest())
 
     def _fresh(self, key):
         e = self.done.get(key)
@@ -237,16 +244,16 @@ class StoryCache:
             return e[0]
         return None
 
-    def _start(self, key, kind, source, context, fallback):
+    def _start(self, key, kind, source, context, fallback, request=""):
         """Needs self.lock. Returns the Event of the work, or None when there is no model (the answer is made at once)."""
         if self.model is None:
-            story, go, ok = make_story(kind, source, context, fallback, None)
+            story, go, ok = make_story(kind, source, context, fallback, None, request)
             self._put(key, story, go, ok)
             return None
         ev = self.pending.get(key)
         if ev is None:
             ev = self.pending[key] = threading.Event()
-            threading.Thread(target=self._work, args=(key, ev, kind, source, context, fallback), daemon=True).start()
+            threading.Thread(target=self._work, args=(key, ev, kind, source, context, fallback, request), daemon=True).start()
         return ev
 
     def _put(self, key, story, go, ok):
@@ -257,37 +264,42 @@ class StoryCache:
         while len(self.done) > MAX_ENTRIES:
             self.done.popitem(last=False)
 
-    def _work(self, key, ev, kind, source, context, fallback):
-        story, go, ok = make_story(kind, source, context, fallback, self.model)
+    def _work(self, key, ev, kind, source, context, fallback, request=""):
+        story, go, ok = make_story(kind, source, context, fallback, self.model, request)
         with self.lock:
             self._put(key, story, go, ok)
             self.pending.pop(key, None)
         ev.set()
 
-    def peek(self, pane, kind, source, context="", fallback=""):
-        """The cached {story, go}, or {"story": "", "go": ""} while the work runs (it is started when new). Never waits."""
+    def peek(self, pane, kind, source, context="", fallback="", request="", use_model=True):
+        """The cached {story, go}, or {"story": "", "go": ""} while the work runs (it is started when new). Never waits.
+        `use_model` False (the phone's AI switch is off): the fallback text, no model, nothing cached."""
         empty = {"story": "", "go": ""}
         if not squash(source):
             return {"story": squash(fallback), "go": ""} if squash(fallback) else empty
-        key = self.key(pane, source)
+        if not use_model:
+            return {"story": squash(fallback) or first_sentence(source), "go": ""}
+        key = self.key(pane, source, request)
         with self.lock:
             r = self._fresh(key)
             if r is not None:
                 return dict(r)
-            self._start(key, kind, source, context, fallback)
+            self._start(key, kind, source, context, fallback, request)
             r = self._fresh(key)
             return dict(r) if r is not None else empty
 
-    def ask(self, pane, kind, source, context="", fallback="", wait=TIMEOUT):
+    def ask(self, pane, kind, source, context="", fallback="", wait=TIMEOUT, request="", use_model=True):
         """Like peek, but waits up to `wait` seconds for the model; then the fallback (the work goes on and fills the cache)."""
         if not squash(source):
             return {"story": squash(fallback), "go": ""}
-        key = self.key(pane, source)
+        if not use_model:
+            return {"story": squash(fallback) or first_sentence(source), "go": ""}
+        key = self.key(pane, source, request)
         with self.lock:
             r = self._fresh(key)
             if r is not None:
                 return dict(r)
-            ev = self._start(key, kind, source, context, fallback)
+            ev = self._start(key, kind, source, context, fallback, request)
             r = self._fresh(key)
             if r is not None:
                 return dict(r)
@@ -297,25 +309,27 @@ class StoryCache:
             r = self._fresh(key)
         return dict(r) if r is not None else {"story": squash(fallback) or first_sentence(source), "go": ""}
 
-    def plain(self, what):
+    def plain(self, what, why="", use_model=True):
         """The one-line meaning of an ask (see check_plain), from the cache. Never waits: the model runs in a background thread
         (same model, same timeout as stories) and the line shows in a later /rooms; "" until then and on failure."""
-        what = squash(what)
-        if self.model is None or not what:
+        what, why = squash(what), squash(why)[:WHY_CHARS]
+        if self.model is None or not what or not use_model:
             return ""
+        k = (what, why)
         with self.lock:
-            e = self.plains.get(what)
+            e = self.plains.get(k)
             if e and (e[0] or self.clock() - e[1] < RETRY_AFTER):
                 return e[0]
-            if what not in self.plain_busy:
-                self.plain_busy.add(what)
-                threading.Thread(target=self._plain_work, args=(what,), daemon=True).start()
+            if k not in self.plain_busy:
+                self.plain_busy.add(k)
+                threading.Thread(target=self._plain_work, args=(what, why), daemon=True).start()
             return ""
 
-    def _plain_work(self, what):
-        line = make_plain(what, self.model)
+    def _plain_work(self, what, why=""):
+        line = make_plain(what, self.model, why)
+        k = (what, why)
         with self.lock:
-            self.plains[what] = (line, self.clock())
-            self.plain_busy.discard(what)
+            self.plains[k] = (line, self.clock())
+            self.plain_busy.discard(k)
             while len(self.plains) > MAX_ENTRIES:
                 self.plains.pop(next(iter(self.plains)))
