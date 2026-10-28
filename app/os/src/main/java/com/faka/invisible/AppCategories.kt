@@ -129,7 +129,7 @@ Go/Taxi             taxi.android.client
 Go/Taxi             com.comuto
 Go/Move             hub:compass
 Tools/Settings      hub:clicktest
-Tools/Reader        hub:reader
+Tools/Daily         hub:reader
 Tools/Settings      hub:reset
 Tools/Daily         hub:habits
 Tools/Daily         hub:counter
