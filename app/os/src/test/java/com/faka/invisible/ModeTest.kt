@@ -76,7 +76,7 @@ class ModeTest {
             override fun messages() = msgs
             override fun notifGroups() = groups
             override fun notifDigest() = digest
-            override fun notifShort(text: String) = shorts[text].orEmpty()
+            override fun notifShort(n: com.faka.invisible.oskit.Notif) = shorts[n.text].orEmpty()
             override fun installedApps() = installed
             override fun pickCount(intent: String) = picksOf[intent] ?: 0
             override fun appMuted(pkg: String) = pkg in mutedPkgs

@@ -37,21 +37,30 @@ object LocalAi {
         return out
     }
 
+    /** The raw text of one answer to [prompt] (the JSON prompts of the notification AI, `AiGuard`). Slow: call it on a worker thread. */
+    fun generate(ctx: Context, prompt: String): String {
+        val e = engine(ctx)
+        val t = System.currentTimeMillis()
+        val text = synchronized(this) { e.createConversation().use { it.sendMessage(prompt).toString() } }
+        Log.d(TAG, "generate ${System.currentTimeMillis() - t}ms")
+        return text
+    }
+
     private fun langName(lang: String) = if (lang == "es") "Spanish" else "English"
 
     /** Up to 3 short reply sentences for [message] (the whole "Sender: text" line), in [lang] ("es" or "en"). */
-    fun replies(ctx: Context, message: String, lang: String): List<String> {
+    fun replies(ctx: Context, message: String, lang: String, context: String = ""): List<String> {
         val es = lang == "es"
-        return ask(ctx, "Someone sent you this message:\n\"$message\"\nWrite 3 short replies you could send, in ${langName(lang)}, as full sentences, one per line:\n" +
+        return ask(ctx, AiGuard.earlierBlock(context) + "Someone sent you this message:\n\"$message\"\nWrite 3 short replies you could send, in ${langName(lang)}, as full sentences, one per line:\n" +
             "1. an agreeing reply\n2. a declining reply\n3. a not-sure reply\n" +
             "Example for \"${if (es) "Luis: ¿Necesitas que te recoja?" else "Dad: Do you need a ride?"}\":\n" +
             (if (es) "1. Sí, por favor, a las seis\n2. No hace falta, gracias\n3. Todavía no sé, te aviso luego" else "1. Yes please, at six\n2. No thanks, I'm fine\n3. Not sure yet, I'll let you know") + "\nNow write the 3 replies.", "replies")
     }
 
     /** Up to 3 short to-do items the message asks of you (empty if it asks nothing), in [lang]. */
-    fun tasks(ctx: Context, message: String, lang: String): List<String> {
+    fun tasks(ctx: Context, message: String, lang: String, context: String = ""): List<String> {
         val es = lang == "es"
-        return ask(ctx, "Someone sent you this message:\n\"$message\"\nIf it asks you to do something, write 1 to 3 short to-do items for yourself, in ${langName(lang)}, " +
+        return ask(ctx, AiGuard.earlierBlock(context) + "Someone sent you this message:\n\"$message\"\nIf it asks you to do something, write 1 to 3 short to-do items for yourself, in ${langName(lang)}, " +
             "each starting with a verb, max 8 words, numbered 1. 2. 3. If it asks for nothing, write only: none\n" +
             "Example for \"${if (es) "Luis: ¿Puedes enviarme el informe el viernes?" else "Kim: Can you send me the report by Friday?"}\":\n" +
             (if (es) "1. Enviar el informe a Luis el viernes" else "1. Send Kim the report by Friday") + "\nNow write the to-do items.", "tasks")

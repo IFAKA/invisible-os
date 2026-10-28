@@ -10,6 +10,11 @@ import java.net.URL
 class BridgeClient(base: String, internal val token: String) {
     internal val base = base.trim().trimEnd('/').let { if (it.startsWith("http://") || it.startsWith("https://")) it else "http://$it" }
 
+    companion object {
+        /** The OS sets this to the phone's AI setting; false adds `ai=0` to /rooms, /room/story and /room/last (bridge/ROOMS-API.md). */
+        @Volatile var aiOn: () -> Boolean = { true }
+    }
+
     class Reply(val seq: Int, val events: List<ClaudeEvent>, val rooms: List<RoomEvent> = emptyList())
 
     /** Long poll: items newer than [since]; returns after [waitSec] seconds at the latest. */
@@ -36,6 +41,8 @@ class BridgeClient(base: String, internal val token: String) {
     fun answer(id: String, choice: String): Int =
         call("POST", "/answer", JSONObject().put("id", id).put("choice", choice).toString(), 10_000).first
 
+    /** "ai=0" when the phone's AI switch is off (see [aiOn]): the laptop then sends no model text. */
+    private fun aiQ(lead: String) = if (aiOn()) "" else "${lead}ai=0"
     private fun strings(a: JSONArray?) = if (a == null) emptyList() else (0 until a.length()).map { a.optString(it) }
     internal fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
     internal fun json(path: String, body: String? = null, method: String = "GET", timeoutMs: Int = 8000): JSONObject {
@@ -47,7 +54,7 @@ class BridgeClient(base: String, internal val token: String) {
     /** GET /rooms. */
     @Throws(IOException::class)
     fun rooms(): List<Room> {
-        val a = json("/rooms").optJSONArray("rooms") ?: JSONArray()
+        val a = json("/rooms" + aiQ("?")).optJSONArray("rooms") ?: JSONArray()
         return (0 until a.length()).mapNotNull { i ->
             val r = a.getJSONObject(i)
             val id = r.optString("id")
@@ -65,13 +72,16 @@ class BridgeClient(base: String, internal val token: String) {
     /** POST /ai/digest: one line over the notifications ([items] = app, title, text), "" when the laptop's model has none. */
     @Throws(IOException::class) fun digest(items: List<Triple<String, String, String>>): String =
         json("/ai/digest", JSONObject().put("items", JSONArray(items.map { JSONObject().put("app", it.first).put("title", it.second).put("text", it.third) })).toString(), "POST", 15_000).optString("line")
-    /** POST /ai/short: a one or two sentence version of a long [text], "" when the laptop's model has none. */
-    @Throws(IOException::class) fun short(text: String): String =
-        json("/ai/short", JSONObject().put("text", text).toString(), "POST", 15_000).optString("short")
+    /** POST /ai/short: a one or two sentence version of a long [text], "" when the laptop's model has none. [context] = earlier messages of the same chat. */
+    @Throws(IOException::class) fun short(text: String, context: String = ""): String =
+        json("/ai/short", JSONObject().put("text", text).put("context", context).toString(), "POST", 15_000).optString("short")
+    /** POST /ai/replies: reply sentences and to-do items for a message in [lang] ("en" or "es"); both empty when the laptop's model has none. */
+    @Throws(IOException::class) fun replies(text: String, lang: String, context: String = ""): Pair<List<String>, List<String>> =
+        json("/ai/replies", JSONObject().put("text", text).put("lang", lang).put("context", context).toString(), "POST", 20_000).let { strings(it.optJSONArray("replies")) to strings(it.optJSONArray("tasks")) }
     /** GET /room/last: Claude's whole last message. */
-    @Throws(IOException::class) fun last(id: String): String = json("/room/last?id=${enc(id)}").optString("text")
+    @Throws(IOException::class) fun last(id: String): String = json("/room/last?id=${enc(id)}" + aiQ("&")).optString("text")
     /** GET /room/story: the short story and go text of one window (the laptop may take a few seconds to make it). */
-    @Throws(IOException::class) fun story(id: String): Pair<String, String> = json("/room/story?id=${enc(id)}", timeoutMs = 12_000).let { it.optString("story") to it.optString("go") }
+    @Throws(IOException::class) fun story(id: String): Pair<String, String> = json("/room/story?id=${enc(id)}" + aiQ("&"), timeoutMs = 12_000).let { it.optString("story") to it.optString("go") }
     /** GET /room/screen: the last lines of the pane. */
     @Throws(IOException::class) fun screen(id: String): String = json("/room/screen?id=${enc(id)}").optString("text")
     /** POST /room/act: run one action id. */

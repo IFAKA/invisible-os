@@ -508,7 +508,10 @@ private val SCREEN_ES = mapOf(
     "Notification access is off. Music and messages will not work. Open the app to turn it on." to "El acceso a notificaciones está apagado. La música y los mensajes no funcionarán. Abre la app para activarlo.",
     "selected" to "seleccionado",
     "Not set" to "Sin configurar",
-    "AI on the phone" to "IA en el teléfono",
+    "AI" to "IA",
+    "Off" to "Apagado",
+    "Computer" to "Ordenador",
+    "Phone, model not downloaded" to "Teléfono, modelo sin descargar",
     "Save" to "Guardar",
     "Setup is done" to "La configuración está lista",
 )

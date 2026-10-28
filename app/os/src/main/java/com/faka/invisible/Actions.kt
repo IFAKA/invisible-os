@@ -83,12 +83,13 @@ object Actions {
             override fun tasks() = taskStore.all()
             override fun prepareAiReplies(m: Msg) {
                 val k = "${m.key}|${m.at}"
-                if (!mode.settings.ai || !LocalAi.available(app) || aiCache.containsKey(k) || !aiBusy.add(k)) return
-                Thread {
-                    val msg = "${m.sender}: ${m.text.take(300)}"; val l = if (m.lang.startsWith("en")) "en" else "es"
-                    try { aiCache[k] = LocalAi.replies(app, msg, l); aiTaskCache[k] = LocalAi.tasks(app, msg, l) }
-                    catch (e: Throwable) { Log.e(TAG, "ai failed", e); aiCache.putIfAbsent(k, emptyList()); aiTaskCache.putIfAbsent(k, emptyList()) } finally { aiBusy.remove(k) }
-                }.start()
+                if (aiCache.containsKey(k) || !aiHelp.canReply() || !aiBusy.add(k)) return
+                // A private notification (or one we cannot find) is never given to any AI, as the message or as context.
+                val notif = ControllerNotificationListener.notifs.get(m.key)
+                if (notif == null || notif.hidden) { aiBusy.remove(k); return }
+                val msg = "${m.sender}: ${m.text.take(300)}"; val l = if (m.lang.startsWith("en")) "en" else "es"
+                val context = AiAssist.earlier(notif, ControllerNotificationListener.notifs.all())
+                aiHelp.replies(msg, l, context) { r, t -> aiCache[k] = r; aiTaskCache[k] = t; aiBusy.remove(k) }
             }
             override fun aiTasks(m: Msg) = aiTaskCache["${m.key}|${m.at}"].orEmpty().map { Task(0, it, if (m.lang.startsWith("en")) "en" else "es") }
             override fun aiReplies(m: Msg) = aiCache["${m.key}|${m.at}"].orEmpty().map { Task(0, it, if (m.lang.startsWith("en")) "en" else "es") }
@@ -127,7 +128,7 @@ object Actions {
             override fun liveApps() = liveAppsNow()
             override fun roomsWaiting() = roomsWaitingNow()
             override fun notifDigest() = aiHelp.digest(ControllerNotificationListener.notifs.all())
-            override fun notifShort(text: String) = aiHelp.short(text)
+            override fun notifShort(n: Notif) = aiHelp.short(n, ControllerNotificationListener.notifs.all())
             override fun liveNotif(key: String) = ControllerNotificationListener.ongoingNotif(key)
             override fun notifRead(n: Notif) = ControllerNotificationListener.modules.forNotif(n).read(n)
             override fun notifSummary(n: Notif) = ControllerNotificationListener.modules.forNotif(n).summary(n)
@@ -246,6 +247,7 @@ object Actions {
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
         rooms.restart()
+        com.faka.invisible.claude.BridgeClient.aiOn = { mode.settings.ai }   // off: the laptop sends no model text either
         aiHelp   // starts listening to notification changes
     }
 
@@ -256,7 +258,7 @@ object Actions {
     private val writeServices = object : WriteServices {
         override fun focusFrame() = ButtonAccessibilityService.inst?.frame() ?: Frame()
         override fun setFieldText(text: String) = ButtonAccessibilityService.inst?.setFieldText(text) ?: false
-        override fun aiEnabled() = mode.settings.ai && LocalAi.available(app)
+        override fun aiEnabled() = mode.settings.ai && LocalAi.available(app)   // the keyboard's word guesses stay on the phone (latency)
         override fun nextWords(text: String, brief: String) = LocalAi.nextWords(app, text, "en", brief)
         override fun continuations(text: String, brief: String) = LocalAi.continuations(app, text, "en", brief)
         override fun detectLanguage(text: String) = MlKitLangDetector().detect(text)
@@ -507,7 +509,12 @@ object Actions {
     }
     private fun roomsWaitingNow(): Int = rooms.waitingNow()
     /** The laptop's model for notifications: the digest on home and the short version of long messages (never blocks; nothing without a computer). */
-    private val aiHelp by lazy { AiHelp({ activeComputer() }).also { ai -> ControllerNotificationListener.onChange = { ai.changed(ControllerNotificationListener.notifs.all()) } } }
+    private val aiHelp by lazy { AiHelp({ activeComputer() }, { mode.settings.ai }, object : AiHelp.PhoneAi {
+        override fun available() = LocalAi.available(app)
+        override fun generate(prompt: String) = LocalAi.generate(app, prompt)
+        override fun replies(text: String, lang: String, context: String) = LocalAi.replies(app, text, lang, context)
+        override fun tasks(text: String, lang: String, context: String) = LocalAi.tasks(app, text, lang, context)
+    }).also { ai -> ControllerNotificationListener.onChange = { ai.changed(ControllerNotificationListener.notifs.all()) } } }
     /** What the Laptop tool asks of the OS: the Write keyboard, and the way back to the tool when nothing was written. */
     val roomsPort = object : RoomsPort {
         override fun computers() = this@Actions.computers()

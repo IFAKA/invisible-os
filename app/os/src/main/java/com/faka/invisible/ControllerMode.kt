@@ -36,7 +36,7 @@ interface ModeOutput {
     fun reply(key: String, text: String): Boolean   // true if the reply was sent
     fun notifGroups(): List<NotifGroup> = emptyList()   // the mailbox: every app's notifications, grouped, muted apps left out
     fun notifDigest(): String = ""             // one line over the waiting notifications from the laptop's model ("3 chats, 2 junk"), "" until known
-    fun notifShort(text: String): String = ""   // a 1-2 sentence version of a long message from the laptop's model, "" until known
+    fun notifShort(n: Notif): String = ""   // a 1-2 sentence version of a long message from the AI (computer, else phone), "" until known
     fun roomsWaiting(): Int = 0                   // Claude windows on the computer that wait for you (the last answer; renewed in the background)
     fun liveApps(): List<LiveApp> = emptyList()   // apps that are live now (playing, a workout...), most recently updated first, for the front of home
     fun liveNotif(key: String): Notif? = null     // an ongoing notification by key (live entries open it)
@@ -809,7 +809,7 @@ class ControllerMode(
     }
     private fun notifRead(n: Notif) = notifLine(n, 500, true)
     /** The short version of a long message (> 40 words) from the laptop's model, or "" (short message, private, no laptop, no answer yet). */
-    private fun longShort(n: Notif): String = if (n.hidden || !AiAssist.isLong(n.text.squash())) "" else out.notifShort(n.text)
+    private fun longShort(n: Notif): String = if (n.hidden || !AiAssist.isLong(n.text.squash())) "" else out.notifShort(n)
     /** What is said on opening a notification: the short version of a long message, else the message. */
     private fun notifIntro(n: Notif): Phrase {
         val s = longShort(n)

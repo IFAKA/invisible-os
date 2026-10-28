@@ -23,6 +23,7 @@ import android.widget.Toast
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
+import com.faka.invisible.logickit.AiChoice
 import com.faka.invisible.voicekit.MenuLanguage
 import com.faka.invisible.voicekit.ScreenMirror
 import com.faka.invisible.voicekit.Translations
@@ -99,7 +100,7 @@ class MainActivity : Activity() {
     private fun slider(label: String, valueText: String, max: Int, now: Int, apply: (Int) -> LauncherSettings) = k.slider(label, valueText, max, now) { change(apply(it)) }
 
     // ---- screens: Home shows one thing to do and a few doors; each door opens one small page ----
-    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), MENUMORE("Order, Today and Phone"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), COMPUTERS("Computers"), LAPTOP("Laptop"), AI("AI on the phone"), HELP("Help") }
+    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), MENUMORE("Order, Today and Phone"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), COMPUTERS("Computers"), LAPTOP("Laptop"), AI("AI"), HELP("Help") }
     private var page = Page.HOME
 
     private val laptop by lazy { LaptopPage(this, k, body) { render() } }
@@ -312,7 +313,7 @@ class MainActivity : Activity() {
             val pcs = Actions.computers()
             k.navRow(this, tr("Computers"), if (pcs.isEmpty()) tr("Add a computer") else pcs.joinToString(", ") { it.name }) { open(Page.COMPUTERS) }
             if (pcs.isNotEmpty()) k.navRow(this, if (pcs.size == 1) pcs[0].name else tr("Rooms"), tr("Rooms of your computer: read, answer")) { open(Page.LAPTOP) }
-            k.navRow(this, tr("AI on the phone"), if (!s.ai) "Off" else if (ModelDownload.ready(this@MainActivity)) "On" else "On, model not downloaded") { open(Page.AI) }
+            k.navRow(this, tr("AI"), tr(AiChoice.label(s.ai, pcs.isNotEmpty(), ModelDownload.ready(this@MainActivity)))) { open(Page.AI) }
             k.navRow(this, tr("Help"), tr("Button gestures and practice")) { open(Page.HELP) }
         }
         if (EventLog.running) list.addView(k.quiet(tr("Stop listening"), Ui.bad) { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
@@ -542,8 +543,8 @@ class MainActivity : Activity() {
     }
 
     private fun aiPage() {
-        card("AI on the phone", "Writes replies and tidy tasks. It runs on the phone, uses no network after the download, and never listens.") {
-            k.toggleRow(this, "Use AI for replies and tasks", null, s.ai) { v -> change(s.copy(ai = v)); if (v) ModelDownload.start(applicationContext) { EventLog.refresh() } }
+        card("AI", "Short versions of long messages, a count of your notifications, reply ideas and tidy tasks. It uses your computer when one is set and answers, else the model on the phone (no network after the download). It never listens.") {
+            k.toggleRow(this, "Use AI", null, s.ai) { v -> change(s.copy(ai = v)); if (v) ModelDownload.start(applicationContext) { EventLog.refresh() } }
             if (s.ai) {
                 val ready = ModelDownload.ready(this@MainActivity)
                 addView(k.text(if (ready) "Ready. The model is on this phone." else ModelDownload.status.ifEmpty { "The model (2.6 GB) is not on this phone yet." }, Type.CAPTION, Ui.soft),

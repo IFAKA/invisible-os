@@ -19,7 +19,9 @@ Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rule
 | Calculator.kt | `Calculator` = state of the spoken calculator (digit, point, operate, equals, undo, `spoken()`), left to right; `%` = percent of. Used by the Calculator program. |
 | PriceSum.kt | `PriceSum` = running total of prices in cents (`add("12.5")`, `undo()`, `spoken()`). Used by the Sum prices tool (`launchSum` in Actions). |
 | Calls.kt | `Calls.kind(category, callType, actions)` = a dialer notification is INCOMING, ONGOING or NONE. `callerName`, `spokenNumber`, `rank(contacts)` (starred, then most called, one per number), `withTop(top, rest)` (3 most called first, then `rank`), `topNumbers(log)` (most frequent numbers of a call log), `emergencyNumber(country)` (112 fallback), `emergencyText()`. Used by the call screens in `ControllerMode` and the listener. |
-| AiAssist.kt | `AiAssist.isLong(text)` (> 40 words: a short version is read first), `digestKey(items, hidden)` (cache key of a set of notifications), `digestable(n)`, `withPrivate(line, hidden)` (adds ", 2 private" so the digest numbers add up to all). Used by `AiHelp` (:os) and `ControllerMode`; the model runs on the laptop bridge (`/ai/digest`, `/ai/short`). |
+| AiAssist.kt | `AiAssist.isLong(text)` (> 40 words: a short version is read first), `digestKey(items, hidden)` (cache key of a set of notifications), `digestable(n)`, `withPrivate(line, hidden)` (adds ", 2 private" so the digest numbers add up to all). Used by `AiHelp` (:os) and `ControllerMode`; the model runs on the laptop bridge (`/ai/digest`, `/ai/short`). `earlier(current, all)` (the 2-3 earlier messages of the same chat as context, never a private one). |
+| AiChoice.kt | `AiChoice.pick(enabled, computerSet, computerDown, phoneModel)` = the ONE order for every AI job (computer, else phone model, else none; switch off = none) and `label(...)` = the subtitle of the AI row ("Computer", "Phone", "Phone, model not downloaded", "Off"). Used by `AiHelp` and the settings. |
+| AiGuard.kt | The accuracy guard and prompts of the notification AI, the same as the bridge (`story.check_story`, `aitext.py`): `checkStory`, `makeShort(text, context, model)`, `makeDigest(items, model)`, `earlierBlock`. Pure; the model is a function. Keep in step with the bridge. Used by `AiHelp` for the phone model. |
 | ChatLang.kt | `ChatLang.of(seen, detect)` = the language of the chat or message a reply goes to (null if too short or unknown). `needsTranslation(target)`. Used by Write for screen chats and for notification replies. |
 
 ## Elsewhere (use these, do not copy them)
@@ -41,7 +43,7 @@ Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rule
 | What to offer first in the hub | `Suggester` | Suggester.kt |
 | The place Write types into (app, field kind, screen text) | `Frame`, `BucketStore`, `BucketRanker` | Context.kt |
 | Next word (English) | `NextWord` | NextWord.kt |
-| Phone AI (replies, endings, tasks) | `LocalAi`, `ModelDownload` | LocalAi.kt, ModelDownload.kt |
+| Phone AI (replies, endings, tasks, raw `generate`) | `LocalAi`, `ModelDownload`; jobs go through `AiHelp` (computer first, phone fallback) | LocalAi.kt, ModelDownload.kt, AiHelp.kt |
 | Weather and navigation sentences | `Weather`, the nav parser | Info.kt |
 | Local choice log and gesture log | `ChoiceLog`, `EventLog` | ChoiceLog.kt, EventLog.kt |
 | Earbud clicks while the OS is closed -> next/previous/play-pause for the real player; which player; who pauses on wake | `MediaReplay` (used by `Actions.forwardToMusic / pauseMusicNow`) | MediaReplay.kt |

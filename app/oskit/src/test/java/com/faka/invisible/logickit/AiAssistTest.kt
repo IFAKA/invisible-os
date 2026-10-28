@@ -25,4 +25,29 @@ class AiAssistTest {
     @Test fun digestable_bounds() {
         assertFalse(AiAssist.digestable(0)); assertTrue(AiAssist.digestable(30)); assertFalse(AiAssist.digestable(31))
     }
+
+    private fun n(key: String, title: String, text: String, at: Long, hidden: Boolean = false, pkg: String = "wa") =
+        com.faka.invisible.oskit.Notif(key, pkg, "App", title, text, at, hidden = hidden)
+
+    @Test fun earlierMessagesOfTheSameChatOnly() {
+        val cur = n("c", "Ana", "can you pick it up?", 10)
+        val all = listOf(cur, n("a", "Ana", "the cake is ready", 5), n("b", "Ana", "it is for Leo", 7), n("x", "Bob", "other chat", 6),
+            n("y", "Ana", "other app", 6, pkg = "tg"), n("z", "Ana", "from the future", 20), n("h", "Ana", "", 8, hidden = true))
+        assertEquals("Ana: the cake is ready\nAna: it is for Leo", AiAssist.earlier(cur, all))
+    }
+
+    @Test fun earlierIsCutAndCapped() {
+        val cur = n("c", "Ana", "now", 100)
+        val all = (1..6).map { n("k$it", "Ana", "m$it " + "w".repeat(600), it.toLong()) }
+        val e = AiAssist.earlier(cur, all)
+        assertTrue(e.length <= 1000); assertTrue(e.contains("m6")); assertFalse(e.contains("m1 "))
+        assertEquals(3, AiAssist.earlier(cur, (1..6).map { n("k$it", "Ana", "m$it", it.toLong()) }).lines().size)
+    }
+
+    @Test fun aPrivateNotificationIsNeverContextNorMessage() {
+        val priv = n("p", "", "", 10, hidden = true)
+        assertEquals("", AiAssist.earlier(priv, listOf(priv, n("a", "", "secret text", 5))))
+        val cur = n("c", "Ana", "hi", 10)
+        assertFalse(AiAssist.earlier(cur, listOf(cur, n("h", "Ana", "SECRET", 5, hidden = true))).contains("SECRET"))
+    }
 }
