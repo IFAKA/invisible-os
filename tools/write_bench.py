@@ -18,6 +18,8 @@ Designs: today (the bug: fixed letter order, Space via menu), fixed (letters by 
   --miss, makes a stray click with chance --false per item and pass; the clicks go into a Python port of ClickModel.kt
   (tools/click_model.py); wrong picks are undone through the Undo item; one person per seed keeps learning through all the texts;
   s/char = mean over --seeds seeds with a 95% interval). --sweep prints the table for sd 40/60/100 and threshold ln 99 / ln 19.
+  --smooth E mixes letter bigrams into the letter chances (Kotlin LetterRank.SMOOTH); --focus [--focus-ms N --focus-cov C] plays a focus round after a click that does not choose
+  (Kotlin LetterLoop/LoopFocus), then back to the full loop after --focus-passes quiet passes; --false P = chance of one stray click per full-loop pass (same per second in a focus round).
   --verify-click compares the Python ClickModel with the Kotlin dump (cd app && ./gradlew :oskit:testDebugUnitTest --offline --tests '*ClickModelDumpTest*')."""
 import argparse, array, bisect, datetime, hashlib, heapq, io, json, math, multiprocessing as mp
 import operator, os, pickle, statistics, random, re, struct, sys, time, urllib.request, zipfile
@@ -218,10 +220,10 @@ TIE = {c: 1e-12 * (27 - (BYUSE.index(c) if c in BYUSE else 27)) for c in ALPHABE
 PHRASE_Q, CONTROL_P = 0.15, 0.02
 _items_cache = {}
 
-def loop_items(ctx, ckey, bg, written_n, prefix, can_undo, floor=1e-6):
+def loop_items(ctx, ckey, bg, written_n, prefix, can_undo, floor=1e-6, smooth=0.0):
     """The items of one round in spoken order with their chances: port of LoopItems.build + LetterRank.letters (no whole-text phrases).
     Returns [(key, prior, risky)]; keys: ('w', word) ('l', c) 'space' 'undo' 'send'."""
-    k = (ckey, prefix, can_undo, written_n > 0, floor)
+    k = (ckey, prefix, can_undo, written_n > 0, floor, smooth)
     if k in _items_cache: return _items_cache[k]
     fits = ctx.with_prefix(prefix)
     mass = sum(p for _, p in fits)
@@ -229,11 +231,12 @@ def loop_items(ctx, ckey, bg, written_n, prefix, can_undo, floor=1e-6):
     pm = dict(fits)
     p_words = [pm[w] / mass if mass > 0 else 0.0 for w in guesses]
     m = ctx.mass(prefix)
+    g = bg.get(prefix[-1] if prefix else "^", {}); gt = sum(g.get(c, 0.0) for c in ALPHABET) or 1.0
+    bchance = {c: g.get(c, 0.0) / gt for c in ALPHABET}
     if m:
         tot = sum(m.values()); chance = {c: m.get(c, 0.0) / tot for c in ALPHABET}
-    else:
-        g = bg.get(prefix[-1] if prefix else "^", {}); tot = sum(g.get(c, 0.0) for c in ALPHABET) or 1.0
-        chance = {c: g.get(c, 0.0) / tot for c in ALPHABET}
+        if smooth: chance = {c: (1 - smooth) * chance[c] + smooth * bchance[c] for c in ALPHABET}   # letter mass = (1-e) word model + e letter bigram
+    else: chance = bchance
     letters = sorted(ALPHABET, key=lambda c: -(chance[c] + TIE[c]))
     left = max(1.0 - sum(p_words), 0.2)
     has_text = written_n > 0 or bool(prefix)
@@ -276,7 +279,7 @@ def simulate_session(texts, ctxs, bg, prm, seed):
                 ckey = tuple(target[:good][-8:]); ipre = ""
                 if good == len(written) and good < len(target): ipre = _common(prefix, target[good])
                 if good == len(target): ckey = tuple(target[-8:][:-1]); ipre = ""
-            items = loop_items(ctxs[ckey], ckey, bg, len(written), ipre, bool(hist), prm["letter_floor"])
+            items = loop_items(ctxs[ckey], ckey, bg, len(written), ipre, bool(hist), prm["letter_floor"], prm["smooth"])
             if ok:
                 w = target[len(written)]
                 words = [it[0] for it in items if it[0][0] == "w"]
@@ -287,25 +290,56 @@ def simulate_session(texts, ctxs, bg, prm, seed):
             keys = [it[0] for it in items]; n = len(keys)
             if os.environ.get('BENCH_DEBUG'): print(t, written, repr(prefix), ok, want, len(hist), file=sys.stderr)
             period = math.ceil(n / 2) * item
-            onset = {k: (i // 2) * item + (i % 2) * item / 2 for i, k in enumerate(keys)}
+            def layout(ks, ms): return {k: (i // 2) * ms + (i % 2) * ms / 2 for i, k in enumerate(ks)}, math.ceil(len(ks) / 2) * ms
+            onset, _ = layout(keys, item)
+            risky = {k for k, _, r in items if r}
             m = cm.ClickModel(period, params)
             if prev is not None: m.inherit(prev)
             elif prm["seed_offsets"]: m.seed(prm["seed_offsets"])
-            m.start({k: max(p, 1e-9) for k, p, _ in items}, onset, 0.0, {k: m.params.win_diff_high for k, _, r in items if r})
-            chosen = None; at = 0.0; cyc = 0
+            m.start({k: max(p, 1e-9) for k, p, _ in items}, onset, 0.0, {k: m.params.win_diff_high for k in risky})
+            chosen = None; at = 0.0; focused = False; t0 = 0.0; per = period; cur = keys; full_scores = None; guard = 0
             while chosen is None:
-                if cyc > 60: chosen = "GIVEUP"; break
-                ev = []
-                for k in keys:
-                    base = onset[k] + cyc * period
-                    if k == want and rng.random() >= prm["miss"]: ev.append(max(0.0, base + rng.gauss(prm["click_mean"], prm["click_sd"])))
-                    if prm["false_per_item"] and rng.random() < prm["false"]: ev.append(base + rng.random() * item)
-                if not prm["false_per_item"] and rng.random() < prm["false"]: ev.append(rng.random() * period + cyc * period)   # one stray click in this pass of the loop
-                ev.sort()
-                for e in ev:
-                    at = e
-                    if m.click(e): chosen = m.chosen(); break
-                cyc += 1
+                guard += 1
+                if guard > 400: chosen = "GIVEUP"; break
+                nonfocus_stray = prm["false"] * per / period   # stray clicks per second are the same in a short focus pass
+                cyc = 0; moved = False
+                while not moved and chosen is None:
+                    ev = []
+                    for k in cur:
+                        base = t0 + onset[k] + cyc * per
+                        if k == want and rng.random() >= prm["miss"]: ev.append(max(0.0, base + rng.gauss(prm["click_mean"], prm["click_sd"])))
+                        if prm["false_per_item"] and rng.random() < prm["false"]: ev.append(base + rng.random() * item)
+                    if not prm["false_per_item"] and rng.random() < nonfocus_stray: ev.append(rng.random() * per + t0 + cyc * per)   # one stray click in this pass
+                    ev.sort()
+                    for e in (ev[:1] if prm["focus"] else ev):
+                        at = e
+                        if m.click(e): chosen = m.chosen(); break
+                        if prm["focus"]:   # a click that did not choose: the next round plays only what the clicks leave likely
+                            post = m.posteriors(); order = sorted(post, key=lambda k: -post[k]); fk = []; cum = 0.0
+                            for k in order:
+                                if k == "undo": continue
+                                if len(fk) >= prm["focus_max"] or (cum >= prm["focus_cov"] and len(fk) >= prm["focus_min"]): break
+                                fk.append(k); cum += post[k]
+                            if "undo" in post: fk.append("undo")
+                            sc = m.scores_map()
+                            if not focused: full_scores = dict(sc)
+                            else: full_scores.update(sc)
+                            fscores = {k: sc[k] for k in fk}
+                            fon, fper = layout(fk, prm["focus_ms"]); t0 = e + prm["focus_gap"]
+                            m2 = cm.ClickModel(fper, params); m2.inherit(m)
+                            m2.restart(fscores, fon, t0, {k: m.params.win_diff_high for k in fk if k in risky})
+                            m = m2; onset = fon; per = fper; cur = fk; focused = True; moved = True
+                            if prm["focus_trace"] and os.environ.get("BENCH_DEBUG3"): print("focus", want, fk, round(cum, 2), file=sys.stderr)
+                            break
+                    if chosen is not None or moved: continue
+                    cyc += 1
+                    if focused and cyc >= prm["focus_passes"]:   # nothing clicked for passes: back to the full loop, the evidence is kept
+                        sc = m.scores_map(); merged = dict(full_scores); merged.update(sc)
+                        t0 = t0 + cyc * per + prm["focus_gap"]; onset, _ = layout(keys, item)
+                        m2 = cm.ClickModel(period, params); m2.inherit(m)
+                        m2.restart({k: merged[k] for k in keys}, onset, t0, {k: m.params.win_diff_high for k in risky})
+                        m = m2; per = period; cur = keys; focused = False; moved = True; at = t0
+                    if t0 + cyc * per > 60 * period: chosen = "GIVEUP"
             if chosen == "GIVEUP": seconds += (lead + 60 * period) / 1000; continue
             seconds += (lead + at + say) / 1000; picks += 1
             if chosen == want: pass
@@ -357,6 +391,11 @@ def main():
     ap.add_argument("--false", type=float, default=0.02, help="chance of one stray click per pass of the loop")
     ap.add_argument("--false-per-item", action="store_true", help="--false is the chance per item and pass (about 0.6 stray clicks per loop at 0.02: nothing works); default: per pass of the whole loop")
     ap.add_argument("--letter-floor", type=float, default=1e-6, help="the least chance of a letter in LoopItems (Kotlin: 1e-6)")
+    ap.add_argument("--smooth", type=float, default=0.0, help="e: letter mass = (1-e) word model + e letter bigram (0 = off, the old 1e-6 floor)")
+    ap.add_argument("--focus", action="store_true", help="after a click that does not choose, play only the likely items (focus round)")
+    ap.add_argument("--focus-ms", type=float, default=500.0); ap.add_argument("--focus-cov", type=float, default=0.95)
+    ap.add_argument("--focus-max", type=int, default=6); ap.add_argument("--focus-min", type=int, default=2)
+    ap.add_argument("--focus-passes", type=int, default=2); ap.add_argument("--focus-gap", type=float, default=400.0, help="ms from the click to the first sound of the focus round")
     ap.add_argument("--threshold", type=float, default=99.0, help="the model picks when its lead is ln THRESHOLD (Kotlin: 99)")
     ap.add_argument("--seeds", type=int, default=10, help="simulated persons (same seeds for every setting)")
     ap.add_argument("--profile-seed", action="store_true", help="the model starts from the person's mean and spread (Click test seed)")
@@ -419,7 +458,7 @@ def main():
     # the loop: simulated persons
     configs = [(sd, thr) for thr in (99.0, 19.0) for sd in (40.0, 60.0, 100.0)] if a.sweep else [(a.click_sd, a.threshold)]
     for sd, thr in configs:
-        lp = dict(prm, click_mean=a.click_mean, click_sd=sd, miss=a.miss, false=a.false, false_per_item=a.false_per_item, letter_floor=a.letter_floor, threshold=thr, profile_seed=a.profile_seed, seed_offsets=None)
+        lp = dict(prm, click_mean=a.click_mean, click_sd=sd, miss=a.miss, false=a.false, false_per_item=a.false_per_item, letter_floor=a.letter_floor, threshold=thr, profile_seed=a.profile_seed, seed_offsets=None, smooth=a.smooth, focus=a.focus, focus_ms=a.focus_ms, focus_cov=a.focus_cov, focus_max=a.focus_max, focus_min=a.focus_min, focus_passes=a.focus_passes, focus_gap=a.focus_gap, focus_trace=False)
         lkey = hashlib.sha256(json.dumps([srcs, lm.model_hash, lm.vhash, OWNER, sample, lp, a.seeds, "loop"]).encode()).hexdigest()[:16]
         if lkey in cache and not a.no_cache: lres = cache[lkey]; log("cached loop %s" % lkey)
         else:
