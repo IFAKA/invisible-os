@@ -28,6 +28,7 @@ Rules are checked two ways:
 | engines/TonePlayer.kt | engine | The only short-sound player: earcons, program sounds, stereo pair, find-phone loop. |
 | engines/MediaKeyIntake.kt | engine | The only media session: takes the earbud button, wins it back, keeps it alive. |
 | engines/GameAudio.kt | engine | A game's low-latency stereo stream (used by all game programs) and latency estimate. |
+| engines/GameSounds.kt | engine | The sound desk of the simple games (Memory, Quiz, Reaction): `warm` builds sounds off the main thread, `open`, `play(sound, pan, gain, delayMs)`, `close`. |
 | organisms/Narrator.kt | organism | Say, beep, play (a program's own sound), stereo word pair, `waiting()` (the heartbeat for slow work). What screens call to be heard. |
 | organisms/ButtonInput.kt | organism | The one button: dedupe, raw button for programs, tap tone, gestures. |
 | organisms/Scanner.kt | organism | The spoken list: pauses, ticks, loops then leave, fast scroll. `load(items, title)`: a list with a title reads it again each time it starts over after its last item (a click while the title is read picks nothing; `ScanOut.sayTitle`). Used by the menu and the Write menu. |

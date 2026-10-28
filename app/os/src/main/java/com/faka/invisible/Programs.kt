@@ -2,6 +2,9 @@ package com.faka.invisible
 
 import com.faka.invisible.echo.EchoProgram
 import com.faka.invisible.compass.CompassProgram
+import com.faka.invisible.memory.MemoryProgram
+import com.faka.invisible.quiz.QuizProgram
+import com.faka.invisible.reaction.ReactionProgram
 import com.faka.invisible.clicktest.ClickTestProgram
 import com.faka.invisible.reader.ReaderEntry
 import com.faka.invisible.whereami.WhereAmIEntry
@@ -35,6 +38,9 @@ object Programs {
         DuelProgram.play,
         EchoProgram.entry,
         GuardProgram.entry,
+        MemoryProgram.entry,
+        QuizProgram.entry,
+        ReactionProgram.entry,
         DuelProgram.howTo,
         CompassProgram.entry,
         ClickTestProgram.entry,
