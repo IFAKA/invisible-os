@@ -89,8 +89,12 @@ class TypeProgram(
     private var menu = false
     private var recap = false   // the next pair is a new word: first say the sentence so far
     /** The small menu, read one item at a time by the kit's Scanner: one pause per item, no OS ceremony. */
-    private val menuScan: Scanner<Phrase> = Scanner(timers, { if (it == TypeVoice.MENU_DONE && text().isNotEmpty()) Phrase.content("Done. ${text()}") else it }, object : ScanOut {   // Done also shows and reads what will be sent
-        override fun say(index: Int, label: Phrase, spearcon: Boolean) { out.say(label); menuScan.itemDone() }
+    private val menuScan: Scanner<Phrase> = Scanner(timers, { it }, object : ScanOut {
+        override fun say(index: Int, label: Phrase, spearcon: Boolean) {
+            val t = willSend()
+            out.say(if (label == TypeVoice.MENU_DONE && t.isNotEmpty()) Phrase.content("Done. $t") else label)   // Done is spoken with what will be sent; the screen keeps "Done"
+            menuScan.itemDone()
+        }
         override fun sayFast(word: Phrase) {}
         override fun tone(t: Tone) {}
         override fun leave() { closeMenu() }
@@ -117,6 +121,9 @@ class TypeProgram(
     }
 
     fun stop() { if (active) { active = false; waiting = false; pending = null; menu = false; menuScan.stop(); timers.clear("t:gap"); timers.clear("t:hold"); timers.clear("t:replay") } }
+
+    /** What Done sends: the written words plus the letters spelled so far. */
+    private fun willSend(): String = if (frame.digits) text() else (written + listOfNotNull(prefix.ifEmpty { null })).joinToString(" ").replaceFirstChar { it.uppercase() }
 
     fun text(): String = if (frame.digits) written.joinToString("") { if (it == POINT) "." else it } else written.joinToString(" ").replaceFirstChar { it.uppercase() }
 
