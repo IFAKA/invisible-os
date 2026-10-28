@@ -347,6 +347,29 @@ class Rooms:
         self._msg_cache[path] = (st.st_mtime, st.st_size, text)
         return text
 
+    def last_message_in_folder(self, path):
+        """Last assistant text of the newest transcript of a project folder (~/.claude/projects/<path with / and . as ->).
+        Used when a pane has no session slot yet, or its own transcript is still empty (a window started with `claude --continue`)."""
+        if not path:
+            return None
+        d = os.path.join(self.claude_dir, "projects", re.sub(r"[^A-Za-z0-9]", "-", path.rstrip("/") or "/"))
+        try:
+            files = [os.path.join(d, n) for n in os.listdir(d) if n.endswith(".jsonl")]
+            files.sort(key=lambda p: os.stat(p).st_mtime, reverse=True)
+        except OSError:
+            return None
+        for p in files[:3]:
+            st = os.stat(p)
+            c = self._msg_cache.get(p)
+            if c and c[0] == st.st_mtime and c[1] == st.st_size:
+                text = c[2]
+            else:
+                text = read_last_assistant_text(p)
+                self._msg_cache[p] = (st.st_mtime, st.st_size, text)
+            if text:
+                return text
+        return None
+
     @staticmethod
     def is_claude(cmd):
         return bool(re.match(r"^\d+(\.\d+)+$", cmd)) or cmd.lower() == "claude"
@@ -452,7 +475,7 @@ class Rooms:
 
     def _claude_state(self, room, row, asks):
         st = self.agent_status(row["window"])
-        msg = self.last_message(self.session_id(row))
+        msg = self.last_message(self.session_id(row)) or self.last_message_in_folder(row["path"])
         room["_src"] = strip_markdown(msg) if msg else ""
         found, need, options = need_line(msg) if msg else (False, "", [])
         if not found and msg:
@@ -659,21 +682,37 @@ class Rooms:
         if self.clock() - self._proj_cache[0] < 60:
             return self._proj_cache[1]
         counts = collections.Counter()
+        last = {}   # project -> newest history timestamp (ms)
         try:
             with open(self.history, errors="ignore") as f:
                 for line in f:
                     if '"project"' not in line:
                         continue
                     try:
-                        p = json.loads(line).get("project")
-                    except ValueError:
+                        o = json.loads(line)
+                        p = o.get("project")
+                    except (ValueError, AttributeError):
                         continue
                     if isinstance(p, str) and p:
                         counts[p] += 1
+                        ts = o.get("timestamp")
+                        if isinstance(ts, (int, float)) and ts > last.get(p, 0):
+                            last[p] = ts
         except OSError:
             pass
-        out = [{"name": os.path.basename(p.rstrip("/")) or p, "path": p, "uses": n}
-               for p, n in counts.most_common() if os.path.isdir(p)][:20]
+
+        def modified(p):
+            """Last modified (epoch s): newest of the last Claude use, .git/index and the folder itself."""
+            best = last.get(p, 0) / 1000.0
+            for q in (os.path.join(p, ".git", "index"), p):
+                try:
+                    best = max(best, os.stat(q).st_mtime)
+                except OSError:
+                    pass
+            return best
+        rows = [(modified(p), p, n) for p, n in counts.items() if os.path.isdir(p)]
+        rows.sort(key=lambda r: r[0], reverse=True)
+        out = [{"name": os.path.basename(p.rstrip("/")) or p, "path": p, "uses": n} for _, p, n in rows[:20]]
         self._proj_cache = (self.clock(), out)
         return out
 

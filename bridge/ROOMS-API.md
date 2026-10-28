@@ -39,7 +39,7 @@ The hook then allows, denies or allows-and-remembers as before (hooks are not ch
 ## GET /room/screen?id=%3 -> {"text": "..."}   last 60 lines of the pane, ANSI stripped (for the screen view)
 ## POST /room/act {"id":"%3","action":"go"}             -> {"ok":true,"said":"go"}   runs one action id
 ## POST /room/send {"id":"%3","text":"free text"}       -> {"ok":true}            types text + Enter (from Write)
-## GET /projects -> {"projects":[{"name":"console-core","path":"...","uses":2355}, ...]}  top 20, folders that exist
+## GET /projects -> {"projects":[{"name":"console-core","path":"...","uses":2355}, ...]}  top 20 by last modified, newest first (max of the last Claude history timestamp, mtime of .git/index, folder mtime), folders that exist; "uses" is only the history count
 ## POST /project/open {"path":"...","mode":"continue"|"new"} -> {"ok":true,"id":"%9"}  new tmux window running claude
 ## GET /areas -> {"areas":[{"name":"hardware","path":"/Users/.../code/projects/hardware","uses":4000}, ...]}  parent folders of the known projects, ranked by summed uses, max 8
 ## POST /project/new {"area":"<a path from /areas>","name":"My game","ask":"optional first message"} -> {"ok":true,"pane":"%9","path":".../my-game"}

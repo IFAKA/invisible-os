@@ -1,6 +1,7 @@
 """Tests: python3 -m unittest -v   (from the bridge/ folder). Pure parts, then server + fake phone + hook.py end to end."""
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -531,6 +532,38 @@ class RoomsTmuxTest(unittest.TestCase):
         self.assertTrue(self.wait_screen(sh, "MADE-IT"))
         self.assertIsNone(r.act(sh, "make:nope"))
         self.assertIsNone(r.act(sh, "make:hi; rm x"))
+
+    def test_projects_sorted_by_last_modified(self):
+        hist = os.path.join(self.claude, "history.jsonl")
+        old, mid, git = (os.path.join(self.tmp, n) for n in ("p-old", "p-mid", "p-git"))
+        for p in (old, mid, git):
+            os.makedirs(p)
+            os.utime(p, (1000, 1000))
+        os.makedirs(os.path.join(git, ".git"))
+        idx = os.path.join(git, ".git", "index")
+        open(idx, "w").close()
+        os.utime(idx, (5000, 5000))
+        os.utime(git, (1000, 1000))
+        with open(hist, "w") as f:
+            for _ in range(9):   # many uses but long ago
+                f.write(_json.dumps({"project": old, "timestamp": 2000 * 1000}) + "\n")
+            f.write(_json.dumps({"project": mid, "timestamp": 9000 * 1000}) + "\n")
+            f.write(_json.dumps({"project": git, "timestamp": 3000 * 1000}) + "\n")
+        r = self.make()
+        self.assertEqual([p["name"] for p in r.projects()], ["p-mid", "p-git", "p-old"])
+
+    def test_last_message_in_folder_uses_newest_transcript(self):
+        proj = os.path.join(self.tmp, "my.proj")
+        os.makedirs(proj)
+        d = os.path.join(self.claude, "projects", re.sub(r"[^A-Za-z0-9]", "-", proj))
+        os.makedirs(d)
+        for name, text, t in (("a.jsonl", "older chat", 1000), ("b.jsonl", "resumed chat", 2000)):
+            p = os.path.join(d, name)
+            with open(p, "w") as f:
+                f.write(_json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": text}]}}) + "\n")
+            os.utime(p, (t, t))
+        self.assertEqual(self.make().last_message_in_folder(proj), "resumed chat")
+        self.assertIsNone(self.make().last_message_in_folder(os.path.join(self.tmp, "none")))
 
     def test_open_project_and_projects(self):
         hist = os.path.join(self.claude, "history.jsonl")
