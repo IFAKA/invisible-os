@@ -12,6 +12,9 @@ object Storeroom {
     private val ALWAYS = setOf("com.android.camera", "com.android.deskclock", "com.google.android.deskclock", "com.google.android.dialer", "com.android.dialer",
         "com.google.android.contacts", "com.android.settings", "com.android.vending")
 
+    /** Places where you want one app (not Video or Chat: Netflix and YouTube, or two chats, are different things). */
+    val SLOTS = setOf("Watch and listen/Music", "Watch and listen/Photos", "Talk/Mail", "Plan/Notes", "Tools/Web")
+
     fun always(pkg: String) = pkg in ALWAYS || ".camera" in pkg
 
     fun opens(pkg: String, use: Map<String, AppUse>, picks: (String) -> Int): Int { val u = use[pkg]; return (u?.month ?: 0) + 2 * (u?.week ?: 0) + picks("app:$pkg") }
@@ -24,7 +27,15 @@ object Storeroom {
         val family = installed.map { it.pkg }.filter { it !in AppWeights.PLUMBING }.groupBy { core(it) ?: it }.filter { it.value.size > 1 }
         val out = HashMap<String, String>()
         for ((core, g) in family) { val job = g.firstNotNullOfOrNull { AppCategories.JOBS[it] } ?: "app:$core"; g.forEach { out[it] = job } }
-        for (a in installed) AppCategories.JOBS[a.pkg]?.let { out[a.pkg] = it }
+        // a slot: an app in a one-choice place (music, mail, ...) with no job yet takes the job of the table apps in that place
+        val placeJob = AppCategories.JOBS.entries.filter { AppCategories.categoryOf(it.key) in SLOTS }.groupBy({ AppCategories.categoryOf(it.key) }, { it.value }).mapValues { (_, v) -> v.groupingBy { it }.eachCount().maxBy { it.value }.key }
+        for (a in installed) {
+            val listed = AppCategories.JOBS[a.pkg]
+            if (listed != null) { out[a.pkg] = listed; continue }
+            if (a.pkg in AppWeights.PLUMBING || a.pkg in out) continue
+            val place = AppCategories.categoryOf(a.pkg, a.hint)
+            if (place in SLOTS) out[a.pkg] = placeJob[place] ?: "slot:$place"
+        }
         return out
     }
 

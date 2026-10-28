@@ -26,6 +26,15 @@ class StoreroomTest {
         val use = mapOf("com.a.android.tool.x" to AppUse(100, 0), "app.b.android.tool.x" to AppUse(3, 0))
         assertTrue("app.b.android.tool.x" in run(listOf(app("com.a.android.tool.x"), app("app.b.android.tool.x")), use))
     }
+    @Test fun unknownMusicAppTakesTheMusicSlot() {
+        // no table line, no copy: the name says music, so it competes with Spotify for the one music slot
+        val use = mapOf("com.spotify.music" to AppUse(100, 0), "org.new.musicplayer" to AppUse(3, 0))
+        assertTrue("org.new.musicplayer" in run(listOf(app("com.spotify.music"), app("org.new.musicplayer")), use))
+    }
+    @Test fun chatsAreNotASlot() {
+        val use = mapOf("com.whatsapp" to AppUse(100, 0), "org.telegram.messenger" to AppUse(3, 0))
+        assertTrue(run(listOf(app("com.whatsapp"), app("org.telegram.messenger")), use).isEmpty())
+    }
     @Test fun alwaysKept() = assertTrue(run(listOf(app("com.android.camera"), app("com.x.camera2"), app("com.android.settings"), app(busy.first)), mapOf(busy)).isEmpty())
     @Test fun newInstallKept() {
         val r = run(listOf(app("com.new", now - 3 * 86_400_000L), app("com.old", now - 30 * 86_400_000L), app(busy.first)), mapOf(busy))
