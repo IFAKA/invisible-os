@@ -28,7 +28,7 @@ Picture: a waiter. He guesses your order from where you sit, you say yes or give
   - Letters Ticker style (no codes to learn): the letters are spoken fast in a loop, most likely first, in fixed voices and ears; click when you hear yours. A click is evidence, not a final pick, so a late click is forgiven. The letters are a hint: the prefix of the word, or the first letters of the words (the AI reads both). After each letter the guesses are made again.
   - Undo, end word and send are items of the same loop, not menu trips. Hold 3 s leaves.
   - Morse (click dot, hold dash) is a later option for speed, only if the owner wants to learn it (owner: does not know Morse, 2026-10-28).
-- **Home is a request too**: Morse letters at home give actions ("w" -> WhatsApp, "bi" -> play Billie Jean, "ana" -> reply to Ana). The menu tree stays for browsing.
+- **Home is a request too**: letters at home give actions ("w" -> WhatsApp, "bi" -> play Billie Jean, "ana" -> reply to Ana). The menu tree stays for browsing.
 
 ## Expected speed (to be proven)
 - Ticker-style letters: about one click per letter, a letter every 1-2 s. With guesses about 2x more (SpeakFaster). Today: 0.02-0.12 characters/s.
