@@ -6,6 +6,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ClickModelTest {
+    /** The constants of the Nomon reference (the app's own defaults differ: later first click, wider wrap). */
+    private val NOMON = ClickModel.Params(mu0 = 0.05, sigma0 = 0.14, learnWrapS = 1.0)
     private val keys = listOf("A", "B", "C", "D", "E")
     private val noon = mapOf("A" to 0.0, "B" to 600.0, "C" to 1200.0, "D" to 1800.0, "E" to 2400.0)
     private val prior = mapOf("A" to 0.4, "B" to 0.25, "C" to 0.15, "D" to 0.1, "E" to 0.1)
@@ -36,7 +38,7 @@ class ClickModelTest {
     )
 
     @Test fun matchesNomonReference() {
-        val m = ClickModel<String>(3000.0)
+        val m = ClickModel<String>(3000.0, NOMON)
         var k = 0
         for (r in rounds) {
             m.start(prior, noon)
@@ -52,7 +54,7 @@ class ClickModelTest {
         assertEquals(expected.size, k)
     }
 
-    private fun fresh() = ClickModel<String>(3000.0).also { it.start(prior, noon) }
+    private fun fresh() = ClickModel<String>(3000.0, NOMON).also { it.start(prior, noon) }
 
     @Test fun clickAfterItemMakesItLikely() {
         val m = fresh()
@@ -68,7 +70,7 @@ class ClickModelTest {
     }
 
     @Test fun wrongSingleClickIsRecovered() {
-        val m = ClickModel<String>(3000.0)
+        val m = ClickModel<String>(3000.0, NOMON)
         m.start(prior, noon)
         assertTrue(m.click(1400.0))             // person meant D, got C
         m.learn(m.chosen()!!)
@@ -86,18 +88,18 @@ class ClickModelTest {
     }
 
     @Test fun startAloneNeverChooses() {
-        val m = ClickModel<String>(3000.0)
+        val m = ClickModel<String>(3000.0, NOMON)
         m.start(mapOf("A" to 0.99, "B" to 0.01), mapOf("A" to 0.0, "B" to 1500.0))
         assertNull(m.chosen())   // the handicap keeps a strong prior from winning alone
     }
 
     /** A new model per round (the items and the cycle change) that inherits the last one learns exactly like one model. */
     @Test fun inheritedModelsLearnLikeOneModel() {
-        val one = ClickModel<String>(3000.0)
+        val one = ClickModel<String>(3000.0, NOMON)
         var prev: ClickModel<String>? = null
         for (r in rounds) {
             one.start(prior, noon)
-            val m = ClickModel<String>(3000.0).also { n -> prev?.let { n.inherit(it) }; n.start(prior, noon) }
+            val m = ClickModel<String>(3000.0, NOMON).also { n -> prev?.let { n.inherit(it) }; n.start(prior, noon) }
             for (c in r) {
                 val w1 = one.click(c.toDouble()); val w2 = m.click(c.toDouble())
                 assertEquals(w1, w2)
@@ -110,7 +112,7 @@ class ClickModelTest {
     }
 
     @Test fun seededOffsetsMoveTheDensity() {
-        val a = ClickModel<String>(3000.0); val b = ClickModel<String>(3000.0)
+        val a = ClickModel<String>(3000.0, NOMON); val b = ClickModel<String>(3000.0, NOMON)
         b.seed(List(30) { 0.30 })   // this person clicks 300 ms late
         a.start(prior, noon); b.start(prior, noon)
         a.click(1500.0); b.click(1500.0)   // 300 ms after C
@@ -118,11 +120,11 @@ class ClickModelTest {
     }
 
     @Test fun restartKeepsTheScoresAndTakesNewTimes() {
-        val a = ClickModel<String>(3000.0); a.start(prior, noon)
+        val a = ClickModel<String>(3000.0, NOMON); a.start(prior, noon)
         a.click(1300.0)   // 100 ms after C
         val before = a.posteriors()
         // a focus round: C, D and B only, another cycle length and other onset times; the evidence stays (no start handicap)
-        val b = ClickModel<String>(1500.0); b.inherit(a)
+        val b = ClickModel<String>(1500.0, NOMON); b.inherit(a)
         val sc = a.scoresMap().filterKeys { it in listOf("C", "D", "B") }
         b.restart(sc, mapOf("C" to 0.0, "D" to 500.0, "B" to 1000.0), 5000.0)
         val rel = { m: Map<String, Double> -> m.getValue("C") / m.getValue("D") }

@@ -5,25 +5,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LoopLevelTest {
-    @Test fun startsAtOneEarNormalSpeechSixHundred() {
+    @Test fun startsAtOneEarNormalSpeechEightHundred() {
         val l = LoopLevel()
-        assertEquals(600, l.pace.itemMs); assertEquals(1.0, l.pace.speed, 0.0); assertEquals(1, l.pace.ears)
-        assertEquals("level=0 item=600 speed=1.0 ears=1", l.describe())
+        assertEquals(800, l.pace.itemMs); assertEquals(1.0, l.pace.speed, 0.0); assertEquals(1, l.pace.ears)
+        assertEquals("level=0 item=800 speed=1.0 ears=1", l.describe())
     }
 
     @Test fun fiveCleanPicksRaiseOneLevel() {
         val saved = ArrayList<Int>(); val l = LoopLevel(save = { saved.add(it) })
         repeat(4) { assertFalse(l.chose(false)) }
-        assertTrue(l.chose(false)); assertEquals(1, l.level); assertEquals(500, l.pace.itemMs); assertEquals(listOf(1), saved)
+        assertTrue(l.chose(false)); assertEquals(1, l.level); assertEquals(600, l.pace.itemMs); assertEquals(listOf(1), saved)
     }
 
     @Test fun theStepsGoSlowerItemsThenFasterSpeechThenTwoEars() {
         val l = LoopLevel()
         val seen = ArrayList<String>(); seen.add(l.describe())
-        repeat(7 * 5) { if (l.chose(false)) seen.add(l.describe()) }
+        repeat(8 * 5) { if (l.chose(false)) seen.add(l.describe()) }
         assertEquals(listOf(
-            "level=0 item=600 speed=1.0 ears=1", "level=1 item=500 speed=1.0 ears=1", "level=2 item=420 speed=1.0 ears=1", "level=3 item=350 speed=1.0 ears=1",
-            "level=4 item=350 speed=1.25 ears=1", "level=5 item=350 speed=1.5 ears=1", "level=6 item=350 speed=1.75 ears=1", "level=7 item=350 speed=1.75 ears=2"), seen)
+            "level=0 item=800 speed=1.0 ears=1", "level=1 item=600 speed=1.0 ears=1", "level=2 item=500 speed=1.0 ears=1", "level=3 item=420 speed=1.0 ears=1", "level=4 item=350 speed=1.0 ears=1",
+            "level=5 item=350 speed=1.25 ears=1", "level=6 item=350 speed=1.5 ears=1", "level=7 item=350 speed=1.75 ears=1", "level=8 item=350 speed=1.75 ears=2"), seen)
         repeat(20) { l.chose(false) }
         assertEquals("the top stays", LoopLevel.TOP, l.level)
     }

@@ -44,7 +44,7 @@ object LoopItems {
         val guesses = candidates.filter { c -> slot.any { it.word == c.first } }
         val shownPhrases = slot.filter { it.word == null }.map { it.phrase }.sorted()
         val pWords = guesses.map { if (mass > 0) Math.exp(it.second) / mass else 0.0 }
-        val letters = LetterRank.letters(all, prefix, grams)
+        val letters = LetterRank.letters(all, prefix, grams).sortedBy { LetterRank.ALPHABET.indexOf(it.first) }   // fixed A to Z: a letter is always in the same place
         val left = (1.0 - pWords.sum()).coerceAtLeast(0.2)
         val phraseP = shownPhrases.sumOf { phraseOf(it) }
         val hasText = written.isNotEmpty() || prefix.isNotEmpty()

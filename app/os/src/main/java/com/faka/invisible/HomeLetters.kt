@@ -109,7 +109,7 @@ class HomeLetters(
         val actionP = top.map { it.chance * ACTION_MASS }
         top.forEachIndexed { i, r -> out.add(LoopItem("a:" + r.action.key, r.action.label, actionP[i].coerceAtLeast(1e-6), guess = true)) }
         val left = (1.0 - actionP.sum() - (if (canUndo) UNDO_P else 0.0)).coerceAtLeast(0.2)
-        val order = ('a'..'z').sortedWith(compareByDescending<Char> { next[it] ?: 0.0 }.thenBy { it })
+        val order = 'a'..'z'   // fixed A to Z: a letter is always in the same place
         for (c in order) out.add(LoopItem("l:$c", Phrase.content(c.toString()), (next[c] ?: 0.0) * 0.9 * left + 0.1 * left / 26 + 1e-6))
         if (canUndo) out.add(LoopItem(UNDO, Menu.UNDO, UNDO_P, undo = true, risky = true))
         return out

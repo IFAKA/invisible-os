@@ -5,7 +5,7 @@ import com.faka.invisible.voicekit.*
 import org.junit.Assert.*
 import org.junit.Test
 
-/** A person with no saved level: one channel in both ears, normal speech, 600 ms an item; five clean picks raise it and it is saved. */
+/** A person with no saved level: one channel in both ears, normal speech, 800 ms an item; five clean picks raise it and it is saved. */
 class LoopBeginnerTest {
     private val audio = FakeLoopAudio(latencyMs = 60.0)
     private var level = 0
@@ -29,8 +29,9 @@ class LoopBeginnerTest {
     private fun pick(text: String, done: () -> Boolean) {
         running(); var n = 0
         while (!done() && n++ < 14) {
+            var wait = 0; while (audio.played.count { it.text == text } < 2 && wait++ < 400) audio.advance(250)   // letters sit in fixed A to Z places: wait until this one has come round twice
             val first = audio.heardAt(text, 0); val cyc = audio.heardAt(text, 1) - first
-            var at = first + 50; while (at < audio.now) at += cyc
+            var at = first + 300; while (at < audio.now) at += cyc
             click(at.toLong())
         }
         assertTrue("never picked $text", done())
@@ -42,7 +43,7 @@ class LoopBeginnerTest {
         assertTrue("all in the middle", audio.played.all { it.pan == 0.0 })
         val letters = ('a'..'z').filter { audio.played.any { p -> p.text == it.toString() } }.map { at(it.toString()) }.sorted()
         assertTrue(letters.size > 10)
-        letters.zipWithNext().forEach { (x, y) -> assertEquals(0.0, (y - x) % 600.0, 0.5); assertTrue(y - x >= 599.0) }   // one letter after the other, 600 ms slots
+        letters.zipWithNext().forEach { (x, y) -> assertEquals(0.0, (y - x) % 800.0, 0.5); assertTrue(y - x >= 799.0) }   // one letter after the other, 800 ms slots
         assertEquals(1.0, audio.speeds.getValue("a"), 0.0); assertEquals(1.0, audio.speeds.getValue("android"), 0.0)
         assertTrue("guesses come before the letters", at("android") < at("a") && at("hello") < at("a"))
     }

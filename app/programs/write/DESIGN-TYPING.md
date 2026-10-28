@@ -71,3 +71,9 @@ Picture: a waiter. He guesses your order from where you sit, you say yes or give
 - Prompt: few-shot with "Words done / Letters" (`AiGuard.completePrompt`, `build_complete_prompt`, same text). Eval: `tools/complete_eval.py --model M --prompt both` over `bridge/tests/complete_cases.tsv` (21 cases, real Ollama, cached by prompt hash). gemma3:4b new prompt: hit@1 57%, hit@5 62%, about 1350 ms; gemma3:1b: 29%, 29%, about 735 ms (mostly junk). Default stays gemma3:4b.
 - Source "initials" (`InitialsSource`, `NextWord.initials`): beam search (width 8) with the word model, no AI, 2 letters or more. "hay" gives "how are you" first; 4 letters take about 13 ms on the laptop; capped at 400 ms on the phone. "omw" gives "or maybe we" first ("on my way" is rank 27): short forms like that come from history or the AI.
 - AI timeout = time to the next loop cycle plus one cycle, 1 to 3 s (`LoopProgram.aiBudgetMs`).
+
+## Fixed letter order, slower start (loop-fixed-order)
+- Letters in the loop (Write and home) always play A to Z, never by chance, so a letter is always in the same place. The focus round still chooses its items by chance but plays them in list order. Chances still drive the click model.
+- Level 0 is 800 ms an item (was 600); there are 9 levels. ClickModel defaults: mu0 0.3 s, sigma0 0.15 s, learnWrapS 1.6 s (tools/click_model.py matches). Tests of the Nomon reference keep the old constants on purpose.
+- The home letters hint is said 3 times (`home_letters_hint_count`), not once.
+- Not re-run: tools/write_bench.py with the new order and constants.

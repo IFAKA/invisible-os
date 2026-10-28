@@ -31,7 +31,7 @@ class LoopProgramTest {
         override fun translate(text: String, then: (Translation) -> Unit) { then(translation) }
     }, audio, audio, Frame(), object : LoopStore {
         override fun load() = emptyList<Double>()
-        override fun level() = 7; override fun save(offsets: List<Double>) { saved = offsets }
+        override fun level() = com.faka.invisible.logickit.LoopLevel.TOP; override fun save(offsets: List<Double>) { saved = offsets }
     }) { ended++ }
 
     /** Let the intro or the short word finish until the loop plays. */
@@ -44,8 +44,9 @@ class LoopProgramTest {
         running()
         var n = 0
         while (!done() && n < 14) {
+            var wait = 0; while (audio.played.count { it.text == text } < 2 && wait++ < 400) audio.advance(250)   // letters sit in fixed A to Z places: wait until this one has come round twice
             val first = audio.heardAt(text, 0); val cyc = audio.heardAt(text, 1) - first
-            var at = first + 50
+            var at = first + 300
             while (at < audio.now) at += cyc
             press(at.toLong()); n++
         }
@@ -156,7 +157,7 @@ class LoopProgramTest {
             override fun say(text: Phrase) { said.add(text.text) }
             override fun cue(c: TypeCue) {}
             override fun finished(text: String) {}
-        }, audio, audio, Frame(kind = FieldKind.PASSWORD), object : LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }) { ended++ }
+        }, audio, audio, Frame(kind = FieldKind.PASSWORD), object : LoopStore { override fun load() = emptyList<Double>(); override fun level() = com.faka.invisible.logickit.LoopLevel.TOP; override fun save(offsets: List<Double>) {} }) { ended++ }
         pw.start()
         assertTrue(said.contains(TypeVoice.PASSWORD.text)); assertEquals(1, ended); assertFalse(pw.active)
     }

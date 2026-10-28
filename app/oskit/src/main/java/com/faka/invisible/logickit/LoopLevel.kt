@@ -4,8 +4,8 @@ import com.faka.invisible.voicekit.LoopPace
 
 /**
  * The beginner pace of the letter loop, one level per person, shared by Write and the home letters (Ticker users were trained over sessions;
- * Nomon lets the speed rise as the user gets good). Level 0 = one channel (both ears the same), normal speech, 600 ms an item; it rises in steps
- * 600 -> 500 -> 420 -> 350 ms, then speech 1.25x -> 1.5x -> 1.75x, then two ears (the top level, the old fixed pace).
+ * Nomon lets the speed rise as the user gets good). Level 0 = one channel (both ears the same), normal speech, 800 ms an item; it rises in steps
+ * 800 -> 600 -> 500 -> 420 -> 350 ms, then speech 1.25x -> 1.5x -> 1.75x, then two ears (the top level, the old fixed pace).
  * [chose] is told every choice of the loop: [cleanToRise] clean picks in a row (a pick not followed at once by Undo) raise the level;
  * [undosToFall] Undos in a row lower it by one. [save] gets the new level (the caller keeps it in prefs). Pure.
  */
@@ -38,7 +38,7 @@ class LoopLevel(start: Int = 0, private val cleanToRise: Int = 5, private val un
 
     companion object {
         val PACES = listOf(
-            LoopPace(600, 1.0, 1), LoopPace(500, 1.0, 1), LoopPace(420, 1.0, 1), LoopPace(350, 1.0, 1),
+            LoopPace(800, 1.0, 1), LoopPace(600, 1.0, 1), LoopPace(500, 1.0, 1), LoopPace(420, 1.0, 1), LoopPace(350, 1.0, 1),
             LoopPace(350, 1.25, 1), LoopPace(350, 1.5, 1), LoopPace(350, 1.75, 1), LoopPace(350, 1.75, 2),
         )
         val TOP = PACES.size - 1

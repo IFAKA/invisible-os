@@ -62,7 +62,7 @@ object Voice {
     val DIAL_HINT get() = f("Hold: quieter, any press stops. Click: louder.")   // said while learning
     val HOLD_TO_FIND get() = f("Hold to find by name.")   // said once per wake after two groups were left without a pick
     val FIND_HINT get() = f("Find. Pick the first letter.")   // said the first time only
-    val HOME_LETTERS_HINT get() = f("Type it with letters. Click on what you hear.")   // said the first time only
+    val HOME_LETTERS_HINT get() = f("Type it with letters. They go A to Z. Click on yours.")   // said the first 3 times
     val GESTURE_HELP get() = f("Click when you hear the option. 2 clicks: back one. 3 clicks: go up; on home, leave. 4 clicks: leave. Click, then hold: exit.")
     fun timerSet(minutes: Int) = f("Timer $minutes minutes")
     val TIMER_DONE get() = f("Timer done")

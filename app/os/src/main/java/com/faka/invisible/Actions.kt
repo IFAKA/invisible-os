@@ -245,6 +245,7 @@ object Actions {
     private val songsPlayed by lazy { SongsPlayed(prefs().getString("songs_played", null)) { prefs().edit().putString("songs_played", it).apply() } }
     private val homeTrust by lazy { SourceTrust(prefs().getString("home_trust", null)) { prefs().edit().putString("home_trust", it).apply() } }
 
+    private val HINT_TIMES = 3   // the home letters hint is said this many times, then never
     private fun startHomeLetters(leaves: List<AppLeaf>): Boolean {
         val sound = LoopSound(narrator.words, handler, { narrator.swapEars() }).takeIf { it.open() } ?: return false
         songsPlayed.record(null, 0)
@@ -258,7 +259,7 @@ object Actions {
         val sources = listOf(AppsActions { leaves }, SongsActions({ songsPlayed.all() }), ChatsActions { ControllerNotificationListener.notifs.all() }, ContactsActions({ PhoneCalls.contacts(app) }))
         val ranker = ActionRanker(homeTrust::trust, homeTrust::scored, { prefs().getInt("home_pick_$it", 0) })
         val p = HomeLetters(sources, ranker, sound, HandlerTimers(handler), store,
-            { prefs().getBoolean("home_letters_hint_seen", false) }, { prefs().edit().putBoolean("home_letters_hint_seen", true).apply() },
+            { prefs().getInt("home_letters_hint_count", 0) >= HINT_TIMES }, { prefs().edit().putInt("home_letters_hint_count", prefs().getInt("home_letters_hint_count", 0) + 1).apply() },   // heard HINT_TIMES times (the old one-time flag is ignored)
             picked = { a -> prefs().edit().putInt("home_pick_${a.key}", prefs().getInt("home_pick_${a.key}", 0) + 1).apply() },
             closeAudio = { sound.close() })
         backAfterEnd = { mode.homeResult(p.result); true }   // no OS close sound: the menu goes on (or closes itself)

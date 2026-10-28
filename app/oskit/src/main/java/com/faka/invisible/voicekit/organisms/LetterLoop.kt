@@ -46,7 +46,9 @@ class LoopFocus(
             out.add(it); sum += chance[it.key] ?: 0.0
         }
         out.addAll(items.filter { it.undo })
-        return out
+        // chosen by chance, but played in the order of the list, so a letter is always where the person expects it
+        val order = items.withIndex().associate { (i, it) -> it.key to i }
+        return out.sortedBy { order[it.key] ?: Int.MAX_VALUE }
     }
 }
 

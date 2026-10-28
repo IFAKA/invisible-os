@@ -10,7 +10,7 @@ class LetterLoopTest {
     private var idle = 0
     private val audio = FakeLoopAudio(latencyMs = 90.0)
     private fun item(k: String, prior: Double = 0.1, undo: Boolean = false) = LoopItem(k, Phrase.content(k), prior, undo)
-    private fun loop(seed: List<Double> = emptyList(), focus: LoopFocus? = null, params: com.faka.invisible.logickit.ClickModel.Params = com.faka.invisible.logickit.ClickModel.Params()) = LetterLoop<String>(audio, audio, seed = seed, params = params, onChosen = { chosen.add(it) }, onIdle = { idle++ }, focus = focus, log = { e, f -> events.add(e + f.joinToString(" ", " ")) })
+    private fun loop(seed: List<Double> = emptyList(), focus: LoopFocus? = null, params: com.faka.invisible.logickit.ClickModel.Params = com.faka.invisible.logickit.ClickModel.Params(mu0 = 0.05, sigma0 = 0.14, learnWrapS = 1.0)) = LetterLoop<String>(audio, audio, seed = seed, params = params, onChosen = { chosen.add(it) }, onIdle = { idle++ }, focus = focus, log = { e, f -> events.add(e + f.joinToString(" ", " ")) })
     private val events = ArrayList<String>()
     private val six = listOf("a", "b", "c", "d", "e", "f")
 
@@ -219,7 +219,7 @@ class LetterLoopTest {
     }
 
     @Test fun theFocusRoundIsAtLeast150msSlowerThanTheItemsOfTheLoop() {
-        val l = LetterLoop<String>(audio, audio, pace = LoopPace(itemMs = 600, speed = 1.0, ears = 1), onChosen = { chosen.add(it) }, focus = LoopFocus(), log = { e, f -> events.add(e + f.joinToString(" ", " ")) })
+        val l = LetterLoop<String>(audio, audio, pace = LoopPace(itemMs = 600, speed = 1.0, ears = 1), params = com.faka.invisible.logickit.ClickModel.Params(mu0 = 0.05, sigma0 = 0.14, learnWrapS = 1.0), onChosen = { chosen.add(it) }, focus = LoopFocus(), log = { e, f -> events.add(e + f.joinToString(" ", " ")) })
         l.start(six.map { item(it, prior = 0.1) })
         audio.advance(100)
         l.click(audio.heardAt("d").toLong() + 300)   // a click that does not choose

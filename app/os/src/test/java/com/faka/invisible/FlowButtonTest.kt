@@ -88,16 +88,17 @@ class FlowButtonTest {
             override fun readBack(text: String) { reads.add(text); rig.said.add(text) }
             override fun finished(text: String) { sent = text }
         }
-        val p = LoopProgram(lm, out, audio, audio, Frame(), object : LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }) { host.ended() }
+        val p = LoopProgram(lm, out, audio, audio, Frame(), object : LoopStore { override fun load() = emptyList<Double>(); override fun level() = com.faka.invisible.logickit.LoopLevel.TOP; override fun save(offsets: List<Double>) {} }) { host.ended() }
         rig.rawOwner = p; p.start()
         var guard = 0
         fun clickOn(text: String, done: () -> Boolean) {
             while (audio.played.isEmpty() && guard++ < 2000) rig.advance(50)
             var n = 0
             while (!done() && n++ < 12) {
+                var wait = 0; while (audio.heard(text).size < 2 && wait++ < 2000) rig.advance(50)   // letters sit in fixed places: wait for a full round
                 val at = audio.heard(text)
                 val cyc = if (at.size > 1) at[1] - at[0] else 1000.0
-                var t = at.first() + 50; while (t < rig.now()) t += cyc
+                var t = at.first() + 300; while (t < rig.now()) t += cyc
                 while (rig.now() < t.toLong()) rig.advance(5)
                 rig.press("80"); rig.advance(60)
             }
@@ -120,7 +121,7 @@ class FlowButtonTest {
                 HomeAction(ActionKind.OPEN, "WhatsApp", "com.whatsapp", 30.0), HomeAction(ActionKind.OPEN, "Weather", "com.weather", 3.0),
                 HomeAction(ActionKind.OPEN, "Maps", "com.maps", 20.0), HomeAction(ActionKind.START, "Timer", "hub:timer", 5.0))
         }
-        val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }
+        val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun level() = com.faka.invisible.logickit.LoopLevel.TOP; override fun save(offsets: List<Double>) {} }
         var hint = true
         val p = HomeLetters(listOf(apps), ActionRanker(), audio, audio, store, { hint }, { hint = true })
         rig.running = p; p.start(host)
@@ -129,9 +130,10 @@ class FlowButtonTest {
             while ((audio.played.isEmpty() || audio.heard(text).isEmpty()) && guard++ < 2000) rig.advance(50)
             var n = 0
             while (!done() && n++ < 12) {
+                var wait = 0; while (audio.heard(text).size < 2 && wait++ < 2000) rig.advance(50)   // letters sit in fixed places: wait for a full round
                 val at = audio.heard(text)
                 val cyc = if (at.size > 1) at[1] - at[0] else 1000.0
-                var t = at.first() + 50; while (t < rig.now()) t += cyc
+                var t = at.first() + 300; while (t < rig.now()) t += cyc
                 while (rig.now() < t.toLong() && !done()) rig.advance(5)
                 if (done()) break
                 rig.press("80"); rig.advance(60)
@@ -150,7 +152,7 @@ class FlowButtonTest {
     @Test fun home_letters_hold_three_seconds_leaves_and_click_hold_is_only_clicking() {
         fun make(): Triple<RoboRig, RoboRig.Host, HomeLetters> {
             val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)
-            val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }
+            val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun level() = com.faka.invisible.logickit.LoopLevel.TOP; override fun save(offsets: List<Double>) {} }
             val p = HomeLetters(emptyList(), ActionRanker(), audio, audio, store, { true }, {})
             rig.running = p; p.start(host); return Triple(rig, host, p)
         }
@@ -168,7 +170,7 @@ class FlowButtonTest {
     @Test fun home_letters_one_click_then_the_assistant_signal_does_not_end_it() {
         val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)
         val apps = object : ActionSource { override val id = "apps"; override fun actions() = listOf(HomeAction(ActionKind.OPEN, "WhatsApp", "com.whatsapp", 30.0)) }
-        val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }
+        val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun level() = com.faka.invisible.logickit.LoopLevel.TOP; override fun save(offsets: List<Double>) {} }
         val p = HomeLetters(listOf(apps), ActionRanker(), audio, audio, store, { true }, {})
         rig.running = p; p.start(host)
         rig.advance(1500)
@@ -195,12 +197,12 @@ class FlowButtonTest {
             override fun finished(text: String) {}
         }
         var ended = 0
-        val p = LoopProgram(lm, out, audio, audio, Frame(), object : LoopStore { override fun load() = emptyList<Double>(); override fun level() = 7; override fun save(offsets: List<Double>) {} }) { ended++ }
+        val p = LoopProgram(lm, out, audio, audio, Frame(), object : LoopStore { override fun load() = emptyList<Double>(); override fun level() = com.faka.invisible.logickit.LoopLevel.TOP; override fun save(offsets: List<Double>) {} }) { ended++ }
         rig.rawOwner = p; p.start()
         rig.advance(6000)
-        rig.press("2"); rig.advance(614); rig.buttons.assistHold(); rig.advance(2000)
+        rig.press("2"); rig.advance(614); rig.buttons.assistHold(); rig.advance(2300)   // the second click must not land on the Send of the two-item focus round
         assertTrue(p.active); assertEquals(0, ended); assertEquals(0, rig.exits)
         rig.press("120,150,900"); rig.advance(Pacing.GAP_MS + 1000)
-        assertTrue("click then hold must not leave Write", p.active); assertEquals(0, rig.exits)
+        assertTrue("click then hold must not leave Write ended=$ended", p.active); assertEquals(0, rig.exits)
     }
 }

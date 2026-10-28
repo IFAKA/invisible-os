@@ -38,9 +38,9 @@ class ClickModel<K>(
         /** Bins of the click density (config.py:49 num_divs_click). */
         val bins: Int = 80,
         /** Prior mean of the click offset in s (config.py:77 mu0). */
-        val mu0: Double = 0.05,
+        val mu0: Double = 0.3,
         /** Prior spread in s (config.py:78 sigma0). */
-        val sigma0: Double = 0.14,
+        val sigma0: Double = 0.15,
         /** Old clicks fade by this factor per new click (clock_inference_engine.py:65 damp). */
         val damp: Double = 0.96,
         /** A win needs this score gap (config.py:63 win_diff_base = ln 99). */
@@ -52,7 +52,7 @@ class ClickModel<K>(
         /** A choice is learned this many choices later, so undo can cancel it (config.py:74 learn_delay). */
         val learnDelay: Int = 2,
         /** Learned offsets are wrapped into [-w/2, w/2) seconds (clock_inference_engine.py:247 "% 1 ... - 0.5": w = 1 s). */
-        val learnWrapS: Double = 1.0,
+        val learnWrapS: Double = 1.6,
         /** Floor for a prior of 0 (mine: ln 0 is minus infinity). */
         val minPrior: Double = 1e-9,
     )

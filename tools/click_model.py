@@ -4,8 +4,8 @@ Used by tools/write_bench.py to simulate a person clicking in the letter loop. S
 import math
 
 class Params:
-    def __init__(self, bins=80, mu0=0.05, sigma0=0.14, damp=0.96, win_diff=math.log(99), win_diff_high=math.log(999),
-                 max_init_diff=math.log(99) - math.log(4), learn_delay=2, learn_wrap_s=1.0, min_prior=1e-9):
+    def __init__(self, bins=80, mu0=0.3, sigma0=0.15, damp=0.96, win_diff=math.log(99), win_diff_high=math.log(999),
+                 max_init_diff=math.log(99) - math.log(4), learn_delay=2, learn_wrap_s=1.6, min_prior=1e-9):
         self.bins, self.mu0, self.sigma0, self.damp = bins, mu0, sigma0, damp
         self.win_diff, self.win_diff_high, self.max_init_diff = win_diff, win_diff_high, max_init_diff
         self.learn_delay, self.learn_wrap_s, self.min_prior = learn_delay, learn_wrap_s, min_prior
