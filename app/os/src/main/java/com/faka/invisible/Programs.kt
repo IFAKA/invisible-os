@@ -5,6 +5,9 @@ import com.faka.invisible.compass.CompassProgram
 import com.faka.invisible.memory.MemoryProgram
 import com.faka.invisible.quiz.QuizProgram
 import com.faka.invisible.reaction.ReactionProgram
+import com.faka.invisible.habits.HabitsEntry
+import com.faka.invisible.counter.CounterEntry
+import com.faka.invisible.breathe.BreatheEntry
 import com.faka.invisible.clicktest.ClickTestProgram
 import com.faka.invisible.reader.ReaderEntry
 import com.faka.invisible.whereami.WhereAmIEntry
@@ -43,6 +46,9 @@ object Programs {
         ReactionProgram.entry,
         DuelProgram.howTo,
         CompassProgram.entry,
+        HabitsEntry.entry,
+        CounterEntry.entry,
+        BreatheEntry.entry,
         ClickTestProgram.entry,
         ReaderEntry.entry,
         WhereAmIEntry.entry(where!!),

@@ -25,7 +25,7 @@ data class LauncherSettings(
     val spearcons: Boolean = false,   // a well-known option is scanned as its sped-up word (off: it sounded odd)
 ) {
     companion object {
-        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "games" to "Games", "alarm" to "Set alarm", "calculator" to "Calculator", "write" to "Write", "compass" to "Compass", "whereami" to "Where am I", "claude" to "Claude (answer Claude Code on the laptop)", "sum" to "Sum prices", "reset" to "Reset learning (forget what the order learned)", "clicktest" to "Click test (how late and even you click)", "reader" to "Reader (read a shared text aloud)")
+        val HUB_ITEMS = linkedMapOf("messages" to "Messages", "tasks" to "Tasks", "music" to "Music", "timer" to "Timer", "today" to "Today (weather, next event, next turn)", "phone" to "Phone (status, volume, torch, do not disturb, find my phone)", "games" to "Games", "alarm" to "Set alarm", "calculator" to "Calculator", "write" to "Write", "compass" to "Compass", "whereami" to "Where am I", "claude" to "Claude (answer Claude Code on the laptop)", "sum" to "Sum prices", "reset" to "Reset learning (forget what the order learned)", "clicktest" to "Click test (how late and even you click)", "reader" to "Reader (read a shared text aloud)", "habits" to "Habits", "counter" to "Counter", "breathe" to "Breathe (and sleep timer)")
         val DEFAULT_HUB = HUB_ITEMS.keys.toList()
 
         /** Every key a saved menu has ever used, in a fixed order. Only the old migration steps use it; [cleanHub] drops what is no longer an app. */

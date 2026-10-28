@@ -131,6 +131,9 @@ Go/Move             hub:compass
 Tools/Settings      hub:clicktest
 Tools/Reader        hub:reader
 Tools/Settings      hub:reset
+Tools/Daily         hub:habits
+Tools/Daily         hub:counter
+Tools/Daily         hub:breathe
 Go/Move             hub:whereami
 Go/Move             com.miui.compass
 Pay/Shop            com.amazon.mShop.android.shopping

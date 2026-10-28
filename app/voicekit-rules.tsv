@@ -28,3 +28,6 @@ allow	ReactionSentences.kt	phrase-make	Reaction's own fixed sentences (program-o
 allow	ClickTestSentences.kt	phrase-make	the Click test's own fixed sentences (program-owned)
 allow	WriteSentences.kt	phrase-make	Write and Sum's own fixed sentences (program-owned)
 allow	PracticeSentences.kt	phrase-make	the first-run practice sentences (program-owned)
+allow	HabitsSentences.kt	phrase-make	the Habits tool's own fixed sentences (program-owned)
+allow	CounterSentences.kt	phrase-make	the Counter tool's own fixed sentences (program-owned)
+allow	BreatheSentences.kt	phrase-make	the Breathe tool's own fixed sentences (program-owned)
