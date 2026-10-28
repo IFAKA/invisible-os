@@ -199,6 +199,12 @@ class AiHttpTest(unittest.TestCase):
             self.assertIn("Ana: hi", seen[0])
             fake_phone.call(url, token, "/rooms?ai=0"); fake_phone.call(url, token, "/rooms")
             self.assertEqual(seen[1:], ["rooms ai=False", "rooms ai=True"])
+            seen.clear()
+            FakeRooms.ai = aitext.AiText(lambda p: seen.append(p) or '{"completions": ["how are you", "hay fever", "what is that", "How are you"]}')
+            got = fake_phone.call(url, token, "/ai/complete", {"text": "hay", "lang": "en", "context": "Ana: hi"})
+            self.assertEqual(got, {"completions": ["how are you", "hay fever"]})   # "what is that" does not fit, the repeat is dropped
+            self.assertIn("hay", seen[0]); self.assertIn("Ana: hi", seen[0])
+            self.assertEqual(aitext.AiText(None).complete("hay"), {"completions": []})
         finally:
             srv.shutdown()
 

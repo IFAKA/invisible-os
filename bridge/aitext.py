@@ -222,6 +222,59 @@ def make_replies(text, lang, model, context=""):
     return {"replies": r, "tasks": t} if r or t else {}
 
 
+COMPLETE_WORDS = 12
+
+
+def completion_fits(text, typed):
+    """Pure. Does the completion `text` fit what was typed? The typed words are the start of the text's words (the last one may be cut), OR
+    the typed letters are the first letters of the text's words ("hay" -> "how are you"). Same rule as logickit/Completion.kt."""
+    tw = [w.lower() for w in str(typed or "").split()]
+    ow = [w.lower() for w in str(text or "").split()]
+    if not tw or not ow:
+        return False
+    if len(tw) <= len(ow) and all(a == b for a, b in zip(tw[:-1], ow)) and ow[len(tw) - 1].startswith(tw[-1]):
+        return True
+    letters = "".join(c for w in tw for c in w if c.isalpha())
+    initials = "".join(w[0] for w in ow if w[0].isalpha())
+    return len(letters) >= 2 and initials.startswith(letters)
+
+
+def build_complete_prompt(typed, lang, context=""):
+    language = "Spanish" if lang == "es" else "English"
+    return ("%sSomeone is typing a message on a phone with one button, so every letter is slow. So far they typed: \"%s\"\n"
+            "The typed letters are EITHER the start of the word they mean (\"hel\" = \"help\") OR the first letters of the next words (\"hay\" = \"how are you\"). "
+            "Write up to 5 whole texts they most likely mean, most likely first, in %s, as JSON: {\"completions\": [...]}. "
+            "Each text starts with the words already typed, is natural and short, at most %d words. "
+            "Use only facts, numbers and names that are in the earlier messages. Never invent.\nOutput only the JSON."
+            % (earlier_block(context), str(typed)[:200], language, COMPLETE_WORDS))
+
+
+def parse_completions(text):
+    """Pure. The list of strings of {"completions": [...]} in the model's reply; [] if it is not the JSON asked for."""
+    m = re.search(r"\{.*\}", str(text or ""), re.S)
+    if not m:
+        return []
+    try:
+        o = json.loads(m.group(0))
+    except ValueError:
+        return []
+    v = o.get("completions") if isinstance(o, dict) else None
+    return [re.sub(r"(\*\*|__|`|^#+\s*)", "", squash(x)) for x in v if isinstance(x, str)] if isinstance(v, list) else []
+
+
+def make_complete(typed, lang, model, context=""):
+    """Pure given `model`. Up to 5 completions that fit the typed text, are short and invent nothing; [] when there is no model, a failure or nothing usable."""
+    typed = squash(typed)
+    if model is None or not typed:
+        return []
+    try:
+        items = parse_completions(model(build_complete_prompt(typed, lang, context)))
+    except Exception:
+        return []
+    ctx = squash(context)[:CONTEXT_CHARS]
+    return [t for t in check_items(items, typed, ctx, COMPLETE_WORDS, n=5) if completion_fits(t, typed)]
+
+
 class AiText:
     """Digest and short answers, cached (by hash of the input). Runs the model in the calling thread (the server has one per request)."""
 
@@ -261,3 +314,8 @@ class AiText:
         text, context, lang = str(text or ""), squash(context)[:CONTEXT_CHARS], "es" if lang == "es" else "en"
         got = self._get(self._key("r", [text, lang, context]), lambda: make_replies(text, lang, self.model, context))
         return {"replies": list(got.get("replies", [])), "tasks": list(got.get("tasks", []))} if got else {"replies": [], "tasks": []}
+
+    def complete(self, typed, lang="en", context=""):
+        typed, context, lang = squash(typed)[:200], squash(context)[:CONTEXT_CHARS], "es" if lang == "es" else "en"
+        got = self._get(self._key("c", [typed, lang, context]), lambda: make_complete(typed, lang, self.model, context))
+        return {"completions": list(got or [])}

@@ -3,7 +3,7 @@
 
 Phone:  GET /events?since=N&wait=25   (long poll)      POST /answer {"id": "3", "choice": "Allow"}
 Tools:  GET /info /room/tools   POST /room/tool   (see ROOMS-API.md, tools.py)
-Rooms:  GET /rooms /room/last /room/screen /room/story /projects /areas   POST /room/act /room/send /room/choose /ai/digest /ai/short /ai/replies /project/open /project/new   (see ROOMS-API.md)
+Rooms:  GET /rooms /room/last /room/screen /room/story /projects /areas   POST /room/act /room/send /room/choose /ai/digest /ai/short /ai/replies /ai/complete /project/open /project/new   (see ROOMS-API.md)
 Hooks:  POST /ask {kind, project, summary, options, wait}  (blocks until answered)      POST /notify {kind, project, summary}
 All calls need the header  Authorization: Bearer <token>.
 """
@@ -234,6 +234,8 @@ def make_handler(store, token, rooms, tools=None):
                 self._send(200, {"short": rooms.ai.short(b.get("text"), b.get("context"), b.get("kind"))})
             elif path == "/ai/replies":
                 self._send(200, rooms.ai.replies(b.get("text"), b.get("lang"), b.get("context")))
+            elif path == "/ai/complete":
+                self._send(200, rooms.ai.complete(b.get("text"), b.get("lang"), b.get("context")))
             elif path == "/room/send":
                 ok = rooms.send(b.get("id"), b.get("text"))
                 self._send(200 if ok else 400, {"ok": ok})
