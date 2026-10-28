@@ -53,7 +53,7 @@ class InitialsBeamTest {
     @Test fun omwIsOnlyFoundWithAWideBeamBecauseTheModelPrefersOtherTexts() {
         // "on", "my", "way" are in the vocabulary, but at the start of a text the model gives "or maybe we" more chance than "on my way" (measured 2026-10-28:
         // top 5 with beam 8 or 30 is "or maybe we, okay maybe we, ..."). So no promise for "omw"; history and the AI source carry such short forms.
-        val r = lm.initials(emptyList(), "omw", beam = 60, n = 60).map { it.first }
+        val r = lm.initials(emptyList(), "omw", beam = 60, n = 60, budgetMs = 5000).map { it.first }
         println("BEAM omw rank of 'on my way' = ${r.indexOf("on my way")} of ${r.size}; top5 ${r.take(5)}")
         assertTrue(r.isNotEmpty() && r.all { it.split(" ").size == 3 && it.split(" ").map { w -> w[0] } == listOf('o', 'm', 'w') })
     }
