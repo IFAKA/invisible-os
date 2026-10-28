@@ -46,7 +46,9 @@ class MediaKeyIntake(
             setCallback(object : MediaSession.Callback() {
                 override fun onMediaButtonEvent(i: Intent): Boolean {
                     val e = i.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java) ?: return false
-                    if (!ButtonInput.isButton(e)) return false
+                    // Our session says PLAYING, so an earbud tap (Bluetooth AVRCP) arrives as PAUSE (or PLAY): it is the same button.
+                    val tap = e.keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE || e.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY
+                    if (!ButtonInput.isButton(e) && !tap) return false
                     Trace.ev("media", "key action=${e.action} code=${e.keyCode} repeat=${e.repeatCount}")
                     Log.d(tag, "KEY action=${e.action} repeat=${e.repeatCount} down=${e.downTime} t=${e.eventTime}")
                     port.key("media", e.action == KeyEvent.ACTION_DOWN, e.repeatCount, e.downTime, e.eventTime)
