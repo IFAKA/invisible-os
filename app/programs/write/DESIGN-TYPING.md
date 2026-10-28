@@ -34,10 +34,14 @@ Picture: a waiter. He guesses your order from where you sit, you say yes or give
 - Ticker-style letters: about one click per letter, a letter every 1-2 s. With guesses about 2x more (SpeakFaster). Today: 0.02-0.12 characters/s.
 - "Billie jean" in YT Music: "b i" + the app suggests "billie jean" + long hold: about 6 s (today 633 s).
 
-## Gaps and checks (in order)
-1. Letter order bug fix in today's Write. Check: `tools/write_sim.py` about 37% less; unit test that "andro" offers "i" first.
-2. Logs: Write writes its request (app, field kind, path) and the AI time for each guess to the trace. Check: lines in `tools/trace.py`.
-3. Click timing: how late is the owner's click after a letter in the earbud, and how much does it vary? A 5-minute test on the phone. Check: the spread is small enough for 1-2 s per letter.
-4. AI time: guesses in under 1 s from the computer. Check: the trace times from step 2.
-5. Offline proof with the real AI: steps per text for real texts, old vs new. Check: at least 3x fewer seconds.
-6. Build the engine (request, sources, ranker, spellers), then the Ticker speller, then home as a request. Check each with `write_stats.py` on real use.
+## Plan (each step: what, copied from, check). Measure on real use with `tools/write_stats.py` after each step.
+1. Fix the letter order (Typing.kt `candidates()`: chances per prefix, normalised). Check: unit test "andro" offers "i" first; `tools/write_sim.py` about 37% less.
+2. Logs: the trace gets the request (path, app, field kind), each AI answer time, and every click time in the letter loop. Check: lines in `tools/trace.py`.
+3. Benchmark: `tools/write_sim.py` grows into a replay of real texts (the owner's + the standard MacKenzie-Soukoreff phrase set) with the real AI; it counts clicks and seconds per character for old and new. Check: today's baseline number written here.
+4. Click model, copied from Nomon (GPL v3, github.com/tbroderick/Nomon, nbonaker/Nomon-Simulation): a pure Kotlin port in `logickit/` (click time vs the item's time, a learned spread, a Bayesian update, pick when the chance passes a threshold). Check: same posteriors as Nomon-Simulation on the same recorded clicks and seeds.
+5. Letter loop, layout from Ticker: a Voice Kit organism; letters at about 1.75x in 2 voices and 2 ears, most likely first, with Undo, Space and Send as items of the loop. Check: laptop Flow tests; phone e2e for the real sound.
+6. Click test, 5 minutes, as a game (a sound on each hit): measures how late and how even the owner's clicks are; the model starts from it and keeps learning in use. Check: spread measured; loop speed set from it.
+7. New Write: request + sources + one ranker. Mixing rule from Smart Compose (a share per source), shares learned from picks (Gboard). Guesses are words, whole texts or actions; no menu while typing. Check: Flow tests; benchmark at least 3x better than step 3's baseline.
+8. Sources: computer AI (replies; a new "complete" job that reads letters as a prefix or as first letters of words, SpeakFaster), phone model when there is no computer, the app's suggestions on screen, lists (contacts, songs played, apps, words spelled before). Private notifications never reach any AI. Check: AI answer under 1 s in the trace; benchmark better again.
+9. Home as a request: letters at home give actions (open an app, play a song, call, reply). The tree stays for browsing. Check: Flow tests; e2e on the phone.
+10. One week of real use, then tune the loop speed and threshold on the recorded clicks (fast-search: halving, same recorded data). Check: seconds per character at or under 2.
