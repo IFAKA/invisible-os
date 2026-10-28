@@ -99,6 +99,7 @@ class TypeProgram(
         override fun tone(t: Tone) {}
         override fun leave() { closeMenu() }
     }, ScanCadence(pauseMs = { MENU_GAP_MS }, loops = { MENU_LOOPS }, ceremony = false), scanKey = "t:menu")
+    private var bigrams: LetterBigrams? = null   // built once, the first time a spelled prefix matches no word
     private var phrases: List<String> = emptyList()   // ways to finish the text, from the big model, when ready
     private var phraseMode = false
     private var phraseGen = 0
@@ -135,9 +136,17 @@ class TypeProgram(
         return if (letters) {
             val mass = LinkedHashMap<Char, Double>()
             for ((w, lp) in all) if (w.length > prefix.length && w.startsWith(prefix) && LETTER_RE.matches(w)) mass.merge(w[prefix.length], Math.exp(lp), Double::plus)
-            if (mass.isEmpty()) return ALPHABET.toList().sorted().map { it.toString() }   // no word to guess from: A to Z, so where a letter is can be predicted
-            // the whole alphabet is ranked: the model's chance first, a small prior for common letters breaks ties and orders letters it has no word for
-            ALPHABET.toList().sortedByDescending { (mass[it] ?: 0.0) + 1e-6 * (ALPHABET.length - ALPHABET_BY_USE.indexOf(it).let { i -> if (i < 0) ALPHABET.length else i }) }.map { it.toString() }
+            if (mass.isEmpty() && all.isEmpty()) return ALPHABET.toList().sorted().map { it.toString() }   // no word list at all: A to Z, so where a letter is can be predicted
+            val prior = { c: Char -> 1e-12 * (ALPHABET.length - ALPHABET_BY_USE.indexOf(c).let { i -> if (i < 0) ALPHABET.length else i }) }   // common letters first: only breaks ties and orders letters with no weight
+            if (mass.isEmpty()) {   // no word starts so (a name): which letter follows the last one, from the word list
+                val grams = bigrams ?: LetterBigrams(all.map { it.first }).also { bigrams = it }
+                val prev = prefix.last()
+                val total = ALPHABET.sumOf { grams.weight(prev, it) }.let { if (it > 0) it else 1.0 }
+                return ALPHABET.toList().sortedByDescending { grams.weight(prev, it) / total + prior(it) }.map { it.toString() }
+            }
+            // the whole alphabet is ranked: the model's chance among the letters of this prefix first (masses are tiny, so they are made to sum to 1), the prior breaks ties
+            val total = mass.values.sum()
+            ALPHABET.toList().sortedByDescending { (mass[it] ?: 0.0) / total + prior(it) }.map { it.toString() }
         } else all.asSequence().filter { it.first !in recent }.filter { it.first.startsWith(prefix) && LETTER_RE.matches(it.first) && (prefix.isNotEmpty() || !lm.skipShortFirst || (it.first.length >= 3 && '\'' !in it.first)) }.take(WORD_PAGES * 2).map { it.first }.toList()
     }
 
