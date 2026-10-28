@@ -193,6 +193,7 @@ class ControllerMode(
     private val treePath = ArrayList<TreeNode>()   // the groups walked down from home; the last one is the list shown in TREE
     private var hubOpts: Map<String, Opt> = emptyMap()   // the built-in programs of the OS, as options (leaves of the tree)
     private var notifKey: String? = null     // the notification open in NOTIF_ACTIONS
+    private var notifHeard = false            // the notification was just heard as a list item: on opening, its text is not read again (only when the loop starts over)
     private var notifFromAll = false          // the app's notifications were reached from the Notifications list (back goes there), not from the tree
     private var taskIdx = 0   // first task of the page being read
     private val TASK_PAGE = 5
@@ -410,7 +411,8 @@ class ControllerMode(
         if (s == Screen.TASK_CONFIRM) taskAsked?.let { (_, line) -> intro += Intro(Voice.taskDoneAsk(line), null) }
         if (s == Screen.CALL_ASK) callAsked?.let { intro += Intro(Menu.callAsk(it.name), null) }
         if (s == Screen.RESET_ASK) intro += Intro(resetName?.let { Voice.resetAsk(it) } ?: Voice.RESET_ASK_ALL, null)
-        if (s == Screen.NOTIF_ACTIONS) openNotif()?.let { intro += Intro(notifIntro(it), null) }
+        if (s == Screen.NOTIF_ACTIONS && !notifHeard) openNotif()?.let { intro += Intro(notifIntro(it), null) }
+        notifHeard = false
         curIntro = null
         if (s == Screen.VOLUME_DIAL) {   // no list: the song plays on and the button is the dial
             phase = Phase.WAIT; waitNext = null; dialScreen()
@@ -954,7 +956,7 @@ class ControllerMode(
     /** The notifications of one app (it has 2 or more here; one goes straight to its actions): "Clear all from this app" last. */
     private fun notifListOptions(): List<Opt> =
         openItems().take(MAX_NOTIFS).map { n ->
-            Opt("notif:item", notifLine(n, MAX_SPOKEN, false)) { pick("notif:item"); notifKey = n.key; show(Screen.NOTIF_ACTIONS) }
+            Opt("notif:item", notifLine(n, MAX_SPOKEN, false)) { pick("notif:item"); notifKey = n.key; notifHeard = true; show(Screen.NOTIF_ACTIONS) }
         } + Opt("notif:clearapp", Menu.CLEAR_APP) { pick("notif:clearapp"); clearedAll(out.notifDismissAll(notifPkg)) { appUp() } }
 
     /** Says how many went, then goes back one level ([back]): the cleared ones are gone from that list. Ones the app keeps (cannot be swiped) stay in it. */

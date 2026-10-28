@@ -1327,10 +1327,9 @@ class ModeTest {
         assertEquals(ControllerMode.Screen.HUB, r.m.screen)
     }
 
-    @Test fun notificationReadInFullThenActionFires() {
+    @Test fun notificationPickedThenActionFires() {
         val r = mail(); r.wake(); r.pick("Mail")
         r.pick("Boss. Call me"); r.advance(1500)
-        assertTrue(r.spoken().contains("say Boss. Call me"))   // read in full, then the actions
         r.pick("Archive")
         assertTrue(r.has("nfire k1 0"))
     }
@@ -1418,6 +1417,12 @@ class ModeTest {
         val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Mail, 2 notifications"); r.pick("Clear all from this app"); r.advance(3000)
         assertTrue("log=${r.log} screen=${r.m.screen}", r.has("nclear com.mail")); assertEquals(ControllerMode.Screen.NOTIF_APPS, r.m.screen)
         assertFalse(r.spoken().takeLast(6).any { it == "say Mail, 2 notifications" })
+    }
+
+    @Test fun aNotificationPickedFromItsListIsNotReadAgainOnOpening() {
+        val r = mail(); r.wake(); r.pick("Notifications, 3"); r.pick("Mail, 2 notifications"); r.clearLog(); r.pick("Boss. Call me"); r.advance(1500)
+        assertEquals(ControllerMode.Screen.NOTIF_ACTIONS, r.m.screen)
+        assertFalse(r.spoken().toString(), r.spoken().any { it.contains("Call me") })
     }
 
     @Test fun appWithOneNotificationSkipsTheListAndReadsItThenItsActions() {
