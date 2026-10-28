@@ -629,6 +629,17 @@ class ModeTest {
         assertTrue(said.toString(), said.first().endsWith("Bob. two"))   // not "Ann. one"
     }
 
+    @Test fun goingBackToTheAppsListReadsItFromTheSecondApp() {
+        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("today"))
+        r.groups = listOf(NotifGroup("com.a", "Aaa", "com.a", listOf(Notif("k1", "com.a", "Aaa", "x", "one", 9), Notif("k2", "com.a", "Aaa", "x", "two", 8))),
+            NotifGroup("com.b", "Bbb", "com.b", listOf(Notif("k3", "com.b", "Bbb", "y", "three", 5), Notif("k4", "com.b", "Bbb", "y", "four", 4))))
+        r.installed = listOf(InstalledApp("com.a", "Aaa"), InstalledApp("com.b", "Bbb"), InstalledApp("com.google.android.apps.maps", "Maps"))
+        r.wake(); r.pick("Notifications, 4"); r.pick("Bbb, 2 notifications"); r.advance(1500)
+        r.clearLog(); r.m.onGesture(Gesture.TRIPLE); r.advance(3000)   // back to the apps list
+        val said = r.spoken().filter { it.startsWith("say") }
+        assertTrue(said.toString(), said.first().contains("Bbb"))   // not "Aaa" again
+    }
+
     @Test fun lastTaskDoneSaysAllDone() {
         val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1500)
         r.pick("Buy milk"); r.advance(1500); r.pick("Yes, done"); r.advance(6000)

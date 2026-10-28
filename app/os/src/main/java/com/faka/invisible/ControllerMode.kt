@@ -1229,7 +1229,7 @@ class ControllerMode(
     /** Where a pick was made: the list is read again from there when the person comes back (triple click). */
     private class Mark(val screen: Screen, val where: List<Any?>, val index: Int, val label: String)
     private val trail = ArrayList<Mark>()
-    private fun here(): List<Any?> = listOf(treePath.map { it.label }, notifPkg, findStack.size)
+    private fun here(): List<Any?> = listOf(treePath.map { it.label }, findStack.size)   // not notifPkg: picking an app sets it after the mark is made
 
     /** Runs item [i] (a click or a tap on the app screen) and keeps its place first. */
     private fun runItem(i: Int) {
