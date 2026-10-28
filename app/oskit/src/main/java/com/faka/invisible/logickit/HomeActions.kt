@@ -14,12 +14,31 @@ enum class ActionKind { OPEN, START, PLAY, REPLY, CALL }
  */
 data class HomeAction(val kind: ActionKind, val name: String, val target: String, val prior: Double, val lang: String? = null) {
     val key: String get() = "${kind.name.lowercase()}:$target"
+    /** What is said when the action is offered (short: it is read alone, once per cycle). Never the key or a raw id. */
     val label: Phrase get() = when (kind) {
-        ActionKind.OPEN -> Menu.openApp(name)
-        ActionKind.START -> Menu.startProgram(name)
-        ActionKind.PLAY -> Menu.playSong(name)
-        ActionKind.REPLY -> Menu.replyTo(name)
-        ActionKind.CALL -> Menu.callName(name)
+        ActionKind.OPEN -> Menu.openApp(ActionSpeech.short(name, 4))
+        ActionKind.START -> Menu.startProgram(ActionSpeech.short(name, 4))
+        ActionKind.PLAY -> Menu.playSong(ActionSpeech.short(name, 4))
+        ActionKind.REPLY -> Menu.replyTo(ActionSpeech.person(name))
+        ActionKind.CALL -> Menu.callName(ActionSpeech.person(name))
+    }
+}
+
+/** Short names for speech. Pure. */
+object ActionSpeech {
+    /** [name] without (brackets), [brackets], "feat." tails and " - version" tails, at most [max] words ("La Maza (feat. Shakira)" -> "La Maza"). */
+    fun short(name: String, max: Int): String {
+        var t = name.replace(Regex("\\([^)]*\\)|\\[[^]]*]"), " ")
+        t = t.split(" - ", " – ", " | ")[0]
+        t = t.replace(Regex("(?i)\\b(feat|ft|featuring)\\b.*$"), " ")
+        val w = t.squash().split(' ').filter { it.isNotEmpty() }
+        return (if (w.isEmpty()) name.squash() else w.take(max).joinToString(" "))
+    }
+
+    /** A person or chat title: at most 3 words; a raw id (digits, bars, no letters) is "the chat". */
+    fun person(name: String): String {
+        val s = short(name, 3)
+        return if (s.count { it.isLetter() } < 2 || '|' in s) "the chat" else s
     }
 }
 

@@ -65,9 +65,8 @@ object Pacing {
     // ---- Write: the letter loop (Ticker layout: two voices, one per ear) ----
     /** Time of one item (a letter) in the loop. A longer clip (a word) gets a longer slot. */
     const val LOOP_ITEM_MS = 350
-    /** How fast the loop speaks, as a factor of normal speech (blind expert users, 1.75x). The word clips are made at [WORD_RATE], so they are shortened by [WORD_RATE] / [LOOP_SPEED]. */
+    /** How fast the loop speaks, as a factor of normal speech (blind expert users, 1.75x). The clips are made at [WORD_RATE], so they are shortened by [WORD_RATE] / speed. This is the top level; a beginner starts slower ([com.faka.invisible.logickit.LoopLevel]). */
     const val LOOP_SPEED = 1.75
-    const val LOOP_RATIO = WORD_RATE / LOOP_SPEED
     /** Quiet kept after a clip inside its slot. */
     const val LOOP_GAP_MS = 40
     /** The loop starts this long after it is asked (so the first onset is scheduled, not late). */
@@ -78,6 +77,14 @@ object Pacing {
     const val LOOP_FOCUS_MS = 650
     /** The focus round plays the most likely items until their chances add up to this. */
     const val LOOP_FOCUS_COVER = 0.95
+    /** The focus round is at least this much slower per item than the full loop (and never under [LOOP_FOCUS_MS]). */
+    const val LOOP_FOCUS_EXTRA_MS = 150
+    /** The guess slot: quiet after each guess that is read alone (a guess is one whole thing, so the ear needs a rest). */
+    const val LOOP_GUESS_GAP_MS = 500
+    /** At most this many guesses are read alone in a cycle. */
+    const val LOOP_GUESS_MAX = 3
+    /** A loop with a long cycle (the beginner levels) reports idle after about this long, not after [LOOP_IDLE_CYCLES] whole cycles. */
+    const val LOOP_IDLE_MAX_MS = 40000
     /** Quiet between the click and the first sound of the focus round (the loop stops, the next one starts). */
     const val LOOP_FOCUS_PAUSE_MS = 280
 

@@ -35,8 +35,10 @@ class FakeLoopAudio(var latencyMs: Double = 0.0, var lengthMs: (String) -> Int =
         now = end
     }
 
-    override fun prepare(texts: List<String>, then: (Map<String, FloatArray>) -> Unit) {
-        prepared++
+    /** The speed asked for each text in the last calls (1.0 = a guess read alone). */
+    val speeds = HashMap<String, Double>()
+    override fun prepare(texts: List<String>, speed: Double, then: (Map<String, FloatArray>) -> Unit) {
+        prepared++; texts.forEach { speeds[it] = speed }
         then(texts.filter { it !in missing }.associateWith { t ->
             made.getOrPut(t) { FloatArray(lengthMs(t) * sampleRate / 1000).also { textOf[it] = t } }
         })

@@ -59,4 +59,13 @@ class HomeActionsTest {
         assertEquals(2, s.all().first().plays)
         assertEquals("Billie Jean", SongsPlayed(saved).all().first().title)
     }
+
+    @Test fun spokenLabelsAreShortAndNeverARawKey() {
+        assertEquals("Play La Maza", HomeAction(ActionKind.PLAY, "La Maza (feat. Shakira)", "La Maza (feat. Shakira) Mercedes Sosa", 1.0).label.text)
+        assertEquals("Play Billie Jean", HomeAction(ActionKind.PLAY, "Billie Jean - Remastered 2012", "x", 1.0).label.text)
+        assertEquals("Open WhatsApp", HomeAction(ActionKind.OPEN, "WhatsApp", "com.whatsapp", 1.0).label.text)
+        assertEquals("Reply to Ana Lopez", HomeAction(ActionKind.REPLY, "Ana Lopez", "0|com.microsoft.teams|-376346685|null|10355", 1.0).label.text)
+        assertEquals("Reply to the chat", HomeAction(ActionKind.REPLY, "0|com.microsoft.teams|-376346685", "k", 1.0).label.text)
+        assertEquals("Reply to Team Alpha Beta", HomeAction(ActionKind.REPLY, "Team Alpha Beta Gamma Delta", "k", 1.0).label.text)
+    }
 }

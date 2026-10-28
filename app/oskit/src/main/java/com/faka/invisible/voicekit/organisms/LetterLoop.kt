@@ -2,6 +2,7 @@ package com.faka.invisible.voicekit
 
 import com.faka.invisible.logickit.ClickModel
 import kotlin.math.max
+import kotlin.math.min
 
 /** One thing the loop speaks: a [key] the caller gets back, the words said ([say]), its chance ([prior]). */
 class LoopItem<K>(
@@ -12,7 +13,12 @@ class LoopItem<K>(
     val undo: Boolean = false,
     /** A costly mistake (Undo, Send): the click model wants a bigger lead before it takes this item. */
     val risky: Boolean = false,
+    /** A whole guess (an action, a word, a text): it is read ALONE, one voice, normal speech, before the short items of the cycle (the guess slot). */
+    val guess: Boolean = false,
 )
+
+/** How fast one cycle runs: [itemMs] per short item, speech [speed] (1.0 = normal), [ears] 1 = one channel in both ears, 2 = two voices (Ticker). */
+data class LoopPace(val itemMs: Int = Pacing.LOOP_ITEM_MS, val speed: Double = Pacing.LOOP_SPEED, val ears: Int = 2)
 
 /** What was chosen: [rank] = its place in the list the caller gave, [cycles] = whole cycles heard before the choice, [ms] = from the first sound of the round, [clicks] = clicks of the round. */
 class LoopChoice<K>(val key: K, val rank: Int, val cycles: Int, val ms: Long, val clicks: Int)
@@ -48,8 +54,8 @@ class LoopFocus(
 interface LoopAudio {
     /** Frames per second of [nowFrame] and of the clips. */
     val sampleRate: Int
-    /** Make the clips of [texts] (speech, already at the loop speed, mono floats at [sampleRate]); [then] gets the ready ones (a text that could not be made is missing). */
-    fun prepare(texts: List<String>, then: (Map<String, FloatArray>) -> Unit)
+    /** Make the clips of [texts] (speech, already at [speed] times normal speech, mono floats at [sampleRate]); [then] gets the ready ones (a text that could not be made is missing). */
+    fun prepare(texts: List<String>, speed: Double, then: (Map<String, FloatArray>) -> Unit)
     /** Frames handed to the output so far. */
     fun nowFrame(): Long
     /** The clock of the button (the time a press carries), in ms. */
@@ -70,8 +76,11 @@ interface LoopAudio {
  * voice. A click is evidence, not a pick: a [ClickModel] (Nomon) turns the clicks and the exact time each item was HEARD
  * into the chance of each item, and an item is taken when it leads by 99 to 1. A late or wrong click is forgiven.
  *
- * Channels: item 0, 2, 4... voice A (left), item 1, 3, 5... voice B (right), so the two best items come first in each ear;
- * the caller puts the controls (Space, Undo, Send) last. Channel B starts half an item later. An item takes [itemMs], or
+ * The guess slot: items with [LoopItem.guess] (a whole action, word or text) are NOT in the fast channels. Each is read alone in the middle, at
+ * normal speech, with [Pacing.LOOP_GUESS_GAP_MS] of quiet after it, before the short items of the cycle; each has its own onset for the click model.
+ * Pace ([LoopPace]): at the beginner levels one channel in both ears, slower items and speech; two ears only at the top level.
+ * Channels (two ears): item 0, 2, 4... voice A (left), item 1, 3, 5... voice B (right), so the two best items come first in each ear;
+ * the caller puts the controls (Space, Undo, Send) last. Channel B starts half an item later. An item takes [LoopPace.itemMs], or
  * its clip plus a gap if it is longer. The cycle is the longer channel.
  * Onset times: every clip is scheduled at an exact frame ([LoopAudio.play]); the model gets [LoopAudio.wallMsOf] of that
  * frame plus the offset of the item, so it knows when each item was heard on the clock of the button. A fixed delay left
@@ -83,7 +92,8 @@ interface LoopAudio {
 class LetterLoop<K>(
     private val audio: LoopAudio,
     private val timers: Timers,
-    private val itemMs: Int = Pacing.LOOP_ITEM_MS,
+    /** The pace of the short items; the caller may change it between rounds (the beginner levels, [com.faka.invisible.logickit.LoopLevel]). */
+    var pace: LoopPace = LoopPace(),
     private val idleCycles: Int = Pacing.LOOP_IDLE_CYCLES,
     private val gapMs: Int = Pacing.LOOP_GAP_MS,
     private val leadMs: Int = Pacing.LOOP_LEAD_MS,
@@ -132,7 +142,10 @@ class LetterLoop<K>(
         if (list.isEmpty()) return
         state = State.PREPARING
         val g = ++gen
-        audio.prepare(list.map { it.say.text }.distinct()) { clips -> if (g == gen && state == State.PREPARING) begin(clips) }
+        val guessTexts = list.filter { it.guess }.map { it.say.text }.distinct()
+        val shortTexts = list.filter { !it.guess }.map { it.say.text }.distinct().filter { it !in guessTexts }
+        // guesses are read at normal speech, the short items at the pace of the level
+        audio.prepare(guessTexts, 1.0) { a -> if (g == gen && state == State.PREPARING) audio.prepare(shortTexts, pace.speed) { b -> if (g == gen && state == State.PREPARING) begin(a + b) } }
     }
 
     /** Ms until the cycle now playing ends and the next one starts (0 when the loop is not running): the moment a new item list may take over without changing a cycle being heard. */
@@ -155,7 +168,7 @@ class LetterLoop<K>(
         val live = items.filter { made[it.say.text] != null }
         if (live.isEmpty()) { state = State.PAUSED; log("loop-empty", listOf(items.size)); return }
         fullLive = live; focused = false
-        play(live, itemMs, null, 0)
+        play(live, pace.itemMs, null, 0)
         roundWall = startWall; roundPeriod = periodMs
         clicks = 0
     }
@@ -166,16 +179,26 @@ class LetterLoop<K>(
      */
     private fun play(live: List<LoopItem<K>>, ms: Int, carry: Map<K, Double>?, pauseMs: Int) {
         val sr = audio.sampleRate
-        val half = ms / 2.0
+        val twoEars = pace.ears >= 2
+        val half = if (twoEars) ms / 2.0 else 0.0
         val at = HashMap<K, Double>(); val ps = ArrayList<Triple<FloatArray, Long, Double>>()
-        val end = doubleArrayOf(0.0, half)   // where the next item of channel A and of channel B starts
-        var longest = 0.0
-        live.forEachIndexed { i, item ->
-            val ch = i % 2
+        // the guess slot: each guess alone, in the middle, at normal speech, with quiet after it
+        var t = 0.0
+        for (item in live.filter { it.guess }) {
+            val clip = clips.getValue(item.say.text)
+            at[item.key] = t
+            ps.add(Triple(clip, Math.round(t * sr / 1000.0), 0.0))
+            t += clip.size * 1000.0 / sr + Pacing.LOOP_GUESS_GAP_MS
+        }
+        // the short items: one channel (both ears the same), or two voices half an item apart
+        val end = doubleArrayOf(t, t + half)   // where the next item of channel A and of channel B starts
+        var longest = t
+        live.filter { !it.guess }.forEachIndexed { i, item ->
+            val ch = if (twoEars) i % 2 else 0
             val clip = clips.getValue(item.say.text)
             val len = clip.size * 1000.0 / sr
             at[item.key] = end[ch]
-            ps.add(Triple(clip, Math.round(end[ch] * sr / 1000.0), if (ch == 0) -1.0 else 1.0))
+            ps.add(Triple(clip, Math.round(end[ch] * sr / 1000.0), if (!twoEars) 0.0 else if (ch == 0) -1.0 else 1.0))
             end[ch] += max(ms.toDouble(), len + gapMs)
             longest = max(longest, end[ch] - (if (ch == 1) half else 0.0))
         }
@@ -205,13 +228,14 @@ class LetterLoop<K>(
     private fun refocus(m: ClickModel<K>) {
         val f = focus ?: return
         val set = f.pick(fullLive, m.posteriors())
+        val focusMs = max(f.itemMs, pace.itemMs + Pacing.LOOP_FOCUS_EXTRA_MS)
         if (set.size >= fullLive.size) return   // nothing would be left out
         val now = m.scoresMap()
         fullScores = if (focused) fullScores + now else now
         halt()
-        play(set, f.itemMs, now.filterKeys { k -> set.any { it.key == k } }, f.pauseMs)
+        play(set, focusMs, now.filterKeys { k -> set.any { it.key == k } }, f.pauseMs)
         focused = true
-        log("focus", listOf("n=${set.size}", "ms=${f.itemMs}"))
+        log("focus", listOf("n=${set.size}", "ms=$focusMs"))
     }
 
     /** No click in the focus round: the whole loop again, with what the clicks said. */
@@ -219,7 +243,7 @@ class LetterLoop<K>(
         val m = model ?: return
         val carry = fullScores + m.scoresMap()
         halt()
-        play(fullLive, itemMs, fullLive.associate { it.key to (carry[it.key] ?: 0.0) }, 0)
+        play(fullLive, pace.itemMs, fullLive.associate { it.key to (carry[it.key] ?: 0.0) }, 0)
         focused = false
         log("focus-end", listOf(fullLive.size))
     }
@@ -236,7 +260,7 @@ class LetterLoop<K>(
         timers.set(TIMER, max(0L, Math.round(due - audio.nowMs()))) {
             if (g != gen || state != State.RUNNING) return@set
             if (focused && focus != null && audio.nowMs() - lastActiveMs >= focus.passes * periodMs - periodMs / 2) { unfocus(); return@set }
-            if (audio.nowMs() - lastActiveMs >= idleCycles * periodMs - periodMs / 2) { pause(); return@set }
+            if (audio.nowMs() - lastActiveMs >= min(idleCycles * periodMs, max(Pacing.LOOP_IDLE_MAX_MS.toDouble(), 1.5 * periodMs)) - periodMs / 2) { pause(); return@set }
             schedule(k + 2); next(k + 1)
         }
     }

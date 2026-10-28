@@ -1,6 +1,7 @@
 package com.faka.invisible.write
 
 import com.faka.invisible.voicekit.LoopItem
+import com.faka.invisible.voicekit.Pacing
 import com.faka.invisible.voicekit.Phrase
 
 /** What the letter loop offers in one round, and the chance of each item. Pure. */
@@ -22,7 +23,7 @@ object LoopItems {
     private const val SEND_AFTER_SENTENCE_P = 0.2
 
     /**
-     * Items in the order of the chance of the guesses first (up to [phrases] 2-3 whole texts, up to [WORDS] words for the prefix), then every letter, then Space (only
+     * Items: the guess slot first (at most [Pacing.LOOP_GUESS_MAX] guesses among the whole texts [phrases] and up to [WORDS] words for the prefix, the likeliest first, each flagged `guess` so it is read alone), then every letter, then Space (only
      * while a word is being spelled), Undo (only when there is something to undo) and Send, last, so they sit at the end of each channel.
      * Chances: a word = its chance among the words that fit the prefix; a letter = its letter chance times what the guesses leave; the controls are small and fixed (Send is bigger when the text ends a sentence).
      */
@@ -33,20 +34,28 @@ object LoopItems {
         val recent = written.takeLast(3).toSet()   // a word just written is not offered again at once
         val fits = all.filter { it.first.startsWith(prefix) && LetterRank.LETTER_RE.matches(it.first) }
         val mass = fits.sumOf { Math.exp(it.second) }
-        val guesses = fits.asSequence().filter { it.first !in recent }
+        val candidates = fits.asSequence().filter { it.first !in recent }
             .filter { prefix.isNotEmpty() || !skipShortFirst || (it.first.length >= 3 && '\'' !in it.first) }.take(WORDS).toList()
+        val phraseOf = { i: Int -> phraseChances.getOrNull(i) ?: PHRASE_P }
+        // the guess slot holds at most Pacing.LOOP_GUESS_MAX guesses, whole texts and words together, the likeliest first (each is read alone)
+        class Guess(val phrase: Int, val word: String?, val score: Double)
+        val pool = phrases.indices.map { Guess(it, null, phraseOf(it)) } + candidates.map { Guess(-1, it.first, if (mass > 0) Math.exp(it.second) / mass * 0.7 else 0.0) }
+        val slot = pool.sortedByDescending { it.score }.take(Pacing.LOOP_GUESS_MAX)
+        val guesses = candidates.filter { c -> slot.any { it.word == c.first } }
+        val shownPhrases = slot.filter { it.word == null }.map { it.phrase }.sorted()
         val pWords = guesses.map { if (mass > 0) Math.exp(it.second) / mass else 0.0 }
         val letters = LetterRank.letters(all, prefix, grams)
         val left = (1.0 - pWords.sum()).coerceAtLeast(0.2)
-        val phraseOf = { i: Int -> phraseChances.getOrNull(i) ?: PHRASE_P }
-        val phraseP = phrases.indices.sumOf { phraseOf(it) }
+        val phraseP = shownPhrases.sumOf { phraseOf(it) }
         val hasText = written.isNotEmpty() || prefix.isNotEmpty()
         val controls = (if (prefix.isNotEmpty()) CONTROL_P else 0.0) + (if (canUndo) CONTROL_P else 0.0) + sendP(hasText, endsSentence)
         val k = (1.0 - controls - phraseP).coerceAtLeast(0.3)
 
         val out = ArrayList<LoopItem<String>>()
-        phrases.forEachIndexed { i, t -> out.add(LoopItem(phrase(i), Phrase.content(t), phraseOf(i))) }
-        guesses.forEachIndexed { i, (w, _) -> out.add(LoopItem(word(w), Phrase.content(w), pWords[i] * k)) }
+        val items = ArrayList<LoopItem<String>>()
+        shownPhrases.forEach { i -> items.add(LoopItem(phrase(i), Phrase.content(phrases[i]), phraseOf(i), guess = true)) }
+        guesses.forEachIndexed { i, (w, _) -> items.add(LoopItem(word(w), Phrase.content(w), pWords[i] * k, guess = true)) }
+        out.addAll(items)   // whole texts first, then words
         for ((c, chance) in letters) out.add(LoopItem(letter(c), Phrase.content(c.toString()), chance * left * k))   // no fixed floor: the letter pairs give every letter a share
         if (prefix.isNotEmpty()) out.add(LoopItem(SPACE, TypeVoice.SPACE, CONTROL_P, risky = false))
         if (canUndo) out.add(LoopItem(UNDO, TypeVoice.LOOP_UNDO, CONTROL_P, undo = true, risky = true))

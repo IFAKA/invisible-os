@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 /**
- * ENGINE. The sound of the [LetterLoop]: words made by the speech engine (as clips), shortened to the loop speed, and played at exact
+ * ENGINE. The sound of the [LetterLoop]: words made by the speech engine (as clips), shortened to the loop speed (guesses: normal speech), and played at exact
  * frames of one low-latency stereo stream ([GameAudio] + [FrameMixer]). The time an item is heard is the frame it is scheduled at
  * plus the delay the stream measures (buffer written minus buffer played, about every 250 ms); a fixed extra delay of the earbuds
  * is not known here: the click model learns it. No audio input of any kind.
@@ -44,7 +44,7 @@ class LoopSound(
     /** The measured output delay in ms (0 until measured). */
     val latency get() = latencyMs
 
-    override fun prepare(texts: List<String>, then: (Map<String, FloatArray>) -> Unit) {
+    override fun prepare(texts: List<String>, speed: Double, then: (Map<String, FloatArray>) -> Unit) {
         val me = ++seq
         var left = texts.size
         var done = false
@@ -53,7 +53,7 @@ class LoopSound(
                 done = true
                 worker.execute {   // shortening a clip takes some ms: off the main thread
                     val out = HashMap<String, FloatArray>()
-                    for (t in texts) clipOf(t)?.let { out[t] = it }
+                    for (t in texts) clipOf(t, speed)?.let { out[t] = it }
                     handler.post { if (me == seq) then(out) }
                 }
             }
@@ -63,8 +63,8 @@ class LoopSound(
         handler.postDelayed({ deliver() }, 5000)   // a voice that hangs must not hold the loop for ever: start with what is made
     }
 
-    private fun clipOf(text: String): FloatArray? = floats[text] ?: try {
-        words.fast(text, Pacing.LOOP_RATIO)?.let { p -> resample(p.samples, p.rate, sampleRate).also { floats[text] = it } }
+    private fun clipOf(text: String, speed: Double): FloatArray? = floats["$text@$speed"] ?: try {
+        words.fast(text, Pacing.WORD_RATE / speed)?.let { p -> resample(p.samples, p.rate, sampleRate).also { floats["$text@$speed"] = it } }
     } catch (e: Throwable) { Log.e("Invisible", "loop clip failed", e); null }
 
     override fun nowFrame(): Long = synchronized(lock) { mixer.nowFrame() }

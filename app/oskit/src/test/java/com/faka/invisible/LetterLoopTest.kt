@@ -180,4 +180,49 @@ class LetterLoopTest {
         assertTrue(f.size <= 7)
         assertEquals(listOf("c", "d", "e"), f.take(3).map { it.key })
     }
+
+    // ---- the guess slot and the pace ----
+    private fun guess(k: String, prior: Double = 0.2) = LoopItem(k, Phrase.content(k), prior, guess = true)
+    private fun loopAt(pace: LoopPace) = LetterLoop<String>(audio, audio, pace = pace, onChosen = { chosen.add(it) }, onIdle = { idle++ }, focus = null, log = { _, _ -> })
+    private fun startMs(l: LetterLoop<String>, k: String) = l.onsets.getValue(k)
+
+    @Test fun guessesAreReadAloneInTheMiddleAtNormalSpeechBeforeTheLetters() {
+        audio.lengthMs = { if (it.startsWith("Play")) 1200 else 200 }
+        val l = loop(); l.start(listOf(guess("Play La Maza"), guess("Open WhatsApp")) + six.map { item(it) })
+        audio.advance(100)
+        // each guess alone: the first at 0, the second after the first plus its quiet; both in the middle (pan 0)
+        assertEquals(0.0, startMs(l, "Play La Maza"), 0.01)
+        assertEquals(1200.0 + Pacing.LOOP_GUESS_GAP_MS, startMs(l, "Open WhatsApp"), 0.5)
+        val lettersStart = 1200.0 + Pacing.LOOP_GUESS_GAP_MS + 200 + Pacing.LOOP_GUESS_GAP_MS
+        assertEquals(lettersStart, startMs(l, "a"), 0.5)
+        assertEquals(lettersStart + 175.0, startMs(l, "b"), 0.5)   // two ears: the letters keep the old layout after the slot
+        assertTrue(audio.played.filter { it.text.startsWith("Play") || it.text.startsWith("Open") }.all { it.pan == 0.0 })
+        assertEquals(1.0, audio.speeds.getValue("Play La Maza"), 0.0)
+        assertEquals(Pacing.LOOP_SPEED, audio.speeds.getValue("a"), 0.0)
+        assertEquals(lettersStart + 1050.0, l.cycleMs, 0.5)
+    }
+
+    @Test fun aClickOnAGuessPicksItAtItsRealOnset() {
+        loopRef = loop(); loopRef.start(listOf(guess("Play La Maza", 0.6), guess("Open WhatsApp", 0.1)) + six.map { item(it, prior = 0.05) })
+        val n = clickOn("Play La Maza", 60)
+        assertEquals("Play La Maza", chosen.single().key); assertEquals(0, chosen.single().rank)
+        assertTrue("took $n clicks", n <= 5)
+    }
+
+    @Test fun oneEarMeansOneChannelInTheMiddleAtTheLevelPace() {
+        val l = loopAt(LoopPace(itemMs = 600, speed = 1.0, ears = 1)); l.start(six.map { item(it) })
+        audio.advance(100)
+        assertEquals(0.0, startMs(l, "a"), 0.01); assertEquals(600.0, startMs(l, "b"), 0.01); assertEquals(3000.0, startMs(l, "f"), 0.01)
+        assertEquals(3600.0, l.cycleMs, 0.01)
+        assertTrue(audio.played.all { it.pan == 0.0 })
+        assertEquals(1.0, audio.speeds.getValue("a"), 0.0)
+    }
+
+    @Test fun theFocusRoundIsAtLeast150msSlowerThanTheItemsOfTheLoop() {
+        val l = LetterLoop<String>(audio, audio, pace = LoopPace(itemMs = 600, speed = 1.0, ears = 1), onChosen = { chosen.add(it) }, focus = LoopFocus(), log = { e, f -> events.add(e + f.joinToString(" ", " ")) })
+        l.start(six.map { item(it, prior = 0.1) })
+        audio.advance(100)
+        l.click(audio.heardAt("d").toLong() + 300)   // a click that does not choose
+        assertTrue(events.toString(), events.any { it.startsWith("focus") && it.contains("ms=750") })
+    }
 }

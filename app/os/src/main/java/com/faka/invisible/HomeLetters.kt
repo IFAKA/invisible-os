@@ -19,7 +19,7 @@ sealed class HomeResult {
 
 /**
  * Home is a request too (DESIGN-TYPING step 9). A hold on home starts this: the letter loop ([LetterLoop], the same as Write) offers the best
- * ACTIONS first (up to 3: "Open WhatsApp", "Play Billie Jean", "Reply to Ana"), then the letters, then Undo. A click on an action runs it; a click on a
+ * ACTIONS first, in the guess slot (up to 3, each read ALONE at normal speech: "Open WhatsApp", "Play Billie Jean", "Reply to Ana"), then the short letters, then Undo. A click on an action runs it; a click on a
  * letter narrows the actions that fit; Undo takes the last letter back. The actions come from [ActionSource]s mixed by [ActionRanker]
  * (shares learned from picks, priors from use counts). Every app and program is reachable by its letters, so this replaces Find's letter ranges
  * (Reset learning still walks [NameFinder]). A program of the OS: it owns the raw button; hold 3 s leaves to home. Click then hold does NOT close the OS here (like Write): the earbud's long-press signal arrives about 600 ms after a plain click and was read as an exit.
@@ -67,7 +67,8 @@ class HomeLetters(
         this.host = host; active = true; startedAt = audio.nowMs()
         host.pauseMusic()
         Trace.ev("home", "request start seed=${seeded.first}")
-        if (hintSeen()) round() else { setHintSeen(); speakThen(Voice.HOME_LETTERS_HINT) { round() } }
+        if (hintSeen()) { Trace.ev("home", "hint skipped (heard before)"); round() }
+        else { setHintSeen(); Trace.ev("home", "hint spoken"); speakThen(Voice.HOME_LETTERS_HINT) { round() } }
     }
 
     override fun stop() { finish(HomeResult.Exit) }
@@ -104,7 +105,7 @@ class HomeLetters(
     private fun build(top: List<ActionRanker.Ranked>, next: Map<Char, Double>, canUndo: Boolean): List<LoopItem<String>> {
         val out = ArrayList<LoopItem<String>>()
         val actionP = top.map { it.chance * ACTION_MASS }
-        top.forEachIndexed { i, r -> out.add(LoopItem("a:" + r.action.key, r.action.label, actionP[i].coerceAtLeast(1e-6))) }
+        top.forEachIndexed { i, r -> out.add(LoopItem("a:" + r.action.key, r.action.label, actionP[i].coerceAtLeast(1e-6), guess = true)) }
         val left = (1.0 - actionP.sum() - (if (canUndo) UNDO_P else 0.0)).coerceAtLeast(0.2)
         val order = ('a'..'z').sortedWith(compareByDescending<Char> { next[it] ?: 0.0 }.thenBy { it })
         for (c in order) out.add(LoopItem("l:$c", Phrase.content(c.toString()), (next[c] ?: 0.0) * 0.9 * left + 0.1 * left / 26 + 1e-6))
@@ -156,7 +157,7 @@ class HomeLetters(
 
     private companion object {
         const val AFTER = "home:after"; const val UNDO = "undo"
-        const val ACTIONS = 3; const val ACTION_MASS = 0.7; const val UNDO_P = 0.03; const val LEAVE_MS = 3000L
+        val ACTIONS = Pacing.LOOP_GUESS_MAX; const val ACTION_MASS = 0.7; const val UNDO_P = 0.03; const val LEAVE_MS = 3000L
     }
 }
 

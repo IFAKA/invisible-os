@@ -57,7 +57,7 @@ class FlowButtonTest {
         private val textOf = java.util.IdentityHashMap<FloatArray, String>()
         private val tasks = HashMap<String, Runnable>()
         var confirms = 0
-        override fun prepare(texts: List<String>, then: (Map<String, FloatArray>) -> Unit) {
+        override fun prepare(texts: List<String>, speed: Double, then: (Map<String, FloatArray>) -> Unit) {
             then(texts.associateWith { t -> FloatArray(200 * sampleRate / 1000).also { textOf[it] = t } })
         }
         override fun nowFrame() = rig.now() * sampleRate / 1000
