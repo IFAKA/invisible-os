@@ -47,7 +47,7 @@ object LoopItems {
         val out = ArrayList<LoopItem<String>>()
         phrases.forEachIndexed { i, t -> out.add(LoopItem(phrase(i), Phrase.content(t), phraseOf(i))) }
         guesses.forEachIndexed { i, (w, _) -> out.add(LoopItem(word(w), Phrase.content(w), pWords[i] * k)) }
-        for ((c, chance) in letters) out.add(LoopItem(letter(c), Phrase.content(c.toString()), chance * left * k + 1e-6))
+        for ((c, chance) in letters) out.add(LoopItem(letter(c), Phrase.content(c.toString()), chance * left * k))   // no fixed floor: the letter pairs give every letter a share
         if (prefix.isNotEmpty()) out.add(LoopItem(SPACE, TypeVoice.SPACE, CONTROL_P, risky = false))
         if (canUndo) out.add(LoopItem(UNDO, TypeVoice.LOOP_UNDO, CONTROL_P, undo = true, risky = true))
         out.add(LoopItem(SEND, TypeVoice.LOOP_SEND, sendP(hasText, endsSentence), risky = true))
