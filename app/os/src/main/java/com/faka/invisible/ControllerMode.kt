@@ -574,10 +574,10 @@ class ControllerMode(
                 val notifs = out.notifGroups().sumOf { it.items.size }
                 val digest = if (notifs > 0) out.notifDigest() else ""
                 val notifOpt = if (notifs > 0) listOf(Opt("notifs:all", if (digest.isEmpty()) Menu.notifications(notifs) else Menu.notificationsDigest(notifs, digest)) { pick("notifs:all"); show(Screen.NOTIF_APPS) }) else emptyList()   // all waiting notifications, right after the live apps
-                val tasksOpt = if (out.tasks().isNotEmpty()) listOfNotNull(all["hub:tasks"]).also { out.tasks().forEach { t -> out.taskLine(t.text) } } else emptyList()   // asking now makes the AI lines ready before the list is opened   // open tasks: one home entry "Tasks, N" right after Notifications
+                val tasksOpt = if (out.tasks().isNotEmpty()) listOfNotNull(all["hub:tasks"]).also { out.tasks().forEach { t -> out.taskLine(t.text) } } else emptyList()   // asking now makes the AI lines ready before the list is opened   // open tasks: one home entry "Tasks, N" right before Notifications
                 val (pinned, rest0) = treeOptions(root).partition { o -> AppTree.PINNED.any { o.key == it } }
-                val rest = if (tasksOpt.isEmpty()) rest0 else rest0.filter { it.key != "hub:tasks" }   // the pinned Laptop tool comes right after Notifications, before the suggestions
-                liveOpts + notifOpt + tasksOpt + pinned + front.filter { f -> pinned.none { it.key == f.key } } + rest + unmuteOption() + Opt("phone:emergency", Menu.EMERGENCY) { pick("phone:emergency"); show(Screen.EMERGENCY) }   // the home list is the tree's top; only the small Suggested slot in front adapts; Emergency is always the last item
+                val rest = if (tasksOpt.isEmpty()) rest0 else rest0.filter { it.key != "hub:tasks" }   // the pinned Laptop tool comes right after Tasks and Notifications, before the suggestions
+                liveOpts + tasksOpt + notifOpt + pinned + front.filter { f -> pinned.none { it.key == f.key } } + rest + unmuteOption() + Opt("phone:emergency", Menu.EMERGENCY) { pick("phone:emergency"); show(Screen.EMERGENCY) }   // the home list is the tree's top; only the small Suggested slot in front adapts; Emergency is always the last item
             }
             Screen.TASK -> {   // this page of tasks (a click right after hearing one = done; a hold then release reads one in full), "More tasks", then "Add task"
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)
