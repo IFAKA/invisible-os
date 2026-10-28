@@ -62,6 +62,8 @@ class LetterLoop<K>(
     private val leadMs: Int = Pacing.LOOP_LEAD_MS,
     /** What the person learned before (see [offsets]): click offsets in seconds, newest first. */
     seed: List<Double> = emptyList(),
+    /** The model's start values (from the Click test when the person has no learned clicks yet). */
+    private val params: ClickModel.Params = ClickModel.Params(),
     private val log: (event: String, fields: List<Any?>) -> Unit = { _, _ -> },
     private val onChosen: (LoopChoice<K>) -> Unit,
     private val onIdle: () -> Unit = {},
@@ -135,7 +137,7 @@ class LetterLoop<K>(
         plays = ps; onsets = at
         cycleStartFrame = audio.nowFrame() + sr * leadMs / 1000
         startWall = audio.wallMsOf(cycleStartFrame)
-        val m = ClickModel<K>(periodMs)
+        val m = ClickModel<K>(periodMs, params)
         val before = prev
         if (before != null) m.inherit(before) else m.seed(seedOffsets)
         m.start(

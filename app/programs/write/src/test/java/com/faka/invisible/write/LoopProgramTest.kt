@@ -1,5 +1,7 @@
 package com.faka.invisible.write
 
+import com.faka.invisible.logickit.ClickModel
+import com.faka.invisible.logickit.ClickProfile
 import com.faka.invisible.oskit.testing.FakeLoopAudio
 import com.faka.invisible.voicekit.*
 import org.junit.Assert.*
@@ -153,5 +155,18 @@ class LoopProgramTest {
         assertEquals("[0.120,0.080]", LoopDensity.encode(listOf(0.12, 0.08)))
         assertEquals(listOf(0.12, 0.08), LoopDensity.decode("[0.120,0.080]"))
         assertEquals(emptyList<Double>(), LoopDensity.decode(null)); assertEquals(emptyList<Double>(), LoopDensity.decode("[]"))
+    }
+
+    @Test fun startLogsTheSeed() { p.start(); assertTrue(logs.toString(), logs.contains("seed from=default")) }
+
+    @Test fun seedFromProfileOnlyWithoutLearnedClicks() {
+        val prof = ClickProfile.of(List(20) { 180.0 + (it % 5) * 20 })
+        val few = List(7) { 0.1 }; val many = List(8) { 0.1 }
+        assertEquals("profile", LoopSeed.choose(emptyList(), prof).first)
+        assertEquals(prof.params(), LoopSeed.choose(few, prof).second)
+        assertEquals("write", LoopSeed.choose(many, prof).first)
+        assertEquals(ClickModel.Params(), LoopSeed.choose(many, prof).second)
+        assertEquals("default", LoopSeed.choose(emptyList(), null).first)
+        assertEquals("default", LoopSeed.choose(emptyList(), ClickProfile.of(listOf(100.0, 120.0))).first)
     }
 }

@@ -1,5 +1,7 @@
 package com.faka.invisible.write
 
+import com.faka.invisible.logickit.ClickModel
+import com.faka.invisible.logickit.ClickProfile
 import com.faka.invisible.voicekit.*
 
 /** What the shell needs of a keyboard: the raw button, a tap on the screen, a stop. Both [TypeProgram] (numbers) and [LoopProgram] (text) are one. */
@@ -13,6 +15,18 @@ interface Typer : RawButton {
 interface LoopStore {
     fun load(): List<Double>
     fun save(offsets: List<Double>)
+    /** What the Click test measured (prefs "click_profile"), if the person did it. */
+    fun profile(): ClickProfile? = null
+}
+
+/** Where the loop's click model starts: Write's own learned clicks win (real typing); else the Click test; else Nomon's values. */
+object LoopSeed {
+    const val MIN_LEARNED = 8
+    fun choose(learned: List<Double>, profile: ClickProfile?): Pair<String, ClickModel.Params> = when {
+        learned.size >= MIN_LEARNED -> "write" to ClickModel.Params()
+        profile != null && profile.count >= ClickProfile.MIN_COUNT -> "profile" to profile.params()
+        else -> "default" to ClickModel.Params()
+    }
 }
 
 /** Click offsets in seconds as a small JSON list, e.g. "[0.12,0.08]". */
@@ -59,13 +73,16 @@ class LoopProgram(
     override val exitOnClickHold = false   // Write is left by holding 3 s
     override var active = false; private set
 
-    private val loop = LetterLoop<String>(audio, timers, seed = store.load(),
+    private val learned = store.load()
+    private val seeded = LoopSeed.choose(learned, store.profile())
+    private val loop = LetterLoop<String>(audio, timers, seed = learned, params = seeded.second,
         log = { event, fields -> out.log(event, *fields.toTypedArray()) },
         onChosen = { chosen(it) }, onIdle = { idle() })
 
     fun start() {
         if (frame.kind == FieldKind.PASSWORD) { out.say(TypeVoice.PASSWORD); onEnded(); return }   // never spoken, never saved
         active = true
+        out.log("seed", "from=" + seeded.first)
         askPhrases()
         speakThen(listOf(TypeVoice.LOOP_START, TypeVoice.LOOP_START2)) { round() }
     }
