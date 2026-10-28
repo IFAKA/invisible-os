@@ -28,6 +28,7 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
                  override fun taskLine(text: String) = b.short(text, "", "task")
                  override fun tasksSummary(items: List<String>) = b.short(items.joinToString("\n"), "", "tasks")
                  override fun replies(text: String, lang: String, context: String) = b.replies(text, lang, context)
+                 override fun complete(typed: String, lang: String, context: String) = b.complete(typed, lang, context)
              } } }) {
     interface AiClient {
         @Throws(IOException::class) fun digest(items: List<Triple<String, String, String>>): String
@@ -38,6 +39,8 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
         @Throws(IOException::class) fun tasksSummary(items: List<String>): String = ""
         /** Reply sentences and tasks; both empty = the laptop's model had nothing. */
         @Throws(IOException::class) fun replies(text: String, lang: String, context: String): Pair<List<String>, List<String>>
+        /** Up to 5 whole texts the typed letters mean (the bridge waits 1 s at most). */
+        @Throws(IOException::class) fun complete(typed: String, lang: String, context: String): List<String> = emptyList()
     }
 
     /** The model on the phone (LocalAi). Slow: only called from the background thread. */
@@ -187,6 +190,22 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
                 { it.replies(message, lang, context) }, { p -> p.replies(message, lang, context) to p.tasks(message, lang, context) })
             done(r.first, r.second)
         }
+    }
+
+    /**
+     * Up to 5 whole texts that the typed letters [typed] may mean ("hay" -> "how are you"; the start of the word or the first letters of the next words).
+     * BLOCKS: call it from a worker thread; the caller gives up after 1 s. Computer first, then the phone model, same guard as the bridge (`AiGuard`).
+     * [context] = the earlier messages of the chat. The caller must not call this for a private notification or a password field. A slow computer is not marked
+     * as down (it only answered late); no AI or no answer = empty.
+     */
+    fun complete(typed: String, lang: String, context: String): List<String> {
+        val t = typed.squash()
+        if (t.isEmpty() || source() == AiSource.NONE) return emptyList()
+        val r = chain(emptyList<String>(), { it.isEmpty() },
+            { c -> try { c.complete(t, lang, context) } catch (_: java.net.SocketTimeoutException) { emptyList() } },
+            { p -> AiGuard.makeCompletions(t, context, lang) { p.generate(it) } })
+        Trace.ev("ai", "complete [${source()}] '$t' -> ${r.size}")
+        return r
     }
 
     private companion object { const val DOWN_MS = 60_000L; const val TASK_SHORT_WORDS = 4; const val TASKS_SUMMARY_MIN = 4; const val RETRY_MS = 60_000L }

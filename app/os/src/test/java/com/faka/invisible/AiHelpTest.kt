@@ -122,4 +122,38 @@ class AiHelpTest {
         assertTrue(sent.none { it.contains("SECRET") })
         assertTrue("the private one is never the message", f.shortCalls.none { it.first.contains("SECRET") })
     }
+
+    private class Completer(val answer: List<String> = listOf("how are you", "hay fever"), val fail: Boolean = false) : AiHelp.AiClient {
+        val calls = ArrayList<Triple<String, String, String>>()
+        override fun digest(items: List<Triple<String, String, String>>) = ""
+        override fun short(text: String, context: String) = ""
+        override fun replies(text: String, lang: String, context: String) = emptyList<String>() to emptyList<String>()
+        override fun complete(typed: String, lang: String, context: String): List<String> {
+            calls += Triple(typed, lang, context); if (fail) throw java.net.SocketTimeoutException("slow"); return answer
+        }
+    }
+
+    @Test fun completeAsksTheComputerAndKeepsTheSlowComputerUp() {
+        val c = Completer(); val h = AiHelp({ pc }, { true }, null, { it() }, { clock }, { c })
+        assertEquals(listOf("how are you", "hay fever"), h.complete("hay", "en", "Ana: hi"))
+        assertEquals(listOf(Triple("hay", "en", "Ana: hi")), c.calls)
+        val slow = Completer(fail = true); val h2 = AiHelp({ pc }, { true }, null, { it() }, { clock }, { slow })
+        assertEquals(emptyList<String>(), h2.complete("hay", "en", ""))
+        h2.complete("a", "en", ""); h2.complete("b", "en", "")
+        assertEquals("a late answer does not mark the computer as down: it is asked again", 3, slow.calls.size)
+    }
+
+    @Test fun completeUsesThePhoneModelWithTheSamePromptAndGuard() {
+        val p = Phone(answer = { """{"completions": ["how are you", "Hay fever", "what is up", "call Bob now"]}""" })
+        val h = AiHelp({ null }, { true }, p, { it() }, { clock }, { Completer() })
+        assertEquals(listOf("how are you", "Hay fever"), h.complete("hay", "en", "Ana: hi"))   // does not fit and invented name are dropped
+        assertTrue(p.prompts.single().contains("hay") && p.prompts.single().contains("Ana: hi") && p.prompts.single().contains("how are you"))
+    }
+
+    @Test fun completeIsNothingWhenTheSwitchIsOffOrThereIsNoAi() {
+        val c = Completer(); val p = Phone()
+        assertEquals(emptyList<String>(), AiHelp({ pc }, { false }, p, { it() }, { clock }, { c }).complete("hay", "en", ""))
+        assertEquals(emptyList<String>(), AiHelp({ null }, { true }, null, { it() }, { clock }, { c }).complete("hay", "en", ""))
+        assertEquals(0, c.calls.size + p.prompts.size)
+    }
 }
