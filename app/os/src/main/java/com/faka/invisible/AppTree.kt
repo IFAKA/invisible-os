@@ -107,13 +107,16 @@ object AppTree {
         return TreeNode(label, kids, unread = kids.sumOf { it.unread }, weight = weight, hint = hint, more = more)
     }
 
+    /** An app's plain name for a group hint: an OS program's label may carry its count and an AI line ("Tasks, 17. Mostly ..."); the hint says only "Tasks". */
+    fun bare(a: AppLeaf) = if (a.pkg.startsWith("hub:")) a.label.substringBefore(", ").substringBefore(". ") else a.label
+
     private fun appCount(n: TreeNode): Int = if (n.isApp) 1 else n.children.sumOf { appCount(it) }
 
     /** What a group says about itself (information scent): the top app of each of its first entries (a sub-group gives its top app), or every app when there are 3 or fewer. */
     fun scent(kids: List<TreeNode>): Pair<List<String>, Int> {
         val total = kids.sumOf { appCount(it) }
-        fun top(n: TreeNode): List<String> = if (n.isApp) listOf(n.label) else n.hint.take(1).ifEmpty { n.children.take(1).flatMap { top(it) } }
-        val all = if (total <= 3) kids.flatMap { if (it.isApp) listOf(it.label) else apps(it).map { a -> a.label } } else kids.flatMap { top(it) }
+        fun top(n: TreeNode): List<String> = if (n.isApp) listOf(bare(n.app!!)) else n.hint.take(1).ifEmpty { n.children.take(1).flatMap { top(it) } }
+        val all = if (total <= 3) kids.flatMap { if (it.isApp) listOf(bare(it.app!!)) else apps(it).map { a -> bare(a) } } else kids.flatMap { top(it) }
         val names = all.distinct().take(if (total <= 3) 3 else 2)
         return names to (total - names.size)
     }

@@ -164,6 +164,11 @@ class AppTreeTest {
         talk.children.filter { !it.isApp }.forEach { assertEquals(AppTree.apps(it).size, it.hint.size + it.more) }
     }
 
+    @Test fun groupHintSaysTheBareNameOfAnOsProgram() {   // heard on the phone: "Plan: Tasks, 17. Mostly purchasing ..., Keep Notes"
+        val kids = listOf(AppLeaf("hub:tasks", "Tasks, 17. Mostly buying parts.", "Plan", 0, 50.0), AppLeaf("k", "Keep Notes", "Plan/Notes", 0, 40.0)).map { TreeNode(it.label, app = it) }
+        assertEquals(listOf("Tasks", "Keep Notes"), AppTree.scent(kids).first)
+    }
+
     @Test fun everyGroupHasAHintAndNoAppDoes() {
         fun check(n: TreeNode) { for (c in n.children) { if (c.isApp) assertTrue(c.hint.isEmpty()) else { assertTrue(c.label, c.hint.isNotEmpty()); assertEquals(AppTree.apps(c).size, c.hint.size + c.more); check(c) } } }
         check(AppTree.build(phone()))
