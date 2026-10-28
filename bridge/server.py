@@ -235,7 +235,7 @@ def make_handler(store, token, rooms, tools=None):
             elif path == "/ai/replies":
                 self._send(200, rooms.ai.replies(b.get("text"), b.get("lang"), b.get("context")))
             elif path == "/ai/complete":
-                self._send(200, rooms.ai.complete(b.get("text"), b.get("lang"), b.get("context")))
+                self._send(200, rooms.ai.complete(b.get("text"), b.get("lang"), b.get("context"), b.get("done"), b.get("letters")))
             elif path == "/room/send":
                 ok = rooms.send(b.get("id"), b.get("text"))
                 self._send(200 if ok else 400, {"ok": ok})

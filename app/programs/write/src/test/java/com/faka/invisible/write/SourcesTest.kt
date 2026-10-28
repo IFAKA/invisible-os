@@ -8,17 +8,25 @@ class SourcesTest {
     private val chat = Frame(app = "wa", thread = "Ana", around = listOf("Ana: how are you?"))
 
     @Test fun completeAsksWithTheTypedLettersAndTheChat() {
-        val calls = ArrayList<Pair<String, String>>(); val trace = ArrayList<String>()
-        val s = CompleteSource({ t, c -> calls += t to c; listOf("how are you", "hay fever") }, 1000, { trace += it }, run = { it() })
+        val calls = ArrayList<Triple<String, String, String>>(); val trace = ArrayList<String>()
+        val s = CompleteSource({ d, l, c, _ -> calls += Triple(d, l, c); listOf("how are you", "hay fever") }, { 1000L }, { trace += it }, run = { it() })
         val g = ask(s, Request(chat, emptyList(), "hay"))!!
         assertEquals(listOf("how are you", "hay fever"), g.map { it.text })
-        assertEquals(listOf("hay" to "Ana: how are you?"), calls)
+        assertEquals(listOf(Triple("", "hay", "Ana: how are you?")), calls)
         assertTrue(trace.single().matches(Regex("ai complete \\d+ms 2")))
+    }
+
+    @Test fun theFinishedWordsAndTheLettersGoApartWithTheTimeFromTheLoop() {
+        val calls = ArrayList<Triple<String, String, Long>>(); var budget = 1700L
+        val s = CompleteSource({ d, l, _, ms -> calls += Triple(d, l, ms); listOf("see you tomorrow") }, { budget }, run = { it() })
+        ask(s, Request(chat, listOf("see", "you"), "tom"))
+        budget = 2500L; ask(s, Request(chat, listOf("see", "you"), "to"))
+        assertEquals(listOf(Triple("see you", "tom", 1700L), Triple("see you", "to", 2500L)), calls)
     }
 
     @Test fun aPrivateReplyNeverReachesTheAi() {
         var called = 0
-        val s = CompleteSource({ _, _ -> called++; listOf("x") }, 1000, run = { it() })
+        val s = CompleteSource({ _, _, _, _ -> called++; listOf("x") }, { 1000L }, run = { it() })
         val priv = Frame.reply("com.bank", "Bank", "Your code is 123456", hidden = true)
         assertTrue(priv.private)
         assertNull(ask(s, Request(priv, emptyList(), "hay")))
@@ -31,7 +39,7 @@ class SourcesTest {
 
     @Test fun aSlowAnswerIsDroppedAfterTheTimeout() {
         val trace = ArrayList<String>()
-        val s = CompleteSource({ _, _ -> Thread.sleep(400); listOf("late") }, 50, { trace += it }, run = { it() })
+        val s = CompleteSource({ _, _, _, _ -> Thread.sleep(400); listOf("late") }, { 50L }, { trace += it }, run = { it() })
         val t0 = System.currentTimeMillis()
         assertNull(ask(s, Request(chat, emptyList(), "hay")))
         assertTrue(System.currentTimeMillis() - t0 < 300)
@@ -39,7 +47,7 @@ class SourcesTest {
     }
 
     @Test fun aFailingAiGivesNoGuesses() {
-        val s = CompleteSource({ _, _ -> throw java.io.IOException("down") }, 1000, run = { it() })
+        val s = CompleteSource({ _, _, _, _ -> throw java.io.IOException("down") }, { 1000L }, run = { it() })
         assertNull(ask(s, Request(chat, emptyList(), "hay")))
     }
 

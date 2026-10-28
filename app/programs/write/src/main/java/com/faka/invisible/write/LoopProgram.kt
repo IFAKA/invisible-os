@@ -223,6 +223,9 @@ class LoopProgram(
         }
     }
 
+    /** How long an AI answer may take: until the next cycle of the loop plus one more (an answer waits for a cycle anyway), 1 to 3 s. */
+    fun aiBudgetMs(): Long = (loop.msToNextCycle() + loop.cycleMs.toLong()).coerceIn(1000L, 3000L)
+
     private fun guess() {
         if (guessing) return
         guessing = true

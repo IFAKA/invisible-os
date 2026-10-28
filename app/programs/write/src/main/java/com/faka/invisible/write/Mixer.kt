@@ -30,14 +30,14 @@ class Mixer(private val trust: (String) -> Double = { 0.5 }, private val scored:
     private fun normalized(m: Map<String, Double>): Map<String, Double> { val z = m.values.sum(); return if (z > 0) m.mapValues { it.value / z } else emptyMap() }
 
     /** A guess is a word (for the prefix) or a whole text. A one-word text and the one new word after the words written are words. */
-    private fun split(req: Request, guesses: List<Guess>): Pair<Map<String, Double>, Map<String, Double>> {
+    private fun split(req: Request, guesses: List<Guess>, wholeWord: Boolean): Pair<Map<String, Double>, Map<String, Double>> {
         val wl = req.written.map { it.lowercase() }; val prefix = req.prefix.lowercase()
         val ws = LinkedHashMap<String, Double>(); val ps = LinkedHashMap<String, Double>()
         for (g in guesses) {
             val tw = g.text.words(); if (tw.isEmpty() || g.score <= 0) continue
             val low = tw.map { it.lowercase() }
             if (low.size == 1) { if (low[0].startsWith(prefix) && LetterRank.LETTER_RE.matches(low[0])) ws.merge(low[0], g.score, Double::plus); continue }
-            if (req.typed.isNotEmpty() && !Completion.fits(g.text, req.typed)) continue
+            if (req.typed.isNotEmpty() && !Completion.fits(g.text, req.written, req.prefix, wholeWord)) continue
             if (low.size == wl.size + 1 && low.take(wl.size) == wl && low.last().startsWith(prefix) && LetterRank.LETTER_RE.matches(low.last())) ws.merge(low.last(), g.score, Double::plus)
             else ps.merge(tw.joinToString(" "), g.score, Double::plus)
         }
@@ -50,7 +50,7 @@ class Mixer(private val trust: (String) -> Double = { 0.5 }, private val scored:
         val wordSrc = LinkedHashMap<String, Map<String, Double>>(); val phraseSrc = LinkedHashMap<String, Map<String, Double>>()
         for ((id, a) in answers) {
             if (a.key != req.key) continue
-            val (w, p) = split(req, a.guesses)
+            val (w, p) = split(req, a.guesses, id != "complete")   // only the AI may copy the letters as a word
             if (w.isNotEmpty()) wordSrc[id] = w
             if (p.isNotEmpty()) phraseSrc[id] = p
         }

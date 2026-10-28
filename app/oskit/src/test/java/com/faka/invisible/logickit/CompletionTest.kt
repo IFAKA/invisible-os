@@ -13,4 +13,14 @@ class CompletionTest {
         assertFalse(Completion.fits("meet you tomorrow", "meet me t"))
         assertFalse(Completion.fits("anything", ""))
     }
+
+    @Test fun theLettersCopiedAsAWordDoNotFit() {
+        assertTrue(Completion.fits("how are you", emptyList(), "hay"))
+        assertTrue(Completion.fits("see you tomorrow", listOf("see", "you"), "tom"))
+        assertFalse(Completion.fits("hay how are you", emptyList(), "hay"))
+        assertFalse(Completion.fits("billie j help?", listOf("billie"), "j"))
+        assertFalse(Completion.fits("hay fever", emptyList(), "hay"))
+        assertTrue(Completion.fits("hay fever", emptyList(), "hay", wholeWord = true))
+        assertFalse(Completion.fits("thanks you tom", listOf("thank"), "y"))
+    }
 }

@@ -78,9 +78,9 @@ class BridgeClient(base: String, internal val token: String) {
     /** POST /ai/replies: reply sentences and to-do items for a message in [lang] ("en" or "es"); both empty when the laptop's model has none. */
     @Throws(IOException::class) fun replies(text: String, lang: String, context: String = ""): Pair<List<String>, List<String>> =
         json("/ai/replies", JSONObject().put("text", text).put("lang", lang).put("context", context).toString(), "POST", 20_000).let { strings(it.optJSONArray("replies")) to strings(it.optJSONArray("tasks")) }
-    /** POST /ai/complete: up to 5 whole texts the typed letters [typed] mean (start of a word or first letters of words); empty when the laptop's model has none. Waits [timeoutMs] at most. */
-    @Throws(IOException::class) fun complete(typed: String, lang: String, context: String = "", timeoutMs: Int = 1000): List<String> =
-        strings(json("/ai/complete", JSONObject().put("text", typed).put("lang", lang).put("context", context).toString(), "POST", timeoutMs).optJSONArray("completions"))
+    /** POST /ai/complete: up to 5 whole texts that [letters] mean after the finished words [done] (start of a word or first letters of words); empty when the laptop's model has none. Waits [timeoutMs] at most. */
+    @Throws(IOException::class) fun complete(done: String, letters: String, lang: String, context: String = "", timeoutMs: Int = 1000): List<String> =
+        strings(json("/ai/complete", JSONObject().put("text", "$done $letters".trim()).put("done", done).put("letters", letters).put("lang", lang).put("context", context).toString(), "POST", timeoutMs).optJSONArray("completions"))
     /** GET /room/last: Claude's whole last message. */
     @Throws(IOException::class) fun last(id: String): String = json("/room/last?id=${enc(id)}" + aiQ("&")).optString("text")
     /** GET /room/story: the short story and go text of one window (the laptop may take a few seconds to make it). */

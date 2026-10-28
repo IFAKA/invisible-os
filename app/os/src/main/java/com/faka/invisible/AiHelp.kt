@@ -28,7 +28,7 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
                  override fun taskLine(text: String) = b.short(text, "", "task")
                  override fun tasksSummary(items: List<String>) = b.short(items.joinToString("\n"), "", "tasks")
                  override fun replies(text: String, lang: String, context: String) = b.replies(text, lang, context)
-                 override fun complete(typed: String, lang: String, context: String) = b.complete(typed, lang, context)
+                 override fun complete(done: String, letters: String, lang: String, context: String, timeoutMs: Int) = b.complete(done, letters, lang, context, timeoutMs)
              } } }) {
     interface AiClient {
         @Throws(IOException::class) fun digest(items: List<Triple<String, String, String>>): String
@@ -39,8 +39,8 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
         @Throws(IOException::class) fun tasksSummary(items: List<String>): String = ""
         /** Reply sentences and tasks; both empty = the laptop's model had nothing. */
         @Throws(IOException::class) fun replies(text: String, lang: String, context: String): Pair<List<String>, List<String>>
-        /** Up to 5 whole texts the typed letters mean (the bridge waits 1 s at most). */
-        @Throws(IOException::class) fun complete(typed: String, lang: String, context: String): List<String> = emptyList()
+        /** Up to 5 whole texts the [letters] mean after the finished words [done] (the bridge waits [timeoutMs] at most; the phone model has no limit but the caller's). */
+        @Throws(IOException::class) fun complete(done: String, letters: String, lang: String, context: String, timeoutMs: Int): List<String> = emptyList()
     }
 
     /** The model on the phone (LocalAi). Slow: only called from the background thread. */
@@ -193,18 +193,18 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
     }
 
     /**
-     * Up to 5 whole texts that the typed letters [typed] may mean ("hay" -> "how are you"; the start of the word or the first letters of the next words).
-     * BLOCKS: call it from a worker thread; the caller gives up after 1 s. Computer first, then the phone model, same guard as the bridge (`AiGuard`).
-     * [context] = the earlier messages of the chat. The caller must not call this for a private notification or a password field. A slow computer is not marked
-     * as down (it only answered late); no AI or no answer = empty.
+     * Up to 5 whole texts that [letters] may mean after the finished words [done] ("" + "hay" -> "how are you"; "see you" + "tom" -> "see you tomorrow": the start of
+     * the word or the first letters of the next words). BLOCKS: call it from a worker thread; the caller gives up after its own timeout, which is also what the computer is given ([timeoutMs]). Computer first, then the
+     * phone model, same prompt and guard as the bridge (`AiGuard`). [context] = the earlier messages of the chat. The caller must not call this for a private
+     * notification or a password field. A slow computer is not marked as down (it only answered late); no AI or no answer = empty.
      */
-    fun complete(typed: String, lang: String, context: String): List<String> {
-        val t = typed.squash()
-        if (t.isEmpty() || source() == AiSource.NONE) return emptyList()
+    fun complete(done: String, letters: String, lang: String, context: String, timeoutMs: Int = 1000): List<String> {
+        val d = done.squash(); val l = letters.squash()
+        if (l.isEmpty() || source() == AiSource.NONE) return emptyList()
         val r = chain(emptyList<String>(), { it.isEmpty() },
-            { c -> try { c.complete(t, lang, context) } catch (_: java.net.SocketTimeoutException) { emptyList() } },
-            { p -> AiGuard.makeCompletions(t, context, lang) { p.generate(it) } })
-        Trace.ev("ai", "complete [${source()}] '$t' -> ${r.size}")
+            { c -> try { c.complete(d, l, lang, context, timeoutMs) } catch (_: java.net.SocketTimeoutException) { emptyList() } },
+            { p -> AiGuard.makeCompletions(d, l, context, lang) { p.generate(it) } })
+        Trace.ev("ai", "complete [${source()}] '$d' + '$l' -> ${r.size}")
         return r
     }
 

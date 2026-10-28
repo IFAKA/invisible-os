@@ -58,14 +58,51 @@ class NextWord(bin: InputStream, vocabText: String) : Ranker {
         return h to c
     }
 
-    private fun state(words: List<String>): Pair<FloatArray, FloatArray> {
+    private fun state(words: List<String>, cache: MutableMap<String, Pair<FloatArray, FloatArray>> = states): Pair<FloatArray, FloatArray> {
         val key = words.joinToString(" ")
-        states[key]?.let { return it }
+        cache[key]?.let { return it }
         val s = if (words.isEmpty()) step(1, FloatArray(H), FloatArray(H))
-        else state(words.dropLast(1)).let { step(ids[words.last()] ?: 2, it.first, it.second) }
-        if (states.size > 2000) states.clear()
-        states[key] = s
+        else state(words.dropLast(1), cache).let { step(ids[words.last()] ?: 2, it.first, it.second) }
+        if (cache.size > 2000) cache.clear()
+        cache[key] = s
         return s
+    }
+
+    /** The real words (letters and apostrophes) of the vocabulary by their first letter, built once. */
+    private val byInitial: Map<Char, IntArray> by lazy {
+        (3 until V).filter { LetterRank.LETTER_RE.matches(vocab[it]) }.groupBy { vocab[it][0] }.mapValues { it.value.toIntArray() }
+    }
+
+    /**
+     * Constrained beam search for first letters ("hay" -> "how are you"): word k starts with letter k. Each step keeps the [beam] best texts by the sum of the
+     * log chances the model gives to their words after the finished words [done]; returns the best [n] whole texts (done words first) with their log chance.
+     * Does not touch the state cache of [ranked], so it may run on another thread; stops at [budgetMs] and returns what it has (nothing if no text is whole).
+     */
+    fun initials(done: List<String>, letters: String, beam: Int = 8, n: Int = 5, budgetMs: Long = 150): List<Pair<String, Double>> {
+        val ls = letters.lowercase().filter { it.isLetter() }
+        if (ls.isEmpty()) return emptyList()
+        val deadline = System.nanoTime() + budgetMs * 1_000_000
+        val cache = HashMap<String, Pair<FloatArray, FloatArray>>()
+        val base = done.map { it.lowercase() }
+        var beams = listOf(emptyList<String>() to 0.0)
+        for (c in ls) {
+            val pool = byInitial[c] ?: return emptyList()
+            val next = ArrayList<Pair<List<String>, Double>>()
+            for ((ws, score) in beams) {
+                if (System.nanoTime() > deadline) return emptyList()
+                val ctx = base + ws
+                val p = gemv(proj, E, H, state(ctx, cache).first)
+                val logits = gemv(emb, V, E, p)
+                for (i in 0 until V) logits[i] += bias[i]
+                val mx = logits.max()
+                var sum = 0.0
+                for (v in logits) sum += exp((v - mx).toDouble())
+                val lse = ln(sum) + mx
+                for (i in pool.sortedByDescending { logits[it] }.take(beam)) next += (ws + vocab[i]) to score + (logits[i] - lse)
+            }
+            beams = next.sortedByDescending { it.second }.take(beam)
+        }
+        return beams.take(n).map { (base + it.first).joinToString(" ") to it.second }
     }
 
     private var rankedKey: String? = null

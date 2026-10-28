@@ -122,31 +122,49 @@ object AiGuard {
 
     const val COMPLETE_WORDS = 12
 
-    fun completePrompt(typed: String, lang: String, context: String = ""): String {
+    private val COMPLETE_EXAMPLES = listOf(
+        "" to ("hay" to listOf("how are you", "how are you doing", "how about you")),
+        "see you" to ("tom" to listOf("see you tomorrow", "see you tomorrow morning")),
+        "" to ("wh" to listOf("where are you", "what happened", "who is this")),
+        "billie" to ("j" to listOf("billie jean", "billie jean lyrics")),
+        "" to ("iwt" to listOf("i want to", "i went to", "i will try")),
+        "" to ("tyvm" to listOf("thank you very much")),
+        "ill" to ("bt" to listOf("ill be there", "ill be there tonight")),
+        "no" to ("p" to listOf("no problem", "no pressure", "no way")),
+    ).joinToString("") { (d, lr) -> "Words done: \"$d\". Letters: \"${lr.first}\" -> {\"completions\": [${lr.second.joinToString(", ") { "\"$it\"" }}]}\n" }
+
+    /** The same prompt as `build_complete_prompt` in the bridge: the finished words [done] and the [letters] come apart (few-shot, measured by tools/complete_eval.py). */
+    fun completePrompt(done: String, letters: String, lang: String, context: String = ""): String {
         val language = if (lang == "es") "Spanish" else "English"
-        return "${earlierBlock(context)}Someone is typing a message on a phone with one button, so every letter is slow. So far they typed: \"${typed.take(200)}\"\n" +
-            "The typed letters are EITHER the start of the word they mean (\"hel\" = \"help\") OR the first letters of the next words (\"hay\" = \"how are you\"). " +
-            "Write up to 5 whole texts they most likely mean, most likely first, in $language, as JSON: {\"completions\": [...]}. " +
-            "Each text starts with the words already typed, is natural and short, at most $COMPLETE_WORDS words. " +
+        return "${earlierBlock(context)}Someone is typing a message on a phone with one button, so every letter is slow.\n" +
+            "They give the words they finished and some letters. The letters are EITHER the start of the next word (\"wh\" = \"what\") " +
+            "OR the first letters of the next words, one letter per word (\"hay\" = \"how are you\"). The letters are never a word by themselves. " +
+            "Words from the examples are not part of the answer.\n" +
+            "Examples:\n$COMPLETE_EXAMPLES\n" +
+            "Now: Words done: \"${done.squash().take(200)}\". Letters: \"${letters.squash().take(60)}\" ->\n" +
+            "Write up to 5 whole texts they most likely mean, most likely first, in $language: the words done, then the new words, at most $COMPLETE_WORDS words, " +
+            "as JSON {\"completions\": [list of plain strings]}. " +
             "Use only facts, numbers and names that are in the earlier messages. Never invent.\nOutput only the JSON."
     }
 
-    /** The strings of {"completions": [...]} in the model's reply; empty if it is not the JSON asked for. */
+    /** The strings of {"completions": [...]} in the model's reply (plain strings, or objects with a "text" field); empty if it is not the JSON asked for. */
     fun parseCompletions(raw: String): List<String> {
         val m = Regex("\\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL).find(raw.substringAfter("\"completions\"", "")) ?: return emptyList()
-        return Regex("\"((?:[^\"\\\\]|\\\\.)*)\"").findAll(m.groupValues[1]).map { unescape(it.groupValues[1]).squash().replace(markdown, "").squash() }.filter { it.isNotEmpty() }.toList()
+        val body = m.groupValues[1]
+        val strings = if (body.contains("\"text\"")) Regex("\"text\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"") else Regex("\"((?:[^\"\\\\]|\\\\.)*)\"")
+        return strings.findAll(body).map { unescape(it.groupValues[1]).squash().replace(markdown, "").squash() }.filter { it.isNotEmpty() }.toList()
     }
 
-    /** Up to 5 completions of [typed] that fit it, are short and invent nothing (checked against [typed] and [context]); empty on any failure. */
-    fun makeCompletions(typed: String, context: String, lang: String, model: (String) -> String): List<String> {
-        val t = typed.squash()
-        if (t.isEmpty()) return emptyList()
-        val items = try { parseCompletions(model(completePrompt(t, lang, context))) } catch (_: Exception) { return emptyList() }
-        val hay = (t + "\n" + context.squash().take(CONTEXT_CHARS)).lowercase()
+    /** Up to 5 completions of [done] + [letters] that fit them, are short and invent nothing (checked against both and [context]); empty on any failure. */
+    fun makeCompletions(done: String, letters: String, context: String, lang: String, model: (String) -> String): List<String> {
+        val d = done.squash(); val l = letters.words().joinToString("")
+        if (l.isEmpty()) return emptyList()
+        val items = try { parseCompletions(model(completePrompt(d, l, lang, context))) } catch (_: Exception) { return emptyList() }
+        val hay = ("$d $l\n" + context.squash().take(CONTEXT_CHARS)).lowercase()
         val out = ArrayList<String>()
         for (x in items) {
             val c = x.squash().trim(' ', '"', '\'')
-            if (c.isEmpty() || c.words().size > COMPLETE_WORDS || out.any { it.equals(c, true) } || !Completion.fits(c, t)) continue
+            if (c.isEmpty() || c.words().size > COMPLETE_WORDS || out.any { it.equals(c, true) } || !Completion.fits(c, d.words(), l)) continue
             if (riskyTokens(c).any { !inSource(it, hay) }) continue
             out += c
         }

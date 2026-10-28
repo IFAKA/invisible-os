@@ -27,8 +27,8 @@ interface WriteServices {
     fun nextWords(text: String, brief: String): List<String>
     /** Blocking: ways to finish [text]. */
     fun continuations(text: String, brief: String): List<String>
-    /** Blocking: up to 5 whole texts that the typed [typed] may mean (the start of a word or the first letters of the next words), from the AI (computer, else the phone model); [context] = the chat on the screen. Never called for a private place or a password. Default: none. */
-    fun completions(typed: String, context: String, lang: String): List<String> = emptyList()
+    /** Blocking: up to 5 whole texts that the [letters] may mean after the finished words [done] (the start of a word or the first letters of the next words), from the AI (computer, else the phone model); [context] = the chat on the screen; the computer is given [timeoutMs]. Never called for a private place or a password. Default: none. */
+    fun completions(done: String, letters: String, context: String, lang: String, timeoutMs: Int): List<String> = emptyList()
     /** Blocking: what the app in front shows as its own suggestions for the field (a search box lists them), read through the accessibility service. Default: none. */
     fun screenSuggestions(): List<String> = emptyList()
     /** Blocking: names the OS knows that may be typed (contacts, apps, songs played), best known first. Default: none. */
@@ -142,8 +142,9 @@ class WriteProgram(
         val base = WriteOut(host)
         val sourceList: List<GuessSource> = listOf(
             SpelledSource(buckets), ScreenSource({ services.screenSuggestions() }), ListSource("lists", { services.lists() }),
-            CompleteSource({ typed, context -> services.completions(typed, context, chatLang ?: "en") }, 1000, { Trace.ev("write", it) }),
-        ).filter { it !is ScreenSource || sendTo == null }   // a reply or a search typed for the OS has no app screen to read
+            CompleteSource({ done, letters, context, ms -> services.completions(done, letters, context, chatLang ?: "en", ms.toInt()) }, { (typer as? LoopProgram)?.aiBudgetMs() ?: 1000L }, { Trace.ev("write", it) }),
+        ).let { l -> (lm as? NextWord)?.let { l + InitialsSource(it, 400) } ?: l }   // 150 ms on the laptop; the phone is slower, so a cap of 400 ms
+            .filter { it !is ScreenSource || sendTo == null }   // a reply or a search typed for the OS has no app screen to read
         val out = object : TypeOut by base {
             override fun suggestions() = buckets.suggestions(frame)
             override fun nextWords(text: String, then: (List<String>) -> Unit) {

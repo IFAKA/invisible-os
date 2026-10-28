@@ -88,10 +88,13 @@ class AiGuardTest {
     @Test fun completionsFitTheTypedLettersAndInventNothing() {
         val raw = """Here: {"completions": ["how are you", "hay fever", "what is up", "hey Bob you", "how are you"]} done"""
         assertEquals(listOf("how are you", "hay fever", "what is up", "hey Bob you", "how are you"), AiGuard.parseCompletions(raw))
-        assertEquals(listOf("how are you", "hay fever"), AiGuard.makeCompletions("hay", "Ana: hi", "en") { raw })
-        assertEquals(listOf("hey Bob you"), AiGuard.makeCompletions("hby", "Bob: hi", "en") { raw })   // Bob is in the chat, so it is not invented
-        assertTrue(AiGuard.makeCompletions("hay", "", "en") { throw RuntimeException("x") }.isEmpty())
-        assertTrue(AiGuard.makeCompletions("hay", "", "en") { "no json" }.isEmpty())
-        assertTrue(AiGuard.completePrompt("hay", "en", "Ana: hi").contains("Ana: hi"))
+        assertEquals(listOf("how are you"), AiGuard.makeCompletions("", "hay", "Ana: hi", "en") { raw })   // "hay fever" copies the letters
+        assertEquals(listOf("hey Bob you"), AiGuard.makeCompletions("", "hby", "Bob: hi", "en") { raw })   // Bob is in the chat, so it is not invented
+        assertTrue(AiGuard.makeCompletions("", "hay", "", "en") { throw RuntimeException("x") }.isEmpty())
+        assertTrue(AiGuard.makeCompletions("", "hay", "", "en") { "no json" }.isEmpty())
+        assertTrue(AiGuard.completePrompt("", "hay", "en", "Ana: hi").contains("Ana: hi"))
+        assertEquals(listOf("see you tomorrow"), AiGuard.makeCompletions("see you", "tom", "", "en") { """{"completions": [{"text": "see you tomorrow"}, {"text": "see you tom"}]}""" })
+        assertEquals(listOf("a b", "c"), AiGuard.parseCompletions("""{"completions": [{"text": "a b"}, {"text": "c"}]}"""))
+        assertTrue(AiGuard.completePrompt("see you", "tom", "en").contains("Words done: \"see you\". Letters: \"tom\" ->"))
     }
 }

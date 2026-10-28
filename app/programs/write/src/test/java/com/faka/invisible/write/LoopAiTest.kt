@@ -14,7 +14,7 @@ class LoopAiTest {
     private val words = listOf("hello" to -2.0, "hi" to -2.5, "there" to -3.0, "yes" to -4.0, "had" to -3.5, "hay" to -4.5, "happy" to -4.0)
     private val lm = object : Ranker { override fun ranked(context: List<String>) = words }
     private var frame = Frame()
-    private val sources = listOf<GuessSource>(CompleteSource({ typed, _ -> asked += typed; if (typed == "hay") listOf("how are you", "hay fever", "what is up") else emptyList() }, 1000, run = { it() }))
+    private val sources = listOf<GuessSource>(CompleteSource({ done, letters, _, _ -> val typed = (done + " " + letters).trim(); asked += typed; if (typed == "hay") listOf("how are you", "hayden lee", "what is up") else emptyList() }, { 1000L }, run = { it() }))
     private val p by lazy {
         LoopProgram(lm, object : TypeOut {
             override fun pair(left: String, right: String?) {}
@@ -54,7 +54,7 @@ class LoopAiTest {
         audio.advance(2500)
         val items = audio.played.drop(n).map { it.text }.distinct()
         assertEquals("how are you", items.first())
-        assertTrue(items.indexOf("hay fever") in 1..2)
+        assertTrue(items.indexOf("hayden lee") in 1..2)
         assertFalse("does not fit the letters", items.contains("what is up"))
         pick("how are you") { p.text() == "How are you" }
         assertTrue(logs.any { it.startsWith("source pick=complete rank=0") })

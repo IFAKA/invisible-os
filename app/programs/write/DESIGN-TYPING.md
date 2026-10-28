@@ -54,3 +54,9 @@ Picture: a waiter. He guesses your order from where you sit, you say yes or give
 - AI job: `AiHelp.complete` (computer `/ai/complete`, else the phone model, same prompt and guard: `AiGuard.makeCompletions`, bridge `make_complete`).
 - Trace: `write ai complete 312ms 3`, `write source pick=complete rank=0`.
 - Not proven without the real computer and phone: the real AI answer time (must stay under 1 s), the real screen suggestions of YT Music. Songs played has no store yet (Write's own earlier searches are in the history source).
+
+## Step 8b: complete job and initials (2026-10-28)
+- The request carries the finished words and the letters apart (`done`, `letters`; `text` stays for old callers). Fit rule (`Completion.fits`, `completion_fits`): starts with the done words, then the next word starts with the letters and is longer, or the next words' first letters start with the letters (2 or more). The letters copied as a word ("hay how are you") fail.
+- Prompt: few-shot with "Words done / Letters" (`AiGuard.completePrompt`, `build_complete_prompt`, same text). Eval: `tools/complete_eval.py --model M --prompt both` over `bridge/tests/complete_cases.tsv` (21 cases, real Ollama, cached by prompt hash). gemma3:4b new prompt: hit@1 57%, hit@5 62%, about 1350 ms; gemma3:1b: 29%, 29%, about 735 ms (mostly junk). Default stays gemma3:4b.
+- Source "initials" (`InitialsSource`, `NextWord.initials`): beam search (width 8) with the word model, no AI, 2 letters or more. "hay" gives "how are you" first; 4 letters take about 13 ms on the laptop; capped at 400 ms on the phone. "omw" gives "or maybe we" first ("on my way" is rank 27): short forms like that come from history or the AI.
+- AI timeout = time to the next loop cycle plus one cycle, 1 to 3 s (`LoopProgram.aiBudgetMs`).

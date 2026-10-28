@@ -3,6 +3,7 @@ package com.faka.invisible.write
 import com.faka.invisible.voicekit.*
 
 import java.io.File
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -33,5 +34,44 @@ class NextWordTest {
         val ms = (System.nanoTime() - t0) / 20 / 1e6
         println("top4 ms on laptop: $ms")
         assertTrue(ms < 25)
+    }
+}
+
+class InitialsBeamTest {
+    private val dir = File("src/main/assets/lm")
+    private val lm by lazy { NextWord(File(dir, "lm.bin").inputStream(), File(dir, "vocab.txt").readText()) }
+
+    @Test fun hayGivesHowAreYou() {
+        val r = lm.initials(emptyList(), "hay").map { it.first }
+        println("BEAM hay -> $r")
+        assertTrue(r.toString(), "how are you" in r.take(3))
+    }
+
+    @Test fun omwIsOnlyFoundWithAWideBeamBecauseTheModelPrefersOtherTexts() {
+        // "on", "my", "way" are in the vocabulary, but at the start of a text the model gives "or maybe we" more chance than "on my way" (measured 2026-10-28:
+        // top 5 with beam 8 or 30 is "or maybe we, okay maybe we, ..."). So no promise for "omw"; history and the AI source carry such short forms.
+        val r = lm.initials(emptyList(), "omw", beam = 60, n = 60).map { it.first }
+        println("BEAM omw rank of 'on my way' = ${r.indexOf("on my way")} of ${r.size}; top5 ${r.take(5)}")
+        assertTrue(r.isNotEmpty() && r.all { it.split(" ").size == 3 && it.split(" ").map { w -> w[0] } == listOf('o', 'm', 'w') })
+    }
+
+    @Test fun doneWordsAreKeptAndFourLettersAreFast() {
+        val r = lm.initials(listOf("see"), "yt").map { it.first }
+        println("BEAM see+yt -> $r")
+        assertTrue(r.isNotEmpty() && r.all { it.startsWith("see ") && it.split(" ").size == 3 })
+        lm.initials(emptyList(), "hay")   // warm up
+        val t0 = System.nanoTime(); val four = lm.initials(emptyList(), "ttyl", budgetMs = 5000); val ms = (System.nanoTime() - t0) / 1_000_000
+        println("BEAM ttyl -> ${four.map { it.first }} in $ms ms")
+        assertTrue("took $ms ms", ms < 150)
+        val t1 = System.nanoTime(); val cut = lm.initials(emptyList(), "ttyl", budgetMs = 0); assertTrue(cut.isEmpty() && (System.nanoTime() - t1) / 1_000_000 < 50)
+    }
+
+    @Test fun theInitialsSourceNeedsTwoLettersAndAnswersWithWholeTexts() {
+        val s = InitialsSource(lm, run = { it() })
+        var got: List<Guess>? = null
+        s.ask(Request(Frame(), emptyList(), "h")) { got = it }
+        assertNull(got)
+        s.ask(Request(Frame(), emptyList(), "hay")) { got = it }
+        assertTrue(got!!.first().text == "how are you")
     }
 }

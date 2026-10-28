@@ -160,3 +160,35 @@ class TaskLineTest(unittest.TestCase):
         src = "\n".join(["Buy a breadboard", "Buy jumper wires", "Buy a multimeter", "Call the bank about the card statement", "Buy a small pencil case"])
         self.assertEqual(aitext.make_short(src, model, "", "tasks"), "mostly buying electronics parts, and a few calls")
         self.assertIn("to-do list", seen[0])
+
+
+class CompleteTest(unittest.TestCase):
+    def test_fit_rule(self):
+        f = aitext.completion_fits
+        self.assertTrue(f("how are you", "", "hay"))
+        self.assertTrue(f("see you tomorrow", "see you", "tom"))
+        self.assertTrue(f("meet me tomorrow", "meet me", "t"))
+        self.assertTrue(f("Meet me tomorrow", [], "mmt"))
+        self.assertTrue(f("hayden", "", "hay"))
+        self.assertFalse(f("hay how are you", "", "hay"))        # the letters copied as a word
+        self.assertFalse(f("billie j help?", "billie", "j"))
+        self.assertFalse(f("hay fever", "", "hay"))               # equal to the letters, not longer
+        self.assertTrue(f("hay fever", "", "hay", whole_word=True))
+        self.assertFalse(f("what is up", "", "hay"))
+        self.assertFalse(f("meet you tomorrow", "meet me", "t"))
+        self.assertFalse(f("thanks you tom", "thank", "y"))       # the done words must stay
+        self.assertTrue(f("meet me tomorrow", "meet me t"))       # old call shape
+        self.assertFalse(f("anything", ""))
+
+    def test_parse_accepts_objects_and_strings(self):
+        raw = 'x {"completions": ["how are you", {"text": "how about you"}, {"nope": 1}, 3]}'
+        self.assertEqual(aitext.parse_completions(raw), ["how are you", "how about you"])
+
+    def test_make_complete_filters_and_prompt_carries_both_parts(self):
+        seen = []
+        m = lambda p: seen.append(p) or '{"completions": ["see you tomorrow", "see you tom", "see you at 9", "see you tomorrow"]}'
+        self.assertEqual(aitext.make_complete("see you", "tom", "en", m, "Ana: hi"), ["see you tomorrow"])
+        self.assertIn('Words done: "see you". Letters: "tom"', seen[0]); self.assertIn("Ana: hi", seen[0])
+        self.assertEqual(aitext.AiText(m).complete("see you tom"), {"completions": ["see you tomorrow"]})
+        self.assertEqual(aitext.AiText(m).complete(done="see you", letters="tom"), {"completions": ["see you tomorrow"]})
+        self.assertEqual(aitext.make_complete("", "", "en", m), [])

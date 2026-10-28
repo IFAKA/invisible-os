@@ -202,8 +202,12 @@ class AiHttpTest(unittest.TestCase):
             seen.clear()
             FakeRooms.ai = aitext.AiText(lambda p: seen.append(p) or '{"completions": ["how are you", "hay fever", "what is that", "How are you"]}')
             got = fake_phone.call(url, token, "/ai/complete", {"text": "hay", "lang": "en", "context": "Ana: hi"})
-            self.assertEqual(got, {"completions": ["how are you", "hay fever"]})   # "what is that" does not fit, the repeat is dropped
+            self.assertEqual(got, {"completions": ["how are you"]})   # "hay fever" copies the letters, "what is that" does not fit, the repeat is dropped
             self.assertIn("hay", seen[0]); self.assertIn("Ana: hi", seen[0])
+            seen.clear()
+            got = fake_phone.call(url, token, "/ai/complete", {"text": "see you tom", "done": "see you", "letters": "tom", "lang": "en", "context": ""})
+            self.assertEqual(got, {"completions": []})   # the fake model's answers do not fit "see you" + "tom"
+            self.assertIn('Words done: "see you". Letters: "tom"', seen[0])
             self.assertEqual(aitext.AiText(None).complete("hay"), {"completions": []})
         finally:
             srv.shutdown()

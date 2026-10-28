@@ -225,32 +225,60 @@ def make_replies(text, lang, model, context=""):
 COMPLETE_WORDS = 12
 
 
-def completion_fits(text, typed):
-    """Pure. Does the completion `text` fit what was typed? The typed words are the start of the text's words (the last one may be cut), OR
-    the typed letters are the first letters of the text's words ("hay" -> "how are you"). Same rule as logickit/Completion.kt."""
-    tw = [w.lower() for w in str(typed or "").split()]
+def completion_fits(text, done, letters=None, whole_word=False):
+    """Pure. Does the completion `text` fit the finished words `done` (a string or a list) and the `letters` of the word being spelled?
+    It must start with the done words. Then EITHER its next word starts with the letters and is longer ("t" -> "tomorrow"; equal only when
+    `whole_word`), OR the first letters of its next words start with the letters ("hay" -> "how are you", 2 letters or more). The letters copied
+    as a word ("hay how are you") do not fit. Same rule as logickit/Completion.kt. Old callers: `completion_fits(text, "meet me t")`, the last word is the letters."""
+    if letters is None:
+        tw = str(done or "").split()
+        if not tw:
+            return False
+        done, letters = tw[:-1], tw[-1]
+    d = [w.lower() for w in (done.split() if isinstance(done, str) else [x for y in done for x in str(y).split()])]
+    l = "".join(str(letters or "").split()).lower()
     ow = [w.lower() for w in str(text or "").split()]
-    if not tw or not ow:
+    if len(ow) < len(d) or ow[:len(d)] != d:
         return False
-    if len(tw) <= len(ow) and all(a == b for a, b in zip(tw[:-1], ow)) and ow[len(tw) - 1].startswith(tw[-1]):
+    rest = ow[len(d):]
+    if not l:
+        return bool(rest)
+    if not rest:
+        return False
+    if rest[0].startswith(l) and (len(rest[0]) > len(l) or whole_word):
         return True
-    letters = "".join(c for w in tw for c in w if c.isalpha())
-    initials = "".join(w[0] for w in ow if w[0].isalpha())
-    return len(letters) >= 2 and initials.startswith(letters)
+    ls = "".join(c for c in l if c.isalpha())
+    initials = "".join(w[0] for w in rest if w[0].isalpha())
+    return len(ls) >= 2 and initials.startswith(ls)
 
 
-def build_complete_prompt(typed, lang, context=""):
+COMPLETE_EXAMPLES = (
+    'Words done: "". Letters: "hay" -> {"completions": ["how are you", "how are you doing", "how about you"]}\n'
+    'Words done: "see you". Letters: "tom" -> {"completions": ["see you tomorrow", "see you tomorrow morning"]}\n'
+    'Words done: "". Letters: "wh" -> {"completions": ["where are you", "what happened", "who is this"]}\n'
+    'Words done: "billie". Letters: "j" -> {"completions": ["billie jean", "billie jean lyrics"]}\n'
+    'Words done: "". Letters: "iwt" -> {"completions": ["i want to", "i went to", "i will try"]}\n'
+    'Words done: "". Letters: "tyvm" -> {"completions": ["thank you very much"]}\n'
+    'Words done: "ill". Letters: "bt" -> {"completions": ["ill be there", "ill be there tonight"]}\n'
+    'Words done: "no". Letters: "p" -> {"completions": ["no problem", "no pressure", "no way"]}\n')
+
+
+def build_complete_prompt(done, letters, lang, context=""):
     language = "Spanish" if lang == "es" else "English"
-    return ("%sSomeone is typing a message on a phone with one button, so every letter is slow. So far they typed: \"%s\"\n"
-            "The typed letters are EITHER the start of the word they mean (\"hel\" = \"help\") OR the first letters of the next words (\"hay\" = \"how are you\"). "
-            "Write up to 5 whole texts they most likely mean, most likely first, in %s, as JSON: {\"completions\": [...]}. "
-            "Each text starts with the words already typed, is natural and short, at most %d words. "
+    return ("%sSomeone is typing a message on a phone with one button, so every letter is slow.\n"
+            "They give the words they finished and some letters. The letters are EITHER the start of the next word (\"wh\" = \"what\") "
+            "OR the first letters of the next words, one letter per word (\"hay\" = \"how are you\"). The letters are never a word by themselves. "
+            "Words from the examples are not part of the answer.\n"
+            "Examples:\n%s\n"
+            "Now: Words done: \"%s\". Letters: \"%s\" ->\n"
+            "Write up to 5 whole texts they most likely mean, most likely first, in %s: the words done, then the new words, at most %d words, "
+            "as JSON {\"completions\": [list of plain strings]}. "
             "Use only facts, numbers and names that are in the earlier messages. Never invent.\nOutput only the JSON."
-            % (earlier_block(context), str(typed)[:200], language, COMPLETE_WORDS))
+            % (earlier_block(context), COMPLETE_EXAMPLES, squash(done)[:200], squash(letters)[:60], language, COMPLETE_WORDS))
 
 
 def parse_completions(text):
-    """Pure. The list of strings of {"completions": [...]} in the model's reply; [] if it is not the JSON asked for."""
+    """Pure. The list of strings of {"completions": [...]} in the model's reply (a string, or an object with a "text" field); [] if it is not the JSON asked for."""
     m = re.search(r"\{.*\}", str(text or ""), re.S)
     if not m:
         return []
@@ -259,20 +287,28 @@ def parse_completions(text):
     except ValueError:
         return []
     v = o.get("completions") if isinstance(o, dict) else None
-    return [re.sub(r"(\*\*|__|`|^#+\s*)", "", squash(x)) for x in v if isinstance(x, str)] if isinstance(v, list) else []
+    if not isinstance(v, list):
+        return []
+    out = []
+    for x in v:
+        if isinstance(x, dict):
+            x = x.get("text")
+        if isinstance(x, str):
+            out.append(re.sub(r"(\*\*|__|`|^#+\s*)", "", squash(x)))
+    return out
 
 
-def make_complete(typed, lang, model, context=""):
-    """Pure given `model`. Up to 5 completions that fit the typed text, are short and invent nothing; [] when there is no model, a failure or nothing usable."""
-    typed = squash(typed)
-    if model is None or not typed:
+def make_complete(done, letters, lang, model, context="", prompt=None):
+    """Pure given `model`. Up to 5 completions that fit the done words and letters, are short and invent nothing; [] when there is no model, a failure or nothing usable."""
+    done, letters = squash(done), "".join(str(letters or "").split())
+    if model is None or not letters:
         return []
     try:
-        items = parse_completions(model(build_complete_prompt(typed, lang, context)))
+        items = parse_completions(model((prompt or build_complete_prompt)(done, letters, lang, context)))
     except Exception:
         return []
     ctx = squash(context)[:CONTEXT_CHARS]
-    return [t for t in check_items(items, typed, ctx, COMPLETE_WORDS, n=5) if completion_fits(t, typed)]
+    return [t for t in check_items(items, done + " " + letters, ctx, COMPLETE_WORDS, n=5) if completion_fits(t, done, letters)]
 
 
 class AiText:
@@ -315,7 +351,12 @@ class AiText:
         got = self._get(self._key("r", [text, lang, context]), lambda: make_replies(text, lang, self.model, context))
         return {"replies": list(got.get("replies", [])), "tasks": list(got.get("tasks", []))} if got else {"replies": [], "tasks": []}
 
-    def complete(self, typed, lang="en", context=""):
-        typed, context, lang = squash(typed)[:200], squash(context)[:CONTEXT_CHARS], "es" if lang == "es" else "en"
-        got = self._get(self._key("c", [typed, lang, context]), lambda: make_complete(typed, lang, self.model, context))
+    def complete(self, typed="", lang="en", context="", done=None, letters=None):
+        """`done` (finished words) and `letters` come separately; an old caller sends `typed` ("meet me t": the last word is the letters)."""
+        if letters is None:
+            tw = squash(typed).split()
+            done, letters = " ".join(tw[:-1]), (tw[-1] if tw else "")
+        done, letters = squash(done)[:200], squash(letters)[:60]
+        context, lang = squash(context)[:CONTEXT_CHARS], "es" if lang == "es" else "en"
+        got = self._get(self._key("c", [done, letters, lang, context]), lambda: make_complete(done, letters, lang, self.model, context))
         return {"completions": list(got or [])}
