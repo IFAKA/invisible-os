@@ -159,7 +159,7 @@ class ControllerMode(
     private val queueMs: Long = 300_000,       // the wake queue holds only messages this young
     private val wakeReadsFresh: Boolean = false, // off: a wake always opens the hub (tests that need the message screen turn it on)
 ) {
-    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_APPS, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL, CALL_IN, CALL_ACTIVE, CONTACTS, EMERGENCY, RESET_ASK }
+    enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_CONFIRM, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_APPS, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL, CALL_IN, CALL_ACTIVE, CONTACTS, EMERGENCY, RESET_ASK }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: Phrase, val msgId: String?, val hint: Boolean = false) { var started = false }
     private class Opt(val key: String, val label: Phrase, val full: Phrase? = null, val run: () -> Unit) { var shown = label }   // [full]: read instead of [label] after a fast-scroll release (a task: its whole text)
@@ -182,6 +182,7 @@ class ControllerMode(
     private var pausedByUs = false
     private var queue = mutableListOf<Msg?>()   // null = the finished timer
     private var qi = 0
+    private var taskAsked: Pair<Task, Phrase>? = null   // the task a click is asking about ("Mark done?")
     private var taskList = listOf<Task>()   // snapshot while the Tasks screen is open
     private var notifPkg: String? = null     // the app open in the notification screens
     private var treeRoot: TreeNode? = null   // the group tree, built when the home list is built (fixed while the user walks it)
@@ -369,7 +370,7 @@ class ControllerMode(
 
     private fun tone(s: Screen) = when (s) {
         Screen.HUB -> Tone.HUB; Screen.MESSAGE -> Tone.MESSAGE; Screen.TIMER_DONE, Screen.TIMER_PICK -> Tone.TIMER
-        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_APPS, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY, Screen.CONTACTS -> Tone.MORE; Screen.CALL_IN, Screen.CALL_ACTIVE, Screen.EMERGENCY, Screen.RESET_ASK -> Tone.TIMER; Screen.VOLUME, Screen.VOLUME_DIAL -> Tone.VOLUME; Screen.SENT -> Tone.SENT
+        Screen.MORE_MSG, Screen.TODAY, Screen.PHONE, Screen.COMPOSE, Screen.TASK, Screen.TASK_CONFIRM, Screen.TASK_ADD, Screen.MSG_TASK, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR, Screen.ALARM_MIN, Screen.TREE, Screen.APP_OPEN, Screen.NOTIF_APPS, Screen.NOTIF_LIST, Screen.NOTIF_ACTIONS, Screen.FIND, Screen.MUSIC, Screen.MUSIC_PLAY, Screen.CONTACTS -> Tone.MORE; Screen.CALL_IN, Screen.CALL_ACTIVE, Screen.EMERGENCY, Screen.RESET_ASK -> Tone.TIMER; Screen.VOLUME, Screen.VOLUME_DIAL -> Tone.VOLUME; Screen.SENT -> Tone.SENT
     }
 
     private fun learning() = out.codeCount() < learnActions
@@ -399,6 +400,7 @@ class ControllerMode(
         if (s == Screen.CALL_IN) intro += Intro(Voice.callFrom(out.callCaller() ?: "unknown"), null)
         if (s == Screen.CALL_ACTIVE) intro += Intro(Voice.CALL_ANSWERED, null)
         if (s == Screen.EMERGENCY) intro += Intro(Voice.EMERGENCY_ASK, null)
+        if (s == Screen.TASK_CONFIRM) taskAsked?.let { (_, line) -> intro += Intro(Voice.taskDoneAsk(line), null) }
         if (s == Screen.RESET_ASK) intro += Intro(resetName?.let { Voice.resetAsk(it) } ?: Voice.RESET_ASK_ALL, null)
         if (s == Screen.NOTIF_ACTIONS) openNotif()?.let { intro += Intro(notifIntro(it), null) }
         curIntro = null
@@ -588,18 +590,24 @@ class ControllerMode(
                     val line = out.taskLine(t.text)
                     val whole = Voice.cut(t.text, TASK_FULL_CHARS, t.lang == "es", lang)
                     opts += Opt("task:done", if (line.isEmpty()) Voice.cut(t.text, MAX_SPOKEN, t.lang == "es", lang) else Phrase.content(line, lang), if (line.isEmpty()) null else whole) {
-                    pick("task:done")
-                    startPending(Voice.TASK_DONE_UNDO, { out.completeTask(t.id); true }, onCancel = { show(Screen.TASK) }, after = {
-                        taskList = taskList - t
-                        if (taskList.isEmpty()) { say(Voice.ALL_DONE); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } }
-                        else { if (taskIdx >= taskList.size) taskIdx = 0; show(Screen.TASK) }
-                    })
+                    pick("task:ask"); taskAsked = t to (if (line.isEmpty()) Voice.cut(t.text, MAX_SPOKEN, t.lang == "es", lang) else Phrase.content(line, lang)); show(Screen.TASK_CONFIRM)   // a click only asks: "Mark done?"
                     }
                 }
                 if (taskIdx + TASK_PAGE < taskList.size) opts += Opt("task:more", Menu.MORE_TASKS) { pick("task:more"); taskIdx += TASK_PAGE; show(Screen.TASK) }
                 opts += Opt("task:add", Menu.ADD_TASK) { pick("task:add"); show(Screen.TASK_ADD) }   // last: reading is the common job
                 opts
             }
+            Screen.TASK_CONFIRM -> listOf(   // the safe answer is read first: a click right after hearing it picks it
+                Opt("task:keep", Menu.EMERGENCY_NO) { pick("task:keep"); show(Screen.TASK) },
+                Opt("task:done", Menu.TASK_YES) {
+                    val t = taskAsked?.first ?: run { show(Screen.TASK); return@Opt }
+                    pick("task:done")
+                    startPending(Voice.TASK_DONE_UNDO, { out.completeTask(t.id); true }, onCancel = { show(Screen.TASK) }, after = {
+                        taskList = taskList - t
+                        if (taskList.isEmpty()) { say(Voice.ALL_DONE); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } }
+                        else { if (taskIdx >= taskList.size) taskIdx = 0; show(Screen.TASK) }
+                    })
+                })
             Screen.TASK_ADD -> phraseOptions(taskChoices(), "taskadd") { t ->
                 out.addTask(t.text, t.lang); say(Voice.TASK_ADDED); phase = Phase.WAIT; waitNext = { show(Screen.HUB) }
             }
@@ -1090,6 +1098,7 @@ class ControllerMode(
             Screen.FIND -> { findStack.removeLastOrNull(); if (findStack.isEmpty()) show(Screen.HUB) else show(Screen.FIND) }
             Screen.TIMER_PICK, Screen.TODAY, Screen.PHONE, Screen.TASK, Screen.TASK_ADD, Screen.GAMES, Screen.CALC, Screen.ALARM_HOUR -> treeUp()   // opened from the tree: back to the list it was picked in
             Screen.ALARM_MIN -> show(Screen.ALARM_HOUR)
+            Screen.TASK_CONFIRM -> show(Screen.TASK)
             Screen.CONTACTS, Screen.EMERGENCY -> show(Screen.PHONE)
             Screen.RESET_ASK -> show(Screen.FIND)
             Screen.MESSAGE -> if (fromHub) show(Screen.HUB) else leaveSilent()

@@ -594,14 +594,14 @@ class ModeTest {
     @Test fun pickingATaskMarksItDoneAfterTheCancelWindow() {
         val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.taskStore.add("Call mum")
         r.wake(); r.pick("Tasks, 2")
-        r.pick("Buy milk"); assertEquals(2, r.taskStore.all().size)   // not removed yet
+        r.pick("Buy milk"); r.advance(1500); r.pick("Yes, done"); assertEquals(2, r.taskStore.all().size)   // not removed yet
         r.advance(5000)
         assertEquals(listOf("Call mum"), r.taskStore.all().map { it.text })
     }
 
     @Test fun lastTaskDoneSaysAllDone() {
         val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1500)
-        r.pick("Buy milk"); r.advance(6000)
+        r.pick("Buy milk"); r.advance(1500); r.pick("Yes, done"); r.advance(6000)
         assertTrue(r.taskStore.all().isEmpty()); assertTrue(r.log.contains("say All done"))
     }
 
@@ -625,8 +625,16 @@ class ModeTest {
 
     @Test fun clickingDuringTheCancelWindowKeepsTheTask() {
         val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1000)
-        r.pick("Buy milk"); r.advance(1000); r.click()
+        r.pick("Buy milk"); r.advance(1500); r.pick("Yes, done"); r.advance(1000); r.click()
         r.advance(5000)
+        assertEquals(1, r.taskStore.all().size)
+    }
+
+    @Test fun aClickOnATaskOnlyAsksAndNoKeepsIt() {
+        val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1000)
+        r.pick("Buy milk"); r.advance(1500)
+        assertTrue(r.log.toString(), r.log.any { it.contains("Mark done?") })
+        r.pick("No, go back"); r.advance(6000)
         assertEquals(1, r.taskStore.all().size)
     }
 

@@ -76,6 +76,8 @@ object Voice {
     fun resetAsk(name: String) = Phrase.mixed("Forget what it learned about $name?")
     val RESET_DONE get() = f("Done. The order starts fresh")
     val EMERGENCY_ASK get() = f("Call the emergency number?")
+    /** "<task>. Mark done?" */
+    fun taskDoneAsk(task: Phrase) = Phrase.join(listOf(Phrase.content(task.text + ".", task.lang), f("Mark done?")))
     val EMERGENCY_CALLING get() = f("Calling the emergency number")
     val EMERGENCY_TEXTED get() = f("Your emergency contact got a message")
     val ALARM_STOPPED get() = f("Alarm stopped")
@@ -221,6 +223,7 @@ object Menu {
     val RESET_YES get() = f("Yes, reset")
     val EMERGENCY_NO get() = f("No, go back")
     val EMERGENCY_YES get() = f("Yes, call now")
+    val TASK_YES get() = f("Yes, done")
     val GAMES get() = f("Games")
     val ADD_TASK get() = f("Add task")
     val MORE_TASKS get() = f("More tasks")

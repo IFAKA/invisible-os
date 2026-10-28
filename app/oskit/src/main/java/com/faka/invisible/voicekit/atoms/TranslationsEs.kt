@@ -135,6 +135,8 @@ private val SPOKEN_ES = mapOf(
     "Emergency" to "Emergencia",
     "No, go back" to "No, volver",
     "Yes, call now" to "Sí, llamar ya",
+    "Yes, done" to "Sí, hecha",
+    "Mark done?" to "¿Marcar como hecha?",
     "Games" to "Juegos",
     "Add task" to "Añadir tarea",
     "More tasks" to "Más tareas",
