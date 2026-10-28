@@ -76,7 +76,7 @@ class TypingTest {
         p.start(); clicks(1); said.clear(); clicks(3)
         assertEquals(listOf("Letters"), said)   // Done is last: used once, at the end
         t.advance(TypeProgram.MENU_GAP_MS * 2)
-        assertEquals(listOf("Letters", "Delete word", "Done"), said)
+        assertEquals(listOf("Letters", "Delete word", "Done. Hello"), said)
         clicks(1)
         assertEquals("Hello", result)
         assertTrue(!p.active)
@@ -253,7 +253,7 @@ class TypingTest {
     @Test fun noEndingsMeansNoPhrasesItem() {
         p.start(); clicks(1); said.clear(); clicks(3)
         t.advance(TypeProgram.MENU_GAP_MS * 2)
-        assertEquals(listOf("Letters", "Delete word", "Done"), said)
+        assertEquals(listOf("Letters", "Delete word", "Done. Hello"), said)
     }
 
     private fun program(frame: Frame, sug: List<String> = emptyList(), ended: () -> Unit = {}) = TypeProgram(lm, object : TypeOut {

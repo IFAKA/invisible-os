@@ -90,7 +90,11 @@ class TypeProgram(
     private var recap = false   // the next pair is a new word: first say the sentence so far
     /** The small menu, read one item at a time by the kit's Scanner: one pause per item, no OS ceremony. */
     private val menuScan: Scanner<Phrase> = Scanner(timers, { it }, object : ScanOut {
-        override fun say(index: Int, label: Phrase, spearcon: Boolean) { out.say(label); menuScan.itemDone() }
+        override fun say(index: Int, label: Phrase, spearcon: Boolean) {
+            val t = text()
+            out.say(if (label == TypeVoice.MENU_DONE && t.isNotEmpty()) Phrase.content("Done. $t") else label)   // Done also reads what will be sent
+            menuScan.itemDone()
+        }
         override fun sayFast(word: Phrase) {}
         override fun tone(t: Tone) {}
         override fun leave() { closeMenu() }
