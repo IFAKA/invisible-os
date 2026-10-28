@@ -2,6 +2,7 @@ package com.faka.invisible
 
 import com.faka.invisible.echo.EchoProgram
 import com.faka.invisible.compass.CompassProgram
+import com.faka.invisible.clicktest.ClickTestProgram
 import com.faka.invisible.whereami.WhereAmIEntry
 import com.faka.invisible.whereami.WhereServices
 import com.faka.invisible.claude.ClaudeProgram
@@ -34,6 +35,7 @@ object Programs {
         GuardProgram.entry,
         DuelProgram.howTo,
         CompassProgram.entry,
+        ClickTestProgram.entry,
         WhereAmIEntry.entry(where!!),
         ClaudeProgram.entry(roomsPort!!),
         PracticeEntry.entry,

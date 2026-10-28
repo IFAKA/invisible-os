@@ -209,6 +209,18 @@ private val SPOKEN_ES = mapOf(
     "Play" to "Jugar",
     "Go" to "Ir",
     "Tools" to "Herramientas",
+    // ---- Click test ----
+    "Click test" to "Prueba de clic",
+    "Click test. Click on the high bell. Hold three seconds to leave." to "Prueba de clic. Haz clic en la campana aguda. Mantén tres segundos para salir.",
+    "No clicks heard. Try again later." to "No se oyeron clics. Prueba más tarde.",
+    "Not enough clicks to measure." to "Faltan clics para medir.",
+    "You click on time." to "Haces clic a tiempo.",
+    "You click {0} milliseconds late." to "Haces clic {0} milisegundos tarde.",
+    "You click {0} milliseconds early." to "Haces clic {0} milisegundos antes.",
+    "Very steady." to "Muy constante.",
+    "Steady." to "Constante.",
+    "A little uneven." to "Un poco irregular.",
+    "Uneven." to "Irregular.",
     // ---- Compass ----
     "Compass" to "Brújula",
     "Compass. Click: heading. Two clicks: find north." to "Brújula. Clic: rumbo. Dos clics: buscar el norte.",

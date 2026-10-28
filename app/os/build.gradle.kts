@@ -50,6 +50,7 @@ dependencies {
     implementation(project(":programs:guard"))
     implementation(project(":programs:duel"))
     implementation(project(":programs:compass"))
+    implementation(project(":programs:clicktest"))
     implementation(project(":programs:whereami"))
     implementation(project(":programs:claude"))
     implementation(project(":programs:practice"))

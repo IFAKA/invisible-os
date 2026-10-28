@@ -14,7 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** The home programs before Set alarm and Calculator were added; the older tests count their menu items. */
-private val OLD_HUB = LauncherSettings.DEFAULT_HUB - "alarm" - "calculator" - "write" - "compass" - "whereami" - "claude" - "sum" - "reset"
+private val OLD_HUB = LauncherSettings.DEFAULT_HUB - "alarm" - "calculator" - "write" - "compass" - "whereami" - "claude" - "sum" - "reset" - "clicktest"
 
 class ModeTest {
     internal class Rig(ranker: OptionRanker = OptionRanker.DEFAULT, gap: Long? = 800, reactionText: String = "", wakeFresh: Boolean = true) {
@@ -830,7 +830,7 @@ class ModeTest {
 
     @Test fun noMoreInTheHubAndOrderIsFixed() {
         val a = Rig(); a.m.settings = LauncherSettings(hub = OLD_HUB); a.msgs = listOf(bob.copy(at = 1)); a.wake()
-        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator", "write", "compass", "whereami", "claude", "sum", "reset"), LauncherSettings.DEFAULT_HUB)
+        assertFalse(a.m.hubOrder().contains("more")); assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator", "write", "compass", "whereami", "claude", "sum", "reset", "clicktest"), LauncherSettings.DEFAULT_HUB)
         a.advance(400 + 1300 * 8); assertFalse(a.spoken().contains("say More")); assertFalse(a.spoken().contains("say Exit"))
     }
 
@@ -904,7 +904,7 @@ class ModeTest {
     }
 
     @Test fun firstLayerIsShortAndInOrder() {
-        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator", "write", "compass", "whereami", "claude", "sum", "reset"), LauncherSettings.DEFAULT_HUB)
+        assertEquals(listOf("messages", "tasks", "music", "timer", "today", "phone", "games", "alarm", "calculator", "write", "compass", "whereami", "claude", "sum", "reset", "clicktest"), LauncherSettings.DEFAULT_HUB)
         assertEquals(listOf("timer"), LauncherSettings.cleanHub(listOf("weather", "timer", "volume")))
     }
 
