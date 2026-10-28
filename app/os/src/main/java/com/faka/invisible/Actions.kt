@@ -262,7 +262,11 @@ object Actions {
     fun init(ctx: Context) {
         if (::app.isInitialized) return
         app = ctx.applicationContext
-        Programs.install(writeServices, roomsPort, app, object : com.faka.invisible.whereami.WhereServices { override fun navigation() = ControllerNotificationListener.navigation })
+        Programs.install(writeServices, roomsPort, app, object : com.faka.invisible.whereami.WhereServices { override fun navigation() = ControllerNotificationListener.navigation },
+            object : com.faka.invisible.now.NowServices {
+                override fun weather(done: (Phrase) -> Unit) { val w = narrator.waiting(); PhoneInfo.weather(app) { t -> w(); handler.post { done(t) } } }
+                override fun nextEvent(done: (Phrase) -> Unit) { val w = narrator.waiting(); PhoneInfo.nextEvent(app) { t -> w(); handler.post { done(t) } } }
+            })
         Programs.all.forEach { it.warm() }   // some programs build their sounds in seconds on a phone: do it now, quietly
         ControllerNotificationListener.loadMutes(app)
         TreeLeaves.store = prefs()

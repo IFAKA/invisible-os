@@ -2,6 +2,9 @@ package com.faka.invisible
 
 import com.faka.invisible.echo.EchoProgram
 import com.faka.invisible.compass.CompassProgram
+import com.faka.invisible.now.NowEntry
+import com.faka.invisible.now.NowServices
+import com.faka.invisible.now.SwitchesEntry
 import com.faka.invisible.memory.MemoryProgram
 import com.faka.invisible.quiz.QuizProgram
 import com.faka.invisible.reaction.ReactionProgram
@@ -35,7 +38,8 @@ object Programs {
     private var appContext: android.content.Context? = null
     /** What the programs ask of the OS beyond the host; set once when the OS starts, before [all] is read. */
     private var where: WhereServices? = null
-    fun install(write: WriteServices, rooms: com.faka.invisible.claude.RoomsPort, ctx: android.content.Context, whereServices: WhereServices) { services = write; roomsPort = rooms; appContext = ctx; where = whereServices }
+    private var nowServices: NowServices? = null
+    fun install(write: WriteServices, rooms: com.faka.invisible.claude.RoomsPort, ctx: android.content.Context, whereServices: WhereServices, now: NowServices) { nowServices = now; services = write; roomsPort = rooms; appContext = ctx; where = whereServices }
 
     val all: List<ProgramEntry> by lazy { listOf(
         DuelProgram.play,
@@ -46,6 +50,8 @@ object Programs {
         ReactionProgram.entry,
         DuelProgram.howTo,
         CompassProgram.entry,
+        NowEntry.entry(nowServices!!),
+        SwitchesEntry.entry,
         HabitsEntry.entry,
         CounterEntry.entry,
         BreatheEntry.entry,

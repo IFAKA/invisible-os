@@ -53,6 +53,7 @@ dependencies {
     implementation(project(":programs:memory"))
     implementation(project(":programs:quiz"))
     implementation(project(":programs:reaction"))
+    implementation(project(":programs:now"))
     implementation(project(":programs:clicktest"))
     implementation(project(":programs:reader"))
     implementation(project(":programs:whereami"))

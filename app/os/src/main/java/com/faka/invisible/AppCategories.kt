@@ -129,6 +129,8 @@ Go/Taxi             taxi.android.client
 Go/Taxi             com.comuto
 Go/Move             hub:compass
 Tools/Settings      hub:clicktest
+Tools/Utilities     hub:now
+Tools/Settings      hub:switches
 Tools/Daily         hub:reader
 Tools/Settings      hub:reset
 Tools/Daily         hub:habits

@@ -20,6 +20,7 @@ allow	WhereAmISentences.kt	phrase-make	the Where am I fixed sentences (program-o
 allow	ClaudeSentences.kt	phrase-make	the Claude bridge tool's own fixed sentences (program-owned)
 allow	ChangesSentences.kt	phrase-make	Show on phone's fixed sentences (program-owned, the Laptop tool)
 allow	ToolSentences.kt	phrase-make	the Tools list of a Laptop window: its own fixed sentences (program-owned)
+allow	NowSentences.kt	phrase-make	Now and Quick switches: their own fixed sentences (program-owned)
 allow	CompassSentences.kt	phrase-make	the Compass's own fixed sentences (program-owned)
 allow	ReaderSentences.kt	phrase-make	the Reader fixed sentences (program-owned)
 allow	MemorySentences.kt	phrase-make	Memory's own fixed sentences (program-owned)
