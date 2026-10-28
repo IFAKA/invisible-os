@@ -93,8 +93,13 @@ class BridgeClient(base: String, internal val token: String) {
     /** POST /project/new: make the folder in [area] (a path from [areas]), git init, open claude there, type [ask] if not blank. */
     @Throws(IOException::class) fun newProject(area: String, name: String, ask: String): Boolean =
         json("/project/new", JSONObject().put("area", area).put("name", name).apply { if (ask.isNotBlank()) put("ask", ask) }.toString(), "POST", 15_000).optBoolean("ok")
-    /** POST /project/open: a new tmux window with claude; mode is "continue" or "new". */
-    @Throws(IOException::class) fun openProject(path: String, mode: String): Boolean = json("/project/open", JSONObject().put("path", path).put("mode", mode).toString(), "POST", 10_000).optBoolean("ok")
+    /** POST /project/open: a new tmux window with claude; mode is "continue" or "new". The id of the new window, null if the laptop refused. */
+    @Throws(IOException::class) fun openProject(path: String, mode: String): String? {
+        val (code, text) = call("POST", "/project/open", JSONObject().put("path", path).put("mode", mode).toString(), 10_000)
+        if (code == 400) return null
+        if (code != 200) throw IOException("HTTP $code")
+        return try { JSONObject(text).takeIf { it.optBoolean("ok") }?.optString("id")?.takeIf { it.isNotBlank() } } catch (e: org.json.JSONException) { throw IOException("bad reply") }
+    }
 
     /** GET /info: the profile this laptop suggests (work if a project has dw.json) and its name. */
     @Throws(IOException::class) fun info(): BridgeInfo = json("/info").let { BridgeInfo(Profiles.normalize(it.optString("suggest")), it.optString("host")) }

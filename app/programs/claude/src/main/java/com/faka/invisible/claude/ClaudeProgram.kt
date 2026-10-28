@@ -51,7 +51,7 @@ private class HandlerTimers(private val handler: Handler) : Timers {
  * list with the item being read ([ProgramHost.screen]) and a tap on a row picks it ([tap]). Only the button and the network; no microphone.
  */
 class ClaudeAndroid(private val port: RoomsPort) : Program {
-    private enum class Phase { NONE, INTRO, ITEM, STUCK, SENDING, SENT, LOADING, READING, TOGGLE }
+    private enum class Phase { NONE, INTRO, ITEM, STUCK, SENDING, SENT, LOADING, READING, TOGGLE, OPENING }
 
     private lateinit var host: ProgramHost
     private val handler get() = host.handler
@@ -234,6 +234,12 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         showList(items, intro)
     }
 
+    /** A sub-list of the window list ("Replies", "Read"): the same picks as before; triple click goes back to the window list. */
+    private fun showGroup(r: Room, items: List<RoomAction>) {
+        onBack = { showActions(r, null) }
+        showList(items.map { Choice.ActPick(it) }, null)
+    }
+
     /** What is said first in a window: its story, else its need line, else what it is about. */
     private fun intro(r: Room): Phrase =
         r.ask?.let { ClaudeVoice.wants(it.what, it.plain) } ?: r.choice?.let { Phrase.content(it.question, "en") } ?: r.story.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: r.need.takeIf { it.isNotBlank() }?.let { Phrase.content(it, "en") } ?: ClaudeVoice.window(r)
@@ -337,6 +343,8 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
             a.id == "readall" -> readAll(r)
             a.id == "write" -> write(r)
             a.id == RoomAction.TOOLS -> loadTools(r)
+            a.id == RoomAction.REPLIES -> showGroup(r, RoomAction.repliesItems(r))
+            a.id == RoomAction.READ -> showGroup(r, RoomAction.readItems(r))
             a.needsConfirm -> { pending = a; onBack = { showActions(r, null) }; showList(listOf(Choice.No, Choice.Yes), if (a.id == "preview") ChangesVoice.START_PREVIEW else ClaudeVoice.sure(RoomText.label(a))) }
             else -> act(r, a)
         }
@@ -496,10 +504,27 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         val p = project ?: return
         scanner.stop(); awaitItem = false; host.stopSpeech()
         phase = Phase.SENDING
-        bg({ client.openProject(p.path, mode) }) { ok ->
-            if (ok == true) { phase = Phase.SENT; say(ClaudeVoice.opened(p.name)) }
-            else if (ok == null) unreachable { showModes(p) }
+        bg({ client.openProject(p.path, mode) ?: "" }) { id ->
+            if (!id.isNullOrEmpty()) { opening = id; phase = Phase.SENT; say(ClaudeVoice.opened(p.name)) }
+            else if (id == null) unreachable { showModes(p) }
             else { reopen = { showModes(p) }; phase = Phase.STUCK; say(ClaudeVoice.FAILED) }
+        }
+    }
+
+    /** The window just opened by "Opened X": wait until the laptop lists it, then go inside it (its story is read). */
+    private var opening: String? = null
+
+    private fun enterOpened(id: String, tries: Int) {
+        if (!running || (tries > 0 && phase != Phase.OPENING)) return
+        phase = Phase.OPENING
+        bg({ client.rooms() }) { list ->
+            val r = list?.firstOrNull { it.id == id }
+            when {
+                phase != Phase.OPENING -> {}   // the person went back meanwhile
+                r != null -> { opening = null; openRoom(r) }
+                tries + 1 >= OPEN_TRIES -> { opening = null; loadRooms() }
+                else -> { timers.set("claude:open", OPEN_POLL_MS) { enterOpened(id, tries + 1) } }
+            }
         }
     }
 
@@ -574,7 +599,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
             Phase.INTRO -> { phase = Phase.ITEM; scanner.speakItem(0) }
             Phase.ITEM -> if (awaitItem) { awaitItem = false; scanner.itemDone() }
             Phase.TOGGLE -> { phase = Phase.ITEM; scanner.speakItem(scanner.list.nextIndex()) }
-            Phase.SENT -> timers.set("claude:next", NEXT_MS) { loadRooms() }
+            Phase.SENT -> { val o = opening; if (o != null) { opening = null; timers.set("claude:next", NEXT_MS) { enterOpened(o, 0) } } else timers.set("claude:next", NEXT_MS) { loadRooms() } }
             Phase.READING -> room?.let { showActions(it, null) }
             else -> {}
         }
@@ -606,7 +631,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     }
 
     private fun onClicks(n: Int) {
-        if (phase == Phase.SENDING || phase == Phase.LOADING) return
+        if (phase == Phase.SENDING || phase == Phase.LOADING || (phase == Phase.OPENING && n != 3)) return
         roomsClick(n)
     }
 
@@ -614,7 +639,7 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         if (!running) return
         running = false
         handler.removeCallbacks(leave); handler.removeCallbacks(resolve); handler.removeCallbacks(holdFast)
-        timers.clear("claude:next"); timers.clear("claude:retry"); scanner.stop()
+        timers.clear("claude:next"); timers.clear("claude:retry"); timers.clear("claude:open"); scanner.stop()
         stopWaiting?.invoke(); stopWaiting = null
         host.stopSpeech()
         host.resumeMusic()
@@ -625,13 +650,13 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     private fun releaseQuietly() {
         running = false
         handler.removeCallbacks(leave); handler.removeCallbacks(resolve); handler.removeCallbacks(holdFast)
-        timers.clear("claude:next"); timers.clear("claude:retry"); scanner.stop()
+        timers.clear("claude:next"); timers.clear("claude:retry"); timers.clear("claude:open"); scanner.stop()
         stopWaiting?.invoke(); stopWaiting = null
         host.stopSpeech()
         host.resumeMusic()
     }
 
-    private companion object { const val RETRY_MS = 700L; const val PAUSE_MS = 1200L; const val PARTS_PAUSE_MS = 90_000L; const val LOOPS = 2; const val NEXT_MS = 700L; const val MAX_ROOMS = 8 }
+    private companion object { const val RETRY_MS = 700L; const val PAUSE_MS = 1200L; const val PARTS_PAUSE_MS = 90_000L; const val LOOPS = 2; const val NEXT_MS = 700L; const val OPEN_POLL_MS = 1500L; const val OPEN_TRIES = 8; const val MAX_ROOMS = 8 }
 }
 
 /** What the OS registry lists for the Claude bridge (a tool of the home hub). */

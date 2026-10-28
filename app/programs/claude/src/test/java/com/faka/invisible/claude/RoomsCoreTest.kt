@@ -49,8 +49,55 @@ class RoomsCoreTest {
     }
     @Test fun earbudListKeepsServerOrderAndDropsScreen() {
         val r = room("option:go", "go", "screen", "yes", "go", "readall", "write")
-        assertEquals(listOf("hear", "option:go", "go", "yes", "tools", "more", "readall", "write"), RoomAction.earbudList(r).map { it.id })
+        assertEquals(listOf("hear", "option:go", "go", "replies", "read", "tools", "write"), RoomAction.earbudList(r).map { it.id })
         assertEquals(listOf("option:go", "go", "yes"), RoomAction.screenList(r).map { it.id })
+    }
+
+    private fun big(state: String, kind: String = "claude", vararg acts: String) = Room("%1", "A", "p", kind, state, "", emptyList(), acts.toList())
+    private val everything = arrayOf("option:Fix it", "option:Leave it", "option:Ask", "option:Fourth", "go", "yes", "commit", "push", "compact", "explain", "recommend", "research", "progress", "hold", "stop", "clear", "screen", "show", "preview", "readall", "write")
+
+    @Test fun idleWindowTopLevelIsAtMostEight() {
+        val r = big("idle", "claude", *everything)
+        val top = RoomAction.earbudList(r).map { it.id }
+        assertEquals(listOf("hear", "option:Fix it", "option:Leave it", "option:Ask", "replies", "read", "tools", "write"), top)   // three options fill the budget: the replies wait inside "Replies"
+        assertTrue(RoomAction.repliesItems(r).map { it.id }.containsAll(listOf("go", "commit")))
+    }
+    @Test fun typicalIdleWindowShowsTwoReplies() {
+        val r = big("idle", "claude", "go", "yes", "commit", "push", "stop", "readall", "write")
+        assertEquals(listOf("hear", "go", "commit", "replies", "read", "tools", "write"), RoomAction.earbudList(r).map { it.id })
+    }
+    @Test fun workingWindowHasStopAndFits() {
+        val r = big("working", "claude", "go", "yes", "commit", "stop", "readall", "write")
+        assertEquals(listOf("hear", "stop", "go", "commit", "replies", "read", "tools", "write"), RoomAction.earbudList(r).map { it.id })
+        assertEquals(listOf("yes"), RoomAction.repliesItems(r).map { it.id })
+    }
+    @Test fun repliesHoldsTheRestIncludingStopWhenIdleAndOptionsBeyondBudget() {
+        val r = big("idle", "claude", *everything)
+        val ids = RoomAction.repliesItems(r).map { it.id }
+        assertEquals(listOf("option:Fourth", "go", "yes", "commit", "push", "compact", "explain", "recommend", "research", "progress", "hold", "stop", "clear"), ids)
+    }
+    @Test fun goAndYesNeverBothAtTheTop() {
+        val r = big("idle", "claude", "yes", "go", "commit", "readall", "write")
+        assertEquals(listOf("hear", "go", "commit", "replies", "read", "tools", "write"), RoomAction.earbudList(r).map { it.id })
+        assertEquals(listOf("yes"), RoomAction.repliesItems(r).map { it.id })
+    }
+    @Test fun readHoldsMoreReadAllThenShowAndPreview() {
+        val r = big("idle", "claude", "go", "show", "preview", "readall", "write")
+        assertEquals(listOf("more", "readall", "show", "preview"), RoomAction.readItems(r).map { it.id })
+        assertTrue("replies" !in RoomAction.earbudList(r).map { it.id })
+    }
+    @Test fun noRepliesEntryWhenNothingIsHidden() {
+        val r = big("idle", "claude", "go", "commit", "write")
+        assertEquals(listOf("hear", "go", "commit", "tools", "write"), RoomAction.earbudList(r).map { it.id })
+    }
+    @Test fun shellWindowKeepsItsActionsAndGroupsRead() {
+        val r = big("idle", "shell", "again", "make:test", "stop", "readall", "write")
+        assertEquals(listOf("hear", "again", "make:test", "replies", "read", "tools", "write"), RoomAction.earbudList(r).map { it.id })
+        assertEquals(listOf("stop"), RoomAction.repliesItems(r).map { it.id })
+    }
+    @Test fun screenListStillHasEverythingTheServerCanRun() {
+        val r = big("idle", "claude", *everything)
+        assertTrue(RoomAction.screenList(r).map { it.id }.containsAll(listOf("go", "yes", "stop", "clear", "option:Fourth")))
     }
 
     private val tz = TimeZone.getTimeZone("Europe/Madrid")

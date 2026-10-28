@@ -38,7 +38,7 @@ class ProfilesTest {
     }
     @Test fun toolsSitBeforeReadAllAndWrite() {
         val r = Room("%1", "A", "p", "claude", "idle", "", emptyList(), listOf("go", "stop", "readall", "screen", "write"))
-        assertEquals(listOf("hear", "go", "stop", "tools", "more", "readall", "write"), RoomAction.earbudList(r).map { it.id })
+        assertEquals(listOf("hear", "go", "replies", "read", "tools", "write"), RoomAction.earbudList(r).map { it.id })
         assertEquals(listOf("go", "stop"), RoomAction.screenList(r).map { it.id })
     }
 }

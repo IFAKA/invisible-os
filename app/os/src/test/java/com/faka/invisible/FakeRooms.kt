@@ -14,6 +14,8 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
     val gets = CopyOnWriteArrayList<String>()
     /** Names of windows that finished: the next /events says so, one name per call. */
     val fire = CopyOnWriteArrayList<String>()
+    /** -1 until POST /project/open; then the number of GET /rooms since. The opened window %9 is listed from the second one on (it takes a moment to appear). */
+    @Volatile private var polls = -1
     private val server = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
     val url get() = "http://127.0.0.1:${server.localPort}"
     @Volatile private var open = true
@@ -43,7 +45,7 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
             val j = JSONObject(body.ifBlank { "{}" }); posts.add(path to j)
             when (path) {
                 "/room/act" -> reply(c, JSONObject().put("ok", true).put("said", j.optString("action")))
-                "/project/open" -> reply(c, JSONObject().put("ok", true).put("id", "%9"))
+                "/project/open" -> { polls = 0; reply(c, JSONObject().put("ok", true).put("id", "%9")) }
                 "/room/tool" -> reply(c, tool(j))
                 else -> reply(c, JSONObject().put("ok", true))
             }
@@ -51,7 +53,7 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
         }
         gets.add(target)
         when (path) {
-            "/rooms" -> reply(c, JSONObject().put("seq", 1).put("rooms", JSONArray(rooms)))
+            "/rooms" -> { val show = polls >= 0 && ++polls >= 2; reply(c, JSONObject().put("seq", 1).put("rooms", JSONArray(rooms + (if (show) listOf(OPENED) else emptyList())))) }
             "/room/last" -> reply(c, JSONObject().put("text", if (target.contains("%25")) "First paragraph here.\n\nSecond paragraph here.\n\nThird paragraph here." else "Alpha last message. The design doc is ready."))
             "/room/story" -> {
                 val id = target.substringAfter("id=", "").substringBefore('&').let { java.net.URLDecoder.decode(it, "UTF-8") }
@@ -109,6 +111,8 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
                     .put(JSONObject().put("n", 2).put("label", "Flat list").put("desc", "One long list"))))
         /** A window whose last message has three paragraphs (the "More" option). */
         fun partsRoom() = room("%7", "Zeta", "zeta-proj", "claude", "done", "", listOf("go", "readall", "screen", "write"), "Zeta story.")
+        /** The window that "Continue last chat" opens (id %9, as POST /project/open answers); its story is the resumed chat. */
+        val OPENED = room("%9", "Resumed", "alpha-proj", "claude", "idle", "", listOf("go", "readall", "write"), "Resumed chat story: we were fixing the loop.")
         val DEFAULT_ROOMS = listOf(
             room("%1", "Alpha", "alpha-proj", "claude", "needs", "The design doc is ready.", ACTIONS, "Wrote the design doc. It is ready. Say go to start building.", "start building"),
             room("%2", "Beta", "beta-proj", "claude", "working", "", listOf("stop", "readall", "screen", "write")),

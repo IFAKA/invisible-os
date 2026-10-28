@@ -84,18 +84,70 @@ data class RoomAction(val id: String) {
     /** Push and Clear ask "No, go back" / "Yes" first. */
     val needsConfirm get() = id == "push" || id == "clear" || id == "preview"
     /** Handled on the phone, not sent with POST /room/act. */
-    val onPhone get() = id == "readall" || id == "screen" || id == "write" || id == HEAR || id == TOOLS || id == MORE || id == "show" || id == "preview"
+    val onPhone get() = id == "readall" || id == "screen" || id == "write" || id == HEAR || id == TOOLS || id == MORE || id == REPLIES || id == READ || id == "show" || id == "preview"
     /** True for something the earbud list can show (the screen view is the "screen" action itself). */
     val earbud get() = id != "screen" && id.isNotBlank()
 
     companion object {
-        /** The actions to read, in the order the server gave them, without repeats and without "screen". */
-        fun earbudList(room: Room): List<RoomAction> {
-            val acts = room.actions.map { RoomAction(it.trim()) }.filter { it.earbud && it.id != HEAR && it.id != TOOLS && it.id != MORE }.distinctBy { it.id }
+        /** All actions of a room in the server's order (the old flat list): Hear it again, the server's actions, Tools before Read all / Write, "More" just before "Read all". */
+        fun fullList(room: Room): List<RoomAction> {
+            val acts = room.actions.map { RoomAction(it.trim()) }.filter { it.earbud && it.id != HEAR && it.id != TOOLS && it.id != MORE && it.id != REPLIES && it.id != READ }.distinctBy { it.id }
             val at = acts.indexOfFirst { it.id == "readall" || it.id == "write" }.let { if (it < 0) acts.size else it }   // Tools sits before Read all / Write
             val rest = acts.drop(at).flatMap { if (it.id == "readall") listOf(RoomAction(MORE), it) else listOf(it) }   // "More" (one paragraph at a time) just before "Read all"
             return listOf(RoomAction(HEAR)) + acts.take(at) + RoomAction(TOOLS) + rest
         }
+
+        /** The replies that may sit at the top of a window list; the rest of them go into "Replies". */
+        private val REPLY_IDS = listOf("go", "yes", "commit", "push", "compact", "explain", "recommend", "research", "progress", "hold", "clear")
+        const val MAX_TOP = 8
+        const val MAX_OPTIONS = 3
+
+        /** Items inside "Read": More (in parts), Read all, then Show on phone / Start preview when the server offered it. */
+        fun readItems(room: Room): List<RoomAction> {
+            val full = fullList(room)
+            return listOf("more", "readall", "show", "preview").mapNotNull { id -> full.firstOrNull { it.id == id } }
+        }
+
+        /** Items inside "Replies": every reply and other server action that is not at the top (server order). */
+        fun repliesItems(room: Room): List<RoomAction> = split(room).second
+
+        /** (top-level actions between Hear it again and Replies, items for "Replies"). Budget: [MAX_TOP] items in all; what does not fit goes to "Replies". */
+        private fun split(room: Room): Pair<List<RoomAction>, List<RoomAction>> {
+            val full = fullList(room)
+            val options = full.filter { it.option != null }.take(MAX_OPTIONS)
+            val stop = full.firstOrNull { it.id == "stop" }?.takeIf { room.state == "working" }
+            val replies = full.filter { it.id in REPLY_IDS }
+            var top2 = replies.take(2)
+            if (top2.size == 2 && top2.any { it.id == "go" } && top2.any { it.id == "yes" }) {   // go and yes together: keep go, take the next reply instead of yes
+                top2 = (top2.filter { it.id != "yes" } + listOfNotNull(replies.getOrNull(2))).sortedBy { replies.indexOf(it) }
+            }
+            // Shell windows keep their own actions (Run again, Make...) at the top while there is room.
+            val own = if (room.kind == "claude") emptyList() else full.filter { it.option == null && it.id !in REPLY_IDS && it.id != "stop" && it.id !in FIXED_IDS }
+            val hasRead = readItems(room).isNotEmpty()
+            // hear + replies-group + read-group + tools + write are counted first; the movable items fill the rest.
+            val fixed = 1 + 1 + (if (hasRead) 1 else 0) + 1 + (if (full.any { it.id == "write" }) 1 else 0)
+            // If nothing goes to Replies, its entry is not needed and the budget is one larger.
+            fun fits(n: Int, anyHidden: Boolean) = n + (if (anyHidden) fixed else fixed - 1) <= MAX_TOP
+            val shown = ArrayList<RoomAction>(options + listOfNotNull(stop) + top2 + own)
+            val dropOrder = (own.reversed() + top2.reversed() + options.reversed())   // what is hidden first when the list is too long
+            fun hiddenCount() = full.count { it.id !in FIXED_IDS && it !in shown }
+            for (d in dropOrder) { if (fits(shown.size, hiddenCount() > 0)) break; shown.remove(d) }
+            val inReplies = full.filter { it.id !in FIXED_IDS && it !in shown }
+            return (shown.filter { it.option != null } + shown.filter { it.id == "stop" } + shown.filter { it.option == null && it.id != "stop" }.sortedBy { full.indexOf(it) }) to inReplies
+        }
+
+        private val FIXED_IDS = setOf(HEAR, TOOLS, "write", "more", "readall", "show", "preview")
+
+        /** What the earbud reads in a window (no ask, no menu), at most [MAX_TOP]: Hear it again, Claude's options (3), Stop (working), 2 replies, Replies, Read, Tools, Write. */
+        fun earbudList(room: Room): List<RoomAction> {
+            val (top, inReplies) = split(room)
+            return listOf(RoomAction(HEAR)) + top + (if (inReplies.isNotEmpty()) listOf(RoomAction(REPLIES)) else emptyList()) +
+                (if (readItems(room).isNotEmpty()) listOf(RoomAction(READ)) else emptyList()) + RoomAction(TOOLS) + fullList(room).filter { it.id == "write" }
+        }
+        /** Phone-only: opens the list of the other replies. */
+        const val REPLIES = "replies"
+        /** Phone-only: opens More, Read all, Show on phone / Start preview. */
+        const val READ = "read"
         /** Phone-only option that opens the work tools of the window (Git, merge request...). */
         const val TOOLS = "tools"
         /** Phone-only first option of every window: say the story again. */
@@ -103,7 +155,7 @@ data class RoomAction(val id: String) {
         /** Phone-only: Claude's last message one paragraph at a time. */
         const val MORE = "more"
         /** The actions that make a button on the phone screen: everything the server can run (no read-aloud, no keyboard, no "screen"). */
-        fun screenList(room: Room): List<RoomAction> = earbudList(room).filter { !it.onPhone }
+        fun screenList(room: Room): List<RoomAction> = fullList(room).filter { !it.onPhone }
     }
 }
 

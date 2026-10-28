@@ -147,8 +147,9 @@ class FlowRoomsTest {
         start(rig, port)
         val i = rig.mark(); rig.needLive("web-proj, Web, done", i); rig.advance(60); rig.press("120")
         val j = rig.mark(); rig.needLive("Hear it again", j); rig.advance(60)
-        rig.needLive("Show on phone", j); rig.advance(60); rig.press("120")
-        rig.needLive("Sent to phone.", j)
+        rig.needLive("Read", j); rig.advance(60); rig.press("120")   // the Read group
+        val r = rig.mark(); rig.needLive("Show on phone", r); rig.advance(60); rig.press("120")
+        rig.needLive("Sent to phone.", r)
         assertEquals(listOf("Home" to "%1"), port.shown)
         assertFalse("it is not an act on the laptop", s.posts.any { it.first == "/room/act" })
         assertFalse("show alone does not start anything", s.posts.any { it.first == "/room/preview/start" })
@@ -159,6 +160,7 @@ class FlowRoomsTest {
         start(rig, port)
         val i = rig.mark(); rig.needLive("fresh-proj, Fresh, done", i); rig.advance(60); rig.press("120")
         // the list started at the first window; walk to the second with one click-click? the windows list reads Web first, then Fresh
+        val j0 = rig.mark(); rig.needLive("Read", j0); rig.advance(60); rig.press("120")   // the Read group
         val j = rig.mark(); rig.needLive("Start preview", j); rig.advance(60); rig.press("120")
         val k = rig.mark(); rig.needLive("Start the preview?", k); rig.needLive("No, go back", k); rig.advance(60)
         rig.needLive("Yes", k); rig.advance(60)
@@ -224,7 +226,8 @@ class FlowRoomsTest {
     @Test fun rooms_more_reads_a_paragraph_per_click_and_triple_click_goes_back() {
         val s = server(rooms = listOf(FakeRooms.partsRoom())); val rig = RoboRig()
         val j = enterWindow(rig, s, "zeta-proj, Zeta, done")
-        rig.needLive("More", j); rig.advance(60)
+        rig.needLive("Read", j); rig.advance(60); rig.press("120")   // the Read group
+        val g = rig.mark(); rig.needLive("More", g); rig.advance(60)
         val k = rig.mark(); rig.press("120")
         rig.needLive("First paragraph here.", k)
         rig.advance(5000)
@@ -286,6 +289,30 @@ class FlowRoomsTest {
         val t0 = System.currentTimeMillis()
         while (port.cueSeen.isEmpty() && System.currentTimeMillis() - t0 < 10_000) { rig.advance(50); Thread.sleep(5) }
         assertTrue("the name cue never came: ${port.cueSeen}", port.cueSeen.any { it.contains("Write the project name", true) })
+    }
+
+    @Test fun rooms_continue_last_chat_lands_inside_the_new_window_and_hears_its_story() {
+        val s = server(); val rig = RoboRig(); val port = Port(listOf(Computer("Home", s.url, s.token)), Computer("Home", s.url, s.token))
+        start(rig, port)
+        val i = rig.mark(); rig.needLive("New window", i); rig.advance(60); rig.press("120")
+        val j = rig.mark(); rig.needLive("New project", j); rig.needLive("alpha-proj", j); rig.advance(60); rig.press("120")
+        val k = rig.mark(); rig.needLive("Continue last chat", k); rig.advance(60); rig.press("120")
+        rig.needLive("Opened alpha-proj", k)
+        rig.needLive("Resumed chat story: we were fixing the loop.", k)
+        rig.needLive("Hear it again", k)
+        assertTrue("it polled the windows until the new one showed: ${s.gets}", s.gets.count { it == "/rooms" } >= 3)
+        assertTrue("it did not fall back to the windows list", rig.said.drop(k).none { it.contains("Laptop settings") })
+        assertTrue("sent the open: ${s.posts}", s.posts.any { (p, b) -> p == "/project/open" && b.optString("mode") == "continue" })
+    }
+
+    @Test fun rooms_read_group_triple_click_goes_back_to_the_window_list() {
+        val s = server(rooms = listOf(FakeRooms.partsRoom())); val rig = RoboRig()
+        val j = enterWindow(rig, s, "zeta-proj, Zeta, done")
+        rig.needLive("Read", j); rig.advance(60); rig.press("120")
+        val g = rig.mark(); rig.needLive("More", g)
+        val m = rig.mark(); rig.press("120,100,120,100,120")
+        rig.needLive("Hear it again", m)
+        assertTrue("back at the window list, no Back item: ${rig.said.drop(m)}", rig.said.drop(m).none { it == "Back" })
     }
 
     /** The OS's own room-event code ([RoomEvents], the same class [Actions] uses), on the test rig's handler and voice. */
@@ -356,7 +383,7 @@ class FlowRoomsTest {
         rig.advance(2500); assertTrue("the mark moved on: ${host.screens.takeLast(3)}", host.screens.last().second >= 1)
         val j = rig.mark(); (rig.running as ClaudeAndroid).tap(2)   // Gamma, a shell window
         rig.needLive("Fake story for Gamma", j); rig.needLive("Run again", j)
-        assertEquals(listOf("Hear it again", "Run again", "Make test", "Stop", "Tools", "Write"), host.screens.last().first)
+        assertEquals(listOf("Hear it again", "Run again", "Make test", "Replies", "Tools", "Write"), host.screens.last().first)
     }
 
     @Test fun retry_gives_feedback_and_speaks_again() {

@@ -23,7 +23,8 @@ class RoomsChoiceTest {
 
     @Test fun moreSitsBeforeReadAllAndIsOnThePhone() {
         val r = Room("%1", "A", "p", "claude", "needs", "", emptyList(), listOf("go", "readall", "write"))
-        assertEquals(listOf("hear", "go", "tools", "more", "readall", "write"), RoomAction.earbudList(r).map { it.id })
+        assertEquals(listOf("hear", "go", "read", "tools", "write"), RoomAction.earbudList(r).map { it.id })
+        assertEquals(listOf("more", "readall"), RoomAction.readItems(r).map { it.id })
         assertTrue(RoomAction("more").onPhone)
     }
 }

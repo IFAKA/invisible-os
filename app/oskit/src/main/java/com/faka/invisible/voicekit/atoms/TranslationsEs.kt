@@ -275,6 +275,7 @@ private val SPOKEN_ES = mapOf(
     "Write it, then Done." to "Escríbelo y pulsa Listo.",
     "Nothing was written." to "No se escribió nada.",
     "Hear it again" to "Oírlo otra vez",
+    "Replies" to "Respuestas",
     "No tools here." to "No hay herramientas aquí.",
     "No rooms open." to "No hay salas abiertas.",
     "Projects" to "Proyectos",
