@@ -42,11 +42,11 @@ object TreeLeaves {
 
     const val APP_RANK = 1000
 
-    /** Dev tool (`am broadcast ... --ez tree true`, logcat tag TREEDUMP): the home tree exactly as the voice walks it, built from this phone's apps and settings. */
-    fun dump(c: Context): String {
+    /** Dev tool (`am broadcast ... --ez tree true [--ez all true = without the storeroom]`, logcat tag TREEDUMP): the home tree exactly as the voice walks it, built from this phone's apps and settings. */
+    fun dump(c: Context, noStoreroom: Boolean = false): String {
         val s = SettingsStore.load(c.getSharedPreferences("invisible", Context.MODE_PRIVATE))
         fun d(n: TreeNode, ind: String): String = n.children.joinToString("") { k -> ind + k.label + (if (k.isApp) "" else " (${k.children.size})") + "\n" + d(k, "$ind  ") }
-        val leaves = edit(all(c, s), s); val root = tree(leaves)
+        val leaves = edit(all(c, s), s).map { if (noStoreroom) it.copy(stored = false) else it }; val root = tree(leaves)   // noStoreroom: the tree as it was before the storeroom, to compare
         // one COST line per app: items heard and levels, in the tree and in Find (for medians and weighted means)
         val plan = NameFinder.plan(leaves)
         fun find(n: NameFinder.Node, pkg: String, heard: Int, levels: Int): Pair<Int, Int>? {
