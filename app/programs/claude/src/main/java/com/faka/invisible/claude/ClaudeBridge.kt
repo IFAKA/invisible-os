@@ -73,8 +73,8 @@ class BridgeClient(base: String, internal val token: String) {
     @Throws(IOException::class) fun digest(items: List<Triple<String, String, String>>): String =
         json("/ai/digest", JSONObject().put("items", JSONArray(items.map { JSONObject().put("app", it.first).put("title", it.second).put("text", it.third) })).toString(), "POST", 15_000).optString("line")
     /** POST /ai/short: a one or two sentence version of a long [text], "" when the laptop's model has none. [context] = earlier messages of the same chat. */
-    @Throws(IOException::class) fun short(text: String, context: String = ""): String =
-        json("/ai/short", JSONObject().put("text", text).put("context", context).toString(), "POST", 15_000).optString("short")
+    @Throws(IOException::class) fun short(text: String, context: String = "", kind: String = ""): String =
+        json("/ai/short", JSONObject().put("text", text).put("context", context).put("kind", kind).toString(), "POST", 15_000).optString("short")
     /** POST /ai/replies: reply sentences and to-do items for a message in [lang] ("en" or "es"); both empty when the laptop's model has none. */
     @Throws(IOException::class) fun replies(text: String, lang: String, context: String = ""): Pair<List<String>, List<String>> =
         json("/ai/replies", JSONObject().put("text", text).put("lang", lang).put("context", context).toString(), "POST", 20_000).let { strings(it.optJSONArray("replies")) to strings(it.optJSONArray("tasks")) }

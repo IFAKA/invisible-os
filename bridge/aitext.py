@@ -97,7 +97,19 @@ def earlier_block(context):
     return ("Earlier messages in the same chat (oldest first, for background only):\n---\n%s\n---\n" % str(context).strip()[:CONTEXT_CHARS]) if c else ""
 
 
-def build_short_prompt(text, context=""):
+TASK_WORDS = 12   # the guard limit for a task line; the prompt asks for 8
+
+
+def build_task_prompt(text):
+    return ("Below is a to-do item.\n---\n%s\n---\n"
+            "Write what to do, for a blind listener, as JSON: {\"short\": \"...\"}.\n"
+            "short: one short action phrase, at most 8 words, in the same language as the item, plain words, no markdown. Keep the key thing. "
+            "Use only names and numbers that are in the item. Never invent.\nOutput only the JSON." % str(text)[:1500])
+
+
+def build_short_prompt(text, context="", kind=""):
+    if kind == "task":
+        return build_task_prompt(text)
     return ("%sBelow is a message sent to a person.\n---\n%s\n---\n"
             "Write what it says for a blind listener, as JSON: {\"short\": \"...\"}.\n"
             "short: one or two sentences, at most %d words, plain words, no markdown. Say who wants what, when, and any number or place. "
@@ -116,17 +128,17 @@ def parse_short(text):
     return re.sub(r"(\*\*|__|`|^#+\s*)", "", squash(v if isinstance(v, str) else ""))
 
 
-def make_short(text, model, context=""):
+def make_short(text, model, context="", kind=""):
     """Pure given `model`. A 1-2 sentence version of `text` that passes the accuracy guard (names and numbers are checked against
     `text` and `context` together), or ""."""
     text = str(text or "")
     if model is None or not squash(text):
         return ""
     try:
-        s = parse_short(model(build_short_prompt(text, context)))
+        s = parse_short(model(build_short_prompt(text, context, kind)))
     except Exception:
         return ""
-    ok, _ = check_story(s, text, squash(context)[:CONTEXT_CHARS], limit=SHORT_WORDS)
+    ok, _ = check_story(s, text, squash(context)[:CONTEXT_CHARS], limit=TASK_WORDS if kind == "task" else SHORT_WORDS)
     return s if ok else ""
 
 
@@ -215,9 +227,10 @@ class AiText:
             return ""
         return self._get(self._key("d", items), lambda: make_digest(items, self.model))
 
-    def short(self, text, context=""):
+    def short(self, text, context="", kind=""):
         text, context = str(text or ""), squash(context)[:CONTEXT_CHARS]
-        return self._get(self._key("s", [text, context]), lambda: make_short(text, self.model, context))
+        kind = "task" if kind == "task" else ""
+        return self._get(self._key("s", [text, context] + ([kind] if kind else [])), lambda: make_short(text, self.model, context, kind))
 
     def replies(self, text, lang="en", context=""):
         text, context, lang = str(text or ""), squash(context)[:CONTEXT_CHARS], "es" if lang == "es" else "en"

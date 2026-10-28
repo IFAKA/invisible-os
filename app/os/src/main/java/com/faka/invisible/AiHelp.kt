@@ -7,6 +7,7 @@ import com.faka.invisible.logickit.AiChoice
 import com.faka.invisible.logickit.AiGuard
 import com.faka.invisible.logickit.AiSource
 import com.faka.invisible.logickit.squash
+import com.faka.invisible.logickit.words
 import com.faka.invisible.oskit.Notif
 import java.io.IOException
 
@@ -23,11 +24,14 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
              private val client: (Computer) -> AiClient = { c -> BridgeClient(c.url, c.token).let { b -> object : AiClient {
                  override fun digest(items: List<Triple<String, String, String>>) = b.digest(items)
                  override fun short(text: String, context: String) = b.short(text, context)
+                 override fun taskLine(text: String) = b.short(text, "", "task")
                  override fun replies(text: String, lang: String, context: String) = b.replies(text, lang, context)
              } } }) {
     interface AiClient {
         @Throws(IOException::class) fun digest(items: List<Triple<String, String, String>>): String
         @Throws(IOException::class) fun short(text: String, context: String): String
+        /** A short action phrase for a to-do item ("" = none). */
+        @Throws(IOException::class) fun taskLine(text: String): String = ""
         /** Reply sentences and tasks; both empty = the laptop's model had nothing. */
         @Throws(IOException::class) fun replies(text: String, lang: String, context: String): Pair<List<String>, List<String>>
     }
@@ -130,6 +134,19 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
         return s.orEmpty()
     }
 
+    /** A short action phrase for the to-do item [text] when the AI made one, else "" (a short item, no AI, or no answer yet: asks now if it has not yet). */
+    fun taskLine(text: String): String {
+        val t = text.squash()
+        if (t.words().size <= TASK_SHORT_WORDS || source() == AiSource.NONE) return ""
+        val k = "task\u0001" + t + "\u0001" + source()
+        val s = synchronized(lock) { shorts[k] }
+        if (s == null && synchronized(lock) { k !in shorts && shortBusy.add(k) }) run {
+            val r = chain("", { it.isEmpty() }, { it.taskLine(t) }, { p -> AiGuard.makeTaskLine(t) { p.generate(it) } })
+            synchronized(lock) { shorts[k] = r; shortBusy.remove(k) }
+        }
+        return s.orEmpty()
+    }
+
     /** True when some AI can write replies now. */
     fun canReply(): Boolean = source() != AiSource.NONE
 
@@ -146,5 +163,5 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
         }
     }
 
-    private companion object { const val DOWN_MS = 60_000L }
+    private companion object { const val DOWN_MS = 60_000L; const val TASK_SHORT_WORDS = 8 }
 }

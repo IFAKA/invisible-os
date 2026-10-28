@@ -139,3 +139,15 @@ class RepliesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TaskLineTest(unittest.TestCase):
+    def test_task_line_uses_task_prompt_and_guard(self):
+        seen = []
+        def model(p):
+            seen.append(p)
+            return '{"short":"Comprar una protoboard de 400 contactos"}'
+        src = "Placa de pruebas (protoboard) 400 contactos, ~5 euros, para montar circuitos sin soldar en el proyecto"
+        self.assertEqual(aitext.make_short(src, model, "", "task"), "Comprar una protoboard de 400 contactos")
+        self.assertIn("to-do item", seen[0])
+        self.assertEqual(aitext.make_short(src, lambda p: '{"short":"Comprar 999 cables"}', "", "task"), "")   # invented number is refused

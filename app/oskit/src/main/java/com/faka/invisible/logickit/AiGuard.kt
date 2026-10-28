@@ -66,6 +66,16 @@ object AiGuard {
             "short: one or two sentences, at most $ASK_SHORT_WORDS words, plain words, no markdown. Say who wants what, when, and any number or place. " +
             "Use only facts, numbers and names that are in the message or the earlier messages. Never invent.\nOutput only the JSON."
 
+    const val TASK_ASK_WORDS = 8
+    const val TASK_WORDS = 12
+
+    /** One short action phrase for a to-do item, in its own language. */
+    fun taskPrompt(text: String): String =
+        "Below is a to-do item.\n---\n${text.take(1500)}\n---\n" +
+            "Write what to do, for a blind listener, as JSON: {\"short\": \"...\"}.\n" +
+            "short: one short action phrase, at most $TASK_ASK_WORDS words, in the same language as the item, plain words, no markdown. Keep the key thing. " +
+            "Use only names and numbers that are in the item. Never invent.\nOutput only the JSON."
+
     private val markdown = Regex("(\\*\\*|__|`|^#+\\s*)")
 
     /** The string value of [key] in the JSON-ish [raw] (the model may add text or fences around it), unescaped; "" if none. */
@@ -99,6 +109,13 @@ object AiGuard {
         if (text.squash().isEmpty()) return ""
         val s = try { parseShort(model(shortPrompt(text, context))) } catch (_: Exception) { return "" }
         return if (checkStory(s, text, context.squash().take(CONTEXT_CHARS), SHORT_WORDS).first) s else ""
+    }
+
+    /** The short action phrase for a to-do item that passes the guard, or "". */
+    fun makeTaskLine(text: String, model: (String) -> String): String {
+        if (text.squash().isEmpty()) return ""
+        val s = try { parseShort(model(taskPrompt(text))) } catch (_: Exception) { return "" }
+        return if (checkStory(s, text, "", TASK_WORDS).first) s else ""
     }
 
     // ---- digest ----
