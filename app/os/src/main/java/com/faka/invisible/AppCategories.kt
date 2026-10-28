@@ -119,6 +119,10 @@ Plan/Health         com.garmin.android.apps.connectmobile
 Plan/Health         com.freeletics.lite
 Go/Move             com.google.android.apps.maps
 Go/Taxi             com.ubercab
+Go/Food             com.ubercab.eats
+Go/Food             com.grability.rappi
+Go/Food             com.dd.doordash
+Go/Food             com.pedidosya
 Go/Transit          com.crtm.integrated
 Go/Transit          com.citymapper.app.release
 Go/Taxi             com.cabify.rider

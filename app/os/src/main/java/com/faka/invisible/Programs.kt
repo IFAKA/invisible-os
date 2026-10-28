@@ -20,6 +20,8 @@ import com.faka.invisible.practice.PracticeEntry
 import com.faka.invisible.tell.DuelProgram
 import com.faka.invisible.guard.GuardProgram
 import com.faka.invisible.adapters.CalendarModule
+import com.faka.invisible.adapters.GmailModule
+import com.faka.invisible.adapters.DeliveryModule
 import com.faka.invisible.adapters.ChatAppsModule
 import com.faka.invisible.adapters.TeamsModule
 import com.faka.invisible.oskit.NotificationModules
@@ -74,5 +76,5 @@ object Programs {
  */
 object Adapters {
     val chat = ChatAppsModule()
-    val modules = NotificationModules(listOf(TeamsModule(chat), CalendarModule(), chat))
+    val modules = NotificationModules(listOf(TeamsModule(chat), CalendarModule(), GmailModule(chat), DeliveryModule(), chat))
 }
