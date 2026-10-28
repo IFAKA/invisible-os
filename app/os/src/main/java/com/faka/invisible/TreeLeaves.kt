@@ -14,11 +14,15 @@ object TreeLeaves {
     fun programLabel(key: String) = LauncherSettings.HUB_ITEMS[key.removePrefix("hub:")]?.substringBefore(" (") ?: key
 
     /** Every installed app (muted ones and this app left out), with its place and weight. */
-    fun apps(installed: List<InstalledApp>, use: Map<String, AppUse>, muted: (String) -> Boolean, unread: Map<String, Int>, picks: (String) -> Int): List<AppLeaf> =
-        installed.filter { it.pkg != AppWeights.SELF && !muted(it.pkg) }.map { a ->
+    fun apps(installed: List<InstalledApp>, use: Map<String, AppUse>, muted: (String) -> Boolean, unread: Map<String, Int>, picks: (String) -> Int,
+             pinned: Set<String> = emptySet(), now: Long = System.currentTimeMillis()): List<AppLeaf> {
+        val shown = installed.filter { it.pkg != AppWeights.SELF && !muted(it.pkg) }
+        val stored = Storeroom.decide(shown, use, picks, pinned, now)
+        return shown.map { a ->
             val u = LearningReset.net(store, a.pkg, use[a.pkg] ?: AppUse(0, 0))
-            AppLeaf(a.pkg, a.label, AppCategories.categoryOf(a.pkg, a.hint), unread[a.pkg] ?: 0, AppWeights.weight(a.pkg, u.month, u.week, picks("app:${a.pkg}")), rank = APP_RANK)
+            AppLeaf(a.pkg, a.label, AppCategories.categoryOf(a.pkg, a.hint), unread[a.pkg] ?: 0, AppWeights.weight(a.pkg, u.month, u.week, picks("app:${a.pkg}")), rank = APP_RANK, stored = a.pkg in stored, storedWhy = stored[a.pkg] ?: "")
         }
+    }
 
     /** The edits: hidden entries leave, moved ones change group (no subgroup), pinned ones get [PIN_BOOST]. */
     fun edit(leaves: List<AppLeaf>, s: LauncherSettings): List<AppLeaf> = UniqueNames.apply(leaves.filter { it.pkg !in s.hidden }, reservedNames()).map { l ->
@@ -33,7 +37,7 @@ object TreeLeaves {
         val programs = LauncherSettings.HUB_ITEMS.keys.map { k -> val key = "hub:$k"
             AppLeaf(key, programLabel(key), AppCategories.categoryOf(key), 0, AppWeights.weight(key, 0, 0, Actions.choices.intentCount(key)), rank = s.hub.indexOf(k)) }
         val use = java.util.concurrent.CompletableFuture.supplyAsync { DeviceApps.use(c) }   // the slow usage query runs while the app list loads
-        return programs + apps(DeviceApps.installed(c), use.get(), { ControllerNotificationListener.mutes.isMuted(it) }, emptyMap()) { Actions.choices.intentCount(it) }
+        return programs + apps(DeviceApps.installed(c), use.get(), { ControllerNotificationListener.mutes.isMuted(it) }, emptyMap(), { Actions.choices.intentCount(it) }, s.pinned)
     }
 
     const val APP_RANK = 1000
@@ -52,14 +56,16 @@ object TreeLeaves {
         }
         val cost = AppTree.paths(root).joinToString("") { p -> val f = find(plan, p.app.pkg, 0, 0)
             "COST\t${p.app.label}\t%.1f\t${p.heard}\t${p.levels + 1}\t${f?.first}\t${f?.second}\n".format(p.app.weight) }
-        return d(root, "") + cost
+        val room = leaves.filter { it.stored }.joinToString("") { "STOREROOM\t${it.label}\t${it.pkg}\t${it.storedWhy}\n" }
+        return d(root, "") + cost + room
     }
 
     /** Set once at start (Actions.init): where the last levels are kept, so the next tree search starts from them. */
     @Volatile var store: android.content.SharedPreferences? = null
 
     /** The spoken tree for these leaves: the voice and the settings screen both come here. */
-    fun tree(leaves: List<AppLeaf>): TreeNode {
+    fun tree(all: List<AppLeaf>): TreeNode {
+        val leaves = all.filter { !it.stored }   // the storeroom is left out of the tree; Find gets every leaf
         val p = store
         val warm = p?.getString("tree_levels", null)?.split(',')?.filter { '=' in it }?.associate { it.substringBefore('=') to (it.substringAfter('=').toIntOrNull() ?: -1) }
         // Same apps, same places, same pins, same week: the earlier levels still hold, only the order inside each list is recomputed (cheap).

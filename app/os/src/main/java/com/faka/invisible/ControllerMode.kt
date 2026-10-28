@@ -8,7 +8,7 @@ import com.faka.invisible.oskit.ProgramEntry
 import com.faka.invisible.voicekit.*
 
 /** A launchable app: [hint] = ApplicationInfo.category, -1 = none. */
-data class InstalledApp(val pkg: String, val label: String, val hint: Int = -1)
+data class InstalledApp(val pkg: String, val label: String, val hint: Int = -1, val installedAt: Long = 0)
 
 /** How often an app was opened in the last month and the last week. */
 data class AppUse(val month: Int, val week: Int)
@@ -562,8 +562,8 @@ class ControllerMode(
                 hubOpts = all; wmark("hub items+context")
                 val leaves = treeLeaves(all); wmark("treeLeaves")
                 val live = out.liveApps().filter { l -> l.pkg == AppWeights.SELF || leaves.any { it.pkg == l.pkg } }   // a live app must be a leaf (installed, not hidden or muted); this app's own is only the e2e fake
-                homeLeaves = leaves.map { if (live.any { l -> l.pkg == it.pkg }) it.copy(live = true) else it }
-                wmark("liveApps"); planFind(); wmark("planFind")
+                homeLeaves = leaves.map { if (live.any { l -> l.pkg == it.pkg }) it.copy(live = true, stored = false, storedWhy = "") else it }
+                com.faka.invisible.oskit.Trace.ev("screen", "home storeroom ${homeLeaves.count { it.stored }}"); wmark("liveApps"); planFind(); wmark("planFind")
                 val root = cachedTree(homeLeaves); treeRoot = root; treePath.clear(); wmark("cachedTree")
                 val deep = deepOptions(); wmark("deepOptions")
                 val far = suggestableLeaves(root)   // apps and programs that are not direct entries of home: offered too, when worth it
@@ -725,7 +725,7 @@ class ControllerMode(
     private fun treeLeaves(builtins: Map<String, Opt>): List<AppLeaf> {
         val programs = builtins.map { (k, o) -> AppLeaf(k, o.label.text, AppCategories.categoryOf(k), if (k == "hub:messages") unread().size else 0, AppWeights.weight(k, 0, 0, out.pickCount(k)), rank = settings.hub.indexOf(k.removePrefix("hub:"))) }
         val unread = out.notifGroups().groupBy { it.pkg }.mapValues { (_, gs) -> gs.sumOf { it.items.size } }
-        val apps = TreeLeaves.apps(out.installedApps(), out.appUse(), { out.appMuted(it) }, unread) { out.pickCount(it) }
+        val apps = TreeLeaves.apps(out.installedApps(), out.appUse(), { out.appMuted(it) }, unread, { out.pickCount(it) }, settings.pinned)
         return TreeLeaves.edit(programs + apps, settings)
     }
 
@@ -734,7 +734,7 @@ class ControllerMode(
     private var treeKey: List<Any>? = null; private var treeCache: TreeNode? = null
     /** The search is exact but not free: when no weight, label or place changed since the last home list, the same tree is reused (unread changes only labels, so they are left out of the key). */
     private fun cachedTree(leaves: List<AppLeaf>): TreeNode {
-        val key = leaves.map { listOf(it.pkg, it.label, it.category, it.weight, it.live) }
+        val key = leaves.map { listOf(it.pkg, it.label, it.category, it.weight, it.live, it.stored) }
         val old = treeCache
         if (key == treeKey && old != null) return withUnread(old, leaves.associate { it.pkg to it.unread })
         return TreeLeaves.tree(leaves).also { treeKey = key; treeCache = it }

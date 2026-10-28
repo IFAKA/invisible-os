@@ -6,7 +6,7 @@ package com.faka.invisible
  * [rank] = the user's own order, used only when weights tie (lower first).
  * [live] = the app is on home as a live entry in front of the tree ([LiveApps]): it is never promoted again, and each live app takes one promoted slot.
  */
-data class AppLeaf(val pkg: String, val label: String, val category: String, val unread: Int, val weight: Double, val rank: Int = 0, val live: Boolean = false)
+data class AppLeaf(val pkg: String, val label: String, val category: String, val unread: Int, val weight: Double, val rank: Int = 0, val live: Boolean = false, val stored: Boolean = false, val storedWhy: String = "")
 
 /** One list entry: a group ([children]) or an app ([app]). [unread] and [weight] are sums over the leaves below. */
 class TreeNode(val label: String, val children: List<TreeNode> = emptyList(), val app: AppLeaf? = null, val unread: Int = 0, val weight: Double = 0.0, val rank: Int = 0,

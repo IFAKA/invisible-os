@@ -1,5 +1,7 @@
 package com.faka.invisible
 
+import com.faka.invisible.logickit.words
+
 /**
  * Pure: where an app lives in the spoken tree. A place is "Group" or "Group/Sub" (what the person wants to do: Talk, Plan, Pay, Work, Watch and listen, Play, Go, Tools).
  * Order of trust: the table below (one line per package; edit it here), then money words in the package name (a bank must never land in Work),
@@ -177,6 +179,23 @@ Tools/Developer     app.revanced.android.gms
     val EXACT: Map<String, String> = TABLE.lines().filter { it.isNotBlank() }.associate { l ->
         val t = l.trim(); t.substringAfterLast(' ') to t.substringBeforeLast(' ').trim()
     }
+
+    /** `job  packages`: apps that do the same job. The storeroom ([Storeroom]) keeps the one you use and stores the ones used 5 times less. */
+    private const val JOB_TABLE = """
+music    com.spotify.music com.miui.player org.oxycblt.auxio com.google.android.apps.youtube.music
+browser  com.android.chrome com.mi.globalbrowser org.mozilla.firefox com.brave.browser
+gallery  com.miui.gallery com.google.android.apps.photos
+files    com.android.providers.downloads.ui com.google.android.apps.nbu.files com.mi.android.globalFileexplorer
+notes    com.google.android.keep com.miui.notes
+auth     com.google.android.apps.authenticator2 com.azure.authenticator
+video    com.miui.videoplayer com.google.android.videos
+mail     com.google.android.gm com.microsoft.office.outlook
+"""
+
+    /** Package -> job. */
+    val JOBS: Map<String, String> = JOB_TABLE.lines().filter { it.isNotBlank() }.flatMap { l ->
+        val t = l.words(); t.drop(1).map { it to t[0] }
+    }.toMap()
 
     /** Words in a package name, in order: the first row that matches wins (money first). */
     private val MONEY = listOf("bank", "banco", "pay", "wallet", "invest", "revolut", "bizum", "trade", "crypto", "binance", "coinbase")

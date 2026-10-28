@@ -417,6 +417,15 @@ class MainActivity : Activity() {
                 addView(row)
             }
             root.children.forEach { node(it, 0, "") }
+            val stored = TreeLeaves.edit(all, s).filter { it.stored }
+            if (stored.isNotEmpty()) {
+                val key = "/stored"; val open = key in openGroups
+                val head = k.row(k.grow(k.text("Not used (Find only)", Type.HEAD)), k.text("${stored.size}  " + if (open) "\u25B4" else "\u25BE", Type.SMALL, Ui.soft))
+                head.minimumHeight = k.dp(52)
+                head.setOnClickListener { openGroups = if (open) openGroups - key else openGroups + key; render() }
+                addView(head)
+                if (open) stored.forEach { a -> addView(k.row(k.grow(k.text(a.label)))) }
+            }
             val gone = all.filter { it.pkg in s.hidden }
             if (gone.isNotEmpty()) {
                 val key = "/hidden"; val open = key in openGroups

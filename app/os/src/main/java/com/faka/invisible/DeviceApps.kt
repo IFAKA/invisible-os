@@ -38,7 +38,7 @@ object DeviceApps {
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         return pm.queryIntentActivities(launcher, 0).map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
             .distinctBy { it.first }.filter { it.first != c.packageName }
-            .map { (p, l) -> InstalledApp(p, l, try { pm.getApplicationInfo(p, 0).category } catch (e: Exception) { -1 }) }
+            .map { (p, l) -> InstalledApp(p, l, try { pm.getApplicationInfo(p, 0).category } catch (e: Exception) { -1 }, try { pm.getPackageInfo(p, 0).firstInstallTime } catch (e: Exception) { 0L }) }
     }
 
     /** Foreground moves per app over 30 and 7 days (needs the usage access grant; without it every app counts 0 and picks alone order the tree). */
