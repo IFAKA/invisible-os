@@ -1,6 +1,7 @@
 package com.faka.invisible.write
 
 import android.text.InputType
+import com.faka.invisible.logickit.SourceTrust
 
 /** What the text field is for. It decides where the choices come from (Write) and what is never spoken or saved. */
 enum class FieldKind { TEXT, NUMBER, DECIMAL, EMAIL, URL, SEARCH, PASSWORD, NAME }
@@ -80,7 +81,7 @@ object Fields {
 class BucketStore(lines: List<String>, private val save: (List<String>) -> Unit = {}) {
     private val next = HashMap<String, HashMap<String, Int>>()      // "key\u0001prev" -> word -> count
     private val values = HashMap<String, LinkedHashMap<String, Int>>() // key -> whole value -> count
-    private val hits = HashMap<String, IntArray>()                  // layer -> [hits, tries]
+    private val hits = SourceTrust(null)                              // layer -> hits / tries (the shared rule of SourceMix)
     private val spelledCounts = HashMap<String, Int>()              // words that were spelled letter by letter (names, new words) -> times
 
     init {
@@ -90,7 +91,7 @@ class BucketStore(lines: List<String>, private val save: (List<String>) -> Unit 
                 when (p[0]) {
                     "N" -> next.getOrPut(p[1] + "\u0001" + p[2]) { HashMap() }[p[3]] = p[4].toInt()
                     "V" -> values.getOrPut(p[1]) { LinkedHashMap() }[p[2]] = p[3].toInt()
-                    "H" -> hits[p[1]] = intArrayOf(p[2].toInt(), p[3].toInt())
+                    "H" -> hits.set(p[1], p[2].toInt(), p[3].toInt())
                     "S" -> spelledCounts[p[1]] = p[2].toInt()
                 }
             } catch (_: Exception) {}
@@ -133,17 +134,17 @@ class BucketStore(lines: List<String>, private val save: (List<String>) -> Unit 
     }
 
     /** How much to trust a layer: its hit rate with a gentle start, so one lucky pick does not decide. */
-    fun trust(layer: String): Double { val h = hits[layer]; return ((h?.get(0) ?: 0) + 1.0) / ((h?.get(1) ?: 0) + 2.0) }
+    fun trust(layer: String): Double = hits.trust(layer)
 
     @Synchronized fun scored(layer: String, hit: Boolean) {
-        val h = hits.getOrPut(layer) { IntArray(2) }; if (hit) h[0]++; h[1]++
+        hits.scored(layer, hit)
     }
 
     private fun persist() {
         val out = ArrayList<String>()
         for ((k, m) in next) { val (key, prev) = k.split('\u0001'); for ((w, c) in m) out.add("N\t$key\t$prev\t$w\t$c") }
         for ((k, m) in values) for ((v, c) in m) out.add("V\t$k\t$v\t$c")
-        for ((l, h) in hits) out.add("H\t$l\t${h[0]}\t${h[1]}")
+        for ((l, h, t) in hits.entries()) out.add("H\t$l\t$h\t$t")
         for ((w, c) in spelledCounts) out.add("S\t$w\t$c")
         save(out)
     }

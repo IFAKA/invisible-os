@@ -12,6 +12,8 @@ second-list	\b(scanIdx|menuIdx|menuSteps|itemIdx|listIdx)\b|\bvar\s+loops\b|\bSc
 hand-timing	(?<!Pacing\.)\b(HOLD_MS|GAP_MS)\b	Button timing comes from Pacing
 logic-squash	Regex\("\\\\s\+"\)	Collapsing or splitting white space is logickit/Text.kt: use squash() or words()
 allow	Text.kt	logic-squash	the one definition
+logic-trust	\+ 1\.0\) / \(.*\+ 2\.0\)	Learned source shares are logickit/SourceMix.kt (SourceTrust): do not write a second trust formula
+allow	SourceMix.kt	logic-trust	the one definition
 allow	TellSentences.kt	phrase-make	the Duel's own fixed sentences (program-owned, like Sentences.kt for the OS)
 allow	TellMistake.kt	phrase-make	the Duel's mistake sentence
 allow	EchoSentences.kt	phrase-make	Echo's own fixed sentences (program-owned)

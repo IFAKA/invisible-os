@@ -66,10 +66,11 @@ class KitRulesTest {
     @Test fun noListsOutsideTheScanner() = rule("second-list")
     @Test fun noHandRolledButtonTiming() = rule("hand-timing")
     @Test fun whiteSpaceCleaningIsInTheLogicKit() = rule("logic-squash")
+    @Test fun trustFormulaIsInTheLogicKit() = rule("logic-trust")
 
     @Test fun everyRuleInTheFileHasATestHere() {
         val ids = rules.filter { it[0] != "allow" }.map { it[0] }.toSet()
-        val tested = setOf("tts", "audio-play", "audio-focus", "button-intake", "phrase-make", "phrase-literal", "say-literal", "second-list", "hand-timing", "logic-squash")
+        val tested = setOf("tts", "audio-play", "audio-focus", "button-intake", "phrase-make", "phrase-literal", "say-literal", "second-list", "hand-timing", "logic-squash", "logic-trust")
         assertTrue("rules without a test: ${ids - tested}", ids == tested)
     }
 

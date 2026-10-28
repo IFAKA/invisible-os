@@ -48,6 +48,7 @@ Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rule
 | Tasks, and offering past texts again | `TaskStore`, `PhraseMemory` | TaskStore.kt, PhraseMemory.kt |
 | What to offer first in the hub | `Suggester` | Suggester.kt |
 | The place Write types into (app, field kind, screen text) | `Frame`, `BucketStore`, `BucketRanker` | Context.kt |
+| Mix guesses from several sources, learn each source's share from picks (Write's Mixer, home's ActionRanker; Smart Compose style) | `SourceMix`, `SourceTrust` ("id=hits/trials;..." text form) | SourceMix.kt |
 | Next word (English) | `NextWord` | NextWord.kt |
 | Phone AI (replies, endings, tasks, raw `generate`) | `LocalAi`, `ModelDownload`; jobs go through `AiHelp` (computer first, phone fallback) | LocalAi.kt, ModelDownload.kt, AiHelp.kt |
 | Weather and navigation sentences | `Weather`, the nav parser | Info.kt |

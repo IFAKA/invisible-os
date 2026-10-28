@@ -1,6 +1,7 @@
 package com.faka.invisible.write
 
 import com.faka.invisible.logickit.Completion
+import com.faka.invisible.logickit.SourceMix
 import com.faka.invisible.logickit.words
 
 /**
@@ -25,9 +26,8 @@ class Mixer(private val trust: (String) -> Double = { 0.5 }, private val scored:
     fun forget() { answers.clear() }
 
     private fun layer(id: String) = if (id == "lm") "base" else "src:$id"
-    private fun share(ids: Collection<String>): Map<String, Double> { val w = ids.associateWith { trust(layer(it)) }; val z = w.values.sum().takeIf { it > 0 } ?: 1.0; return w.mapValues { it.value / z } }
-
-    private fun normalized(m: Map<String, Double>): Map<String, Double> { val z = m.values.sum(); return if (z > 0) m.mapValues { it.value / z } else emptyMap() }
+    private fun share(ids: Collection<String>) = SourceMix.shares(ids) { trust(layer(it)) }
+    private fun normalized(m: Map<String, Double>) = SourceMix.normalized(m)
 
     /** A guess is a word (for the prefix) or a whole text. A one-word text and the one new word after the words written are words. */
     private fun split(req: Request, guesses: List<Guess>, wholeWord: Boolean): Pair<Map<String, Double>, Map<String, Double>> {
@@ -62,16 +62,16 @@ class Mixer(private val trust: (String) -> Double = { 0.5 }, private val scored:
             val lmDist = if (mass > 0) fit.associate { it.first to Math.exp(it.second) / mass } else emptyMap()
             val all = LinkedHashMap<String, Map<String, Double>>(); if (lmDist.isNotEmpty()) all["lm"] = lmDist; all.putAll(wordSrc)
             val sh = share(all.keys)
-            val mixed = HashMap<String, Double>()
-            for ((id, d) in all) { for ((w, p) in d) mixed.merge(w, sh.getValue(id) * p, Double::plus); ranksW[id] = d.entries.sortedByDescending { it.value }.map { it.key } }
+            val mixed = SourceMix.mix(all, sh)
+            for ((id, d) in all) ranksW[id] = SourceMix.ranks(d)
             val seen = mixed.keys.toHashSet()
             words = mixed.entries.sortedByDescending { it.value }.map { it.key to Math.log(it.value) } + lm.filter { it.first !in seen && !(it.first.startsWith(prefix) && LetterRank.LETTER_RE.matches(it.first)) }
         } else lm.filter { it.first.startsWith(prefix) }.take(5).map { it.first }.let { ranksW["lm"] = it }
         var phrases = emptyList<Pair<String, Double>>()
         if (phraseSrc.isNotEmpty()) {
             val sh = share(phraseSrc.keys)
-            val mixed = LinkedHashMap<String, Double>()
-            for ((id, d) in phraseSrc) { for ((t, p) in d) mixed.merge(t.lowercase(), sh.getValue(id) * p, Double::plus); ranksP[id] = d.entries.sortedByDescending { it.value }.map { it.key } }
+            val mixed = SourceMix.mix(phraseSrc.mapValues { (_, d) -> val low = LinkedHashMap<String, Double>(); for ((t, p) in d) low.merge(t.lowercase(), p, Double::plus); low }, sh)
+            for ((id, d) in phraseSrc) ranksP[id] = SourceMix.ranks(d)
             val shown = HashMap<String, String>(); phraseSrc.values.forEach { d -> d.keys.forEach { shown.putIfAbsent(it.lowercase(), it) } }
             phrases = mixed.entries.sortedByDescending { it.value }.map { shown.getValue(it.key) to it.value }
         }
@@ -86,12 +86,6 @@ class Mixer(private val trust: (String) -> Double = { 0.5 }, private val scored:
     fun picked(picked: String, isWord: Boolean): Pair<String, Int>? {
         val tables = if (isWord) lastWords else lastPhrases
         val p = picked.lowercase()
-        var best: Pair<String, Int>? = null
-        for ((id, list) in tables) {
-            val rank = list.indexOfFirst { it.lowercase() == p }
-            if (id != "lm") scored(layer(id), rank in 0..2)
-            if (rank >= 0 && (best == null || rank < best.second)) best = id to rank
-        }
-        return best
+        return SourceMix.credit(tables, { l -> l.indexOfFirst { it.lowercase() == p } }) { id, hit -> if (id != "lm") scored(layer(id), hit) }
     }
 }

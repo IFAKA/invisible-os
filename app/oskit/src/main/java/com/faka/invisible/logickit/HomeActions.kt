@@ -78,27 +78,17 @@ class ActionRanker(private val trust: (String) -> Double = { 0.5 }, private val 
             val z = scores.values.sum()
             if (z > 0) tables[s.id] = scores.mapValues { it.value / z }
         }
-        val w = tables.keys.associateWith { trust(layer(it)).coerceAtLeast(0.01) }
-        val wz = w.values.sum().takeIf { it > 0 } ?: 1.0
-        val mixed = LinkedHashMap<String, Pair<HomeAction, Double>>()
-        for ((id, t) in tables) for ((a, p) in t) {
-            val add = w.getValue(id) / wz * p
-            val old = mixed[a.key]
-            mixed[a.key] = a to ((old?.second ?: 0.0) + add)
-        }
-        lastTables = tables.mapValues { (_, t) -> t.entries.sortedByDescending { it.value }.map { it.key.key } }
+        val shares = SourceMix.shares(tables.keys, 0.01) { trust(layer(it)) }
+        val mixedBy = SourceMix.mix(tables.mapValues { (_, t) -> t.mapKeys { it.key.key } }, shares)
+        val byKey = HashMap<String, HomeAction>(); tables.values.forEach { t -> t.keys.forEach { byKey.putIfAbsent(it.key, it) } }
+        val mixed = mixedBy.mapValues { byKey.getValue(it.key) to it.value }
+        lastTables = tables.mapValues { (_, t) -> SourceMix.ranks(t).map { it.key } }
         return mixed.values.sortedWith(compareByDescending<Pair<HomeAction, Double>> { it.second }.thenBy { it.first.name }).map { Ranked(it.first, it.second) }
     }
 
     /** [key] was picked: credit every source that had it in its top 3. Returns the best source and rank for the trace (null = nobody had it). */
     fun picked(key: String): Pair<String, Int>? {
-        var best: Pair<String, Int>? = null
-        for ((id, list) in lastTables) {
-            val rank = list.indexOf(key)
-            scored(layer(id), rank in 0..2)
-            if (rank >= 0 && (best == null || rank < best.second)) best = id to rank
-        }
-        return best
+        return SourceMix.credit(lastTables, { it.indexOf(key) }) { id, hit -> scored(layer(id), hit) }
     }
 
     /** The letters that can come next, with their chance: from the names of the ranked actions (weighted by chance). Empty when nothing fits. */
@@ -108,14 +98,6 @@ class ActionRanker(private val trust: (String) -> Double = { 0.5 }, private val 
         val z = m.values.sum()
         return if (z > 0) m.mapValues { it.value / z } else emptyMap()
     }
-}
-
-/** What the person trusts each source with, kept as "id=hits/trials;..." in one prefs string. trust = (hits + 1) / (trials + 2), starting at 0.5. */
-class SourceTrust(initial: String?, private val save: (String) -> Unit) {
-    private val hits = HashMap<String, Int>(); private val trials = HashMap<String, Int>()
-    init { initial?.split(';')?.forEach { e -> val (k, v) = e.split('=').let { it.getOrNull(0) to it.getOrNull(1) }; val (h, t) = v?.split('/')?.let { it.getOrNull(0)?.toIntOrNull() to it.getOrNull(1)?.toIntOrNull() } ?: (null to null); if (k != null && h != null && t != null) { hits[k] = h; trials[k] = t } } }
-    fun trust(id: String) = ((hits[id] ?: 0) + 1.0) / ((trials[id] ?: 0) + 2.0)
-    fun scored(id: String, hit: Boolean) { trials.merge(id, 1, Int::plus); if (hit) hits.merge(id, 1, Int::plus); save(trials.keys.sorted().joinToString(";") { "$it=${hits[it] ?: 0}/${trials[it]}" }) }
 }
 
 /** Songs the person played, newest and most played first. Fed from what the media sessions say is playing ("Title, Artist"). Pure; [save] persists the text form. */
