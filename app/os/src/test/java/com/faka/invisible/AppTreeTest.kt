@@ -21,11 +21,14 @@ class AppTreeTest {
         for (p in listOf("com.android.settings", "com.miui.securitycenter", "com.x8bit.bitwarden")) assertEquals(p, "Tools", g(p))
     }
 
-    @Test fun unknownPackageUsesWordsThenHintThenDefault() {
+    @Test fun unknownPackageUsesMoneyWordsThenHintThenWordsThenDefault() {
         assertEquals("Pay/Send", AppCategories.categoryOf("com.some.newbank"))
         assertEquals("Play/Games", AppCategories.categoryOf("com.zzz.app", 0))
+        assertEquals("Pay/Send", AppCategories.categoryOf("com.some.newbank", 7))   // money words come before the system hint
+        assertEquals("Watch and listen/Photos", AppCategories.categoryOf("com.zzz.app", 3))
+        assertEquals("Talk/Mail", AppCategories.categoryOf("com.zzz.mailer"))   // no hint: the words
         assertEquals("Go/Move", AppCategories.categoryOf("com.zzz.app", 6))
-        assertEquals("Tools/Setup", AppCategories.categoryOf("com.zzz.app", -1))
+        assertEquals("Tools/Other", AppCategories.categoryOf("com.zzz.app", -1))
     }
 
     // ---------- the optimized tree ----------
@@ -124,12 +127,12 @@ class AppTreeTest {
 
     @Test fun anUntaggedPileIsCutByLetterNotBehindMore() {
         // 12 apps in one place: no "More"; two sorted sub-lists by first letter
-        val l = (0 until 12).map { AppLeaf("a$it", "App${'A' + it}", "Tools/Setup", 0, (100 - it).toDouble()) }
+        val l = (0 until 12).map { AppLeaf("a$it", "App${'A' + it}", "Tools/Other", 0, (100 - it).toDouble()) }
         val t = AppTree.build(l)
         assertTrue(lists(t).none { it.label == "More" })
         assertTrue(lists(t).drop(1).all { it.children.size <= AppTree.MAX_LIST })
         assertEquals(l.map { it.pkg }.sorted(), AppTree.apps(t).map { it.pkg }.sorted())
-        assertTrue(lists(t).any { it.label.startsWith("Setup ") })
+        assertTrue(lists(t).any { it.label.startsWith("Other ") })
     }
 
     @Test fun aHeavyLeafIsPromotedAndALightGroupStaysDown() {
