@@ -129,6 +129,7 @@ object Actions {
             override fun roomsWaiting() = roomsWaitingNow()
             override fun notifDigest() = aiHelp.digest(ControllerNotificationListener.notifs.all())
             override fun taskLine(text: String) = aiHelp.taskLine(text)
+            override fun tasksSummary(texts: List<String>) = aiHelp.tasksSummary(texts)
             override fun notifShort(n: Notif) = aiHelp.short(n, ControllerNotificationListener.notifs.all())
             override fun liveNotif(key: String) = ControllerNotificationListener.ongoingNotif(key)
             override fun notifRead(n: Notif) = ControllerNotificationListener.modules.forNotif(n).read(n)

@@ -202,6 +202,8 @@ object Menu {
     val PLAY_LIKED get() = f("Play liked music")
     val PLAYING_MUSIC get() = f("Playing music")
     fun tasks(n: Int) = f(if (n == 0) "Tasks, none" else "Tasks, $n")
+    /** "Tasks, 18. Mostly buying electronics parts." The count is counted by code; the line only names the themes. */
+    fun tasksSummary(n: Int, line: String) = tasks(n).let { Phrase.join(listOf(Phrase.content(it.text + ".", it.lang), Phrase.content(line, "en"))) }
     val TIMER get() = f("Timer")
     val TODAY get() = f("Today")
     val PHONE get() = f("Phone")

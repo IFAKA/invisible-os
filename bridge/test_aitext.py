@@ -151,3 +151,12 @@ class TaskLineTest(unittest.TestCase):
         self.assertEqual(aitext.make_short(src, model, "", "task"), "Comprar una protoboard de 400 contactos")
         self.assertIn("to-do item", seen[0])
         self.assertEqual(aitext.make_short(src, lambda p: '{"short":"Comprar 999 cables"}', "", "task"), "")   # invented number is refused
+
+    def test_tasks_summary_kind(self):
+        seen = []
+        def model(p):
+            seen.append(p)
+            return '{"short":"mostly buying electronics parts, and a few calls"}'
+        src = "\n".join(["Buy a breadboard", "Buy jumper wires", "Buy a multimeter", "Call the bank about the card statement", "Buy a small pencil case"])
+        self.assertEqual(aitext.make_short(src, model, "", "tasks"), "mostly buying electronics parts, and a few calls")
+        self.assertIn("to-do list", seen[0])

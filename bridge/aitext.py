@@ -107,9 +107,21 @@ def build_task_prompt(text):
             "Use only names and numbers that are in the item. Never invent.\nOutput only the JSON." % str(text)[:1500])
 
 
+TASKS_WORDS = 20   # the guard limit for the summary of a whole to-do list; the prompt asks for 12
+
+
+def build_tasks_prompt(text):
+    return ("Below is a person's to-do list, one item per line.\n---\n%s\n---\n"
+            "Say what the list is mostly about, for a blind listener, as JSON: {\"short\": \"...\"}.\n"
+            "short: the 2 or 3 main themes, at most 12 words, in English, plain words, no markdown, no counts. Example: mostly buying electronics parts, and a few calls. "
+            "Use only things that are in the list. Never invent.\nOutput only the JSON." % str(text)[:3000])
+
+
 def build_short_prompt(text, context="", kind=""):
     if kind == "task":
         return build_task_prompt(text)
+    if kind == "tasks":
+        return build_tasks_prompt(text)
     return ("%sBelow is a message sent to a person.\n---\n%s\n---\n"
             "Write what it says for a blind listener, as JSON: {\"short\": \"...\"}.\n"
             "short: one or two sentences, at most %d words, plain words, no markdown. Say who wants what, when, and any number or place. "
@@ -138,7 +150,7 @@ def make_short(text, model, context="", kind=""):
         s = parse_short(model(build_short_prompt(text, context, kind)))
     except Exception:
         return ""
-    ok, _ = check_story(s, text, squash(context)[:CONTEXT_CHARS], limit=TASK_WORDS if kind == "task" else SHORT_WORDS)
+    ok, _ = check_story(s, text, squash(context)[:CONTEXT_CHARS], limit={"task": TASK_WORDS, "tasks": TASKS_WORDS}.get(kind, SHORT_WORDS))
     return s if ok else ""
 
 
@@ -229,7 +241,7 @@ class AiText:
 
     def short(self, text, context="", kind=""):
         text, context = str(text or ""), squash(context)[:CONTEXT_CHARS]
-        kind = "task" if kind == "task" else ""
+        kind = kind if kind in ("task", "tasks") else ""
         return self._get(self._key("s", [text, context] + ([kind] if kind else [])), lambda: make_short(text, self.model, context, kind))
 
     def replies(self, text, lang="en", context=""):

@@ -76,6 +76,15 @@ object AiGuard {
             "short: one short action phrase, at most $TASK_ASK_WORDS words, in the same language as the item, plain words, no markdown. Keep the key thing. " +
             "Use only names and numbers that are in the item. Never invent.\nOutput only the JSON."
 
+    const val TASKS_WORDS = 20
+
+    /** What a whole to-do list is mostly about (2-3 themes, no counts: the code counts). */
+    fun tasksPrompt(items: List<String>): String =
+        "Below is a person's to-do list, one item per line.\n---\n${items.joinToString("\n") { it.squash() }.take(3000)}\n---\n" +
+            "Say what the list is mostly about, for a blind listener, as JSON: {\"short\": \"...\"}.\n" +
+            "short: the 2 or 3 main themes, at most 12 words, in English, plain words, no markdown, no counts. Example: mostly buying electronics parts, and a few calls. " +
+            "Use only things that are in the list. Never invent.\nOutput only the JSON."
+
     private val markdown = Regex("(\\*\\*|__|`|^#+\\s*)")
 
     /** The string value of [key] in the JSON-ish [raw] (the model may add text or fences around it), unescaped; "" if none. */
@@ -116,6 +125,13 @@ object AiGuard {
         if (text.squash().isEmpty()) return ""
         val s = try { parseShort(model(taskPrompt(text))) } catch (_: Exception) { return "" }
         return if (checkStory(s, text, "", TASK_WORDS).first) s else ""
+    }
+
+    /** The themes line for a to-do list that passes the guard, or "". */
+    fun makeTasksSummary(items: List<String>, model: (String) -> String): String {
+        if (items.isEmpty()) return ""
+        val s = try { parseShort(model(tasksPrompt(items))) } catch (_: Exception) { return "" }
+        return if (checkStory(s, items.joinToString("\n"), "", TASKS_WORDS).first) s else ""
     }
 
     // ---- digest ----

@@ -58,6 +58,7 @@ interface ModeOutput {
     fun startNotifReply(key: String, index: Int) {}   // Write keyboard; its text goes into that action's reply box
     fun status(): Status
     fun songLang(text: String): String? = null   // "es" or "en" for the voice
+    fun tasksSummary(texts: List<String>): String = ""   // what a long to-do list is mostly about, from the AI ("" until known)
     fun taskLine(text: String): String = ""   // the AI's short action phrase for a long task ("" = none yet: read the task itself)
     fun tasks(): List<Task> = emptyList()   // open to-do items, oldest first
     fun completeTask(id: Long) {}
@@ -159,7 +160,7 @@ class ControllerMode(
     enum class Screen { HUB, MESSAGE, MORE_MSG, COMPOSE, TIMER_DONE, TIMER_PICK, VOLUME, TODAY, PHONE, TASK, TASK_ADD, MSG_TASK, GAMES, CALC, ALARM_HOUR, ALARM_MIN, SENT, TREE, APP_OPEN, NOTIF_APPS, NOTIF_LIST, NOTIF_ACTIONS, FIND, MUSIC, MUSIC_PLAY, VOLUME_DIAL, CALL_IN, CALL_ACTIVE, CONTACTS, EMERGENCY, RESET_ASK }
     private enum class Phase { INTRO, SCAN, WAIT, OUTRO, PENDING }
     private class Intro(val text: Phrase, val msgId: String?, val hint: Boolean = false) { var started = false }
-    private class Opt(val key: String, val label: Phrase, val run: () -> Unit)
+    private class Opt(val key: String, val label: Phrase, val full: Phrase? = null, val run: () -> Unit) { var shown = label }   // [full]: read instead of [label] after a fast-scroll release (a task: its whole text)
 
     /** Set from the app's settings screen; read at use, so changes apply at once. */
     var settings = LauncherSettings()
@@ -209,7 +210,7 @@ class ControllerMode(
     private val ALARM_HOURS = listOf(7, 6, 8, 9, 5, 10, 4, 11) + (0..23).filter { it !in listOf(7, 6, 8, 9, 5, 10, 4, 11) }
     private val ALARM_MINUTES = listOf(0, 30, 15, 45, 10, 20, 40, 50, 5, 25, 35, 55)
 
-    private val scanner = Scanner<Opt>(timers, { it.label }, scanOut,
+    private val scanner = Scanner<Opt>(timers, { it.shown }, scanOut,
         ScanCadence(pauseMs = { pause }, loops = { silentLoops }, tickLeadMs = tickLeadMs, restartLeadMs = restartLeadMs),
         spearcon = { settings.spearcons && out.pickCount(it.key) >= SPEARCON_AFTER })
     private val list get() = scanner.list   // the options being read
@@ -492,6 +493,7 @@ class ControllerMode(
     private fun endFast() {
         if (!scanner.endFast()) return
         stopAll()
+        scanner.list.current.let { o -> o.full?.let { o.shown = it } }   // a hold on a task, then release: hear the whole text
         history.clear()
         scanner.resumeIn(SKIP_MS)
     }
@@ -530,7 +532,7 @@ class ControllerMode(
                     "messages" -> if (n > 0) all["hub:messages"] = Opt("hub:messages", Menu.messages(n)) { readUnread("hub:messages") }
                         else if (out.lacks("notif")) all["hub:messages"] = Opt("hub:messages", Menu.MESSAGES) { pick("hub:messages"); out.needed("notif"); outro(Voice.NEED_NOTIFICATIONS) }   // no access yet: say why, the app shows the button
                     "music" -> if (out.nowPlaying() != null || out.hasMusicApp()) all["hub:music"] = Opt("hub:music", Menu.MUSIC) { pick("hub:music"); musicBack = if (treePath.isEmpty()) Screen.HUB else Screen.TREE; show(Screen.MUSIC) }   // the Music page: what is playing, pause, next, play something
-                    "tasks" -> out.tasks().let { ts -> all["hub:tasks"] = Opt("hub:tasks", Menu.tasks(ts.size)) {
+                    "tasks" -> out.tasks().let { ts -> all["hub:tasks"] = Opt("hub:tasks", out.tasksSummary(ts.map { it.text }).let { line -> if (line.isEmpty()) Menu.tasks(ts.size) else Menu.tasksSummary(ts.size, line) }) {
                         pick("hub:tasks"); taskList = ts; taskIdx = 0
                         when {
                             ts.isNotEmpty() -> show(Screen.TASK)
@@ -574,16 +576,21 @@ class ControllerMode(
                 val rest = if (tasksOpt.isEmpty()) rest0 else rest0.filter { it.key != "hub:tasks" }   // the pinned Laptop tool comes right after Notifications, before the suggestions
                 liveOpts + notifOpt + tasksOpt + pinned + front.filter { f -> pinned.none { it.key == f.key } } + rest + unmuteOption() + Opt("phone:emergency", Menu.EMERGENCY) { pick("phone:emergency"); show(Screen.EMERGENCY) }   // the home list is the tree's top; only the small Suggested slot in front adapts; Emergency is always the last item
             }
-            Screen.TASK -> {   // "Add task" first, then this page of tasks (a click right after hearing one = done), then "More tasks"
+            Screen.TASK -> {   // this page of tasks (a click right after hearing one = done; a hold then release reads one in full), "More tasks", then "Add task"
                 val page = taskList.drop(taskIdx).take(TASK_PAGE)
                 val opts = ArrayList<Opt>()
-                for (t in page) opts += Opt("task:done", out.taskLine(t.text).let { line -> if (line.isEmpty()) Voice.cut(t.text, MAX_SPOKEN, t.lang == "es", t.lang.ifEmpty { out.songLang(t.text) ?: "en" }) else Phrase.content(line, t.lang.ifEmpty { out.songLang(t.text) ?: "en" }) }) {
+                for (t in page) {
+                    val lang = t.lang.ifEmpty { out.songLang(t.text) ?: "en" }
+                    val line = out.taskLine(t.text)
+                    val whole = Voice.cut(t.text, TASK_FULL_CHARS, t.lang == "es", lang)
+                    opts += Opt("task:done", if (line.isEmpty()) Voice.cut(t.text, MAX_SPOKEN, t.lang == "es", lang) else Phrase.content(line, lang), if (line.isEmpty()) null else whole) {
                     pick("task:done")
                     startPending(Voice.TASK_DONE_UNDO, { out.completeTask(t.id); true }, onCancel = { show(Screen.TASK) }, after = {
                         taskList = taskList - t
                         if (taskList.isEmpty()) { say(Voice.ALL_DONE); phase = Phase.WAIT; waitNext = { show(Screen.HUB) } }
                         else { if (taskIdx >= taskList.size) taskIdx = 0; show(Screen.TASK) }
                     })
+                    }
                 }
                 if (taskIdx + TASK_PAGE < taskList.size) opts += Opt("task:more", Menu.MORE_TASKS) { pick("task:more"); taskIdx += TASK_PAGE; show(Screen.TASK) }
                 opts += Opt("task:add", Menu.ADD_TASK) { pick("task:add"); show(Screen.TASK_ADD) }   // last: reading is the common job
@@ -1242,6 +1249,7 @@ class ControllerMode(
         const val FIND_MS = 20_000L   // "Find my phone" rings this long
         const val SPEARCON_AFTER = 30   // picks of one option, then it is scanned as a sped-up spearcon
         private const val MAX_SPOKEN = 160
+        private const val TASK_FULL_CHARS = 600   // a task read in full after a hold
         private const val MAX_NOTIFS = 20   // notifications read in one app list
     }
 }

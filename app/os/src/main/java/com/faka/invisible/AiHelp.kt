@@ -25,6 +25,7 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
                  override fun digest(items: List<Triple<String, String, String>>) = b.digest(items)
                  override fun short(text: String, context: String) = b.short(text, context)
                  override fun taskLine(text: String) = b.short(text, "", "task")
+                 override fun tasksSummary(items: List<String>) = b.short(items.joinToString("\n"), "", "tasks")
                  override fun replies(text: String, lang: String, context: String) = b.replies(text, lang, context)
              } } }) {
     interface AiClient {
@@ -32,6 +33,8 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
         @Throws(IOException::class) fun short(text: String, context: String): String
         /** A short action phrase for a to-do item ("" = none). */
         @Throws(IOException::class) fun taskLine(text: String): String = ""
+        /** The 2-3 main themes of a whole to-do list ("" = none). */
+        @Throws(IOException::class) fun tasksSummary(items: List<String>): String = ""
         /** Reply sentences and tasks; both empty = the laptop's model had nothing. */
         @Throws(IOException::class) fun replies(text: String, lang: String, context: String): Pair<List<String>, List<String>>
     }
@@ -147,6 +150,18 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
         return s.orEmpty()
     }
 
+    /** What the to-do list [texts] is mostly about, when the AI made it, else "" (fewer than 4 tasks, no AI, or no answer yet: asks now if it has not yet). */
+    fun tasksSummary(texts: List<String>): String {
+        if (texts.size < TASKS_SUMMARY_MIN || source() == AiSource.NONE) return ""
+        val k = "tasks\u0001" + texts.joinToString("\u0002") + "\u0001" + source()
+        val s = synchronized(lock) { shorts[k] }
+        if (s == null && synchronized(lock) { k !in shorts && shortBusy.add(k) }) run {
+            val r = chain("", { it.isEmpty() }, { it.tasksSummary(texts) }, { p -> AiGuard.makeTasksSummary(texts) { p.generate(it) } })
+            synchronized(lock) { shorts[k] = r; shortBusy.remove(k) }
+        }
+        return s.orEmpty()
+    }
+
     /** True when some AI can write replies now. */
     fun canReply(): Boolean = source() != AiSource.NONE
 
@@ -163,5 +178,5 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
         }
     }
 
-    private companion object { const val DOWN_MS = 60_000L; const val TASK_SHORT_WORDS = 8 }
+    private companion object { const val DOWN_MS = 60_000L; const val TASK_SHORT_WORDS = 8; const val TASKS_SUMMARY_MIN = 4 }
 }
