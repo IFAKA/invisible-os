@@ -618,6 +618,17 @@ class ModeTest {
         assertTrue(said.toString(), said.first().endsWith("Cy. three"))   // not "Ann. one" again
     }
 
+    @Test fun goingBackToAListReadsItFromTheItemYouWereOn() {
+        val r = Rig(); r.m.settings = LauncherSettings(hub = listOf("today"))
+        val ns = listOf(Notif("k1", "com.mail", "Mail", "Ann", "one", 5), Notif("k2", "com.mail", "Mail", "Bob", "two", 4), Notif("k3", "com.mail", "Mail", "Cy", "three", 3))
+        r.groups = listOf(NotifGroup("com.mail", "Mail", "com.mail", ns))
+        r.installed = listOf(InstalledApp("com.mail", "Mail"), InstalledApp("com.google.android.apps.maps", "Maps"))
+        r.wake(); r.pick("Mail"); r.pick("Bob. two"); r.advance(1500)
+        r.clearLog(); r.m.onGesture(Gesture.TRIPLE); r.advance(6000)   // back to Mail's list
+        val said = r.spoken().filter { it.startsWith("say") }
+        assertTrue(said.toString(), said.first().endsWith("Bob. two"))   // not "Ann. one"
+    }
+
     @Test fun lastTaskDoneSaysAllDone() {
         val r = Rig().withTasks(); r.taskStore.add("Buy milk"); r.wake(); r.pick("Tasks, 1"); r.advance(1500)
         r.pick("Buy milk"); r.advance(1500); r.pick("Yes, done"); r.advance(6000)

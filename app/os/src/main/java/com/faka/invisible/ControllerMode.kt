@@ -272,7 +272,7 @@ class ControllerMode(
                     noteReaction(i, firstPress)
                     stopAll(); code = i + 1; pickMs = firstPress - scanStartedAt
                     com.faka.invisible.oskit.Trace.ev("item", "screen=${screen.name} item=${i + 1}/${list.items.size} text=${com.faka.invisible.voicekit.ScreenMirror.items.getOrNull(i) ?: "?"} reactionMs=$pickMs")
-                    list.items[i].run(); pickMs = -1
+                    runItem(i); pickMs = -1
                 }
                 Phase.INTRO -> skipIntro()
                 Phase.WAIT -> { val n = waitNext; stopAll(); n?.invoke() }
@@ -289,7 +289,7 @@ class ControllerMode(
         if (com.faka.invisible.voicekit.ScreenMirror.items.getOrNull(i) != text) return false
         stopAll(); code = i + 1; pickMs = -1
         com.faka.invisible.oskit.Trace.ev("item", "screen=${screen.name} item=${i + 1}/${list.items.size} text=$text via=app-screen")
-        list.items[i].run()
+        runItem(i)
         return true
     }
 
@@ -384,7 +384,9 @@ class ControllerMode(
         val s = notifGuard(s0)
         stopAll(); lookupId++
         screen = s; phase = Phase.INTRO; prebuilt = null; timers.clear("prebuild")
-        if (resume?.first != s) resume = null
+        if (resume?.first != s) { resume = null; resumeLabel = null }
+        if (backNav) backMark(s)
+        else if (s == Screen.HUB) trail.clear()   // a fresh start (wake) forgets the old places
         com.faka.invisible.oskit.Trace.ev("screen", "${s.name} title=${mirrorTitle(s)}")
         com.faka.invisible.voicekit.ScreenMirror.setTitle(mirrorTitle(s))
         com.faka.invisible.voicekit.ScreenMirror.show(emptyList(), 0)   // the list of the last screen is gone: what is said now fills the picture
@@ -457,7 +459,7 @@ class ControllerMode(
         wmark("beginScan"); val opts = prebuilt?.takeIf { screen == Screen.HUB } ?: buildOptions(); prebuilt = null; wmark("buildOptions")
         scanner.load(opts, listTitle())
         if (scanner.isEmpty) { leaveSilent(); return }
-        val resumeAt = resume?.takeIf { it.first == screen }?.second; resume = null
+        val resumeAt = resume?.takeIf { it.first == screen }?.second?.let { n -> resumeLabel?.let { l -> opts.indexOfFirst { it.label.text == l }.takeIf { it >= 0 } } ?: n }; resume = null; resumeLabel = null
         val first = devAt.takeIf { it >= 0 }?.coerceAtMost(opts.size - 1) ?: resumeAt?.coerceAtMost(opts.size - 1) ?: firstKey?.let { k -> opts.indexOfFirst { it.key == k } }?.takeIf { it > 0 } ?: 0
         firstKey = null; devAt = -1
         scanner.speakItem(first); wmark("speakItem called"); wakeT0 = 0
@@ -1222,6 +1224,28 @@ class ControllerMode(
     private var devAt = -1
     /** After an item is removed (dismissed, done) the list is read again from the place it left, not from the top: the screen it is for and the item number. */
     private var resume: Pair<Screen, Int>? = null
+    private var resumeLabel: String? = null   // set when going back: the item picked there is found by its words first (home and the tree move apps between visits)
+
+    /** Where a pick was made: the list is read again from there when the person comes back (triple click). */
+    private class Mark(val screen: Screen, val where: List<Any?>, val index: Int, val label: String)
+    private val trail = ArrayList<Mark>()
+    private fun here(): List<Any?> = listOf(treePath.map { it.label }, notifPkg, findStack.size)
+
+    /** Runs item [i] (a click or a tap on the app screen) and keeps its place first. */
+    private fun runItem(i: Int) {
+        trail.add(Mark(screen, here(), i, list.items[i].label.text)); if (trail.size > 30) trail.removeAt(0)
+        list.items[i].run()
+    }
+
+    /** Going back to [s]: find the pick that opened what we leave and read [s] again from that item. Marks above it belong to deeper screens and go. */
+    private fun backMark(s: Screen) {
+        val at = trail.indexOfLast { it.screen == s && it.where == here() }
+        if (at < 0) return
+        val m = trail[at]
+        while (trail.size > at) trail.removeAt(trail.size - 1)
+        if (resume?.first == s) return   // an item was removed there: the next one wins
+        resume = s to m.index; resumeLabel = m.label
+    }
     /** Dev (e2e): the next list starts at item [at] (a big number = the last one), so a test need not walk the items before it. */
     fun devShow(name: String, at: Int = -1) { devAt = at; if (!active) { active = true; queue = mutableListOf(); qi = 0; fromHub = false; speechOpen = false; hintPending = false; musicBack = Screen.HUB }; show(Screen.valueOf(name)) }
     /** Dev (e2e): "screen phase" of the menu, for the test log. */
