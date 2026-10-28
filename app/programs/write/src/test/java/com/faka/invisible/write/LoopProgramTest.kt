@@ -65,6 +65,16 @@ class LoopProgramTest {
         assertTrue(saved.isNotEmpty())   // what was learned is kept
     }
 
+    @Test fun aClickThatDoesNotChooseStartsAFocusRoundThatStillPicksTheLetter() {
+        p.start(); running(); audio.advance(1500)
+        val full = audio.played.map { it.text }.toSet().size
+        pick("h") { logs.any { it.startsWith("focus n=") } }
+        assertTrue(logs.toString(), logs.any { Regex("focus n=\\d ms=${Pacing.LOOP_FOCUS_MS}").matches(it.trim()) })
+        assertTrue("fewer items than the $full of the full loop", audio.played.map { it.text }.toSet().size < full)
+        pick("h") { said.any { it == "H" } }
+        assertTrue(logs.any { it.startsWith("choice l:h") })
+    }
+
     @Test fun aWholeWordGuessAddsTheWordAndTheSpace() {
         p.start()
         val n = pick("android") { p.text() == "Android" }

@@ -10,7 +10,8 @@ class LetterLoopTest {
     private var idle = 0
     private val audio = FakeLoopAudio(latencyMs = 90.0)
     private fun item(k: String, prior: Double = 0.1, undo: Boolean = false) = LoopItem(k, Phrase.content(k), prior, undo)
-    private fun loop(seed: List<Double> = emptyList()) = LetterLoop<String>(audio, audio, seed = seed, onChosen = { chosen.add(it) }, onIdle = { idle++ })
+    private fun loop(seed: List<Double> = emptyList(), focus: LoopFocus? = null, params: com.faka.invisible.logickit.ClickModel.Params = com.faka.invisible.logickit.ClickModel.Params()) = LetterLoop<String>(audio, audio, seed = seed, params = params, onChosen = { chosen.add(it) }, onIdle = { idle++ }, focus = focus, log = { e, f -> events.add(e + f.joinToString(" ", " ")) })
+    private val events = ArrayList<String>()
     private val six = listOf("a", "b", "c", "d", "e", "f")
 
     @Test fun twoChannelsHalfAnItemApartAndTheyRepeat() {
@@ -124,5 +125,59 @@ class LetterLoopTest {
 
     @Test fun aClickBeforeTheLoopIsRunningDoesNothing() {
         val l = loop(); l.click(100); assertTrue(chosen.isEmpty())
+    }
+
+    // ---- the focus round ----
+    private val ten = ('a'..'j').map { it.toString() }
+    private val texts get() = audio.played.map { it.text }.toSet()
+    /** The next time (not in the past) the item [k] is heard. */
+    private fun nextHeard(k: String) = audio.played.filter { it.text == k }.map { audio.wallMsOf(it.frame) }.filter { it >= audio.now }.min()
+
+    @Test fun aClickNearHStartsAFocusRoundOfHAndItsNeighbours() {
+        val l = loop(focus = LoopFocus()); l.start(ten.map { item(it) })
+        audio.advance(500)
+        val t = (audio.heardAt("h", 0) + 150).toLong(); audio.advance(t - audio.now); l.click(t)
+        assertTrue("no pick yet", chosen.isEmpty())
+        assertTrue("focus event in $events", events.any { it.startsWith("focus n=") && it.endsWith("ms=${Pacing.LOOP_FOCUS_MS}") })
+        val set = texts
+        assertTrue("h in $set", "h" in set)
+        assertTrue("at most 6 in $set", set.size in 2..6)
+        assertFalse("a is not played in the focus round", "a" in set)
+        assertTrue("slower items", l.cycleMs >= Math.ceil(set.size / 2.0) * Pacing.LOOP_FOCUS_MS - 1)
+    }
+
+    @Test fun aSecondClickPicksHInTheFocusRound() {
+        val l = loop(focus = LoopFocus(), params = com.faka.invisible.logickit.ClickModel.Params(mu0 = 0.15, sigma0 = 0.04)); l.start(ten.map { item(it) })
+        audio.advance(500)
+        var t = (audio.heardAt("h", 0) + 150).toLong(); audio.advance(t - audio.now); l.click(t)
+        var n = 0
+        while (chosen.isEmpty() && n++ < 12) {
+            if ("h" !in texts) break
+            t = (nextHeard("h") + 150).toLong(); audio.advance(t - audio.now); l.click(t)
+        }
+        assertEquals("events $events", 1, chosen.size)
+        assertEquals("h", chosen.single().key)
+        assertTrue("took $n more clicks", n <= 4)
+    }
+
+    @Test fun noClickInTheFocusRoundReturnsToTheFullLoop() {
+        val l = loop(focus = LoopFocus()); l.start(ten.map { item(it) })
+        audio.advance(500)
+        val t = (audio.heardAt("h", 0) + 150).toLong(); audio.advance(t - audio.now); l.click(t)
+        assertFalse("a" in texts)
+        audio.advance((3 * l.cycleMs).toLong() + 600)
+        assertTrue("whole loop again: $texts", texts.size == 10)
+        assertTrue(l.running)
+        // the evidence is kept: the click on h still counts, so one more click on h is enough sooner than from scratch
+        assertTrue(events.any { it.startsWith("focus-end") })
+    }
+
+    @Test fun focusPicksTheLikelyItemsAndUndoLast() {
+        val items = ten.map { item(it, prior = 0.1, undo = it == "j") }
+        val chance = ten.associateWith { if (it == "c") 0.5 else if (it == "d") 0.3 else if (it == "e") 0.15 else 0.01 }
+        val f = LoopFocus().pick(items, chance)
+        assertEquals("j", f.last().key)
+        assertTrue(f.size <= 7)
+        assertEquals(listOf("c", "d", "e"), f.take(3).map { it.key })
     }
 }

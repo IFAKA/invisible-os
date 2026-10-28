@@ -74,6 +74,12 @@ object Pacing {
     const val LOOP_LEAD_MS = 120
     /** Cycles without a click before the loop reports idle. */
     const val LOOP_IDLE_CYCLES = 4
+    /** The focus round (after a click that does not choose): time of one item, spoken more slowly than the full loop (tools/write_bench.py, DESIGN-TYPING.md step 7). */
+    const val LOOP_FOCUS_MS = 650
+    /** The focus round plays the most likely items until their chances add up to this. */
+    const val LOOP_FOCUS_COVER = 0.95
+    /** Quiet between the click and the first sound of the focus round (the loop stops, the next one starts). */
+    const val LOOP_FOCUS_PAUSE_MS = 280
 
     fun words(text: String) = text.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
     fun words(p: Phrase) = words(p.text)

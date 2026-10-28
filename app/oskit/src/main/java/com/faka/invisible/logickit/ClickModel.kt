@@ -163,6 +163,22 @@ class ClickModel<K>(
         }
     }
 
+    /** The raw log score of each item of the round: what the clicks so far made of them (see [restart]). */
+    fun scoresMap(): Map<K, Double> = keys.indices.associate { keys[it] to scores[it] }
+
+    /**
+     * Play the same evidence again with other items or other onset times (a focus round, or the full loop after it): [scores] = key to raw
+     * log score (from [scoresMap]); no start handicap, nothing is forgotten. Call on a model made with [inherit] of the model that gave the scores.
+     */
+    fun restart(scores: Map<K, Double>, timesMs: Map<K, Double>, cycleStartMs: Double = 0.0, winDiffs: Map<K, Double> = emptyMap()) {
+        keys = scores.keys.toList()
+        noonS = DoubleArray(keys.size) { (timesMs[keys[it]] ?: 0.0) / 1000.0 }
+        gate = DoubleArray(keys.size) { winDiffs[keys[it]] ?: params.winDiff }
+        this.scores = DoubleArray(keys.size) { scores.getValue(keys[it]) }
+        startMs = cycleStartMs
+        sort()
+    }
+
     private fun sort() { sorted = keys.indices.sortedByDescending { scores[it] } }      // update_sorted_inds, :258
 
     /** A click at [atMs] (same clock as cycleStartMs). Returns true if an item is now chosen (is_winner, :263). */

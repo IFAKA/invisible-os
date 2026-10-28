@@ -116,4 +116,21 @@ class ClickModelTest {
         a.click(1500.0); b.click(1500.0)   // 300 ms after C
         assertTrue(b.posteriors().getValue("C") > a.posteriors().getValue("C"))
     }
+
+    @Test fun restartKeepsTheScoresAndTakesNewTimes() {
+        val a = ClickModel<String>(3000.0); a.start(prior, noon)
+        a.click(1300.0)   // 100 ms after C
+        val before = a.posteriors()
+        // a focus round: C, D and B only, another cycle length and other onset times; the evidence stays (no start handicap)
+        val b = ClickModel<String>(1500.0); b.inherit(a)
+        val sc = a.scoresMap().filterKeys { it in listOf("C", "D", "B") }
+        b.restart(sc, mapOf("C" to 0.0, "D" to 500.0, "B" to 1000.0), 5000.0)
+        val rel = { m: Map<String, Double> -> m.getValue("C") / m.getValue("D") }
+        assertEquals(rel(before), rel(b.posteriors()), 1e-9)
+        assertEquals(3, b.posteriors().size)
+        // a click 100 ms after C's NEW onset adds to C again
+        b.click(5100.0)
+        assertTrue(b.posteriors().getValue("C") > rel(before) / (1 + rel(before)))
+        assertEquals("C", b.best())
+    }
 }

@@ -17,6 +17,33 @@ class LoopItem<K>(
 /** What was chosen: [rank] = its place in the list the caller gave, [cycles] = whole cycles heard before the choice, [ms] = from the first sound of the round, [clicks] = clicks of the round. */
 class LoopChoice<K>(val key: K, val rank: Int, val cycles: Int, val ms: Long, val clicks: Int)
 
+/**
+ * The focus round (Huffman / probabilistic scanning with noisy switches: Roark, Fried-Oken, Gibbons et al., Computer Speech & Language 2013):
+ * a click that does not choose stops the loop; the next round plays only the most likely items ([min] to [max], together about [cover] of the chance)
+ * plus Undo, [itemMs] per item, most likely first. The model keeps its scores. With no click for [passes] passes the whole loop starts again with the evidence kept.
+ */
+class LoopFocus(
+    val itemMs: Int = Pacing.LOOP_FOCUS_MS,
+    val cover: Double = Pacing.LOOP_FOCUS_COVER,
+    val min: Int = 2,
+    val max: Int = 6,
+    val passes: Int = 2,
+    val pauseMs: Int = Pacing.LOOP_FOCUS_PAUSE_MS,
+) {
+    /** The items of the focus round: most likely first until [cover] (at least [min], at most [max]), then every Undo item. [chance] = the chance of each item now. */
+    fun <K> pick(items: List<LoopItem<K>>, chance: Map<K, Double>): List<LoopItem<K>> {
+        val likely = items.filter { !it.undo }.sortedByDescending { chance[it.key] ?: 0.0 }
+        var sum = 0.0
+        val out = ArrayList<LoopItem<K>>()
+        for (it in likely) {
+            if (out.size >= max || (sum >= cover && out.size >= min)) break
+            out.add(it); sum += chance[it.key] ?: 0.0
+        }
+        out.addAll(items.filter { it.undo })
+        return out
+    }
+}
+
 /** What the loop needs to make sound. The Android side is `engines/LoopSound`; tests use a fake one with fake time. All calls on the main thread. */
 interface LoopAudio {
     /** Frames per second of [nowFrame] and of the clips. */
@@ -67,6 +94,8 @@ class LetterLoop<K>(
     private val log: (event: String, fields: List<Any?>) -> Unit = { _, _ -> },
     private val onChosen: (LoopChoice<K>) -> Unit,
     private val onIdle: () -> Unit = {},
+    /** The focus round after a click that does not choose; null = the whole loop plays on. */
+    private val focus: LoopFocus? = LoopFocus(),
 ) {
     private enum class State { OFF, PREPARING, RUNNING, PAUSED }
     private var state = State.OFF
@@ -81,6 +110,12 @@ class LetterLoop<K>(
     private var lastActiveMs = 0L
     private var clicks = 0
     private var cycleFrames = 0L
+    private var clips: Map<String, FloatArray> = emptyMap()
+    private var fullLive: List<LoopItem<K>> = emptyList()   // the items of the whole loop that have a clip
+    private var focused = false
+    private var fullScores: Map<K, Double> = emptyMap()     // what the model thought of every item when the focus round began
+    private var roundWall = 0.0                             // first sound of the round (the whole loop's)
+    private var roundPeriod = 0.0
     private var plays: List<Triple<FloatArray, Long, Double>> = emptyList()   // clip, frame offset in the cycle, pan
     /** Times of the items in the cycle, ms after the cycle start (key to time); what the model got. Read by tests and traces. */
     var onsets: Map<K, Double> = emptyMap(); private set
@@ -93,7 +128,7 @@ class LetterLoop<K>(
 
     /** Begin a round with [list] (in order of chance, controls last). */
     fun start(list: List<LoopItem<K>>) {
-        halt(); items = list
+        halt(); items = list; focused = false
         if (list.isEmpty()) return
         state = State.PREPARING
         val g = ++gen
@@ -115,40 +150,78 @@ class LetterLoop<K>(
         if (state != State.OFF) state = State.PAUSED
     }
 
-    private fun begin(clips: Map<String, FloatArray>) {
-        val live = items.filter { clips[it.say.text] != null }
+    private fun begin(made: Map<String, FloatArray>) {
+        clips = made
+        val live = items.filter { made[it.say.text] != null }
         if (live.isEmpty()) { state = State.PAUSED; log("loop-empty", listOf(items.size)); return }
+        fullLive = live; focused = false
+        play(live, itemMs, null, 0)
+        roundWall = startWall; roundPeriod = periodMs
+        clicks = 0
+    }
+
+    /**
+     * Play [live] as one cycle, [ms] per item, [pauseMs] after the lead. [carry] = the scores of a round that goes on (a focus round or the whole loop after it): the model
+     * keeps them and what it learned; null = a new round (priors, the leader's start handicap).
+     */
+    private fun play(live: List<LoopItem<K>>, ms: Int, carry: Map<K, Double>?, pauseMs: Int) {
         val sr = audio.sampleRate
-        val half = itemMs / 2.0
+        val half = ms / 2.0
         val at = HashMap<K, Double>(); val ps = ArrayList<Triple<FloatArray, Long, Double>>()
         val end = doubleArrayOf(0.0, half)   // where the next item of channel A and of channel B starts
         var longest = 0.0
         live.forEachIndexed { i, item ->
             val ch = i % 2
             val clip = clips.getValue(item.say.text)
-            val ms = clip.size * 1000.0 / sr
+            val len = clip.size * 1000.0 / sr
             at[item.key] = end[ch]
             ps.add(Triple(clip, Math.round(end[ch] * sr / 1000.0), if (ch == 0) -1.0 else 1.0))
-            end[ch] += max(itemMs.toDouble(), ms + gapMs)
+            end[ch] += max(ms.toDouble(), len + gapMs)
             longest = max(longest, end[ch] - (if (ch == 1) half else 0.0))
         }
         periodMs = longest
         cycleFrames = Math.round(periodMs * sr / 1000.0)
         plays = ps; onsets = at
-        cycleStartFrame = audio.nowFrame() + sr * leadMs / 1000
+        cycleStartFrame = audio.nowFrame() + sr * (leadMs + pauseMs) / 1000
         startWall = audio.wallMsOf(cycleStartFrame)
         val m = ClickModel<K>(periodMs, params)
-        val before = prev
-        if (before != null) m.inherit(before) else m.seed(seedOffsets)
-        m.start(
-            live.associate { it.key to it.prior.coerceAtLeast(1e-9) }, at, startWall,
-            live.filter { it.risky }.associate { it.key to m.params.winDiffHigh },
-        )
-        model = m; clicks = 0; lastActiveMs = startWall.toLong()
+        val risky = live.filter { it.risky }.associate { it.key to m.params.winDiffHigh }
+        if (carry != null) {
+            (model ?: prev)?.let { m.inherit(it) }
+            m.restart(carry, at, startWall, risky)
+        } else {
+            val before = prev
+            if (before != null) m.inherit(before) else m.seed(seedOffsets)
+            m.start(live.associate { it.key to it.prior.coerceAtLeast(1e-9) }, at, startWall, risky)
+        }
+        model = m; lastActiveMs = startWall.toLong()
         state = State.RUNNING
         schedule(0); schedule(1)
         log("loop-start", listOf(live.size, periodMs.toLong(), startWall.toLong()))
         next(0)
+    }
+
+    /** A click that did not choose: play only the likely items for a while. */
+    private fun refocus(m: ClickModel<K>) {
+        val f = focus ?: return
+        val set = f.pick(fullLive, m.posteriors())
+        if (set.size >= fullLive.size) return   // nothing would be left out
+        val now = m.scoresMap()
+        fullScores = if (focused) fullScores + now else now
+        halt()
+        play(set, f.itemMs, now.filterKeys { k -> set.any { it.key == k } }, f.pauseMs)
+        focused = true
+        log("focus", listOf("n=${set.size}", "ms=${f.itemMs}"))
+    }
+
+    /** No click in the focus round: the whole loop again, with what the clicks said. */
+    private fun unfocus() {
+        val m = model ?: return
+        val carry = fullScores + m.scoresMap()
+        halt()
+        play(fullLive, itemMs, fullLive.associate { it.key to (carry[it.key] ?: 0.0) }, 0)
+        focused = false
+        log("focus-end", listOf(fullLive.size))
     }
 
     private fun schedule(k: Int) {
@@ -162,6 +235,7 @@ class LetterLoop<K>(
         val due = startWall + k * periodMs
         timers.set(TIMER, max(0L, Math.round(due - audio.nowMs()))) {
             if (g != gen || state != State.RUNNING) return@set
+            if (focused && focus != null && audio.nowMs() - lastActiveMs >= focus.passes * periodMs - periodMs / 2) { unfocus(); return@set }
             if (audio.nowMs() - lastActiveMs >= idleCycles * periodMs - periodMs / 2) { pause(); return@set }
             schedule(k + 2); next(k + 1)
         }
@@ -181,14 +255,14 @@ class LetterLoop<K>(
         val won = m.click(timeMs.toDouble())
         val best = m.best()
         log("loop-click", listOf(timeMs, ((timeMs - startWall) % periodMs).toLong(), best, "%.2f".format(m.posteriors()[best] ?: 0.0)))
-        if (won) finish(m, m.chosen() ?: return, timeMs)
+        if (won) finish(m, m.chosen() ?: return, timeMs) else refocus(m)
     }
 
     private fun finish(m: ClickModel<K>, key: K, timeMs: Long) {
         val rank = items.indexOfFirst { it.key == key }
         val item = items[rank]
-        val c = LoopChoice(key, rank, ((timeMs - startWall) / periodMs).toInt(), (timeMs - startWall).toLong(), clicks)
-        halt(); state = State.PAUSED
+        val c = LoopChoice(key, rank, ((timeMs - roundWall) / roundPeriod).toInt(), (timeMs - roundWall).toLong(), clicks)
+        halt(); state = State.PAUSED; focused = false
         audio.confirm()
         if (item.undo) m.undo() else m.learn(key)
         prev = m; model = null

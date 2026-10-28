@@ -82,6 +82,21 @@ class ClickModel:
         if len(self.keys) > 1 and self.scores[self.sorted[0]] - self.scores[self.sorted[1]] > self.params.max_init_diff:
             self.scores[self.sorted[0]] = self.scores[self.sorted[1]] + self.params.max_init_diff
 
+    def scores_map(self):
+        """raw log score of every item of the round (what the clicks so far made of them)."""
+        return dict(zip(self.keys, self.scores))
+
+    def restart(self, scores, times_ms, cycle_start_ms=0.0, win_diffs=None):
+        """Play the same evidence again with other items or other onset times (a focus round): scores = key -> raw log score (from scores_map),
+        no start handicap, nothing is forgotten. Call on a model made with inherit(prev)."""
+        win_diffs = win_diffs or {}
+        self.keys = list(scores.keys())
+        self.noon = [times_ms.get(k, 0.0) / 1000.0 for k in self.keys]
+        self.gate = [win_diffs.get(k, self.params.win_diff) for k in self.keys]
+        self.scores = [scores[k] for k in self.keys]
+        self.start_ms = cycle_start_ms
+        self._sort()
+
     def _sort(self): self.sorted = sorted(range(len(self.keys)), key=lambda i: -self.scores[i])   # stable
 
     def click(self, at_ms):
