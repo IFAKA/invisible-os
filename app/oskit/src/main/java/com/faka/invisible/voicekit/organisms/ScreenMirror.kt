@@ -38,20 +38,28 @@ object ScreenMirror {
         onChange?.invoke()
     }
 
-    /** A list item starts: the whole list and the item being read. */
-    fun show(items: List<String>, index: Int) = update { it.copy(active = true, items = items, index = index.coerceIn(0, maxOf(0, items.size - 1)), loop = null) }
+    /** Fold one [Cue] into the picture. The only way list items, lines, loop items and presses reach the screen. */
+    fun apply(c: Cue) = update { reduce(it, c, now) }
 
-    /** The loop screen with [header] rows above; the items come from [loopView]. A new round starts with an empty ring. */
+    /** Pure: the picture after [c]. */
+    fun reduce(s: Snapshot, c: Cue, now: () -> Long = { System.currentTimeMillis() }): Snapshot = when (c.kind) {
+        Cue.Kind.LIST_ITEM -> s.copy(active = true, items = c.list, index = c.index.coerceIn(0, maxOf(0, c.list.size - 1)), loop = null)
+        Cue.Kind.LINE -> if (c.text.isBlank()) s else { val l = (s.items + c.text).takeLast(4); s.copy(active = true, items = l, index = l.size - 1, loop = null) }
+        Cue.Kind.PRESS -> s.copy(lastPress = c.text, pressAt = if (c.onsetMs >= 0) c.onsetMs else now())
+        Cue.Kind.SOUND -> s
+        Cue.Kind.LOOP_ITEM -> s.loop?.let { lp ->
+            s.copy(loop = when {
+                c.ring != null -> lp.copy(ring = c.ring, at = -1, chosen = null)
+                c.index < 0 -> lp.copy(at = -1)
+                c.chosen -> lp.copy(at = c.index, chosen = c.item ?: LoopShown(null, c.text, false))
+                else -> lp.copy(at = c.index, chosen = null)
+            })
+        } ?: s
+    }
+
+    /** The loop screen with [header] rows above; the items come from the loop's LOOP_ITEM cues. A new round starts with an empty ring. */
     fun loopHeader(header: List<String>) = update { it.copy(active = true, items = emptyList(), index = 0, loop = LoopSnap(header)) }
 
-    /** The loop's items, drawn as they sound. Give it to `LetterLoop.view`. */
-    val loopView = object : LoopView {
-        override fun round(items: List<LoopShown>) = updateLoop { it.copy(ring = items, at = -1, chosen = null) }
-        override fun shown(index: Int, item: LoopShown) = updateLoop { it.copy(at = index, chosen = null) }
-        override fun chosen(index: Int, item: LoopShown) = updateLoop { it.copy(at = index, chosen = item) }
-        override fun idle() = updateLoop { it.copy(at = -1) }
-    }
-    private fun updateLoop(f: (LoopSnap) -> LoopSnap) { if (state.loop != null) update { st -> st.loop?.let { st.copy(loop = f(it)) } ?: st } }
 
     /** Move the mark to item [index] of the list on screen (the one a click would choose now). */
     fun point(index: Int) = update { it.copy(index = index.coerceIn(0, maxOf(0, it.items.size - 1))) }
@@ -59,13 +67,10 @@ object ScreenMirror {
     /** A program starts: its name, and no list (the menu list it was picked from is no longer being read). */
     fun program(title: String) = update { it.copy(active = true, title = title, items = emptyList(), index = 0, loop = null) }
 
-    /** A line spoken outside a list (a message, a call, a level, a hint): the last few lines, the newest marked, so the screen shows what is said. */
-    fun said(line: String) = update { val l = (it.items + line).takeLast(4); it.copy(active = true, items = l, index = l.size - 1, loop = null) }
-
     fun setTitle(title: String) = update { it.copy(active = true, title = title) }
 
     /** A button gesture, by its plain name ("click", "2 clicks", "hold"). */
-    fun pressed(gestureName: String) = update { it.copy(lastPress = gestureName, pressAt = now()) }
+    fun pressed(gestureName: String) = Cues.press(gestureName, now())
 
     /** The OS closed: back to the plain screen. */
     fun clear() = update { Snapshot() }

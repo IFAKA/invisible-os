@@ -62,7 +62,7 @@ class HomeLetters(
     private val level = LoopLevel(store.level()) { store.saveLevel(it) }
     private val loop = LetterLoop<String>(audio, timers, pace = level.pace, seed = learned, params = seeded.second,
         log = { event, fields -> Trace.ev("home", "loop $event ${fields.joinToString(" ")}") },
-        onChosen = { chosen(it) }, onIdle = { idle() }).also { it.view = ScreenMirror.loopView }
+        onChosen = { chosen(it) }, onIdle = { idle() })
 
     override fun start(host: ProgramHost) {
         this.host = host; active = true; startedAt = audio.nowMs()

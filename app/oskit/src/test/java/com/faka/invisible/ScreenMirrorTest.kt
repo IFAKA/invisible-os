@@ -13,21 +13,21 @@ class ScreenMirrorTest {
     @Test fun startsClosed() { assertFalse(ScreenMirror.active); assertTrue(ScreenMirror.items.isEmpty()); assertNull(ScreenMirror.lastPress) }
 
     @Test fun showPublishesListAndIndex() {
-        ScreenMirror.show(listOf("Talk", "Plan", "Pay"), 1)
+        Cues.listItem(listOf("Talk", "Plan", "Pay"), 1)
         assertTrue(ScreenMirror.active)
         assertEquals(listOf("Talk", "Plan", "Pay"), ScreenMirror.items)
         assertEquals(1, ScreenMirror.index)
     }
 
     @Test fun indexIsKeptInRange() {
-        ScreenMirror.show(listOf("a", "b"), 9)
+        Cues.listItem(listOf("a", "b"), 9)
         assertEquals(1, ScreenMirror.index)
-        ScreenMirror.show(emptyList(), 3)
+        Cues.listItem(emptyList(), 3)
         assertEquals(0, ScreenMirror.index)
     }
 
     @Test fun pressKeepsListAndStampsTime() {
-        ScreenMirror.show(listOf("a"), 0)
+        Cues.listItem(listOf("a"), 0)
         ScreenMirror.pressed("2 clicks")
         assertEquals("2 clicks", ScreenMirror.lastPress)
         assertEquals(42L, ScreenMirror.state.pressAt)
@@ -36,7 +36,7 @@ class ScreenMirrorTest {
 
     @Test fun titleSurvivesNewItemsAndClearResetsAll() {
         ScreenMirror.setTitle("Talk > Mail")
-        ScreenMirror.show(listOf("a"), 0)
+        Cues.listItem(listOf("a"), 0)
         assertEquals("Talk > Mail", ScreenMirror.title)
         ScreenMirror.clear()
         assertFalse(ScreenMirror.active); assertEquals("", ScreenMirror.title); assertNull(ScreenMirror.lastPress)
@@ -45,7 +45,7 @@ class ScreenMirrorTest {
     @Test fun everyChangeCallsOnChange() {
         var n = 0
         ScreenMirror.onChange = { n++ }
-        ScreenMirror.show(listOf("a"), 0); ScreenMirror.setTitle("x"); ScreenMirror.pressed("click"); ScreenMirror.clear()
+        Cues.listItem(listOf("a"), 0); ScreenMirror.setTitle("x"); ScreenMirror.pressed("click"); ScreenMirror.clear()
         assertEquals(4, n)
     }
 

@@ -83,7 +83,7 @@ class LoopProgram(
     private val level = LoopLevel(store.level()) { store.saveLevel(it) }
     private val loop = LetterLoop<String>(audio, timers, pace = level.pace, seed = learned, params = seeded.second,
         log = { event, fields -> out.log(event, *fields.toTypedArray()) },
-        onChosen = { chosen(it) }, onIdle = { idle() }).also { it.view = ScreenMirror.loopView }
+        onChosen = { chosen(it) }, onIdle = { idle() })
 
     fun start() {
         if (frame.kind == FieldKind.PASSWORD) { out.say(TypeVoice.PASSWORD); onEnded(); return }   // never spoken, never saved

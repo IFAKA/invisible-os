@@ -59,7 +59,7 @@ class Scanner<T>(
         val t = title
         if (t == null) { speakItem(0); return }
         readingTitle = true
-        ScreenMirror.show(list.items.map { label(it).text }, 0)
+        Cues.listItem(list.items.map { label(it).text }, 0)
         out.sayTitle(t)
     }
 
@@ -68,7 +68,7 @@ class Scanner<T>(
         readingTitle = false
         list.moveTo(i)
         val o = list.items[i]
-        ScreenMirror.show(list.items.map { label(it).text }, i)
+        Cues.listItem(list.items.map { label(it).text }, i)
         out.say(i, label(o), spearcon(o))
     }
 

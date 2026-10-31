@@ -394,7 +394,7 @@ class ControllerMode(
         else if (s == Screen.HUB) trail.clear()   // a fresh start (wake) forgets the old places
         com.faka.invisible.oskit.Trace.ev("screen", "${s.name} title=${mirrorTitle(s)}")
         com.faka.invisible.voicekit.ScreenMirror.setTitle(mirrorTitle(s))
-        com.faka.invisible.voicekit.ScreenMirror.show(emptyList(), 0)   // the list of the last screen is gone: what is said now fills the picture
+        com.faka.invisible.voicekit.Cues.listItem(emptyList(), 0)   // the list of the last screen is gone: what is said now fills the picture
         if (!backNav) tn(tone(s)); backNav = false
         intro.clear()
         if (accessWarn) { accessWarn = false; com.faka.invisible.oskit.Trace.ev("wake", "notification access off: warned"); intro += Intro(Voice.NOTIF_ACCESS_OFF, null) }
@@ -451,7 +451,7 @@ class ControllerMode(
         Voice.cut(MessageLogic.spoken(m.text, m.lang).squash(), MAX_SPOKEN, isEs(m), null).text
 
     private fun say(text: Phrase, fast: Boolean = false) {
-        if (phase != Phase.SCAN && screen != Screen.VOLUME_DIAL) com.faka.invisible.voicekit.ScreenMirror.said(text.text)
+        if (phase != Phase.SCAN && screen != Screen.VOLUME_DIAL) com.faka.invisible.voicekit.Cues.line(text.text)
         speechOpen = true
         timers.set("dog", speechCapMs) { onSpeechDone() }
         out.speak(text, false, fast)
@@ -1066,7 +1066,7 @@ class ControllerMode(
 
     /** The volume dial has no list: the app screen shows the level and the two things the button does; a tap does the same. */
     private fun dialScreen() {
-        com.faka.invisible.voicekit.ScreenMirror.show(listOf("Volume ${out.volumeLevel()} of ${out.volumeMax()}", "Louder (1 click)", "Quieter (2 clicks)"), 0)
+        com.faka.invisible.voicekit.Cues.listItem(listOf("Volume ${out.volumeLevel()} of ${out.volumeMax()}", "Louder (1 click)", "Quieter (2 clicks)"), 0)
     }
 
     private fun dialDown() {

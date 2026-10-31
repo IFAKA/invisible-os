@@ -1,0 +1,15 @@
+# Cue refactor: voice and screen are one thing
+
+Goal: every thing the phone says or plays is a `Cue` (sound side + picture side). The kit emits it; `Kit` is the only drawer. No screen text written by hand for spoken content.
+
+Done when (each has a check):
+1. One `Cue` event type in the Voice Kit; Scanner, `say`, LetterLoop emit it; `ScreenMirror.Snapshot` is derived from Cues. Check: unit tests + `checkVoiceKit`.
+2. Cue published at audio onset (speech start callback), not at the call. Check: Flow test.
+3. `host.screen(rows)` removed from programs; typed parts only. Check: new rule in `voicekit-rules.tsv` fails the build on `host.screen(listOf(`.
+4. Sounds (earcons, tones, game audio) emit a sound Cue; `Kit` draws a pulse. Check: unit test + screenshot.
+5. Generic Flow helper: at every audio onset shown == spoken, run on Scanner, say, each program. Check: `./gradlew :os:testDebugUnitTest --tests '*Flow*'`.
+
+Steps run in order 1..5; each ends with the 3 checks from AGENTS.md and an atomic commit.
+
+Status log:
+- Step 1 done: Cue + Cues.emit (organisms/Cue.kt); Scanner, LetterLoop and the os line paths emit it; ScreenMirror.reduce folds cues into Snapshot; os no longer calls ScreenMirror.show/said. Publish is still at call time (onsetMs = -1).

@@ -181,7 +181,7 @@ class LetterLoop<K>(
 
     private fun halt() {
         gen++; timers.clear(TIMER); timers.clear(VIEW)
-        if (state == State.RUNNING) view?.idle()
+        if (state == State.RUNNING) { view?.idle(); Cues.emit(Cue(Cue.Kind.LOOP_ITEM)) }
         if (state == State.RUNNING || state == State.PREPARING) audio.clear()   // a sound that is not the loop's (the confirm) is never cut
         if (state != State.OFF) state = State.PAUSED
     }
@@ -250,20 +250,18 @@ class LetterLoop<K>(
 
     /** Tell the view the order of this cycle and put each item's onset on a timer (one chain: the next onset is set when one fires). */
     private fun showOrder(live: List<LoopItem<K>>, at: Map<K, Double>) {
-        val v = view ?: return
         val sorted = live.sortedBy { at.getValue(it.key) }
         order = sorted.map { LoopShown(it.key, it.say.text, it.guess) }
         orderKeys = sorted.map { it.key }; orderAt = sorted.map { at.getValue(it.key) }
-        v.round(order)
+        view?.round(order); Cues.emit(Cue(Cue.Kind.LOOP_ITEM, ring = order))
         viewNext(0, 0, gen)
     }
 
     private fun viewNext(cycle: Int, i: Int, g: Int) {
-        val v = view ?: return
         val due = startWall + cycle * periodMs + orderAt[i]
         timers.set(VIEW, max(0L, Math.round(due - audio.nowMs()))) {
             if (g != gen || state != State.RUNNING) return@set
-            v.shown(i, order[i])
+            view?.shown(i, order[i]); Cues.emit(Cue(Cue.Kind.LOOP_ITEM, order[i].text, index = i, item = order[i]))
             if (i + 1 < order.size) viewNext(cycle, i + 1, g) else viewNext(cycle + 1, 0, g)
         }
     }
@@ -332,7 +330,9 @@ class LetterLoop<K>(
         val c = LoopChoice(key, rank, ((timeMs - roundWall) / roundPeriod).toInt(), (timeMs - roundWall).toLong(), clicks)
         val shownAt = orderKeys.indexOf(key)
         halt(); state = State.PAUSED; focused = false
-        view?.let { v -> if (shownAt >= 0) v.chosen(shownAt, order[shownAt]) else v.chosen(rank, LoopShown(key, item.say.text, item.guess)) }
+        val pickAt = if (shownAt >= 0) shownAt else rank
+        val picked = if (shownAt >= 0) order[shownAt] else LoopShown(key, item.say.text, item.guess)
+        view?.chosen(pickAt, picked); Cues.emit(Cue(Cue.Kind.LOOP_ITEM, picked.text, index = pickAt, chosen = true, item = picked))
         audio.confirm()
         if (item.undo) m.undo() else m.learn(key)
         prev = m; model = null
