@@ -42,7 +42,8 @@ class RoomEvents(
 
     private fun needs() { if (programRuns() || muted()) return; beepNeeds() }
     private fun done(name: String) {
-        if (programRuns() || muted()) return
+        if (programRuns() || muted()) { com.faka.invisible.oskit.Trace.ev("room", "done $name not said: ${if (programRuns()) "a program runs" else "muted"}"); return }
         if (batch.add(name)) handler.postDelayed({ batch.take()?.let { say(it) } }, (3000 * devBatchScale).toLong())
+        else com.faka.invisible.oskit.Trace.ev("room", "done $name joins a waiting line")
     }
 }

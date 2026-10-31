@@ -387,12 +387,15 @@ def rooms_done_spoken():
     real_url = open(home + "url").read().strip() if os.path.exists(home + "url") else ""
     real_tok = open(home + "token").read().strip() if os.path.exists(home + "token") else ""
     host = test_host(real_url)
-    srv = fake_rooms.start(host, 8798, "e2e-token")
+    fire = []   # its own list: a handler thread of the previous scenario's stopped server is still polling and would take a name from the shared FIRE_DONE
+    srv = fake_rooms.start(host, 8798, "e2e-token", fire=fire)
     try:
         reset(); i = mark()
         bcast("--es", "bridge", f"http://{host}:8798", "--es", "token", "e2e-token")
-        fake_rooms.FIRE_DONE.append("Delta")
-        need("Delta, done", i, 20)
+        fire.append("Delta")
+        g = len(fake_rooms.GETS)
+        try: need("Delta, done", i, 20)
+        except Fail as e: raise Fail(f"{e}; the fake server saw {len(fake_rooms.GETS) - g} requests: {fake_rooms.GETS[g:g + 6]}")
         return "idle phone said: Delta, done"
     finally:
         srv.shutdown()
