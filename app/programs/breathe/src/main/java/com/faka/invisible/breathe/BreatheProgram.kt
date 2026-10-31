@@ -116,7 +116,6 @@ class BreatheProgram(
         mode = Mode.BREATHING; round = 1; phase = BreathePhase.IN
         Trace.ev("program", "breathe begin $rounds")
         host.speak(BreatheVoice.BEGIN)
-        host.screen(listOf("Breathe", "$rounds rounds"), 0)
         host.later(firstBreath, BEGIN_MS)
     }
 

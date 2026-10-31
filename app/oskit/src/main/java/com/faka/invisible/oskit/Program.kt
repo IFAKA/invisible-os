@@ -19,7 +19,7 @@ interface Program : RawButton {
     fun stop()
     /** The phone finished speaking. Programs that wait for the voice use it. */
     fun speechDone() {}
-    /** The person tapped row [row] of the picture the program put on the app screen ([ProgramHost.screen]): do what the button would do for it. */
+    /** The person tapped row [row] of the list the program is reading on the app screen (its Scanner): do what the button would do for it. */
     fun tap(row: Int) {}
 }
 
@@ -36,8 +36,11 @@ interface ProgramHost {
     /** Starts the OS wait sound (a soft heartbeat while sounds are built); call the result when ready. */
     fun waiting(): () -> Unit
     fun speak(text: Phrase, slow: Boolean = false)
-    /** The picture of the program on the app screen: [rows] top to bottom, [mark] the row being read. Without it the screen shows the last lines spoken. */
-    fun screen(rows: List<String>, mark: Int) {}
+    /**
+     * A word of a fast scroll: spoken, but the app screen keeps the list being read (a plain [speak] shows its words as a line).
+     * The app screen is drawn only by the kit from what is spoken: a Scanner's items, or the lines passed to [speak]. A program writes no screen text.
+     */
+    fun speakFast(word: Phrase) { speak(word) }
     fun stopSpeech()
     fun pauseMusic()
     fun resumeMusic()

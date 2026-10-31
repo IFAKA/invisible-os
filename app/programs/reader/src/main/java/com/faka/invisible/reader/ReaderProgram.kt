@@ -64,10 +64,9 @@ class ReaderProgram : Program {
                 awaitItem = true; phase = Phase.ITEM
                 ReaderStore.save(host.prefs, text, index)
                 Trace.ev("program", "reader part ${index + 1}/${scanner.list.items.size}")
-                host.screen(scanner.list.items, index)
                 host.speak(label)
             }
-            override fun sayFast(word: Phrase) { host.speak(word) }
+            override fun sayFast(word: Phrase) { host.speakFast(word) }
             override fun tone(t: Tone) { VoiceKit.narrator.beep(t) }
             override fun leave() { end() }
         }, ScanCadence(pauseMs = { PAUSE_MS }, loops = { 1 }, ceremony = false), scanKey = "reader:scan")
@@ -76,7 +75,6 @@ class ReaderProgram : Program {
         Trace.ev("program", "reader start parts=${parts.size} at=${at + 1} lang=${lang ?: "en"}")
         scanner.list.moveTo(at)
         phase = Phase.INTRO
-        host.screen(parts, at)
         host.speak(if (at > 0) ReaderVoice.resume(at + 1, parts.size) else ReaderVoice.start(parts.size))
     }
 

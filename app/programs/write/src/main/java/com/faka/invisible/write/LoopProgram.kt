@@ -212,8 +212,7 @@ class LoopProgram(
     /** The text to send is read back; a click sends it, a hold goes back to writing. */
     private fun confirm(t: String) {
         pending = t; phase = Phase.CONFIRM
-        out.screen(listOf(t, "Click to send, hold to edit"), 0)
-        out.readBack(t); out.say(TypeVoice.CONFIRM)
+        out.confirm(t)
     }
 
     private fun finish(sent: String) {

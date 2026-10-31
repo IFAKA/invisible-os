@@ -12,6 +12,7 @@ second-list	\b(scanIdx|menuIdx|menuSteps|itemIdx|listIdx)\b|\bvar\s+loops\b|\bSc
 hand-timing	(?<!Pacing\.)\b(HOLD_MS|GAP_MS)\b	Button timing comes from Pacing
 hand-hearing	"Hearing:|"Hearing 	What is played is drawn by the kit (ScreenMirror.loopView + Kit.loopScreen): never write the played items on the screen by hand
 logic-squash	Regex\("\\\\s\+"\)	Collapsing or splitting white space is logickit/Text.kt: use squash() or words()
+hand-screen	\bhost\.screen\(|\.screen\(listOf\(|\bfun screen\(rows	A program writes no screen text: speak a Phrase (the kit shows it as a line), read a Scanner list, or use a kit part (Cues.pairScreen); see KIT.md, Cue
 allow	Text.kt	logic-squash	the one definition
 logic-trust	\+ 1\.0\) / \(.*\+ 2\.0\)	Learned source shares are logickit/SourceMix.kt (SourceTrust): do not write a second trust formula
 allow	SourceMix.kt	logic-trust	the one definition

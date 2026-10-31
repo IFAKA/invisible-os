@@ -390,9 +390,9 @@ class FlowRoomsTest {
         val rig = RoboRig(); val c = Computer("Home", "http://127.0.0.1:1", "x")
         val host = start(rig, Port(listOf(c), c))
         val i = rig.mark(); rig.needLive("Laptop not reachable", i)
-        assertEquals("Laptop not reachable. Click to try again.", host.screens.last().first.single())
+        assertEquals("Laptop not reachable. Click to try again.", host.screens.last().first.last())
         val j = rig.mark(); rig.advance(60); rig.press("120"); rig.advance(400)   // a click
-        assertTrue("no feedback: ${rig.said.drop(j)}", rig.said("Trying again", j)); assertEquals("Trying again", host.screens.last().first.single())
+        assertTrue("no feedback: ${rig.said.drop(j)}", rig.said("Trying again", j)); assertEquals("Trying again", host.screens.last().first.last())
         rig.needLive("Laptop not reachable", j)   // the retry failed: it speaks again, never silent
         val k = rig.mark(); (rig.running as ClaudeAndroid).tap(0)   // a tap does the same
         rig.needLive("Trying again", k); rig.needLive("Laptop not reachable", k)

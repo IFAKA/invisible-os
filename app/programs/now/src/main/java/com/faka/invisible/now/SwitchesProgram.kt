@@ -73,8 +73,8 @@ class SwitchesProgram : Program {
         if (running) return
         this.host = host; running = true
         scanner = Scanner(HostTimers(host), ::label, object : ScanOut {
-            override fun say(index: Int, label: Phrase, spearcon: Boolean) { awaitItem = true; show(index); host.speak(label) }
-            override fun sayFast(word: Phrase) { host.speak(word) }
+            override fun say(index: Int, label: Phrase, spearcon: Boolean) { awaitItem = true; host.speak(label) }
+            override fun sayFast(word: Phrase) { host.speakFast(word) }
             override fun tone(t: Tone) { VoiceKit.narrator.beep(t) }
             override fun leave() { finish() }
         }, ScanCadence(pauseMs = { PAUSE_MS }, loops = { LOOPS }, ceremony = false), scanKey = "switches:scan")
@@ -84,8 +84,6 @@ class SwitchesProgram : Program {
         host.pauseMusic()
         scanner.speakItem(0)
     }
-
-    private fun show(mark: Int) { host.screen(scanner.list.items.map { label(it).text }, mark) }
 
     override fun speechDone() {
         if (!running) return

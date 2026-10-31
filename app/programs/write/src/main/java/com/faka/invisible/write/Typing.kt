@@ -22,8 +22,6 @@ interface TypeOut {
     fun cue(c: TypeCue)
     /** One line for the usage file (event, then fields); lets the layout be tuned from real use. */
     fun log(event: String, vararg fields: Any?) {}
-    /** The picture on the app screen, kept the same as what the player hears: [rows] top to bottom, [mark] is the row being read now. Default: none. */
-    fun screen(rows: List<String>, mark: Int) {}
     fun finished(text: String)   // the written text; "" = nothing written
     /** Ask the big model (slow, in the background) for ways to finish [text]; call [then] with them when ready. Default: none. */
     fun phrases(text: String, then: (List<String>) -> Unit) {}
@@ -39,6 +37,8 @@ interface TypeOut {
     fun translate(text: String, then: (Translation) -> Unit) { then(Translation.Same) }
     /** Say the translation aloud in its own language so the player can check it before it is sent. */
     fun readBack(text: String) {}
+    /** The text to send is read back, then "Click to send. Hold to edit." is said; both are shown as the lines they are. */
+    fun confirm(text: String) { readBack(text); say(TypeVoice.CONFIRM) }
     /** A press cuts a sentence that is being spoken (the sentence so far can be long). */
     fun silence() {}
     /** The English text the player wrote (what the models learn from), even when the translation is what is sent. */
@@ -174,13 +174,13 @@ class TypeProgram(
 
     private fun showScreen(l: String, r: String?) {
         val mode = if (phraseMode) "Phrases" else if (letters) "Letters" else "Words"
-        val rows = ArrayList<String>()
-        rows.add(text().ifEmpty { "Nothing written yet" })
-        if (prefix.isNotEmpty()) rows.add("Spelling: $prefix")
-        val mark = rows.size
-        leftRow = rows.size; rows.add("$mode, left: $l")
-        rightRow = if (r != null) rows.size else -1; if (r != null) rows.add("$mode, right: $r")
-        out.screen(rows, mark)
+        val header = ArrayList<String>()
+        header.add(text().ifEmpty { "Nothing written yet" })
+        if (prefix.isNotEmpty()) header.add("Spelling: $prefix")
+        val heard = ArrayList<String>()
+        leftRow = header.size; heard.add("$mode, left: $l")
+        rightRow = if (r != null) header.size + 1 else -1; if (r != null) heard.add("$mode, right: $r")
+        com.faka.invisible.voicekit.Cues.pairScreen(header, heard)
     }
 
     // ---- the raw button ----
@@ -219,7 +219,7 @@ class TypeProgram(
     private fun many(n: Int) {
         out.log("clicks", n)
         if (waiting) return
-        pending?.let { t -> if (n == 1) send(t) else { out.readBack(t); out.say(TypeVoice.CONFIRM) }; return }
+        pending?.let { t -> if (n == 1) send(t) else out.confirm(t); return }
         if (menu) { when (n) { 1 -> pickMenu(); 2 -> menuScan.prevIn(Pacing.SKIP_MS); else -> closeMenu() }; return }
         when (n) {
             1 -> choose(true)
@@ -321,7 +321,7 @@ class TypeProgram(
             waiting = false
             when (r) {
                 is Translation.Same -> send(t)
-                is Translation.Done -> { pending = r.text; leftRow = -1; rightRow = -1; out.screen(listOf(r.text, "Click to send, hold to edit"), 0); out.readBack(r.text); out.say(TypeVoice.CONFIRM) }
+                is Translation.Done -> { pending = r.text; leftRow = -1; rightRow = -1; out.confirm(r.text) }
                 is Translation.Failed -> { out.say(r.say); show() }   // nothing is sent; the text is kept and you can try again
             }
         }

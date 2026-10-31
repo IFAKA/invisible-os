@@ -113,18 +113,15 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
 
     private val scanner: Scanner<Choice> by lazy {
         Scanner(timers, { c -> label(c) }, object : ScanOut {
-            override fun say(index: Int, label: Phrase, spearcon: Boolean) { awaitItem = true; showRows(index); host.speak(label) }
-            override fun sayFast(word: Phrase) { host.speak(word) }
+            override fun say(index: Int, label: Phrase, spearcon: Boolean) { awaitItem = true; host.speak(label) }
+            override fun sayFast(word: Phrase) { host.speakFast(word) }
             override fun tone(t: Tone) { VoiceKit.narrator.beep(t) }
             override fun leave() { phase = Phase.STUCK; reopen = { restartList() }; host.speak(ClaudeVoice.WAITING_YOU) }
         }, ScanCadence(pauseMs = { if (partsMode) PARTS_PAUSE_MS else PAUSE_MS }, loops = { if (partsMode) 1 else LOOPS }, ceremony = false), scanKey = "claude:scan")
     }
 
-    /** The app screen: every item of the list, [mark] = the one being read. */
-    private fun showRows(mark: Int) { host.screen(scanner.list.items.map { label(it).text }, mark) }
-
-    /** A line spoken and shown (the app screen shows only what the program puts there). */
-    private fun say(p: Phrase) { host.screen(listOf(p.text), 0); host.speak(p) }
+    /** A line spoken; the kit shows it as a line (the list being read is shown by the Scanner). */
+    private fun say(p: Phrase) { host.speak(p) }
 
     override val active get() = running
 
@@ -193,7 +190,6 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         partsMode = items.firstOrNull() is Choice.Part
         scanner.load(items)
         reopen = { showList(items, intro) }
-        showRows(0)
         if (intro != null) { phase = Phase.INTRO; host.speak(intro) } else { phase = Phase.ITEM; scanner.speakItem(0) }
     }
 

@@ -67,16 +67,20 @@ internal class RoboRig {
         var speechToken = 0
         /** Every picture the program put on the app screen: the rows and the marked row. */
         val screens = ArrayList<Pair<List<String>, Int>>()
-        override fun screen(rows: List<String>, mark: Int) { screens.add(rows to mark) }
         override val context: Context get() = ctx
         override val handler: Handler get() = this@RoboRig.handler
         override val prefs: SharedPreferences = FakeProgramHost.MemoryPrefs()
         override fun waiting(): () -> Unit = {}
         override fun speak(text: Phrase, slow: Boolean) {
             said.add(text.text)
+            // like the OS: the staged cue (a Scanner list item) or else the line, published at once (no real voice here)
+            if (com.faka.invisible.voicekit.Cues.hasStaged().not()) com.faka.invisible.voicekit.Cues.stageLine(text.text)
+            com.faka.invisible.voicekit.Cues.takeStaged()?.let { com.faka.invisible.voicekit.Cues.emit(it) }
+            screens.add(com.faka.invisible.voicekit.ScreenMirror.items to com.faka.invisible.voicekit.ScreenMirror.index)
             val t = ++speechToken
             handler.postDelayed({ if (t == speechToken) running?.takeIf { it.active }?.speechDone() }, 500)
         }
+        override fun speakFast(word: Phrase) { said.add(word.text); speechToken++ }
         override fun stopSpeech() { speechToken++ }
         override fun pauseMusic() {}
         override fun resumeMusic() {}

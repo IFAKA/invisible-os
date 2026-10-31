@@ -68,7 +68,6 @@ class HabitsProgram(
         if (at >= names.size) return
         val streak = Habits.streak(Habits.decode(host.prefs.getString(key(at), null)), today())
         host.speak(HabitsVoice.habit(names[at], streak))
-        host.screen(names.mapIndexed { i, n -> if (i < at) "$n, answered" else n }, at)
     }
 
     private fun answer(yes: Boolean) {

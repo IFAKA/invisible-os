@@ -52,7 +52,6 @@ class CounterProgram(private val beep: (Tone) -> Unit = { VoiceKit.narrator.beep
         host.pauseMusic()
         host.speak(CounterVoice.total(name, count))
         host.speak(CounterVoice.HELP)
-        host.screen(CounterCore.NAMES.indices.map { "${CounterCore.NAMES[it]}, ${host.prefs.getInt(key(it), 0)}" }, which)
     }
 
     override fun stop() = finish()

@@ -49,7 +49,7 @@ class NowProgram(private val services: NowServices) : Program {
         say(0)
     }
 
-    private fun show(p: Phrase) { host.screen(listOf(p.text), 0); host.speak(p) }
+    private fun show(p: Phrase) { host.speak(p) }
 
     /** Says fact [i]. The lookups answer later; the ticket drops an answer that came after the person moved on. */
     private fun say(i: Int) {

@@ -459,16 +459,14 @@ object Actions {
     private fun startProgramEntry(e: ProgramEntry) { com.faka.invisible.voicekit.ScreenMirror.program(e.title.text); startProgram(e.create()) }
 
     /** A program that draws no picture of its own: the app screen shows the last lines it said, so a sighted person sees what is going on. */
-    private var ownScreen = false
     private fun mirrorSaid(t: String) {
-        if (ownScreen || running == null || t.isBlank() || com.faka.invisible.voicekit.ScreenMirror.state.loop != null) return
+        if (running == null || com.faka.invisible.voicekit.Cues.hasStaged() || t.isBlank() || com.faka.invisible.voicekit.ScreenMirror.state.loop != null) return
         com.faka.invisible.voicekit.Cues.stageLine(t)
     }
 
     private fun startProgram(p: Program) {
         running?.stop()
         running = p
-        ownScreen = false
         com.faka.invisible.oskit.Trace.ev("program", "start ${p.javaClass.simpleName}")
         p.start(object : ProgramHost {
             override val context get() = app
@@ -476,7 +474,7 @@ object Actions {
             override val prefs get() = prefs()
             override fun waiting() = narrator.waiting()
             override fun speak(text: Phrase, slow: Boolean) { mirrorSaid(text.text); say(text, false, slow = slow) }
-            override fun screen(rows: List<String>, mark: Int) { ownScreen = true; com.faka.invisible.voicekit.Cues.listItem(rows, mark) }
+            override fun speakFast(word: Phrase) { say(word, false, slow = false) }   // a fast-scroll word: no line cue, the list stays on the screen
             override fun stopSpeech() = narrator.stopSpeech()
             override fun pauseMusic() { pauseMusicNow() }
             override fun resumeMusic() = resumeMusicNow()

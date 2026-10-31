@@ -44,12 +44,15 @@ object Cues {
      */
     private var staged: Cue? = null
     fun stage(c: Cue) { synchronized(this) { staged = c } }
+    fun hasStaged(): Boolean = synchronized(this) { staged != null }
     fun takeStaged(): Cue? = synchronized(this) { staged.also { staged = null } }
     fun stageListItem(items: List<String>, index: Int) = stage(Cue(Cue.Kind.LIST_ITEM, text = items.getOrElse(index) { "" }, index = index, list = items))
     fun stageLine(text: String) = stage(Cue(Cue.Kind.LINE, text))
 
     fun listItem(items: List<String>, index: Int) = emit(Cue(Cue.Kind.LIST_ITEM, text = items.getOrElse(index) { "" }, index = index, list = items))
     fun line(text: String) = emit(Cue(Cue.Kind.LINE, text))
+    /** The pair keyboard: [header] rows (what is written so far, not heard) above the [heard] rows (the pair now played); the mark is on the first heard row. */
+    fun pairScreen(header: List<String>, heard: List<String>) = emit(Cue(Cue.Kind.LIST_ITEM, text = heard.firstOrNull().orEmpty(), index = header.size, list = header + heard))
     fun press(gestureName: String, at: Long) = emit(Cue(Cue.Kind.PRESS, gestureName, onsetMs = at))
     fun sound(name: String) = emit(Cue(Cue.Kind.SOUND, name))
 }
