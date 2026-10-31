@@ -59,7 +59,7 @@ class ScreenMirrorTest {
     @Test fun scannerPublishesEveryItemItStarts() {
         val timers = object : Timers { override fun set(key: String, delayMs: Long, task: () -> Unit) {}; override fun clear(key: String) {} }
         val sc = Scanner<String>(timers, { Phrase.content(it) }, object : ScanOut {
-            override fun say(index: Int, label: Phrase, spearcon: Boolean) {}
+            override fun say(index: Int, label: Phrase, spearcon: Boolean) { com.faka.invisible.voicekit.Cues.takeStaged()?.let { com.faka.invisible.voicekit.Cues.emit(it) } }   // stands in for Narrator + engine start
             override fun sayFast(word: Phrase) {}
             override fun tone(t: Tone) {}
             override fun leave() {}

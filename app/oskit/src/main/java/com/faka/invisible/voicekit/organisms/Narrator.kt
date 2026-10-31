@@ -15,18 +15,24 @@ class Narrator(private val speech: SpeechPort, private val tones: TonePort, priv
     var swapEars: () -> Boolean = { true }
 
     private var sayAt = 0L
+    private val gate = CueGate()
+    private val gateTimeout = Runnable { gate.fail(SystemClock.uptimeMillis()) }
     fun say(p: Phrase, queue: Boolean = false, fast: Boolean = false, slow: Boolean = false) {
         Trace.ev("say", "[${p.lang ?: "-"}]${if (queue) " queued" else ""}${if (fast) " fast" else ""} ${p.text}")
         sayAt = SystemClock.uptimeMillis()
+        Cues.takeStaged()?.let { gate.hold(it, queue); handler.removeCallbacks(gateTimeout); handler.postDelayed(gateTimeout, Pacing.CUE_TIMEOUT_MS) }
         speech.speak(p, queue, fast, slow)
     }
     /** The engine began to sound the newest line: how long it took (a slow voice is a `slow` line). */
     fun speechStarted() {
+        handler.removeCallbacks(gateTimeout); gate.started(SystemClock.uptimeMillis())
         if (sayAt == 0L) return
         val ms = SystemClock.uptimeMillis() - sayAt; sayAt = 0L
         Trace.ev("say", "first audio +${ms}ms"); Trace.time("speech start", ms, 600)
     }
-    fun stopSpeech() = speech.stop()
+    /** The engine finished a line. If it never started (error, no voice), the waiting cues are shown now so the screen does not freeze. */
+    fun speechEnded() { handler.removeCallbacks(gateTimeout); gate.fail(SystemClock.uptimeMillis()) }
+    fun stopSpeech() { handler.removeCallbacks(gateTimeout); gate.cancel(); speech.stop() }
     /** The spoken words kept as sound (the letter loop plays them itself). */
     val words get() = speech.words
     val speaking get() = speech.speaking

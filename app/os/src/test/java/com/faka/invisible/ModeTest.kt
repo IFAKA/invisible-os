@@ -52,7 +52,8 @@ class ModeTest {
         private val timers = HashMap<String, Pair<Long, () -> Unit>>()
         /** Platform speech: starts 50 ms after the call, ends 500 ms after it. */
         private fun speech() {
-            timers["tts-start"] = (now + 50) to { m.onSpeechStarted() }
+            val cue = com.faka.invisible.voicekit.Cues.takeStaged()   // what Narrator holds in its CueGate until the engine starts
+            timers["tts-start"] = (now + 50) to { cue?.let { com.faka.invisible.voicekit.Cues.emit(it.copy(onsetMs = now)) }; m.onSpeechStarted() }
             timers["tts"] = (now + 500) to { m.onSpeechDone() }
         }
         val m: ControllerMode = ControllerMode(object : ModeOutput {

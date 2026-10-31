@@ -13,3 +13,4 @@ Steps run in order 1..5; each ends with the 3 checks from AGENTS.md and an atomi
 
 Status log:
 - Step 1 done: Cue + Cues.emit (organisms/Cue.kt); Scanner, LetterLoop and the os line paths emit it; ScreenMirror.reduce folds cues into Snapshot; os no longer calls ScreenMirror.show/said. Publish is still at call time (onsetMs = -1).
+- Step 2 done: LIST_ITEM and LINE cues are staged (Cues.stage*) right before the say call; Narrator.say takes the staged cue into a CueGate and emits it at Narrator.speechStarted() with the real onset (engine error/ended without start or 2.5 s timeout = emit anyway; new non-queued line or stopSpeech = drop). Loop cues now carry onsetMs on the audio clock. Test rigs (RoboRig, ModeTest.Rig) emit the staged cue at their fake voice start.

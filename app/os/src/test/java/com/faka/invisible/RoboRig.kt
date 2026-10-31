@@ -33,7 +33,7 @@ internal class RoboRig {
     var rawOwner: RawButton? = null
 
     val speech = object : SpeechPort {
-        override fun speak(p: Phrase, queue: Boolean, fast: Boolean, slow: Boolean) { said.add(p.text) }
+        override fun speak(p: Phrase, queue: Boolean, fast: Boolean, slow: Boolean) { said.add(p.text); handler.postDelayed({ narrator.speechStarted() }, 50) }   // the fake voice reports its start like the engine
         override fun stop() {}
         override val speaking = false
         override val words = WordClips(File("."), { _, _, _ -> false }, { it() })
@@ -51,7 +51,7 @@ internal class RoboRig {
         override fun gesture(g: Gesture, durationMs: Long) {}
         override fun exitProgram() { exits++; (running as? Program)?.takeIf { it.active }?.let { if (it.exitOnClickHold) it.stop() } }
     }
-    val narrator = Narrator(speech, tones, handler)
+    val narrator: Narrator = Narrator(speech, tones, handler)
     val buttons = ButtonInput(handler, narrator, target)
 
     init {

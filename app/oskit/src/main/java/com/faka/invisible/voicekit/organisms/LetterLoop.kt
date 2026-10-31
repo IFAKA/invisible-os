@@ -181,7 +181,7 @@ class LetterLoop<K>(
 
     private fun halt() {
         gen++; timers.clear(TIMER); timers.clear(VIEW)
-        if (state == State.RUNNING) { view?.idle(); Cues.emit(Cue(Cue.Kind.LOOP_ITEM)) }
+        if (state == State.RUNNING) { view?.idle(); Cues.emit(Cue(Cue.Kind.LOOP_ITEM, onsetMs = audio.nowMs())) }
         if (state == State.RUNNING || state == State.PREPARING) audio.clear()   // a sound that is not the loop's (the confirm) is never cut
         if (state != State.OFF) state = State.PAUSED
     }
@@ -253,7 +253,7 @@ class LetterLoop<K>(
         val sorted = live.sortedBy { at.getValue(it.key) }
         order = sorted.map { LoopShown(it.key, it.say.text, it.guess) }
         orderKeys = sorted.map { it.key }; orderAt = sorted.map { at.getValue(it.key) }
-        view?.round(order); Cues.emit(Cue(Cue.Kind.LOOP_ITEM, ring = order))
+        view?.round(order); Cues.emit(Cue(Cue.Kind.LOOP_ITEM, ring = order, onsetMs = audio.nowMs()))
         viewNext(0, 0, gen)
     }
 
@@ -261,7 +261,7 @@ class LetterLoop<K>(
         val due = startWall + cycle * periodMs + orderAt[i]
         timers.set(VIEW, max(0L, Math.round(due - audio.nowMs()))) {
             if (g != gen || state != State.RUNNING) return@set
-            view?.shown(i, order[i]); Cues.emit(Cue(Cue.Kind.LOOP_ITEM, order[i].text, index = i, item = order[i]))
+            view?.shown(i, order[i]); Cues.emit(Cue(Cue.Kind.LOOP_ITEM, order[i].text, index = i, item = order[i], onsetMs = Math.round(due)))
             if (i + 1 < order.size) viewNext(cycle, i + 1, g) else viewNext(cycle + 1, 0, g)
         }
     }
@@ -332,7 +332,7 @@ class LetterLoop<K>(
         halt(); state = State.PAUSED; focused = false
         val pickAt = if (shownAt >= 0) shownAt else rank
         val picked = if (shownAt >= 0) order[shownAt] else LoopShown(key, item.say.text, item.guess)
-        view?.chosen(pickAt, picked); Cues.emit(Cue(Cue.Kind.LOOP_ITEM, picked.text, index = pickAt, chosen = true, item = picked))
+        view?.chosen(pickAt, picked); Cues.emit(Cue(Cue.Kind.LOOP_ITEM, picked.text, index = pickAt, chosen = true, item = picked, onsetMs = timeMs.toLong()))
         audio.confirm()
         if (item.undo) m.undo() else m.learn(key)
         prev = m; model = null

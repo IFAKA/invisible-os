@@ -462,7 +462,7 @@ object Actions {
     private var ownScreen = false
     private fun mirrorSaid(t: String) {
         if (ownScreen || running == null || t.isBlank() || com.faka.invisible.voicekit.ScreenMirror.state.loop != null) return
-        com.faka.invisible.voicekit.Cues.line(t)
+        com.faka.invisible.voicekit.Cues.stageLine(t)
     }
 
     private fun startProgram(p: Program) {

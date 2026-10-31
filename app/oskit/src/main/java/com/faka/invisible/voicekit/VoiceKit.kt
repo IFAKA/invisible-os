@@ -30,7 +30,7 @@ object VoiceKit {
         val tones = TonePlayer(app, handler)
         val traced = object : SpeechListener {
             override fun started() { narrator.speechStarted(); listener.started() }
-            override fun ended() = listener.ended()
+            override fun ended() { narrator.speechEnded(); listener.ended() }
         }
         val speech = TtsSpeech(app, handler, tones, rate, traced)
         speechSwitch = SwitchSpeech(speech); speechEvents = traced

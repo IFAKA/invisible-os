@@ -22,6 +22,8 @@ object Pacing {
     const val WAIT_SAY_MS = 10000L
     /** The heartbeat stops here even if no one stopped it (a bug must never beat forever). */
     const val WAIT_MAX_MS = 60000L
+    /** A spoken cue whose sound never starts is shown anyway after this long, so the screen never freezes. */
+    const val CUE_TIMEOUT_MS = 2500L
 
     // ---- the scan ----
     /** Fast scroll: the least time one word gets before the next one starts. A word is never cut off by the next. */
