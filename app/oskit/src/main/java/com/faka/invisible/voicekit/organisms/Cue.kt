@@ -83,6 +83,10 @@ object SoundCues {
     /** The same sound again within this time is merged into one mark (count + 1): a fast tick never floods the strip. */
     const val MERGE_MS = 150L
 
+    /** Names that say nothing (the strip shows dots alone for them). The one list; the view must not copy it. */
+    val GENERIC_NAMES = setOf("beat", "sound", "screen tone")
+    fun isMeaningful(name: String) = name.isNotBlank() && name !in GENERIC_NAMES
+
     @Volatile var clock: () -> Long = { android.os.SystemClock.uptimeMillis() }
     private val mainHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
     @Volatile var post: (Long, () -> Unit) -> Unit = { d, f -> mainHandler.postDelayed(f, d) }

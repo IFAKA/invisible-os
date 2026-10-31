@@ -465,10 +465,12 @@ class Kit(private val c: Context) {
         }
         fun update(s: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark>) {
             if (s == marks) return
-            marks = s; name.text = s.lastOrNull()?.name ?: ""; dots.invalidate()
+            marks = s; name.text = stripLabel(s.lastOrNull()?.name); dots.invalidate()
         }
     }
     fun soundStrip() = SoundStripView()
+    /** Text beside the dots: the newest sound's name only when it carries meaning (generic names show dots alone). */
+    fun stripLabel(name: String?): String = if (name != null && com.faka.invisible.voicekit.SoundCues.isMeaningful(name)) name else ""
 
     /** Home status: a coloured dot, a large word, one quiet line. */
     fun status(parent: LinearLayout, headline: String, line: String, color: Int, top: Int = Ui.S3, align: Boolean = false, fill: LinearLayout.() -> Unit = {}) {

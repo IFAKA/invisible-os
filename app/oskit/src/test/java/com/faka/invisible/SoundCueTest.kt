@@ -76,4 +76,10 @@ class SoundCueTest {
         assertEquals("tick", Tone.TICK.cueName)
         assertTrue(Tone.values().all { it.cueName.isNotBlank() })
     }
+
+    @Test fun genericNamesAreHiddenMeaningfulShown() {
+        assertTrue(SoundCues.GENERIC_NAMES.containsAll(listOf(Tone.HUB.cueName, "beat", "sound")))
+        for (g in SoundCues.GENERIC_NAMES) assertFalse(SoundCues.isMeaningful(g))
+        for (m in listOf("close", "pick", "tick")) assertTrue(SoundCues.isMeaningful(m))
+    }
 }
