@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.faka.invisible.oskit.Program
 import com.faka.invisible.oskit.ProgramHost
-import com.faka.invisible.oskit.testing.FakeProgramHost
+import com.faka.invisible.oskit.testing.*
 import com.faka.invisible.voicekit.*
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
@@ -23,7 +23,7 @@ import java.time.Duration
 internal class RoboRig {
     val handler = Handler(Looper.getMainLooper())
     val said = ArrayList<String>()
-    val beeps = ArrayList<Tone>()
+    val beeps get() = tones.beeps
     val ctx: Context = RuntimeEnvironment.getApplication()
 
     /** The program that owns the raw button now (the OS's `running`), null = the menu / idle. */
@@ -32,19 +32,12 @@ internal class RoboRig {
     /** A raw-button owner that is not a [Program] (Write's typer). */
     var rawOwner: RawButton? = null
 
-    val speech = object : SpeechPort {
-        override fun speak(p: Phrase, queue: Boolean, fast: Boolean, slow: Boolean) { said.add(p.text); handler.postDelayed({ narrator.speechStarted() }, 50) }   // the fake voice reports its start like the engine
-        override fun stop() {}
-        override val speaking = false
-        override val words = WordClips(File("."), { _, _, _ -> false }, { it() })
-    }
-    val tones = object : TonePort {
-        override fun beep(k: Tone, vol: Float) { beeps.add(k) }
-        override fun playPcm(pcm: ShortArray) {}
-        override fun playStereo(pcm: ShortArray, rate: Int) {}
-        override fun stopStereo() {}
-        override fun findLoop(on: Boolean) {}
-    }
+    /** The shared parity helper (oskit testing): start it in a test with `rig.parity.start()`, end with `rig.parity.assertParity(); rig.parity.stop()`. */
+    val parity = ParityRecorder(clock = { now() })
+    /** The app screen as it was after each line the fake voice started (the cue is shown at the start). */
+    val screens = ArrayList<Pair<List<String>, Int>>()
+    val speech = FakeVoice(this::now, { d, f -> handler.postDelayed(f, d) }, { narrator }, parity, said = said).also { it.onStarted = { screens.add(ScreenMirror.items to ScreenMirror.index) } }
+    val tones = FakeTones(this::now, parity)
     val target = object : ButtonTarget {
         override fun raw(): RawButton? = ((running as? RawButton) ?: rawOwner)?.takeIf { it.active }
         override val menuActive get() = false
@@ -55,6 +48,7 @@ internal class RoboRig {
     val buttons = ButtonInput(handler, narrator, target)
 
     init {
+        CueClock.reset(); CueClock.install(this::now) { d, f -> handler.postDelayed(f, d) }
         // VoiceKit is the OS's one door (Actions calls its init, which starts the real voice); the tests put the same real
         // ButtonInput and a Narrator on fake ports into it, so programs find their `VoiceKit.narrator` and `VoiceKit.buttons`.
         for ((name, v) in listOf("narrator" to narrator, "buttons" to buttons))
@@ -65,18 +59,15 @@ internal class RoboRig {
     inner class Host : ProgramHost {
         var ended = 0
         var speechToken = 0
-        /** Every picture the program put on the app screen: the rows and the marked row. */
-        val screens = ArrayList<Pair<List<String>, Int>>()
+        val screens get() = this@RoboRig.screens
         override val context: Context get() = ctx
         override val handler: Handler get() = this@RoboRig.handler
         override val prefs: SharedPreferences = FakeProgramHost.MemoryPrefs()
         override fun waiting(): () -> Unit = {}
         override fun speak(text: Phrase, slow: Boolean) {
-            said.add(text.text)
-            // like the OS: the staged cue (a Scanner list item) or else the line, published at once (no real voice here)
-            if (com.faka.invisible.voicekit.Cues.hasStaged().not()) com.faka.invisible.voicekit.Cues.stageLine(text.text)
-            com.faka.invisible.voicekit.Cues.takeStaged()?.let { com.faka.invisible.voicekit.Cues.emit(it) }
-            screens.add(com.faka.invisible.voicekit.ScreenMirror.items to com.faka.invisible.voicekit.ScreenMirror.index)
+            // like the OS (Actions.mirrorSaid, then Narrator.say): stage the line unless a list item is staged, then the real Narrator and the fake voice
+            if (!Cues.hasStagedFor(text.text)) Cues.stageLine(text.text)
+            narrator.say(text, slow = slow)
             val t = ++speechToken
             handler.postDelayed({ if (t == speechToken) running?.takeIf { it.active }?.speechDone() }, 500)
         }

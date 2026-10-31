@@ -20,7 +20,7 @@ class Narrator(private val speech: SpeechPort, private val tones: TonePort, priv
     fun say(p: Phrase, queue: Boolean = false, fast: Boolean = false, slow: Boolean = false) {
         Trace.ev("say", "[${p.lang ?: "-"}]${if (queue) " queued" else ""}${if (fast) " fast" else ""} ${p.text}")
         sayAt = SystemClock.uptimeMillis()
-        Cues.takeStaged()?.let { gate.hold(it, queue); handler.removeCallbacks(gateTimeout); handler.postDelayed(gateTimeout, Pacing.CUE_TIMEOUT_MS) }
+        Cues.takeStagedFor(p.text)?.let { gate.hold(it, queue); handler.removeCallbacks(gateTimeout); handler.postDelayed(gateTimeout, Pacing.CUE_TIMEOUT_MS) }
         speech.speak(p, queue, fast, slow)
     }
     /** The engine began to sound the newest line: how long it took (a slow voice is a `slow` line). */

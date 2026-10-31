@@ -460,7 +460,7 @@ object Actions {
 
     /** A program that draws no picture of its own: the app screen shows the last lines it said, so a sighted person sees what is going on. */
     private fun mirrorSaid(t: String) {
-        if (running == null || com.faka.invisible.voicekit.Cues.hasStaged() || t.isBlank() || com.faka.invisible.voicekit.ScreenMirror.state.loop != null) return
+        if (running == null || com.faka.invisible.voicekit.Cues.hasStagedFor(t) || t.isBlank() || com.faka.invisible.voicekit.ScreenMirror.state.loop != null) return
         com.faka.invisible.voicekit.Cues.stageLine(t)
     }
 

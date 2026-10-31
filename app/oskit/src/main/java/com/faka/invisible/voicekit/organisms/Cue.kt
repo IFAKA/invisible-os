@@ -1,5 +1,7 @@
 package com.faka.invisible.voicekit
 
+import com.faka.invisible.logickit.squash
+
 /**
  * ORGANISM. One thing the phone says or plays, as the screen must show it: the single event of "what you hear is what you see".
  * The kit emits it ([Cues.emit]); [ScreenMirror] folds the stream into the one [ScreenMirror.Snapshot] that `Kit` draws.
@@ -36,7 +38,9 @@ data class Cue(
 
 /** The one publisher. Everything the kit says or plays goes through [emit]; today the only listener is [ScreenMirror]. */
 object Cues {
-    fun emit(c: Cue) = ScreenMirror.apply(c)
+    /** A test listener that sees every emitted cue (the parity helper). Never set in the app. */
+    @Volatile var tap: ((Cue) -> Unit)? = null
+    fun emit(c: Cue) { ScreenMirror.apply(c); tap?.invoke(c) }
 
     /**
      * Spoken cues (LIST_ITEM, LINE) are staged right before the call that speaks them; the next `Narrator.say` takes the
@@ -46,6 +50,14 @@ object Cues {
     fun stage(c: Cue) { synchronized(this) { staged = c } }
     fun hasStaged(): Boolean = synchronized(this) { staged != null }
     fun takeStaged(): Cue? = synchronized(this) { staged.also { staged = null } }
+    private fun norm(t: String) = t.squash().lowercase()
+    /** True when [staged] is the cue of exactly this spoken text (same words, case and spacing aside). */
+    private fun fits(c: Cue, spoken: String): Boolean { val a = norm(c.text); val b = norm(spoken); return a.isEmpty() || b.isEmpty() || a == b || a.contains(b) || b.contains(a) }
+    /** The staged cue if it belongs to the line about to be spoken. A cue staged for something else (its speak call never came) is dropped, so it never shows under a later, unrelated line. */
+    fun takeStagedFor(spoken: String): Cue? = takeStaged()?.takeIf { fits(it, spoken) }
+    /** A staged cue for exactly [text] is waiting (the caller need not stage it again). */
+    fun hasStagedFor(text: String): Boolean = synchronized(this) { staged?.let { fits(it, text) } == true }
+    fun clearStaged() { synchronized(this) { staged = null } }
     fun stageListItem(items: List<String>, index: Int) = stage(Cue(Cue.Kind.LIST_ITEM, text = items.getOrElse(index) { "" }, index = index, list = items))
     fun stageLine(text: String) = stage(Cue(Cue.Kind.LINE, text))
 

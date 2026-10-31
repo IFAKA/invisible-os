@@ -51,7 +51,7 @@ class FlowButtonTest {
     }
 
     /** The loop's sound on the rig's clock: records what is scheduled (text, frame), no real output. */
-    private class RigLoopAudio(val rig: RoboRig) : LoopAudio, Timers {
+    internal class RigLoopAudio(val rig: RoboRig) : LoopAudio, Timers {
         override val sampleRate = 24000
         val played = ArrayList<Pair<String, Long>>()
         private val textOf = java.util.IdentityHashMap<FloatArray, String>()
@@ -63,9 +63,9 @@ class FlowButtonTest {
         override fun nowFrame() = rig.now() * sampleRate / 1000
         override fun nowMs() = rig.now()
         override fun wallMsOf(frame: Long) = frame * 1000.0 / sampleRate + 40.0   // 40 ms of output delay
-        override fun play(clip: FloatArray, atFrame: Long, pan: Double) { played.add((textOf[clip] ?: "?") to atFrame) }
+        override fun play(clip: FloatArray, atFrame: Long, pan: Double) { val t = textOf[clip] ?: "?"; played.add(t to atFrame); rig.parity.heard(t, Math.round(wallMsOf(atFrame))) }
         override fun clear() { played.clear() }
-        override fun confirm() { confirms++ }
+        override fun confirm() { confirms++; rig.parity.sounded(Tone.PICK.cueName, rig.now() + SoundCues.LATENCY_MS); SoundCues.played(Tone.PICK.cueName, SoundCues.LATENCY_MS) }   // like LoopSound.confirm
         override fun set(key: String, delayMs: Long, task: () -> Unit) {
             tasks.remove(key)?.let { rig.handler.removeCallbacks(it) }
             val r = Runnable { tasks.remove(key); task() }; tasks[key] = r; rig.handler.postDelayed(r, delayMs)

@@ -1,5 +1,6 @@
 package com.faka.invisible
 
+import com.faka.invisible.oskit.testing.*
 import com.faka.invisible.logickit.*
 
 import com.faka.invisible.oskit.*
@@ -50,18 +51,22 @@ class ModeTest {
         var live = listOf<LiveApp>(); val liveNotifs = HashMap<String, Notif>(); var rooms = 0; var caller: String? = "Mama"; var extraPrograms = listOf<Pair<String, String>>()   // for the flow tests
         var codes = 100          // experienced by default; learning tests set 0
         private val timers = HashMap<String, Pair<Long, () -> Unit>>()
-        /** Platform speech: starts 50 ms after the call, ends 500 ms after it. */
-        private fun speech() {
-            val cue = com.faka.invisible.voicekit.Cues.takeStaged()   // what Narrator holds in its CueGate until the engine starts
-            timers["tts-start"] = (now + 50) to { cue?.let { com.faka.invisible.voicekit.Cues.emit(it.copy(onsetMs = now)) }; m.onSpeechStarted() }
+        /** The shared parity helper (oskit testing): `r.parity.start()` ... `r.parity.assertParity()`. */
+        val parity = ParityRecorder(clock = { now })
+        private var sndSeq = 0
+        init { CueClock.reset(); CueClock.install({ now }) { d, f -> timers["snd${sndSeq++}"] = (now + d) to f } }
+        /** Platform speech: starts 50 ms after the call, ends 500 ms after it. The fake voice holds the staged cue and shows it at the start, like Narrator. */
+        private val voice = FakeVoice({ now }, { d, f -> timers["tts-start"] = (now + d) to f }, recorder = parity).also { it.onStarted = { m.onSpeechStarted() } }
+        private fun speech(text: Phrase = Phrase.content(""), queue: Boolean = false) {
+            voice.speak(text, queue)
             timers["tts"] = (now + 500) to { m.onSpeechDone() }
         }
         val m: ControllerMode = ControllerMode(object : ModeOutput {
             override fun speak(text: Phrase, queue: Boolean, fast: Boolean) {
-                log.add(if (text.lang == null) "say ${text.text}" else "say[${text.lang}] ${text.text}"); speech()
+                log.add(if (text.lang == null) "say ${text.text}" else "say[${text.lang}] ${text.text}"); speech(text, queue)
             }
-            override fun stopSpeech() { log.add("stopspeech"); timers.remove("tts"); timers.remove("tts-start") }
-            override fun tone(kind: Tone) { log.add("tone $kind") }
+            override fun stopSpeech() { log.add("stopspeech"); timers.remove("tts"); timers.remove("tts-start"); voice.stop() }
+            override fun tone(kind: Tone) { log.add("tone $kind"); parity.sounded(kind.cueName, now); SoundCues.played(kind.cueName) }
             override fun programs() = listOf("games:duel" to "Duel", "games:echo" to "Echo", "games:guard" to "Guard", "games:howto" to "How to play", "hub:compass" to "Compass", "hub:write" to "Write", "hub:sum" to "Sum prices").plus(extraPrograms).map { (id, title) -> ProgramEntry(id, Phrase.content(title)) { error("not started in this test") } }
             override fun startProgram(id: String) { log.add(when (id) { "games:duel" -> "startGame false"; "games:howto" -> "startGame true"; else -> "start" + id.substringAfter(':').replaceFirstChar { it.uppercase() } }) }
             override fun runAction(name: String) { log.add("run $name"); speech() }
