@@ -17,12 +17,13 @@ class TonePlayer(private val app: Context, private val handler: Handler) : ToneP
     private var findOldVolume = -1
 
     /** Plays PCM on the accessibility stream: same level as speech, not tied to the music volume. */
-    fun play(pcm: ShortArray, rate: Int = Earcons.SR, vol: Float = 1f, onDone: (() -> Unit)? = null): AudioTrack? = try {
+    fun play(pcm: ShortArray, rate: Int = Earcons.SR, vol: Float = 1f, name: String = "sound", onDone: (() -> Unit)? = null): AudioTrack? = try {
         val t = AudioTrack.Builder()
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
             .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
             .setBufferSizeInBytes(pcm.size * 2).setTransferMode(AudioTrack.MODE_STATIC).build()
         t.write(pcm, 0, pcm.size); t.setVolume(vol); t.play()
+        SoundCues.played(name)   // the real onset, on the tones thread
         handler.postDelayed({ try { t.release() } catch (e: Exception) {}; onDone?.invoke() }, pcm.size * 1000L / rate + 80)
         t
     } catch (e: Exception) { Log.e(tag, "play failed", e); onDone?.invoke(); null }
@@ -31,7 +32,7 @@ class TonePlayer(private val app: Context, private val handler: Handler) : ToneP
     /** Building an AudioTrack took about 80 ms on the main thread (the wake tone held up the gesture): sounds start on one background thread, in order. */
     private val soundThread = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "tones").apply { isDaemon = true } }
 
-    override fun beep(k: Tone, vol: Float) { soundThread.execute { play(Earcons.pcm(k), vol = vol) } }
+    override fun beep(k: Tone, vol: Float) { soundThread.execute { play(Earcons.pcm(k), vol = vol, name = k.cueName) } }
 
     override fun playPcm(pcm: ShortArray) { soundThread.execute { play(pcm) } }
 

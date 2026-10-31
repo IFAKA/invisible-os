@@ -46,7 +46,8 @@ class CueTest {
         assertNull(ScreenMirror.state.loop)
     }
 
-    @Test fun soundCueChangesNothingYet() {
-        val before = ScreenMirror.state; Cues.sound("tick"); assertEquals(before, ScreenMirror.state)
+    @Test fun soundCueLeavesTheListAlone() {
+        val before = ScreenMirror.state; Cues.sound("tick")
+        assertEquals(before.copy(sounds = ScreenMirror.state.sounds), ScreenMirror.state); assertEquals("tick", ScreenMirror.state.sounds.single().name)
     }
 }

@@ -278,15 +278,15 @@ class MainActivity : Activity() {
         if (mir.active && EventLog.running && !settingsOpen) {   // the OS is in use: the app is its picture, and a second way to drive it
             val snap = mir.loop
             if (snap != null) {   // the letter loop: drawn from the items as they sound, updated in place
-                if (mirrorKey == LOOP_KEY && root.getChildAt(0) === mirrorHost) { loopScene?.update(snap); return }
-                loopScene = k.loopScreen(fixed, mir.title.ifEmpty { tr("Home") }, snap)
+                if (mirrorKey == LOOP_KEY && root.getChildAt(0) === mirrorHost) { loopScene?.update(snap, mir.sounds); return }
+                loopScene = k.loopScreen(fixed, mir.title.ifEmpty { tr("Home") }, snap, mir.sounds)
                 mirrorKey = LOOP_KEY; mirrorHost = fixed; mirror = null
                 root.removeAllViews(); root.addView(fixed)
                 return
             }
             val key = mir.title + "\u0000" + mir.items.joinToString("\u0001")
-            if (mirrorKey == key && root.getChildAt(0) === mirrorHost) { mirror?.update(mir.index, mir.lastPress); return }   // same list: only the mark moves
-            k.mirrorScreen(fixed, mir.title.ifEmpty { tr("Home") }, mir.items, mir.index, mir.lastPress,
+            if (mirrorKey == key && root.getChildAt(0) === mirrorHost) { mirror?.update(mir.index, mir.lastPress, mir.sounds); return }   // same list: only the mark moves
+            k.mirrorScreen(fixed, mir.title.ifEmpty { tr("Home") }, mir.items, mir.index, mir.lastPress, mir.sounds,
                 { i, t -> Actions.tapItem(i, t) },
                 tr("Back"), { Actions.screenPress(com.faka.invisible.voicekit.Gesture.TRIPLE) },
                 tr("Close"), { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) },

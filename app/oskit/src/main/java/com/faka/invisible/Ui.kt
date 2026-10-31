@@ -332,10 +332,13 @@ class Kit(private val c: Context) {
         }
     }
 
+    private companion object { const val FRESH_MS = 450L }
+
     /** The mirror on screen: [update] moves the mark and the last press without rebuilding, so nothing jumps. */
-    inner class MirrorView(private val rows: List<TextView>, private val scroller: ScrollView, private val press: TextView) {
+    inner class MirrorView(private val rows: List<TextView>, private val scroller: ScrollView, private val press: TextView, private val strip: SoundStripView) {
         private var shown = -1
-        fun update(current: Int, lastPress: String?) {
+        fun update(current: Int, lastPress: String?, sounds: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark> = emptyList()) {
+            strip.update(sounds)
             rows.forEachIndexed { i, r ->
                 val on = i == current
                 r.setTextColor(if (on) Ui.accent else Ui.ink)
@@ -362,7 +365,7 @@ class Kit(private val c: Context) {
      * Every row has the same size, so moving the mark never moves the layout.
      */
     fun mirrorScreen(parent: LinearLayout, title: String, items: List<String>, current: Int, lastPress: String?,
-                     onPick: (Int, String) -> Unit, backLabel: String, onBack: () -> Unit, closeLabel: String, onClose: () -> Unit, moreLabel: String, onMore: () -> Unit): MirrorView {
+                     sounds: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark>, onPick: (Int, String) -> Unit, backLabel: String, onBack: () -> Unit, closeLabel: String, onClose: () -> Unit, moreLabel: String, onMore: () -> Unit): MirrorView {
         status(parent, title, Translations.label("Invisible OS is open."), Ui.good, Ui.S1)   // the same header as the idle home (dot, word, line): going between them moves nothing
         val box = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
         val rows = items.mapIndexed { i, t ->
@@ -376,17 +379,19 @@ class Kit(private val c: Context) {
         val scroller = ScrollView(c).apply { isVerticalScrollBarEnabled = false; addView(box) }
         parent.addView(scroller, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(Ui.S2) })
         val press = text("", Type.CAPTION, Ui.soft).apply { minHeight = dp(20) }   // always there, so the list never changes height
-        parent.addView(press, lp(top = Ui.S1))
+        val strip = soundStrip()
+        parent.addView(LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; addView(grow(press)); addView(strip.view, LinearLayout.LayoutParams(-2, dp(22))) }, lp(top = Ui.S1))
         val bar = LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL }
         for ((label, act) in listOf(backLabel to onBack, closeLabel to onClose, moreLabel to onMore))
             bar.addView(btn(label) { act() }.apply { minHeight = dp(52); minimumHeight = dp(52); setTextColor(Ui.ink); textSize = Type.BODY.size; background = fill(Ui.field, Ui.RADIUS_BUTTON) }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
         parent.addView(bar, lp(top = Ui.S2))
-        return MirrorView(rows, scroller, press).also { it.update(current, lastPress) }
+        return MirrorView(rows, scroller, press, strip).also { it.update(current, lastPress, sounds) }
     }
 
     /** The letter loop on screen, updated in place (nothing is rebuilt per item, so nothing jumps). */
-    inner class LoopSceneView(private val head: List<TextView>, private val before: TextView, private val big: TextView, private val after: TextView, private val note: TextView) {
-        fun update(s: com.faka.invisible.voicekit.ScreenMirror.LoopSnap) {
+    inner class LoopSceneView(private val head: List<TextView>, private val before: TextView, private val big: TextView, private val after: TextView, private val note: TextView, private val strip: SoundStripView) {
+        fun update(s: com.faka.invisible.voicekit.ScreenMirror.LoopSnap, sounds: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark> = emptyList()) {
+            strip.update(sounds)
             head.forEachIndexed { i, t -> t.text = s.header.getOrNull(i) ?: "" }
             val ring = s.ring; val n = ring.size
             fun near(from: Int, step: Int) = (1..3).filter { it < n }.map { ring[Math.floorMod(from + step * it, n)].text }
@@ -409,7 +414,7 @@ class Kit(private val c: Context) {
      * What you hear is what you see: the item sounding now BIG in the middle (letter or whole word), the two or three before and after it small
      * above and below, [header] rows on top (what was typed), the item just taken in green. Centered, fixed sizes: only the texts change ([LoopSceneView.update]).
      */
-    fun loopScreen(parent: LinearLayout, title: String, snap: com.faka.invisible.voicekit.ScreenMirror.LoopSnap): LoopSceneView {
+    fun loopScreen(parent: LinearLayout, title: String, snap: com.faka.invisible.voicekit.ScreenMirror.LoopSnap, sounds: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark> = emptyList()): LoopSceneView {
         status(parent, title, Translations.label("Invisible OS is open."), Ui.good, Ui.S1)
         fun centred(t: TextView, type: Type, color: Int) = t.apply { gravity = Gravity.CENTER; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; textSize = type.size; setTextColor(color) }
         val head = List(3) { i -> centred(text("", if (i == 0) Type.TITLE else Type.SMALL, if (i == 0) Ui.ink else Ui.soft), if (i == 0) Type.TITLE else Type.SMALL, if (i == 0) Ui.ink else Ui.soft).apply { minHeight = dp(if (i == 0) 32 else 22) } }
@@ -424,8 +429,46 @@ class Kit(private val c: Context) {
         val note = centred(text("", Type.SMALL, Ui.soft), Type.SMALL, Ui.soft).apply { minHeight = dp(22) }
         mid.addView(before, lp()); mid.addView(big, LinearLayout.LayoutParams(-1, dp(140))); mid.addView(after, lp()); mid.addView(note, lp(top = Ui.S1))
         parent.addView(mid, LinearLayout.LayoutParams(-1, 0, 1f))
-        return LoopSceneView(head, before, big, after, note).also { it.update(snap) }
+        val strip = soundStrip()
+        parent.addView(strip.view, LinearLayout.LayoutParams(-1, dp(22)).apply { topMargin = dp(Ui.S1); gravity = Gravity.CENTER })
+        return LoopSceneView(head, before, big, after, note, strip).also { it.update(snap, sounds) }
     }
+
+    /**
+     * What you hear is what you see, for sounds with no words: a small strip of the last [com.faka.invisible.voicekit.SoundCues.KEEP] sounds
+     * (oldest left, newest right), a dot each; a fresh one is bright and the sound's short name sits beside it. A repeated tick is one
+     * dot (merged by the cue fold), so the strip never floods. In the rhythm games it is the beat strip. Fixed size: only colours change.
+     */
+    inner class SoundStripView {
+        private val slots = com.faka.invisible.voicekit.SoundCues.KEEP
+        private var marks: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark> = emptyList()
+        private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        private val dots = object : View(c) {
+            override fun onDraw(canvas: android.graphics.Canvas) {
+                val gap = width / slots.toFloat(); val cy = height / 2f
+                val now = com.faka.invisible.voicekit.SoundCues.clock()
+                val first = slots - marks.size
+                for (i in 0 until slots) {
+                    val m = marks.getOrNull(i - first)
+                    val fresh = m != null && now - m.onsetMs < FRESH_MS
+                    paint.color = if (m == null) Ui.line else if (fresh) Ui.accent else Ui.soft
+                    canvas.drawCircle(gap * (i + 0.5f), cy, dp(if (fresh) 6 else if (m == null) 2 else 4).toFloat(), paint)
+                }
+            }
+        }.apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        private val name = text("", Type.CAPTION, Ui.soft).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; maxLines = 1; minWidth = dp(72); gravity = Gravity.CENTER_VERTICAL }
+        val view: View = LinearLayout(c).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            addView(dots, LinearLayout.LayoutParams(dp(slots * 14), dp(22)))
+            addView(name, LinearLayout.LayoutParams(-2, -1).apply { marginStart = dp(6) })
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        fun update(s: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark>) {
+            if (s == marks) return
+            marks = s; name.text = s.lastOrNull()?.name ?: ""; dots.invalidate()
+        }
+    }
+    fun soundStrip() = SoundStripView()
 
     /** Home status: a coloured dot, a large word, one quiet line. */
     fun status(parent: LinearLayout, headline: String, line: String, color: Int, top: Int = Ui.S3, align: Boolean = false, fill: LinearLayout.() -> Unit = {}) {

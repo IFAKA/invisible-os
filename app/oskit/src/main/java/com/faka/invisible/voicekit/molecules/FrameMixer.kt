@@ -5,8 +5,11 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** Sample-accurate scheduler: a sound starts at an exact frame, so the beat never drifts. Callers share one lock with the audio thread. */
-class FrameMixer {
-    private class Voice(val src: FloatArray, val start: Long, val l: Float, val r: Float)
+class FrameMixer(
+    /** Called inside [render] (so keep it tiny) when a sound begins, with its name. Null = silent to the picture (the letter loop's spoken clips). */
+    private val onStart: ((String) -> Unit)? = { name -> SoundCues.played(name, SoundCues.LATENCY_MS) },
+) {
+    private class Voice(val src: FloatArray, val start: Long, val l: Float, val r: Float, val name: String, var announced: Boolean = false)
 
     private val voices = ArrayList<Voice>()
     private var frames = 0L
@@ -18,9 +21,9 @@ class FrameMixer {
     fun clear() { voices.clear() }
 
     /** @param pan -1 hard left, 0 centre, 1 hard right. @param atFrame absolute (from [nowFrame]); in the past = now. */
-    fun play(src: FloatArray, atFrame: Long, pan: Double = 0.0, gain: Double = 0.5) {
+    fun play(src: FloatArray, atFrame: Long, pan: Double = 0.0, gain: Double = 0.5, name: String = "beat") {
         val a = (pan + 1) * PI / 4
-        voices.add(Voice(src, maxOf(atFrame, frames), (cos(a) * gain * 1.414).toFloat(), (sin(a) * gain * 1.414).toFloat()))
+        voices.add(Voice(src, maxOf(atFrame, frames), (cos(a) * gain * 1.414).toFloat(), (sin(a) * gain * 1.414).toFloat(), name))
     }
 
     /** Interleaved stereo. */
@@ -30,6 +33,7 @@ class FrameMixer {
         while (it.hasNext()) {
             val v = it.next()
             val from = maxOf(0L, v.start - frames).toInt()
+            if (!v.announced && from < n) { v.announced = true; onStart?.invoke(v.name) }   // the block where it starts: within 5 ms of the sound
             var i = from
             while (i < n) {
                 val k = (frames + i - v.start).toInt()

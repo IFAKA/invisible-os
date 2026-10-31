@@ -54,7 +54,31 @@ object Cues {
     /** The pair keyboard: [header] rows (what is written so far, not heard) above the [heard] rows (the pair now played); the mark is on the first heard row. */
     fun pairScreen(header: List<String>, heard: List<String>) = emit(Cue(Cue.Kind.LIST_ITEM, text = heard.firstOrNull().orEmpty(), index = header.size, list = header + heard))
     fun press(gestureName: String, at: Long) = emit(Cue(Cue.Kind.PRESS, gestureName, onsetMs = at))
-    fun sound(name: String) = emit(Cue(Cue.Kind.SOUND, name))
+    fun sound(name: String, at: Long = -1) = emit(Cue(Cue.Kind.SOUND, name, onsetMs = at))
+}
+
+/**
+ * ORGANISM. Every sound without words (earcon, screen tone, close sound, beat of a game) tells the picture here when it really starts.
+ * [played] is cheap and safe from any thread (the `tones` thread, the audio thread): with no delay it emits at once; with a delay
+ * (a sound the mixer will output in [delayMs]) it posts to the main thread, so the mark never shows before the sound.
+ * Never do slow work here: sounds start on their own threads and a gesture must stay fast.
+ */
+object SoundCues {
+    /** About the delay between the mixer writing a block and the ear hearing it. */
+    const val LATENCY_MS = 60L
+    /** The picture keeps this many marks. */
+    const val KEEP = 8
+    /** The same sound again within this time is merged into one mark (count + 1): a fast tick never floods the strip. */
+    const val MERGE_MS = 150L
+
+    @Volatile var clock: () -> Long = { android.os.SystemClock.uptimeMillis() }
+    private val mainHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
+    @Volatile var post: (Long, () -> Unit) -> Unit = { d, f -> mainHandler.postDelayed(f, d) }
+
+    fun played(name: String, delayMs: Long = 0) {
+        if (delayMs <= 0) Cues.sound(name, clock())
+        else post(delayMs) { Cues.sound(name, clock()) }
+    }
 }
 
 /**

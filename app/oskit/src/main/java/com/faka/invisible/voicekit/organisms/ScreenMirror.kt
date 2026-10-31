@@ -11,6 +11,9 @@ object ScreenMirror {
      */
     data class LoopSnap(val header: List<String> = emptyList(), val ring: List<LoopShown> = emptyList(), val at: Int = -1, val chosen: LoopShown? = null)
 
+    /** One sound that played: its short [name], when it started, and how many identical ones were merged into it. */
+    data class SoundMark(val name: String, val onsetMs: Long, val count: Int = 1)
+
     /** One immutable picture of the OS. [pressAt] is the clock time of [lastPress] (0 = none). */
     data class Snapshot(
         val active: Boolean = false,
@@ -20,6 +23,8 @@ object ScreenMirror {
         val lastPress: String? = null,
         val pressAt: Long = 0,
         val loop: LoopSnap? = null,
+        /** The last [SoundCues.KEEP] sounds without words, oldest first (the beat strip). */
+        val sounds: List<SoundMark> = emptyList(),
     )
 
     @Volatile var state = Snapshot(); private set
@@ -46,7 +51,12 @@ object ScreenMirror {
         Cue.Kind.LIST_ITEM -> s.copy(active = true, items = c.list, index = c.index.coerceIn(0, maxOf(0, c.list.size - 1)), loop = null)
         Cue.Kind.LINE -> if (c.text.isBlank()) s else { val l = (s.items + c.text).takeLast(4); s.copy(active = true, items = l, index = l.size - 1, loop = null) }
         Cue.Kind.PRESS -> s.copy(lastPress = c.text, pressAt = if (c.onsetMs >= 0) c.onsetMs else now())
-        Cue.Kind.SOUND -> s
+        Cue.Kind.SOUND -> if (c.text.isBlank()) s else {
+            val at = if (c.onsetMs >= 0) c.onsetMs else now()
+            val last = s.sounds.lastOrNull()
+            s.copy(sounds = if (last != null && last.name == c.text && at - last.onsetMs < SoundCues.MERGE_MS) s.sounds.dropLast(1) + last.copy(onsetMs = at, count = last.count + 1)
+                else (s.sounds + SoundMark(c.text, at)).takeLast(SoundCues.KEEP))
+        }
         Cue.Kind.LOOP_ITEM -> s.loop?.let { lp ->
             s.copy(loop = when {
                 c.ring != null -> lp.copy(ring = c.ring, at = -1, chosen = null)

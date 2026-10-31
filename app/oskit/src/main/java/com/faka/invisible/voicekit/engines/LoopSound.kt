@@ -23,7 +23,7 @@ class LoopSound(
     override val sampleRate = 24000
     private val block = sampleRate * 5 / 1000
     private val lock = Any()
-    private val mixer = FrameMixer()
+    private val mixer = FrameMixer(onStart = null)   // its clips are spoken letters: LOOP_ITEM cues, not sounds
     @Volatile private var running = false
     @Volatile private var latencyMs = 0.0
     private val audio = GameAudio(sampleRate, block, { buf, n -> synchronized(lock) { mixer.render(buf, n) } }, { running },
@@ -85,6 +85,7 @@ class LoopSound(
     override fun confirm() {
         val pcm = Earcons.pcm(Tone.PICK)
         val f = resample(pcm, Earcons.SR, sampleRate)
+        SoundCues.played(Tone.PICK.cueName, SoundCues.LATENCY_MS)
         synchronized(lock) { mixer.play(f, mixer.nowFrame(), 0.0, 0.5) }
     }
 
