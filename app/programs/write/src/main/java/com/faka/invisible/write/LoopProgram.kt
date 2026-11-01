@@ -75,6 +75,7 @@ class LoopProgram(
     private var roundClicks = 0
     private var after: (() -> Unit)? = null
     private var touched = false
+    private var idleRounds = 0   // silent rounds in a row: after 3 Write leaves with nothing sent (a forgotten Write must not loop all day)
     override val exitOnClickHold = false   // Write is left by holding 3 s
     override var active = false; private set
 
@@ -145,6 +146,7 @@ class LoopProgram(
     private fun push() { history.add(Snap(written.toList(), prefix, endsSentence)) }
 
     private fun chosen(c: LoopChoice<String>) {
+        idleRounds = 0
         if (!active) return
         out.log("choice", c.key, c.rank, c.cycles, c.ms, c.clicks)
         store.save(loop.offsets())
@@ -190,7 +192,7 @@ class LoopProgram(
     }
 
     /** No click for some cycles: say what is written so far (or how to click), then go on. */
-    private fun idle() { if (active) { out.log("idle", written.size, prefix); readThenRound() } }
+    private fun idle() { if (active) { out.log("idle", written.size, prefix); if (++idleRounds >= IDLE_LEAVE_ROUNDS) { out.log("end", "idle", written.size, 0); finish("") } else readThenRound() } }
 
     // ---- send ----
     private fun sendNow() {
@@ -296,5 +298,5 @@ class LoopProgram(
 
     override fun tapRow(row: Int) {}
 
-    private companion object { const val AFTER = "t:after"; const val REFRESH = "t:refresh" }
+    private companion object { const val AFTER = "t:after"; const val REFRESH = "t:refresh"; const val IDLE_LEAVE_ROUNDS = 3 }
 }

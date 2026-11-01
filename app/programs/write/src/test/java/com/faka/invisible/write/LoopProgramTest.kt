@@ -137,6 +137,21 @@ class LoopProgramTest {
         audio.advance(5000); assertTrue(audio.played.isNotEmpty())   // then the loop goes on
     }
 
+    @Test fun threeSilentRoundsInARowLeaveWithNothingSent() {
+        p.start(); running()
+        repeat(40) { if (ended == 0) audio.advance(10_000) }
+        assertEquals(1, ended); assertEquals("", result)
+    }
+
+    @Test fun aClickResetsTheSilentRounds() {
+        p.start()
+        pick("hello") { p.text() == "Hello" }
+        repeat(8) { audio.advance(10_000) }   // about one silent round
+        pick("there") { p.text().endsWith("there") || p.text().endsWith("There") }
+        repeat(8) { audio.advance(10_000) }
+        assertEquals(0, ended)
+    }
+
     @Test fun anEmptyTextHintsInsteadOfReading() {
         p.start(); audio.advance(60_000)
         assertTrue(said.contains(TypeVoice.LOOP_HINT.text))
