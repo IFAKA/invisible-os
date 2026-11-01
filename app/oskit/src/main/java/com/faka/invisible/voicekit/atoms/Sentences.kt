@@ -58,10 +58,10 @@ object Voice {
     // idle:    1 = play/pause, 2 = next, 3 = previous, hold = wake
     // in a list: hold = fast scroll (first words), release = that option in full; elsewhere a plain hold does nothing
     // in menu: 1 = pick the option just spoken, 2 = one back, 3 = back, 4 = leave, click then hold = exit; any click cancels a pending send
-    val HINT get() = f("Click when you hear it. Two clicks: back one. Three clicks: go up. To close: click, then hold.")
-    val DIAL_HINT get() = f("Click: louder. Two clicks: quieter. Hold: keep lowering.")   // said while learning
+    val HINT get() = f("Click when you hear it. Two clicks: back one. Three clicks: go up. To close: click, then hold.").asks(PressHint.click(1))
+    val DIAL_HINT get() = f("Click: louder. Two clicks: quieter. Hold: keep lowering.").asks(PressHint.click(1))   // said while learning
     val HOLD_TO_FIND get() = f("Hold to find by name.")   // said once per wake after two groups were left without a pick
-    val HOME_LETTERS_LEAVE get() = f("Hold three seconds to leave.")   // said after the first letters hint
+    val HOME_LETTERS_LEAVE get() = f("Hold three seconds to leave.").asks(PressHint.HOLD)   // said after the first letters hint
     val FIND_HINT get() = f("Find. Pick the first letter.")   // said the first time only
     val HOME_LETTERS_HINT get() = f("Type it with letters. They go A to Z. Click on yours.")   // said the first 3 times
     val GESTURE_HELP get() = f("Click when you hear the option. 2 clicks: back one. 3 clicks: go up; on home, leave. 4 clicks: leave. Click, then hold: exit.")

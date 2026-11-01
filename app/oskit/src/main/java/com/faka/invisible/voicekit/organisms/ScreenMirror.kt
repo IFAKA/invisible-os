@@ -21,6 +21,8 @@ object ScreenMirror {
         val items: List<String> = emptyList(),
         val index: Int = 0,
         val lastPress: String? = null,
+        /** The press the line now heard asks for (null = none); set with the line, cleared by the next list item. */
+        val asks: PressHint? = null,
         val pressAt: Long = 0,
         val loop: LoopSnap? = null,
         /** The last [SoundCues.KEEP] sounds without words, oldest first (the beat strip). */
@@ -48,8 +50,8 @@ object ScreenMirror {
 
     /** Pure: the picture after [c]. */
     fun reduce(s: Snapshot, c: Cue, now: () -> Long = { System.currentTimeMillis() }): Snapshot = when (c.kind) {
-        Cue.Kind.LIST_ITEM -> s.copy(active = true, items = c.list, index = c.index.coerceIn(0, maxOf(0, c.list.size - 1)), loop = null)
-        Cue.Kind.LINE -> if (c.text.isBlank()) s else { val l = (s.items + c.text).takeLast(4); s.copy(active = true, items = l, index = l.size - 1, loop = null) }
+        Cue.Kind.LIST_ITEM -> s.copy(active = true, items = c.list, index = c.index.coerceIn(0, maxOf(0, c.list.size - 1)), loop = null, asks = null)
+        Cue.Kind.LINE -> if (c.text.isBlank()) s else { val l = (s.items + c.text).takeLast(4); s.copy(active = true, items = l, index = l.size - 1, loop = null, asks = c.press) }
         Cue.Kind.PRESS -> s.copy(lastPress = c.text, pressAt = if (c.onsetMs >= 0) c.onsetMs else now())
         Cue.Kind.SOUND -> if (c.text.isBlank()) s else {
             val at = if (c.onsetMs >= 0) c.onsetMs else now()

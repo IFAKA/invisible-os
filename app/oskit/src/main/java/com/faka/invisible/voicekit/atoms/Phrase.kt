@@ -14,14 +14,17 @@ annotation class KitOnly
  *  - CONTENT: text that belongs to the user or the world (a message, a task, a song title): `Phrase.content(text, lang)`.
  * [lang] is the voice language; null = the menu voice (English).
  */
-class Phrase private constructor(val text: String, val lang: String?, val isFixed: Boolean) {
+class Phrase private constructor(val text: String, val lang: String?, val isFixed: Boolean, val press: PressHint? = null) {
     override fun equals(other: Any?) = other is Phrase && other.text == text && other.lang == lang
     override fun hashCode() = text.hashCode() * 31 + (lang?.hashCode() ?: 0)
     override fun toString() = text
 
     val isEmpty get() = text.isEmpty()
     val isNotEmpty get() = text.isNotEmpty()
-    operator fun plus(o: Phrase) = Phrase(text + o.text, lang ?: o.lang, isFixed && o.isFixed)
+    operator fun plus(o: Phrase) = Phrase(text + o.text, lang ?: o.lang, isFixed && o.isFixed, o.press ?: press)
+
+    /** The same sentence, asking for [p]: the screen draws it under the line (orange). Does not change what is said. */
+    fun asks(p: PressHint) = Phrase(text, lang, isFixed, p)
 
     companion object {
         @KitOnly fun fixed(text: String): Phrase { val (t, l) = Translations.resolve(text); return Phrase(t, l, true) }

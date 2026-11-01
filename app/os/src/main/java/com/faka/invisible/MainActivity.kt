@@ -382,8 +382,8 @@ class MainActivity : Activity() {
                 return
             }
             val key = mir.title + "\u0000" + mir.items.joinToString("\u0001")
-            if (mirrorKey == key && root.getChildAt(0) === mirrorHost) { mirror?.update(mir.index, mir.lastPress, mir.sounds); return }   // same list: only the mark moves
-            k.mirrorScreen(fixed, mir.title.ifEmpty { tr("Home") }, mir.items, mir.index, mir.lastPress, mir.sounds,
+            if (mirrorKey == key && root.getChildAt(0) === mirrorHost) { mirror?.update(mir.index, mir.lastPress, mir.asks, mir.sounds); return }   // same list: only the mark moves
+            k.mirrorScreen(fixed, mir.title.ifEmpty { tr("Home") }, mir.items, mir.index, mir.lastPress, mir.asks, mir.sounds,
                 { i, t -> Actions.tapItem(i, t) },
                 tr("Back"), { Actions.screenPress(com.faka.invisible.voicekit.Gesture.TRIPLE) },
                 tr("Close"), { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) },

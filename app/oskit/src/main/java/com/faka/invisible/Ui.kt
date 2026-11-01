@@ -18,6 +18,7 @@ import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
+import com.faka.invisible.voicekit.PressHint
 import com.faka.invisible.voicekit.Translations
 
 /**
@@ -25,23 +26,31 @@ import com.faka.invisible.voicekit.Translations
  * Spacing is an 8 dp grid. Type is the system font in four steps ([Type]).
  */
 object Ui {
-    @Volatile var dark = false
-    /** Read the system mode from [c]; the Kit does this when it is made. */
-    fun sync(c: Context) { dark = (c.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES }
+    @Volatile var dark = true
+    /** false (default) = always dark; true = follow the system light or dark mode. */
+    @Volatile var followSystem = false
+    /** Set the mode; the Kit does this when it is made. */
+    fun sync(c: Context) { dark = !followSystem || (c.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES }
     private fun pick(light: String, night: String) = Color.parseColor(if (dark) night else light)
 
-    val ink get() = pick("#1C1C1E", "#FFFFFF")            // main text
-    val soft get() = pick("#6C6C70", "#98989F")           // hints, captions
-    val accent get() = pick("#0062CC", "#4DA3FF")         // the one accent for text: values, links, soft buttons (4.5:1 or more on page, card and tint, light and dark)
-    val accentFill get() = pick("#0062CC", "#0A66C2")     // the accent as a button background: white text on it is 4.5:1 or more
-    val good get() = pick("#17722F", "#32D74B")
+    // One palette, fixed meanings (owner rule: voice, screen and gestures are one design). Dark by default, for a glance; light keeps the same meanings.
+    //   NOW (cyan) = what is being spoken this moment.  PRESS (orange) = what the person must press.  DONE (green) = it worked.
+    //   White = text. Gray = quiet text (4.5:1 or more). Faint cyan = hairlines. No other colour carries a meaning.
+    val ink get() = pick("#14181C", "#FFFFFF")            // main text
+    val soft get() = pick("#5F6B76", "#9AA7B5")           // hints, captions (4.5:1 or more on page and card)
+    val now get() = pick("#00677F", "#19E3FF")            // NOW: the line or item being spoken (as text: 4.5:1 or more on page, card and tint, light and dark)
+    val press get() = pick("#A65700", "#FF9A1F")          // PRESS: the press the person must make
+    val done get() = pick("#17722F", "#32D74B")           // DONE: it worked, it was picked
+    val accent get() = now                                // the accent for text (values, links, soft buttons) is the NOW colour
+    val accentFill get() = pick("#006E8A", "#006E8A")     // the accent as a button background: white text on it is 4.5:1 or more
+    val good get() = done
     val bad get() = pick("#D70015", "#FF453A")
-    val page get() = pick("#F2F2F7", "#000000")           // screen background
-    val card get() = pick("#FFFFFF", "#1C1C1E")           // grouped surface
-    val field get() = pick("#F2F2F7", "#2C2C2E")          // input box and task row, inside a card
-    val tint get() = pick("#E5F0FF", "#0A2A4D")           // soft button
-    val line get() = pick("#D9D9DE", "#38383A")           // hairline between rows
-    val edge get() = pick("#C7C7CC", "#48484A")           // off switch, slider track
+    val page get() = pick("#EEF3F6", "#05080D")           // screen background (dark: near-black blue)
+    val card get() = pick("#FFFFFF", "#0D141C")           // grouped surface
+    val field get() = pick("#E3EAEF", "#141E29")          // input box and task row, inside a card
+    val tint get() = pick("#DDF1F6", "#0B2A38")           // soft button
+    val line get() = pick("#C9D8DF", "#16404D")           // hairline (faint cyan in the dark)
+    val edge get() = pick("#AFC0C9", "#3B5563")           // off switch, slider track
     val onAccent = Color.WHITE
     val clear = Color.TRANSPARENT
 
@@ -334,58 +343,98 @@ class Kit(private val c: Context) {
 
     private companion object { const val FRESH_MS = 450L }
 
-    /** The mirror on screen: [update] moves the mark and the last press without rebuilding, so nothing jumps. */
-    inner class MirrorView(private val rows: List<TextView>, private val scroller: ScrollView, private val press: TextView, private val strip: SoundStripView) {
-        private var shown = -1
-        fun update(current: Int, lastPress: String?, sounds: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark> = emptyList()) {
-            strip.update(sounds)
-            rows.forEachIndexed { i, r ->
-                val on = i == current
-                r.setTextColor(if (on) Ui.accent else Ui.ink)
-                r.background = if (on) fill(Ui.field, Ui.RADIUS_ROW) else null
-                r.contentDescription = if (on) r.text.toString() + ", " + Translations.label("selected") else null
-            }
-            press.text = lastPress?.let { Translations.label("Last press") + ": " + Translations.label(it) } ?: ""
-            if (current != shown) {
-                val first = shown < 0; shown = current
-                rows.getOrNull(current)?.let { r ->
-                    fun centre() = (r.top - (scroller.height - r.height) / 2).coerceAtLeast(0)
-                    if (first) scroller.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {   // before the first frame: the new list never shows at the top for a moment
-                        override fun onPreDraw(): Boolean { if (scroller.height == 0) return true; scroller.viewTreeObserver.removeOnPreDrawListener(this); scroller.scrollTo(0, centre()); return true }
-                    })
-                    else scroller.post { scroller.smoothScrollTo(0, centre()) }   // the current item sits in the middle
-                }
+    /**
+     * The press a line asks for, drawn in PRESS orange: a filled dot per click, a long bar for a hold ([PressHint.glyphs]).
+     * [small] is the footer size (the last press). Nothing here is spoken; it only repeats the voice.
+     */
+    inner class PressGlyphView(private val small: Boolean) : View(c) {
+        private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        var hint: PressHint? = null
+            set(v) { if (field != v) { field = v; invalidate() } }
+        init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
+        override fun onDraw(canvas: android.graphics.Canvas) {
+            val g = hint?.glyphs ?: return
+            if (g.isEmpty()) return
+            val k = if (small) 0.4f else 1f
+            val r = dp(18) * k; val barW = dp(84) * k; val gap = dp(18) * k
+            val total = g.sumOf { (if (it == PressHint.Glyph.BAR) barW else 2 * r).toDouble() }.toFloat() + gap * (g.size - 1)
+            var x = (width - total) / 2f; val cy = height / 2f
+            for (s in g) {
+                val w = if (s == PressHint.Glyph.BAR) barW else 2 * r
+                paint.color = Ui.press; paint.alpha = if (small) 200 else 255
+                canvas.drawRoundRect(x, cy - r, x + w, cy + r, r, r, paint)   // a dot is a round rect as wide as high; a bar is the same, longer
+                if (!small) { paint.alpha = 60; canvas.drawRoundRect(x - dp(4), cy - r - dp(4), x + w + dp(4), cy + r + dp(4), r + dp(4), r + dp(4), paint) }   // faint glow
+                x += w + gap
             }
         }
     }
+    fun pressGlyph(small: Boolean = false) = PressGlyphView(small)
+
+    /** The stage on screen: [update] moves the lines and the press without rebuilding, so nothing jumps. */
+    inner class MirrorView(private val items: List<String>, private val slots: List<Pair<Int, TextView>>, private val now: TextView, private val glyph: PressGlyphView,
+                           private val last: PressGlyphView, private val strip: SoundStripView, private val empty: String, private val onPick: (Int, String) -> Unit) {
+        fun update(current: Int, lastPress: String?, asks: PressHint?, sounds: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark> = emptyList()) {
+            strip.update(sounds)
+            fun bind(v: TextView, i: Int) {
+                val t = items.getOrNull(i)
+                v.text = t ?: ""; v.visibility = if (t == null) View.INVISIBLE else View.VISIBLE
+                v.setOnClickListener(if (t == null) null else View.OnClickListener { onPick(i, t) })
+                v.isClickable = t != null
+            }
+            for ((off, v) in slots) bind(v, current + off)
+            bind(now, current)
+            if (items.isEmpty()) { now.text = empty; now.visibility = View.VISIBLE; now.setTextColor(Ui.soft) } else now.setTextColor(Ui.now)
+            now.contentDescription = if (items.isEmpty()) null else now.text.toString() + ", " + Translations.label("selected")
+            glyph.hint = asks
+            val lp = PressHint.fromGestureText(lastPress)
+            last.hint = lp
+            last.contentDescription = lp?.let { Translations.label("Last press") + ": " + Translations.label(lastPress ?: "") }
+        }
+    }
+
+    /** The quiet title at the top of the stage and the loop screen: a small soft word and a faint cyan hairline. No dot, no second line. */
+    private fun stageHeader(parent: LinearLayout, title: String) {
+        parent.addView(text(title, Type.SECTION, Ui.soft).apply { isAccessibilityHeading = true; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; gravity = Gravity.CENTER }, lp(top = Ui.S1))
+        parent.addView(View(c).apply { setBackgroundColor(Ui.line); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, lp(h = maxOf(1, dp(1)), top = Ui.S1))
+    }
 
     /**
-     * The picture of the OS: where you are (title), the list being read with the current item marked (a tap chooses it, as a click would),
-     * the last press, and three buttons that do what the button does. Fits the window; only the list scrolls.
-     * Every row has the same size, so moving the mark never moves the layout.
+     * The stage: what you hear is what you see, as one thing at a glance. The line (or item) being spoken NOW sits in the middle of the free space in very
+     * large cyan type (it shrinks to fit); the two before it above, faded; the next ones below, small and soft. Under the NOW line the press it asks for is
+     * drawn in orange. The foot is one quiet row: Back, Close, Settings as text links, and the last press as the same glyph. A tap on a line picks it, as a click would.
+     * Fits the window; nothing scrolls, so moving the mark never moves the layout.
      */
-    fun mirrorScreen(parent: LinearLayout, title: String, items: List<String>, current: Int, lastPress: String?,
+    fun mirrorScreen(parent: LinearLayout, title: String, items: List<String>, current: Int, lastPress: String?, asks: PressHint?,
                      sounds: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark>, onPick: (Int, String) -> Unit, backLabel: String, onBack: () -> Unit, closeLabel: String, onClose: () -> Unit, moreLabel: String, onMore: () -> Unit): MirrorView {
-        status(parent, title, Translations.label("Invisible OS is open."), Ui.good, Ui.S1)   // the same header as the idle home (dot, word, line): going between them moves nothing
-        val box = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
-        val rows = items.mapIndexed { i, t ->
-            text(t, Type.BODY).apply {
-                setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1)); minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL
-                setOnClickListener { onPick(i, t) }
-                box.addView(this, lp(top = 2))
-            }
+        stageHeader(parent, title)
+        fun line(type: Type, alpha: Float) = text("", type, Ui.soft).apply {
+            gravity = Gravity.CENTER; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; this.alpha = alpha
+            setPadding(dp(Ui.S2), dp(4), dp(Ui.S2), dp(4)); minHeight = dp(40)
         }
-        if (items.isEmpty()) box.addView(text(Translations.label("Playing. Use your earbud button."), Type.BODY, Ui.soft).apply { setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1)) })
-        val scroller = ScrollView(c).apply { isVerticalScrollBarEnabled = false; addView(box) }
-        parent.addView(scroller, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(Ui.S2) })
-        val press = text("", Type.CAPTION, Ui.soft).apply { minHeight = dp(20) }   // always there, so the list never changes height
+        val before = listOf(-2 to line(Type.SMALL, 0.45f), -1 to line(Type.BODY, 0.75f))
+        val after = listOf(1 to line(Type.BODY, 0.8f), 2 to line(Type.SMALL, 0.55f), 3 to line(Type.SMALL, 0.3f))
+        val up = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; before.forEach { addView(it.second, lp()) } }
+        val down = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL; after.forEach { addView(it.second, lp()) } }
+        val big = text("", Type.LARGE, Ui.now).apply {
+            textSize = 52f; gravity = Gravity.CENTER; setPadding(dp(Ui.S2), 0, dp(Ui.S2), 0); maxLines = 6
+            setShadowLayer(dp(10).toFloat(), 0f, 0f, (Ui.now and 0x00FFFFFF) or 0x66000000)   // a soft glow
+            if (android.os.Build.VERSION.SDK_INT >= 26) setAutoSizeTextTypeUniformWithConfiguration(22, 56, 2, android.util.TypedValue.COMPLEX_UNIT_SP)
+        }
+        val glyph = pressGlyph(false)
+        parent.addView(up, LinearLayout.LayoutParams(-1, 0, 1f))
+        parent.addView(big, LinearLayout.LayoutParams(-1, dp(240)))
+        parent.addView(glyph, LinearLayout.LayoutParams(-1, dp(64)))
+        parent.addView(down, LinearLayout.LayoutParams(-1, 0, 1f))
         val strip = soundStrip()
-        parent.addView(LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; addView(grow(press)); addView(strip.view, LinearLayout.LayoutParams(-2, dp(22))) }, lp(top = Ui.S1))
+        val last = pressGlyph(true)
+        parent.addView(View(c).apply { setBackgroundColor(Ui.line); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, lp(h = maxOf(1, dp(1))))
+        parent.addView(LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; addView(strip.view, LinearLayout.LayoutParams(-2, dp(22))); addView(View(c), LinearLayout.LayoutParams(0, 1, 1f)); addView(last, LinearLayout.LayoutParams(dp(120), dp(32))) }, lp(top = Ui.S1))
         val bar = LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL }
         for ((label, act) in listOf(backLabel to onBack, closeLabel to onClose, moreLabel to onMore))
-            bar.addView(btn(label) { act() }.apply { minHeight = dp(52); minimumHeight = dp(52); setTextColor(Ui.ink); textSize = Type.BODY.size; background = fill(Ui.field, Ui.RADIUS_BUTTON) }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
-        parent.addView(bar, lp(top = Ui.S2))
-        return MirrorView(rows, scroller, press, strip).also { it.update(current, lastPress, sounds) }
+            bar.addView(quiet(label, Ui.soft) { act() }.apply { textSize = Type.BODY.size }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        parent.addView(bar, lp(top = 0))
+        val empty = Translations.label("Playing. Use your earbud button.")
+        return MirrorView(items, before + after, big, glyph, last, strip, empty, onPick).also { it.update(current, lastPress, asks, sounds) }
     }
 
     /** The letter loop on screen, updated in place (nothing is rebuilt per item, so nothing jumps). */
@@ -415,7 +464,7 @@ class Kit(private val c: Context) {
      * above and below, [header] rows on top (what was typed), the item just taken in green. Centered, fixed sizes: only the texts change ([LoopSceneView.update]).
      */
     fun loopScreen(parent: LinearLayout, title: String, snap: com.faka.invisible.voicekit.ScreenMirror.LoopSnap, sounds: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark> = emptyList()): LoopSceneView {
-        status(parent, title, Translations.label("Invisible OS is open."), Ui.good, Ui.S1)
+        stageHeader(parent, title)
         fun centred(t: TextView, type: Type, color: Int) = t.apply { gravity = Gravity.CENTER; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; textSize = type.size; setTextColor(color) }
         val head = List(3) { i -> centred(text("", if (i == 0) Type.TITLE else Type.SMALL, if (i == 0) Ui.ink else Ui.soft), if (i == 0) Type.TITLE else Type.SMALL, if (i == 0) Ui.ink else Ui.soft).apply { minHeight = dp(if (i == 0) 32 else 22) } }
         head.forEach { parent.addView(it, lp(top = Ui.S1)) }
@@ -472,11 +521,10 @@ class Kit(private val c: Context) {
     /** Text beside the dots: the newest sound's name only when it carries meaning (generic names show dots alone). */
     fun stripLabel(name: String?): String = if (name != null && com.faka.invisible.voicekit.SoundCues.isMeaningful(name)) name else ""
 
-    /** Home status: a coloured dot, a large word, one quiet line. */
+    /** Home status: a large word (red only for a problem), one quiet line. */
     fun status(parent: LinearLayout, headline: String, line: String, color: Int, top: Int = Ui.S3, align: Boolean = false, fill: LinearLayout.() -> Unit = {}) {
         if (align) parent.addView(View(c), LinearLayout.LayoutParams(1, dp(48)))   // the room of a page's "‹ Home" line: the title then sits at the same height as on every page
-        val dot = View(c).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) } }
-        parent.addView(row(dot.apply { layoutParams = LinearLayout.LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(12) } }, text(headline, Type.LARGE)), lp(top = top))
+        parent.addView(text(headline, Type.LARGE, if (color == Ui.bad) Ui.bad else Ui.ink), lp(top = top))   // no dot: only a problem has a colour
         parent.addView(text(line, Type.SMALL, Ui.soft), lp(top = Ui.S1))
         val extra = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
         extra.fill()

@@ -466,9 +466,9 @@ object Actions {
     private fun startProgramEntry(e: ProgramEntry) { com.faka.invisible.voicekit.ScreenMirror.program(e.title.text); startProgram(e.create()) }
 
     /** A program that draws no picture of its own: the app screen shows the last lines it said, so a sighted person sees what is going on. */
-    private fun mirrorSaid(t: String) {
+    private fun mirrorSaid(t: String, press: com.faka.invisible.voicekit.PressHint? = null) {
         if (running == null || com.faka.invisible.voicekit.Cues.hasStagedFor(t) || t.isBlank() || com.faka.invisible.voicekit.ScreenMirror.state.loop != null) return
-        com.faka.invisible.voicekit.Cues.stageLine(t)
+        com.faka.invisible.voicekit.Cues.stageLine(t, press)
     }
 
     fun tonePick() { handler.post { narrator.beep(Tone.PICK) } }
@@ -507,7 +507,7 @@ object Actions {
             override val handler get() = this@Actions.handler
             override val prefs get() = prefs()
             override fun waiting() = narrator.waiting()
-            override fun speak(text: Phrase, slow: Boolean) { mirrorSaid(text.text); say(text, false, slow = slow) }
+            override fun speak(text: Phrase, slow: Boolean) { mirrorSaid(text.text, text.press); say(text, false, slow = slow) }
             override fun speakFast(word: Phrase) { say(word, false, slow = false) }   // a fast-scroll word: no line cue, the list stays on the screen
             override fun stopSpeech() = narrator.stopSpeech()
             override fun pauseMusic() { pauseMusicNow() }
@@ -600,7 +600,7 @@ object Actions {
             override fun ctx() = LineRules.Ctx(mode.active, running != null, ControllerNotificationListener.inCall, RoomMute.muted(prefs().getLong(RoomMute.KEY, 0L), System.currentTimeMillis()))
             override fun computer() = activeComputer()
             override fun beep() { narrator.beep(Tone.CLAUDE) }
-            override fun speak(p: Phrase) { if (!com.faka.invisible.voicekit.Cues.hasStagedFor(p.text)) com.faka.invisible.voicekit.Cues.stageLine(p.text); say(p, true) }
+            override fun speak(p: Phrase) { if (!com.faka.invisible.voicekit.Cues.hasStagedFor(p.text)) com.faka.invisible.voicekit.Cues.stageLine(p.text, p.press); say(p, true) }
             override fun speaking() = narrator.speaking
             override fun stopSpeech() = narrator.stopSpeech()
             override fun duck() = pauseMusicNow()
@@ -675,7 +675,7 @@ object Actions {
     fun announce(p: Phrase, queue: Boolean) { handler.post { say(p, queue) } }
 
     /** A setup line: spoken, and published as the line now heard, so the big setup text is the same words at the same moment. */
-    fun announceSetup(p: Phrase, queue: Boolean) { handler.post { com.faka.invisible.voicekit.Cues.stageLine(p.text); say(p, queue) } }
+    fun announceSetup(p: Phrase, queue: Boolean) { handler.post { com.faka.invisible.voicekit.Cues.stageLine(p.text, p.press); say(p, queue) } }
 
     private fun say(p: Phrase, queue: Boolean, fast: Boolean = false, slow: Boolean = false) { Log.d("SAY", p.text); pressOnSaid(p.text); narrator.say(p, queue, fast, slow) }   // SAY log: lets a dev check what the menu speaks
 

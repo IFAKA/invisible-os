@@ -21,6 +21,8 @@ data class Cue(
     val ring: List<LoopShown>? = null,
     /** LOOP_ITEM: the item itself (what the picture draws). */
     val item: LoopShown? = null,
+    /** LINE: the press the line asks for (drawn under it). */
+    val press: PressHint? = null,
 ) {
     enum class Kind {
         /** Item [index] of [list] starts. */
@@ -59,10 +61,10 @@ object Cues {
     fun hasStagedFor(text: String): Boolean = synchronized(this) { staged?.let { fits(it, text) } == true }
     fun clearStaged() { synchronized(this) { staged = null } }
     fun stageListItem(items: List<String>, index: Int) = stage(Cue(Cue.Kind.LIST_ITEM, text = items.getOrElse(index) { "" }, index = index, list = items))
-    fun stageLine(text: String) = stage(Cue(Cue.Kind.LINE, text))
+    fun stageLine(text: String, press: PressHint? = null) = stage(Cue(Cue.Kind.LINE, text, press = press))
 
     fun listItem(items: List<String>, index: Int) = emit(Cue(Cue.Kind.LIST_ITEM, text = items.getOrElse(index) { "" }, index = index, list = items))
-    fun line(text: String) = emit(Cue(Cue.Kind.LINE, text))
+    fun line(text: String, press: PressHint? = null) = emit(Cue(Cue.Kind.LINE, text, press = press))
     /** The pair keyboard: [header] rows (what is written so far, not heard) above the [heard] rows (the pair now played); the mark is on the first heard row. */
     fun pairScreen(header: List<String>, heard: List<String>) = emit(Cue(Cue.Kind.LIST_ITEM, text = heard.firstOrNull().orEmpty(), index = header.size, list = header + heard))
     fun press(gestureName: String, at: Long) = emit(Cue(Cue.Kind.PRESS, gestureName, onsetMs = at))

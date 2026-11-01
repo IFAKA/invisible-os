@@ -454,7 +454,7 @@ class ControllerMode(
         Voice.cut(MessageLogic.spoken(m.text, m.lang).squash(), MAX_SPOKEN, isEs(m), null).text
 
     private fun say(text: Phrase, fast: Boolean = false) {
-        if (phase != Phase.SCAN && screen != Screen.VOLUME_DIAL) com.faka.invisible.voicekit.Cues.stageLine(text.text)
+        if (phase != Phase.SCAN && screen != Screen.VOLUME_DIAL) com.faka.invisible.voicekit.Cues.stageLine(text.text, text.press)
         speechOpen = true
         timers.set("dog", speechCapMs) { onSpeechDone() }
         out.speak(text, false, fast)
