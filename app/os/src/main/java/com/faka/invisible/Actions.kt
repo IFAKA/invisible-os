@@ -477,6 +477,17 @@ object Actions {
     @Volatile var onSpeechIdle: (() -> Unit)? = null
 
     /** The app screen leaves the setup: forget the setup lines so the plain home shows (not while the menu or a program is on). */
+    /** True from the first setup line until the setup ends: those lines may still be queued or shown. */
+    @Volatile var setupLive = false
+
+    /** The setup is over (or the menu opens): queued setup lines are dropped unspoken and the mirror forgets them. */
+    fun dropSetupLines() { handler.post {
+        setupLive = false
+        com.faka.invisible.voicekit.Cues.clearStaged()
+        narrator.stopSpeech()
+        if (!mode.active && running == null) com.faka.invisible.voicekit.ScreenMirror.clear()
+    } }
+
     fun clearSetupMirror() { handler.post { if (!mode.active && running == null) com.faka.invisible.voicekit.ScreenMirror.clear() } }
 
     /** A button gesture while the setup screen shows. A first hold: confirm sound and "I heard your button." One click: skip the step if the screen said it may be skipped. */
@@ -538,7 +549,8 @@ object Actions {
         override fun gesture(g: Gesture, durationMs: Long) {
             EventLog.add("${g.name.lowercase()}  ${durationMs}ms")
             EventLog.pressed(g)
-            if (prefs().getBoolean("setup_open", false)) { setupGesture(g); return }   // the setup screen is showing: nothing opens; a hold proves the button, one click skips when allowed
+            if (prefs().getBoolean("setup_open", false)) { setupGesture(g); return }
+            if (setupLive) { setupLive = false; com.faka.invisible.voicekit.Cues.clearStaged(); narrator.stopSpeech(); if (!mode.active && running == null) com.faka.invisible.voicekit.ScreenMirror.clear() }   // the setup is over: its queued lines are never spoken over the menu   // the setup screen is showing: nothing opens; a hold proves the button, one click skips when allowed
             if ((g == Gesture.HOLD || g == Gesture.CLICK_HOLD) && !mode.active && running == null && !prefs().getBoolean(PracticeProgram.DONE_KEY, false)) { startPractice(); return }   // the first wake: the practice comes first, once
             val inMode = mode.active && mode.screen != ControllerMode.Screen.SENT   // a click that cancels a send has its own tone
             val before = mode.tonesPlayed
@@ -675,7 +687,7 @@ object Actions {
     fun announce(p: Phrase, queue: Boolean) { handler.post { say(p, queue) } }
 
     /** A setup line: spoken, and published as the line now heard, so the big setup text is the same words at the same moment. */
-    fun announceSetup(p: Phrase, queue: Boolean) { handler.post { com.faka.invisible.voicekit.Cues.stageLine(p.text, p.press); say(p, queue) } }
+    fun announceSetup(p: Phrase, queue: Boolean) { setupLive = true; handler.post { com.faka.invisible.voicekit.Cues.stageLine(p.text, p.press); say(p, queue) } }
 
     private fun say(p: Phrase, queue: Boolean, fast: Boolean = false, slow: Boolean = false) { Log.d("SAY", p.text); pressOnSaid(p.text); narrator.say(p, queue, fast, slow) }   // SAY log: lets a dev check what the menu speaks
 

@@ -52,6 +52,23 @@ object Setup {
         return order.mapNotNull { id -> steps.firstOrNull { it.id == id } }.firstOrNull { !it.passed }
     }
 
+    /** What a step's one big button says (the voice and the screen say the same thing). The "test" step has no Settings page: its button confirms the hold was heard. */
+    fun control(id: String) = when (id) {
+        "test" -> "Next"
+        in PERMISSION_STEPS -> "Allow"
+        else -> "Open settings"
+    }
+
+    /** The step as the screen shows it: the line (same words as the voice) and the control under it. */
+    data class StepView(val line: String, val control: String, val skippable: Boolean)
+    fun view(step: SetupStep, line: String) = StepView(line, control(step.id), step.optional)
+
+    /** True when [list] (a colon-separated setting such as enabled_notification_listeners) names a component of exactly [pkg]. */
+    fun listed(list: String?, pkg: String) = (list ?: "").split(':').any { it.substringBefore('/') == pkg }
+
+    /** The button test counts as passed once the button works (a hold was heard, or the practice already ran). */
+    fun buttonTested(button: Boolean, heardHold: Boolean, practiceDone: Boolean) = button && (heardHold || practiceDone)
+
     fun label(index: Int, total: Int) = "Step ${index + 1} of $total"
 
     /** The permission asked by a runtime step, or null when the step opens a Settings page. */

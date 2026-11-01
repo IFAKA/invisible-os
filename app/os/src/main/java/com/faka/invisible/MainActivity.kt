@@ -115,7 +115,7 @@ class MainActivity : Activity() {
         k.dotRow(parent, color, tr(LaptopLink.headline(tone)), sub) { open(Page.LAPTOP) }
     }
 
-    override fun onPause() { Handler(Looper.getMainLooper()).removeCallbacks(laptopTimer); ui.removeCallbacks(nudgeRun); Actions.onSpeechIdle = null; super.onPause() }
+    override fun onPause() { Handler(Looper.getMainLooper()).removeCallbacks(laptopTimer); ui.removeCallbacks(nudgeRun); Actions.onSpeechIdle = null; if (!sp.getBoolean("setup_open", false) && Actions.setupLive) Actions.dropSetupLines(); super.onPause() }
 
     override fun onResume() {
         super.onResume()
@@ -324,11 +324,11 @@ class MainActivity : Activity() {
 
     private fun home() {
         if (disclosure) { disclosureCard(); return }
-        val notif = (Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: "").contains(packageName)
+        val notif = Setup.listed(Settings.Secure.getString(contentResolver, "enabled_notification_listeners"), packageName)
         val assist = (Settings.Secure.getString(contentResolver, "assistant") ?: "").contains(packageName) || handsFreeIsOurs()   // "Always" in the chooser sets the hands-free app, not the assistant setting
-        val a11yOn = (Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: "").contains(packageName)   // the setting is true at once; the service connects a second later (Step 1 must not flash first)
+        val a11yOn = Setup.listed(Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES), packageName)   // the setting is true at once; the service connects a second later (Step 1 must not flash first)
         val a11y = (Actions.accessibilityConnected || a11yOn) && !freshPreview
-        val tested = a11y && sp.getBoolean("button_tested", false) && !freshPreview
+        val tested = Setup.buttonTested(a11y, sp.getBoolean("button_tested", false), sp.getBoolean(com.faka.invisible.practice.PracticeProgram.DONE_KEY, false)) && !freshPreview
         val allSteps = Setup.steps(SetupState(a11y, tested, notif, assist, granted(Manifest.permission.POST_NOTIFICATIONS), granted(Manifest.permission.READ_CALENDAR),
             granted(Manifest.permission.ACCESS_COARSE_LOCATION), usageOn(), android.os.Build.VERSION.SDK_INT, sp.getStringSet("setup_skipped", emptySet()) ?: emptySet(),
             contacts = granted(Manifest.permission.READ_CONTACTS), calls = granted(Manifest.permission.CALL_PHONE) && granted(Manifest.permission.ANSWER_PHONE_CALLS), sms = granted(Manifest.permission.SEND_SMS), callLog = granted(Manifest.permission.READ_CALL_LOG)))
@@ -342,7 +342,8 @@ class MainActivity : Activity() {
         if (next >= 0) {
             val t = steps[next]
             val perm = t.id in Setup.PERMISSION_STEPS
-            val action = if (t.id == "test") null else if (perm) "Allow" else "Turn on"
+            val heard = ScreenMirror.state.takeIf { it.active }?.items?.lastOrNull()   // the line now heard, written by the kit
+            val view = Setup.view(t, heard ?: tr(Voice.setupTaps(t.id).first().text))
             if (!previewReady) {
                 if (changed) {
                     nudges = 0
@@ -354,17 +355,16 @@ class MainActivity : Activity() {
             }
             announceStep = false
             sp.edit().putString("setup_skippable", if (t.optional && (failures[t.id] ?: 0) > 0) t.id else "").apply()   // one click skips, only after a failed return
-            val heard = ScreenMirror.state.takeIf { it.active }?.items?.lastOrNull()   // the line now heard, written by the kit
-            val line = heard ?: tr(Voice.setupTaps(t.id).first().text)
-            k.onboarding(body, (next + 1f) / steps.size, tr(Setup.label(next, steps.size)) + if (t.optional) " \u00B7 " + tr("Optional") else "", tr(t.title), line,
-                action?.let { tr(it) }, { startStep(t.id) },
-                if (t.optional) tr("Skip") else null, { sp.edit().putStringSet("setup_skipped", (sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + t.id).apply(); render() },
+            k.onboarding(body, (next + 1f) / steps.size, tr(Setup.label(next, steps.size)) + if (t.optional) " \u00B7 " + tr("Optional") else "", tr(t.title), view.line,
+                tr(view.control), { if (t.id == "test") { sp.edit().putBoolean("button_tested", true).apply(); render() } else startStep(t.id) },
+                if (view.skippable) tr("Skip") else null, { sp.edit().putStringSet("setup_skipped", (sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + t.id).apply(); render() },
                 focusFirst = changed, bigLine = true)
             val before = steps.take(next).filter { it.passed }
             if (before.isNotEmpty()) k.stepList(body, before.map { (if (it.skipped) "\u2013" else "\u2713") to tr(it.title) })
             return
         }
         announceStep = false
+        if (Actions.setupLive && !clearMirrorWhenQuiet && !(changed && prevId != "" && prevId != "stopped" && prevId != "ready" && !previewReady)) Actions.dropSetupLines()   // setup is over: its lines go
         if (changed && prevId != "" && prevId != "stopped" && prevId != "ready" && !previewReady) {   // the last step was just done
             Actions.tonePick(); say(Voice.SETUP_DONE, false); clearMirrorWhenQuiet = true
         }

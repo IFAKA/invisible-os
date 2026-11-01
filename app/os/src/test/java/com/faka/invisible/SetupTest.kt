@@ -9,6 +9,23 @@ class SetupTest {
     private val none = SetupState(false, false, false, false, false, false, false, false, 34)
     private val all = SetupState(true, true, true, true, true, true, true, true, 34, contacts = true, calls = true, sms = true, callLog = true)
 
+    @Test fun everyStepHasAControlOnTheScreen() {
+        for (st in Setup.steps(none)) {
+            val v = Setup.view(st, "Tap Allow.")
+            assertTrue(st.id, v.control.isNotBlank())
+            assertEquals(st.optional, v.skippable)
+        }
+        assertEquals("Open settings", Setup.control("button")); assertEquals("Allow", Setup.control("calendar")); assertEquals("Next", Setup.control("test"))
+    }
+    @Test fun grantedPermissionsGiveNoSetupSteps() {
+        val granted = none.copy(button = true, buttonTested = Setup.buttonTested(true, false, practiceDone = true), notifications = true)
+        assertEquals(-1, Setup.current(Setup.firstRun(Setup.steps(granted))))
+        assertTrue(Setup.listed("com.faka.invisible/com.faka.invisible.ButtonAccessibilityService", "com.faka.invisible"))
+        assertTrue(Setup.listed("com.x/.A:com.faka.invisible/.B", "com.faka.invisible"))
+        assertFalse(Setup.listed("com.faka.invisible.debug/.B", "com.faka.invisible"))
+        assertFalse(Setup.listed(null, "com.faka.invisible"))
+        assertFalse(Setup.buttonTested(false, true, true))
+    }
     @Test fun firstStepIsButtonAccess() {
         val st = Setup.steps(none)
         assertEquals("button", st[Setup.current(st)].id)
