@@ -111,7 +111,7 @@ class MainActivity : Activity() {
         val list = Actions.computers(); val c = Actions.activeComputer()
         val tone = LaptopLink.tone(list.size, if (c != null && laptopFor == c.name) laptopOk else null)
         val color = when (tone) { LaptopLink.Tone.OK -> Ui.good; LaptopLink.Tone.DOWN -> Ui.bad; else -> Ui.edge }
-        val sub = when (tone) { LaptopLink.Tone.NONE -> tr("Tap to add one"); LaptopLink.Tone.DOWN -> tr(laptopWhy); else -> c?.name.orEmpty() }
+        val sub = when (tone) { LaptopLink.Tone.NONE -> tr("Tap to add one"); LaptopLink.Tone.DOWN -> tr(laptopWhy); else -> c?.name?.takeIf { it != "Laptop" }.orEmpty().ifEmpty { tr("Tap to open") } }
         k.dotRow(parent, color, tr(LaptopLink.headline(tone)), sub) { open(Page.LAPTOP) }
     }
 
@@ -364,7 +364,7 @@ class MainActivity : Activity() {
             k.navRow(this, tr("Habits"), Habits.names(sp.getString(HabitsProgram.LIST_KEY, null)).joinToString(", ")) { open(Page.HABITS) }
             k.navRow(this, tr("Emergency contact"), Actions.emergencyContact().ifEmpty { tr("Not set") }) { open(Page.EMERGENCY) }
             val pcs = Actions.computers()
-            k.navRow(this, tr(LaptopLink.title(pcs.size)), if (pcs.isEmpty()) tr("Not connected yet") else pcs.joinToString(", ") { it.name }) { open(Page.LAPTOP) }
+            k.navRow(this, tr(LaptopLink.title(pcs.size)), if (pcs.isEmpty()) tr("Not connected yet") else pcs.map { it.name }.filter { it != "Laptop" }.joinToString(", ").ifEmpty { tr("Tap to open") }) { open(Page.LAPTOP) }
             k.navRow(this, tr("Short summaries (AI)"), tr(when (AiChoice.label(s.ai, pcs.isNotEmpty(), ModelDownload.ready(this@MainActivity))) { "Off" -> "Off"; "Computer" -> "On, done by your laptop"; "Phone" -> "On, done on this phone"; else -> "On, but the phone model is not downloaded" })) { open(Page.AI) }
             k.navRow(this, tr("Help"), tr("Button gestures and practice")) { open(Page.HELP) }
         }

@@ -558,6 +558,7 @@ private val SCREEN_ES = mapOf(
     "Invisible OS is on" to "Invisible OS está encendido",
     "Your earbud button works like normal." to "El botón de tus auriculares funciona como siempre.",
     "Connect your laptop" to "Conecta tu portátil",
+    "Tap to open" to "Toca para abrir",
     "Not connected yet" to "Aún sin conectar",
     "Laptop connection" to "Conexión del portátil",
     "Short summaries (AI)" to "Resúmenes cortos (IA)",
