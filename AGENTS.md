@@ -20,6 +20,7 @@ Android app: control the phone with one earbud button, screen off. The phone spe
 
 ## Design kits (enforced by `KitRulesTest` and the build task `checkVoiceKit`)
 - Screens use only the **UI Kit** (`Ui.kt`: `Ui` colors/radii and `Kit` parts) and the **Voice Kit** (`voicekit/`, see `voicekit/KIT.md`).
+- **Design system:** tokens (colour roles, 4-step type scale, spacing, radii) in `DesignTokens.kt`, rules and components in `app/oskit/src/main/java/com/faka/invisible/DESIGN.md`. No text size, text colour, font or raw `TextView` outside `Ui.kt` (rules `ui-*`). Dev gallery: `--es show GALLERY`.
 - Voice Kit = everything that speaks, plays a sound, reads the button or reads a list. It has atoms, molecules, engines, organisms and one door, `VoiceKit`.
 - Every spoken line is a `Phrase`. Fixed sentences live only in `voicekit/atoms/Sentences.kt` (the OS) or, for a program, in its own `*Sentences.kt` (one `allow` line in the rules file). Text from users or the world is `Phrase.content(...)`.
 - Outside the kit you must not: use TextToSpeech, AudioTrack, SoundPool, MediaPlayer, ToneGenerator, audio focus, MediaSession; make `Phrase(`/`Phrase.fixed`; pass a string to `say`/`speak`; keep your own list index or loop count; write HOLD_MS/GAP_MS by hand. The build fails with file:line. The rules are in `app/voicekit-rules.tsv`.

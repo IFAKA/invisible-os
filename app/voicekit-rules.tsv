@@ -37,3 +37,13 @@ allow	PracticeSentences.kt	phrase-make	the first-run practice sentences (program
 allow	HabitsSentences.kt	phrase-make	the Habits tool's own fixed sentences (program-owned)
 allow	CounterSentences.kt	phrase-make	the Counter tool's own fixed sentences (program-owned)
 allow	BreatheSentences.kt	phrase-make	the Breathe tool's own fixed sentences (program-owned)
+ui-textsize	\btextSize\b|setTextSize\(|setAutoSizeText|autoSizeText	Text size comes only from the type scale (Type in DesignTokens.kt) through Kit.text; no size of your own, no auto-shrink
+ui-textcolor	setTextColor\(|setHintTextColor\(	Text colour comes only from a Ui role through Kit.text; no setTextColor outside Ui.kt
+ui-textview	\bTextView\(	Build text with Kit.text (Ui.kt); never a raw TextView
+ui-typeface	Typeface\.(create|MONOSPACE|DEFAULT|SANS_SERIF|SERIF)|\btypeface\s*=	Fonts come only from the type scale (Ui.kt)
+ui-color	\bColor\.(parseColor|rgb|argb|WHITE|BLACK|RED|GREEN|BLUE|GRAY|YELLOW|CYAN|TRANSPARENT)|Color\.HSVToColor	Colours come only from a Ui role (palette in DesignTokens.kt)
+allow	Ui.kt	ui-textsize	the one place that builds text and colours from the tokens
+allow	Ui.kt	ui-textcolor	the one place that builds text and colours from the tokens
+allow	Ui.kt	ui-textview	the one place that builds text and colours from the tokens
+allow	Ui.kt	ui-typeface	the one place that builds text and colours from the tokens
+allow	Ui.kt	ui-color	the one place that builds text and colours from the tokens

@@ -69,10 +69,15 @@ class KitRulesTest {
     @Test fun noHandWrittenProgramScreen() = rule("hand-screen")
     @Test fun whiteSpaceCleaningIsInTheLogicKit() = rule("logic-squash")
     @Test fun trustFormulaIsInTheLogicKit() = rule("logic-trust")
+    @Test fun textSizesComeOnlyFromTheTypeScale() = rule("ui-textsize")
+    @Test fun textColoursComeOnlyFromTheKit() = rule("ui-textcolor")
+    @Test fun noRawTextViews() = rule("ui-textview")
+    @Test fun fontsComeOnlyFromTheTypeScale() = rule("ui-typeface")
+    @Test fun colourFunctionsOnlyInUiKit() = rule("ui-color")
 
     @Test fun everyRuleInTheFileHasATestHere() {
         val ids = rules.filter { it[0] != "allow" }.map { it[0] }.toSet()
-        val tested = setOf("tts", "audio-play", "audio-focus", "button-intake", "phrase-make", "phrase-literal", "say-literal", "second-list", "hand-timing", "hand-hearing", "hand-screen", "logic-squash", "logic-trust")
+        val tested = setOf("tts", "audio-play", "audio-focus", "button-intake", "phrase-make", "phrase-literal", "say-literal", "second-list", "hand-timing", "hand-hearing", "hand-screen", "logic-squash", "logic-trust", "ui-textsize", "ui-textcolor", "ui-textview", "ui-typeface", "ui-color")
         assertTrue("rules without a test: ${ids - tested}", ids == tested)
     }
 
