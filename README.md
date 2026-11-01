@@ -49,7 +49,26 @@ Menu items: **Messages** (read, reply, or turn a message into a task; Spanish or
 - **Sound design for no-screen use.** Each screen has its own short tone, so words are optional. See [SOUND-DESIGN.md](SOUND-DESIGN.md).
 - **Settings screen.** Check setup in one place, then choose which menu items you hear, their order, timer lengths, pause, voice speed, cancel time and more.
 - **Battery friendly.** Nothing polls. It reacts to button presses.
-- **Private.** No account, no analytics, no microphone. The internet is used only to download the AI model, when you ask.
+- **Private.** No account, no analytics, no microphone. The app uses the internet only for the things listed in [Privacy](#privacy).
+
+## Privacy
+
+- No microphone. The app never listens and has no microphone permission.
+- No analytics, no ads, no account.
+- Logs (the trace of what you pressed and what the phone said) stay on the phone, kept 7 days. They leave only if you tap "Send a problem report" and choose where to share them.
+- What the app reads on the phone: notifications, contacts, calendar, location (optional), call state and call log (optional), app usage (optional), button key events, and the text you type in Write.
+
+The internet is used only for this:
+
+| What | Where it goes | What is sent |
+|---|---|---|
+| AI model download (once, when you ask) | huggingface.co | a file request, nothing about you |
+| Voice download (once, when you ask) | github.com (sherpa-onnx releases) | a file request, nothing about you |
+| Weather (Today, Now) | api.open-meteo.com | your rounded coordinates (2 decimals) |
+| Music search and play | music.youtube.com | the song or artist you asked for |
+| Optional laptop bridge | your own computer, on your network | only what you set up with `invisible pair` |
+
+Full policy: <https://invisible-os.vercel.app/privacy>
 
 ## Install
 
