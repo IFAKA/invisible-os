@@ -4,6 +4,8 @@ import os
 import threading
 import time
 
+import layer
+
 ALLOW, DENY, ALWAYS = "Allow", "Deny", "Always allow"
 PERMISSION_OPTIONS = [ALLOW, DENY, ALWAYS]
 ON_LAPTOP = "Ask on the laptop"   # an extra choice for questions: the terminal asks as usual
@@ -95,8 +97,9 @@ class Store:
     """Items for the phone. kind: permission | question (need an answer), done | needs (no answer)."""
     KEEP_SECONDS = 600
 
-    def __init__(self, clock=time.time):
+    def __init__(self, clock=time.time, active=None):
         self.clock = clock
+        self.active = active   # () -> True | False | None: is the owner at the laptop (idle.Idle.active); None = unknown
         self.cv = threading.Condition()
         self.seq = 0
         self.items = {}   # id -> dict
@@ -111,11 +114,17 @@ class Store:
         self.seq += 1
         item = {"id": str(self.seq), "seq": self.seq, "kind": kind, "project": project,
                 "summary": summary, "options": list(options), "ref": ref, "pane": pane, "room": room, "detail": detail,
-                "answer": None, "cancelled": False, "at": self.clock()}
+                "answer": None, "cancelled": False, "at": self.clock(), "laptop_active": self._laptop_active()}
         self.items[item["id"]] = item
         self._trim()
         self.cv.notify_all()
         return item
+
+    def _laptop_active(self):
+        try:
+            return self.active() if self.active else None
+        except Exception:
+            return None
 
     def _trim(self):
         cutoff = self.clock() - self.KEEP_SECONDS
@@ -126,12 +135,29 @@ class Store:
         with self.cv:
             return self._add(kind, project, summary, options, ref, pane, detail=detail)
 
-    def add_room_event(self, room):
-        """A room turned 'needs': an /events item {"type":"room","id":<pane id>,"name":...,"state":...}."""
+    def add_room_event(self, room, worked_s=None, action_text=None):
+        """A room turned 'needs' or 'done': an /events item {"type":"room","id":<pane id>,"name":...,"state":...}.
+        'needs' also carries line, a, b, laptop_active (layer.py); 'done' carries worked_s (seconds it was working, or None)."""
         ev = {"type": "room", "kind": "room", "id": room["id"], "name": room["name"], "state": room["state"],
               "project": room["project"], "summary": room.get("need", ""), "options": []}
         with self.cv:
-            return self._add("room", room["project"], ev["summary"], (), room=ev)
+            item = self._add("room", room["project"], ev["summary"], (), room=ev)
+            if room["state"] == "done":
+                ev["worked_s"] = None if worked_s is None else int(round(worked_s))
+            else:
+                if action_text is None:
+                    from rooms import ACTION_TEXT as action_text
+                ev["line"] = layer.room_line(room)
+                ev["a"], ev["b"] = layer.room_answers(room, action_text)
+                ev["laptop_active"] = item["laptop_active"]
+            return item
+
+    def add_line(self, who, text, options=()):
+        """POST /line: a spoken line for the owner from any laptop script; with options (max 3) it waits for an answer."""
+        who = " ".join(str(who or "").split())[:40] or "Laptop"
+        opts = [" ".join(str(o).split())[:60] for o in list(options or [])[:3] if str(o).strip()]
+        with self.cv:
+            return self._add("line", who, " ".join(str(text or "").split())[:300], opts)
 
     def pending_panes(self):
         """{tmux pane id: summary} of open permission/question asks that came from a tmux pane."""
@@ -171,8 +197,8 @@ class Store:
                     item["cancelled"] = True
             self.cv.notify_all()
 
-    def wait_answer(self, item_id, timeout):
-        """Block until answered. Returns the choice, or None on timeout/cancel."""
+    def wait_answer(self, item_id, timeout, cancel_on_timeout=True):
+        """Block until answered. Returns the choice, or None on timeout/cancel. cancel_on_timeout=False leaves the item open on timeout."""
         end = time.monotonic() + timeout
         with self.cv:
             while True:
@@ -183,7 +209,8 @@ class Store:
                     return item["answer"]
                 left = end - time.monotonic()
                 if left <= 0:
-                    item["cancelled"] = True
+                    if cancel_on_timeout:
+                        item["cancelled"] = True
                     return None
                 self.cv.wait(left)
 
@@ -219,4 +246,12 @@ class Store:
 def public(v):
     if v.get("room"):
         return dict(v["room"])
-    return {k: v[k] for k in ("id", "kind", "project", "summary", "options")}
+    out = {k: v[k] for k in ("id", "kind", "project", "summary", "options")}
+    out["laptop_active"] = v.get("laptop_active")
+    if v["kind"] == "permission":
+        out["line"] = layer.ask_line(v["project"], v.get("detail") or v["summary"])
+        out["a"], out["b"] = layer.ask_answers(v["id"], v["options"], v.get("detail") or v["summary"])
+    else:
+        out["line"] = shorten(v["summary"] if v["kind"] == "line" else "%s: %s" % (v["project"], v["summary"]), 12)
+        out["a"], out["b"] = layer.option_answers(v["id"], v["options"])
+    return out

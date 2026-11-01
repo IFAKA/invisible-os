@@ -47,7 +47,7 @@ The hook then allows, denies or allows-and-remembers as before (hooks are not ch
   400 {"ok":false} when the area is not in /areas, the name gives an empty slug, or the folder exists.
 ## Profile and work tools (bridge/tools.py)
 The phone keeps a profile per computer (`work` | `personal`, chosen with the Work / Personal chips on the Add or Rename computer screen; not chosen = personal).
-## GET /info -> {"suggest":"work"|"personal","host":"mac-name"}   work if any known project folder (see /projects) has a dw.json; the phone asks it once after the computer is added and pre-fills the chips.
+## GET /info -> {"suggest":"work"|"personal","host":"mac-name","idle_s":2.5|null,"active":true|false|null}   `idle_s` = seconds since the last keyboard or mouse input (macOS `ioreg -c IOHIDSystem` HIDIdleTime; null elsewhere; cached 5 s), `active` = idle_s < 120. suggest: work if any known project folder (see /projects) has a dw.json; the phone asks it once after the computer is added and pre-fills the chips.
 ## GET /room/tools?id=%3&profile=work -> [TOOL, ...]   the tools of one window (404 no such room)
   TOOL = {"id":"git","label":"Git","confirm":false,"children":[TOOL...]}   a group has children; a tool has none and may have "write":true (its text comes from the Write keyboard) and "confirm":true (the phone asks "No, go back" / "Yes" first)
   personal: Git (git.status, git.pull, git.switch, git.commit, git.push*).
@@ -62,6 +62,17 @@ The phone keeps a profile per computer (`work` | `personal`, chosen with the Wor
   research.ask (write) -> a new tmux window in ~/.config/invisible-bridge/research running `claude -p "<question>"` (read-only glab/acli tools), then a shell stays open; the window's story is the answer.
 
 ## /events (exists) also delivers {"type":"room","id":"%3","name":"...","state":"needs"} when a room turns "needs".
+## Push layer fields (DESIGN-LAYER.md; `layer.py`, `idle.py`)
+Every /events item that needs the owner (room needs, permission ask, question, `line`) also has:
+  "line": one spoken line, plain text, at most ~12 words. Room: "<project>: <story, else need, else name>"; ask: "<project> wants to run <what>"; line item: its text.
+  "a": ANSWER, the likeliest answer, and "b": ANSWER or null, the second.  ANSWER = {"label":"Go","risky":false, and one of "act":{"id":"%3","action":"go"} (phone POSTs /room/act) | "answer":{"id":"7","choice":"Allow"} (phone POSTs /answer)}
+  "laptop_active": true | false | null (same as /info `active`, at the moment the item was added)
+  Room needs: a = first quoted option (`option:<text>`), else the first learned action; b = the next action that types something different. Only actions that answer count (not readall, screen, write, show). Label "Go" / "Yes" (+ ": <go>" when the room's go text is at most 5 words). Shell rooms: a = again, b = stop. A room with an open ask uses the ask rule.
+  Ask: a = the allow label (Allow / Yes, never "Always allow"), b = the deny label; a.risky when `what` matches rm, rmdir, git push, git reset --hard, git clean, force, drop, truncate, deploy, publish, kubectl delete or sudo (`layer.RISKY_RE`). Room actions push and clear are risky.
+  Done events (working to done) keep their shape, add "worked_s" (seconds it was working, null if unknown) and have no line / a / b.
+## POST /line {"who":"build","text":"Build failed on main","options":["Rerun","Ignore"]} -> {"ok":true,"id":"12"}   any laptop script asks the owner by ear. Options optional (max 3); none = a notice (a and b null). It is an /events item of kind "line"; the phone answers with POST /answer {"id":"12","choice":"Rerun"}. 400 if text is empty.
+## GET /line/answer?id=12&wait=60 -> {"choice":"Rerun"} | {"choice":null}   waits up to `wait` s (max 600); null on timeout or cancel. A timeout leaves the item open (add `&cancel=1` to cancel it).
+  CLI: `python3 bridge/line.py "text" [--who NAME] [--option X ...] [--wait 60]` prints the choice on one line (empty = none).
 
 ## Choices (a window with an open Claude Code menu: AskUserQuestion or plan approval)
 `/rooms` adds `"choice": {"question":"Which database?","multi":false,"options":[{"n":1,"label":"SQLite","desc":"one file, no server"}, ...],"other":true}` (state "needs"; `n` is the row number on screen). Parsed from the pane (`choice.py`), never by the model. The phone speaks the question, "Hear it again", each option as "Label: description" (12 words), then "Other" (Write).

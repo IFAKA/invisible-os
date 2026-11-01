@@ -99,9 +99,9 @@ Safety rules (enforced by a unit test):
 | C7 | You actually keep using it | Only real use can tell: days a week with an answered push, and whether the 92 s wait before a reply drops. Read from `sends.log` and the trace after 2 weeks |
 
 ## Build order (each step has its check)
-1. Bridge: the `/line` queue and item format, fed from rooms, hook asks and `POST /line`. A and B come from the quoted options and the learned order. Check: `bridge/test_*.py` with fake rooms.
+1. Done 2026-11-01 (`cd bridge && python3 -m unittest test_layer`). Bridge: the `/line` queue and item format, fed from rooms, hook asks and `POST /line`. A and B come from the quoted options and the learned order. Check: `bridge/test_*.py` with fake rooms.
 2. Done 2026-11-01: replay top-2 share is 66.5% (C2). Rerun: `mkdir -p /tmp/wf && python3 bridge/research/extract.py`, then `replay(rows, ..., top=2)`.
-3. Bridge: laptop idle in `/info` and in each event. Check: unit test with a fake `ioreg`.
+3. Done 2026-11-01 (same command, `IdleTest`). Bridge: laptop idle in `/info` and in each event. Check: unit test with a fake `ioreg`.
 4. Phone: the push line and the answer window (`RoomEvents` grows from a tone into a line; this also covers chats). Check: Flow tests for C1, C4 and C5.
 5. Phone: wake reads the queue first; 4 clicks replays. Check: Flow test; the e2e scenario `line_push_answer` on the phone (the real button over Bluetooth).
 6. Two weeks of real use, then C7 from the logs. Change A/B, the levels and the rules from that data, not from guesses.

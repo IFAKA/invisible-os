@@ -5,6 +5,7 @@ Phone:  GET /events?since=N&wait=25   (long poll)      POST /answer {"id": "3", 
 Tools:  GET /info /room/tools   POST /room/tool   (see ROOMS-API.md, tools.py)
 Rooms:  GET /rooms /room/last /room/screen /room/story /projects /areas   POST /room/act /room/send /room/choose /ai/digest /ai/short /ai/replies /ai/complete /project/open /project/new   (see ROOMS-API.md)
 Hooks:  POST /ask {kind, project, summary, options, wait}  (blocks until answered)      POST /notify {kind, project, summary}
+Line:   POST /line {who, text, options}   GET /line/answer?id=N&wait=60   (bridge/line.py; see ROOMS-API.md)
 All calls need the header  Authorization: Bearer <token>.
 """
 import argparse
@@ -23,6 +24,7 @@ from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core import Store  # noqa: E402
+from idle import Idle  # noqa: E402
 from rooms import Rooms  # noqa: E402
 import preview  # noqa: E402
 from tools import Tools, host_name  # noqa: E402
@@ -81,7 +83,7 @@ def default_host():
 
 
 # Calls that only the laptop itself makes (the hook, setup, the CLI) do not count as "the phone is here".
-NOT_PHONE = ("/ping", "/ask", "/notify", "/cancel")
+NOT_PHONE = ("/ping", "/ask", "/notify", "/cancel", "/line", "/line/answer")
 _seen_last = [0.0]
 
 
@@ -104,8 +106,9 @@ def mark_seen(path, headers, seen_file=None):
         return False
 
 
-def make_handler(store, token, rooms, tools=None):
+def make_handler(store, token, rooms, tools=None, idle=None):
     tools = tools or Tools.for_rooms(rooms)
+    idle = idle or Idle()
 
     def room_path(pane):
         row = rooms.room_row(pane)
@@ -175,7 +178,12 @@ def make_handler(store, token, rooms, tools=None):
                 else:
                     self._send(200, got)
             elif u.path == "/info":
-                self._send(200, {"suggest": tools.suggest([p["path"] for p in rooms.projects()]), "host": host_name()})
+                self._send(200, {"suggest": tools.suggest([p["path"] for p in rooms.projects()]), "host": host_name(),
+                                 "idle_s": idle.idle_s(), "active": idle.active()})
+            elif u.path == "/line/answer":   # a laptop script waits for the owner's choice; the item stays open on a timeout unless cancel=1
+                item_id = q.get("id", [""])[0]
+                choice = store.wait_answer(item_id, min(float(q.get("wait", ["0"])[0]), 600), cancel_on_timeout=q.get("cancel", ["0"])[0] == "1")
+                self._send(200, {"choice": choice})
             elif u.path == "/room/tools":
                 path = room_path(q.get("id", [""])[0])
                 if path is None:
@@ -205,6 +213,12 @@ def make_handler(store, token, rooms, tools=None):
                 item = store.add(b.get("kind", "permission"), b.get("project", "Claude"), b.get("summary", ""), b.get("options") or [], b.get("ref"), b.get("pane"), str(b.get("detail") or "")[:200])
                 choice = store.wait_answer(item["id"], float(b.get("wait", 600)))
                 self._send(200, {"id": item["id"], "answer": choice})
+            elif path == "/line":
+                if not str(b.get("text") or "").strip():
+                    self._send(400, {"ok": False, "error": "text needed"})
+                else:
+                    item = store.add_line(b.get("who"), b.get("text"), b.get("options"))
+                    self._send(200, {"ok": True, "id": item["id"]})
             elif path == "/notify":
                 item = store.add(b.get("kind", "done"), b.get("project", "Claude"), b.get("summary", ""))
                 self._send(200, {"id": item["id"]})
@@ -254,23 +268,32 @@ def make_handler(store, token, rooms, tools=None):
 def watch_rooms(rooms, store, stop, every=2.0):
     """Poll the rooms; when one turns 'needs' or finishes (working to done), push a room event to the phone through the store."""
     prev = None
+    working_since = {}   # pane id -> time it went 'working' (None for a room that was already working when we started)
     while not stop.is_set():
         try:
             now = {r["id"]: r for r in rooms.rooms()}
+            t = time.time()
             if prev is not None:
                 for pid, r in now.items():
                     was = prev.get(pid, {}).get("state")
+                    if r["state"] == "working" and was != "working":
+                        working_since[pid] = t
                     if (r["state"] == "needs" and was != "needs") or (r["state"] == "done" and was == "working"):
-                        store.add_room_event(r)
+                        since = working_since.get(pid)
+                        store.add_room_event(r, worked_s=None if since is None else t - since)
+            else:
+                working_since = {pid: None for pid, r in now.items() if r["state"] == "working"}
+            for pid in [p for p, r in now.items() if r["state"] != "working"]:
+                working_since.pop(pid, None)
             prev = now
         except Exception as e:   # never let the watcher die
             print("rooms watcher:", e, file=sys.stderr)
         stop.wait(every)
 
 
-def make_server(host, port, store, token, rooms=None):
+def make_server(host, port, store, token, rooms=None, idle=None):
     rooms = rooms or Rooms.from_env(pending=store.pending_panes, asks=store.pending_asks)
-    return ThreadingHTTPServer((host, port), make_handler(store, token, rooms))
+    return ThreadingHTTPServer((host, port), make_handler(store, token, rooms, idle=idle))
 
 
 def main():
@@ -287,9 +310,10 @@ def main():
         print(token)
         print(pair_code(name, "http://%s:%d" % (host, a.port), token))
         return
-    store = Store()
+    idle = Idle()
+    store = Store(active=idle.active)
     rooms = Rooms.from_env(pending=store.pending_panes, asks=store.pending_asks)
-    srv = make_server(host, a.port, store, token, rooms)
+    srv = make_server(host, a.port, store, token, rooms, idle)
     threading.Thread(target=watch_rooms, args=(rooms, store, threading.Event()), daemon=True).start()
     print("Bridge listening on http://%s:%d" % (host, a.port))
     os.makedirs(CONFIG_DIR, exist_ok=True)
