@@ -129,7 +129,7 @@ class ChangesActivity : Activity() {
     private fun showPatch(f: DiffFile) {
         content.removeAllViews()
         val col = column()
-        col.addView(k.text(f.path, Type.HEAD))
+        col.addView(k.text(f.path, Type.BODY))
         col.addView(k.text(if (f.untracked) "New, not in git yet" else f.counts, Type.CAPTION, Ui.soft), LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = k.dp(Ui.S1) })
         val lines = column()
         PatchLine.parse(f.patch).forEach { l ->

@@ -23,7 +23,7 @@ import com.faka.invisible.voicekit.Translations
 
 /**
  * UI Kit values: one calm system. Colours follow the system light or dark mode ([sync] reads it).
- * Spacing is an 8 dp grid. Type is the system font in four steps ([Type]).
+ * Spacing is an 8 dp grid ([Space]). Type is the system font in four steps ([Type]). All values: DesignTokens.kt; the rules: DESIGN.md.
  */
 object Ui {
     @Volatile var dark = true
@@ -31,48 +31,42 @@ object Ui {
     @Volatile var followSystem = false
     /** Set the mode; the Kit does this when it is made. */
     fun sync(c: Context) { dark = !followSystem || (c.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES }
-    private fun pick(light: String, night: String) = Color.parseColor(if (dark) night else light)
+    private fun pick(r: Palette.Role) = Color.parseColor(if (dark) r.dark else r.light)
 
-    // One palette, fixed meanings (owner rule: voice, screen and gestures are one design). Dark by default, for a glance; light keeps the same meanings.
+    // One palette, fixed meanings (owner rule: voice, screen and gestures are one design). The roles and their hex values live in DesignTokens.kt.
     //   NOW (cyan) = what is being spoken this moment.  PRESS (orange) = what the person must press.  DONE (green) = it worked.
-    //   White = text. Gray = quiet text (4.5:1 or more). Faint cyan = hairlines. No other colour carries a meaning.
-    val ink get() = pick("#14181C", "#FFFFFF")            // main text
-    val soft get() = pick("#5F6B76", "#9AA7B5")           // hints, captions (4.5:1 or more on page and card)
-    val now get() = pick("#00677F", "#19E3FF")            // NOW: the line or item being spoken (as text: 4.5:1 or more on page, card and tint, light and dark)
-    val press get() = pick("#A65700", "#FF9A1F")          // PRESS: the press the person must make
-    val done get() = pick("#17722F", "#32D74B")           // DONE: it worked, it was picked
+    val ink get() = pick(Palette.INK)
+    val soft get() = pick(Palette.SOFT)
+    val now get() = pick(Palette.NOW)
+    val press get() = pick(Palette.PRESS)
+    val done get() = pick(Palette.DONE)
     val accent get() = now                                // the accent for text (values, links, soft buttons) is the NOW colour
-    val accentFill get() = pick("#006E8A", "#006E8A")     // the accent as a button background: white text on it is 4.5:1 or more
+    val accentFill get() = pick(Palette.ACCENT_FILL)
     val good get() = done
-    val bad get() = pick("#D70015", "#FF453A")
-    val page get() = pick("#EEF3F6", "#05080D")           // screen background (dark: near-black blue)
-    val card get() = pick("#FFFFFF", "#0D141C")           // grouped surface
-    val field get() = pick("#E3EAEF", "#141E29")          // input box and task row, inside a card
-    val tint get() = pick("#DDF1F6", "#0B2A38")           // soft button
-    val line get() = pick("#C9D8DF", "#16404D")           // hairline (faint cyan in the dark)
-    val edge get() = pick("#AFC0C9", "#3B5563")           // off switch, slider track
+    val bad get() = pick(Palette.BAD)
+    val page get() = pick(Palette.PAGE)
+    val card get() = pick(Palette.CARD)
+    val field get() = pick(Palette.FIELD)
+    val tint get() = pick(Palette.TINT)
+    val line get() = pick(Palette.LINE)
+    val edge get() = pick(Palette.EDGE)
     val onAccent = Color.WHITE
     val clear = Color.TRANSPARENT
+    /** The colour of a palette role in the current mode (the gallery draws every role through this). */
+    fun of(r: Palette.Role) = pick(r)
 
-    // corner radius in dp
-    const val RADIUS_CARD = 16
-    const val RADIUS_ROW = 12
-    const val RADIUS_CHIP = 12
-    const val RADIUS_BUTTON = 14
+    // radii in dp: two values only
+    const val RADIUS_CARD = Space.R2
+    const val RADIUS_ROW = Space.R1
+    const val RADIUS_CHIP = Space.R1
+    const val RADIUS_BUTTON = Space.R1
 
     // 8 dp grid
-    const val S1 = 8
-    const val S2 = 16
-    const val S3 = 24
-    const val S4 = 32
-    const val S6 = 48
-}
-
-/** The type scale: large title, title, headline, body, caption. System font. */
-enum class Type(val size: Float, val face: String, val bold: Boolean = false) {
-    LARGE(34f, "sans-serif", true), TITLE(22f, "sans-serif-medium"), HEAD(17f, "sans-serif-medium"),
-    BODY(17f, "sans-serif"), SMALL(15f, "sans-serif"), CAPTION(13f, "sans-serif"), SECTION(13f, "sans-serif-medium"),
-    MONO(15f, "monospace")
+    const val S1 = Space.S1
+    const val S2 = Space.S2
+    const val S3 = Space.S3
+    const val S4 = Space.S4
+    const val S6 = Space.S6
 }
 
 /** UI Kit parts (composable). Screens build only from these and the [Ui] values; a missing part is added here first. */
@@ -84,10 +78,15 @@ class Kit(private val c: Context) {
 
     fun text(t: String, type: Type = Type.BODY, color: Int = Ui.ink) = TextView(c).apply {
         text = t; textSize = type.size; setTextColor(color)
-        typeface = Typeface.create(type.face, if (type.bold) Typeface.BOLD else Typeface.NORMAL)
-        if (type == Type.LARGE) letterSpacing = -0.01f
-        if (type == Type.LARGE || type == Type.TITLE || type == Type.SECTION) isAccessibilityHeading = true   // TalkBack can jump from title to title
-        if (type == Type.BODY || type == Type.SMALL) setLineSpacing(0f, 1.12f)
+        typeface = if (type == Type.MONO) Typeface.MONOSPACE else Typeface.create(type.face, Typeface.NORMAL)
+        if (type == Type.DISPLAY || type == Type.TITLE) isAccessibilityHeading = true   // TalkBack can jump from title to title
+        if (type == Type.BODY) setLineSpacing(0f, 1.12f)
+    }
+
+    /** Button text: one type step, no capitals. */
+    private fun Button.styled(label: String, type: Type = Type.BODY, color: Int, minDp: Int = Space.TOUCH) {
+        text = label; isAllCaps = false; textSize = type.size; typeface = Typeface.create(type.face, Typeface.NORMAL); setTextColor(color)
+        minHeight = dp(minDp); minimumHeight = dp(minDp); stateListAnimator = null; elevation = 0f
     }
 
     /** A block of fixed-width text (a terminal screen): soft surface, wraps long lines, text can be selected. */
@@ -117,31 +116,29 @@ class Kit(private val c: Context) {
     /** A page comes in softly: fade and a small rise. */
     fun enter(v: View) {
         if (android.provider.Settings.Global.getFloat(c.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f) return   // Reduce Motion
-        v.alpha = 0f; v.translationY = dp(8).toFloat()
+        v.alpha = 0f; v.translationY = dp(Ui.S1).toFloat()
         v.animate().alpha(1f).translationY(0f).setDuration(220).start()
     }
 
     /** Filled button: the one main action of a page. */
     fun primary(label: String, onClick: () -> Unit) = Button(c).apply {
-        text = label; isAllCaps = false; textSize = Type.HEAD.size; typeface = Typeface.create(Type.HEAD.face, Typeface.NORMAL)
-        minHeight = dp(52); minimumHeight = dp(52); stateListAnimator = null; elevation = 0f
-        setTextColor(Ui.onAccent); background = fill(Ui.accentFill, Ui.RADIUS_BUTTON)
+        styled(label, Type.BODY, Ui.onAccent, Space.BUTTON)
+        background = fill(Ui.accentFill, Ui.RADIUS_BUTTON)
         setOnClickListener { onClick() }
     }
 
     /** Quiet text button: Skip, Not now. No box. */
     fun quiet(label: String, color: Int = Ui.accent, onClick: () -> Unit) = Button(c).apply {
-        text = label; isAllCaps = false; textSize = Type.BODY.size; minHeight = dp(48); minimumHeight = dp(48)
-        stateListAnimator = null; elevation = 0f; setTextColor(color); background = null
+        styled(label, Type.BODY, color)
+        background = null
         setOnClickListener { onClick() }
     }
 
     /** Soft button: [filled] is the main one, otherwise a tinted one. */
     fun btn(label: String, filled: Boolean = false, onClick: () -> Unit): Button =
         if (filled) primary(label, onClick) else Button(c).apply {
-            text = label; isAllCaps = false; textSize = Type.SMALL.size; minHeight = dp(44); minimumHeight = dp(44)
-            stateListAnimator = null; elevation = 0f
-            setTextColor(Ui.accent); background = fill(Ui.tint, Ui.RADIUS_BUTTON)
+            styled(label, Type.BODY, Ui.accent)
+            background = fill(Ui.tint, Ui.RADIUS_BUTTON)
             setOnClickListener { onClick() }
         }
 
@@ -155,22 +152,23 @@ class Kit(private val c: Context) {
     /** Text box on a soft field. No outline. */
     fun input(hintText: String) = android.widget.EditText(c).apply {
         hint = hintText; setHintTextColor(Ui.soft); setTextColor(Ui.ink); textSize = Type.BODY.size
+        minHeight = dp(Space.TOUCH)
         minLines = 2; maxLines = 5; gravity = Gravity.TOP or Gravity.START
-        setPadding(dp(Ui.S2), dp(12), dp(Ui.S2), dp(12))
+        setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
         background = fill(Ui.field, Ui.RADIUS_ROW)
         inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
     }
 
     /** The grip of a draggable row; [visible] false keeps the space but hides it. */
-    fun handle(widthDp: Int, visible: Boolean = true) = TextView(c).apply {
-        text = "\u2261"; textSize = 24f; setTextColor(if (visible) Ui.soft else Ui.clear); gravity = Gravity.CENTER
-        layoutParams = LinearLayout.LayoutParams(dp(maxOf(widthDp, 48)), -1)   // a touch target is at least 48 dp
+    fun handle(widthDp: Int, visible: Boolean = true) = text("\u2261", Type.TITLE, if (visible) Ui.soft else Ui.clear).apply {
+        gravity = Gravity.CENTER
+        layoutParams = LinearLayout.LayoutParams(dp(maxOf(widthDp, Space.TOUCH)), -1)   // a touch target is at least 48 dp
         if (visible) contentDescription = "Reorder"
     }
 
     /** An on/off switch in the app colour, 48 dp high, named for screen readers. */
     fun toggle(label: String, on: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) = Switch(c).apply {
-        isChecked = on; isEnabled = enabled; minimumHeight = dp(48); contentDescription = label
+        isChecked = on; isEnabled = enabled; minimumHeight = dp(Space.TOUCH); contentDescription = label
         val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
         thumbTintList = ColorStateList(states, intArrayOf(Ui.onAccent, Ui.onAccent))
         trackTintList = ColorStateList(states, intArrayOf(Ui.good, Ui.edge))
@@ -182,16 +180,22 @@ class Kit(private val c: Context) {
         val box = LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL
             addView(text(label))
-            if (note != null) addView(text(note, Type.CAPTION, Ui.soft).apply { setPadding(0, dp(2), 0, 0) })
+            if (note != null) addView(text(note, Type.CAPTION, Ui.soft).apply { setPadding(0, dp(Ui.S1) / 4, 0, 0) })
         }
         val r = row(grow(box), toggle(label, on, true, onChange))
-        r.minimumHeight = dp(56); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
+        r.minimumHeight = dp(Ui.S6 + Ui.S1); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
         parent.addView(r, lp())
     }
 
     /** Ask before something that cannot be undone. */
     fun confirm(title: String, yes: String, onYes: () -> Unit) {
         AlertDialog.Builder(c).setTitle(title).setNegativeButton("Cancel", null).setPositiveButton(yes) { _, _ -> onYes() }.show()
+    }
+
+    /** A plain rounded patch of one colour with a hairline edge (the gallery draws colours, radii and spacing with it). */
+    fun swatch(color: Int, radiusDp: Int = Ui.RADIUS_ROW) = View(c).apply {
+        background = GradientDrawable().apply { setColor(color); cornerRadius = dp(radiusDp).toFloat(); setStroke(dp(Space.STROKE), Ui.edge) }
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
     /** Soft rounded background of a list row inside a card. */
@@ -201,23 +205,23 @@ class Kit(private val c: Context) {
     fun header(title: String, onBack: () -> Unit, backLabel: String = "Home"): LinearLayout = LinearLayout(c).apply {
         orientation = LinearLayout.VERTICAL
         addView(quiet("\u2039 " + Translations.label(backLabel), onClick = onBack).apply { contentDescription = Translations.label("Back") + ", " + Translations.label(backLabel); minWidth = dp(64); setPadding(0, 0, dp(Ui.S2), 0); gravity = Gravity.START or Gravity.CENTER_VERTICAL },
-            LinearLayout.LayoutParams(-2, dp(48)))
-        addView(text(title, Type.LARGE), lp(top = Ui.S1))
+            LinearLayout.LayoutParams(-2, dp(Space.TOUCH)))
+        addView(text(title, Type.TITLE), lp(top = Ui.S1))
     }
 
     /** One grouped section like iOS Settings: a small [header] above, a rounded surface, a quiet [footer] below. Rows are separated by hairlines. */
     fun group(parent: LinearLayout, header: String? = null, footer: String? = null, fill: LinearLayout.() -> Unit) {
-        if (header != null) parent.addView(text(header, Type.SECTION, Ui.soft).apply { setPadding(dp(Ui.S2), 0, dp(Ui.S2), dp(6)) }, lp(top = Ui.S3))
+        if (header != null) parent.addView(text(header, Type.CAPTION, Ui.soft).apply { setPadding(dp(Ui.S2), 0, dp(Ui.S2), dp(Ui.S1)) }, lp(top = Ui.S3))
         val g = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL; background = fill(Ui.card, Ui.RADIUS_CARD) }
         g.fill()
         val kids = (0 until g.childCount).map { g.getChildAt(it) }
         g.removeAllViews()
         kids.forEachIndexed { i, v ->
-            if (i > 0) g.addView(View(c).apply { setBackgroundColor(Ui.line) }, LinearLayout.LayoutParams(-1, maxOf(1, dp(1) / 2)).apply { marginStart = dp(Ui.S2) })
+            if (i > 0) g.addView(View(c).apply { setBackgroundColor(Ui.line) }, LinearLayout.LayoutParams(-1, maxOf(1, dp(Space.STROKE))).apply { marginStart = dp(Ui.S2) })
             g.addView(v)
         }
         parent.addView(g, lp(top = if (header == null) Ui.S3 else 0))
-        if (footer != null) parent.addView(text(footer, Type.CAPTION, Ui.soft).apply { setPadding(dp(Ui.S2), dp(6), dp(Ui.S2), 0) }, lp())
+        if (footer != null) parent.addView(text(footer, Type.CAPTION, Ui.soft).apply { setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), 0) }, lp())
     }
 
     /** A card with a header, optional hint under it, and free content with 16 dp inside. */
@@ -236,10 +240,10 @@ class Kit(private val c: Context) {
         val r = row(grow(LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL
             addView(text(title))
-            addView(text(summary, Type.CAPTION, Ui.soft).apply { setPadding(0, dp(2), 0, 0) })
-        }), text("\u203A", Type.TITLE, Ui.edge).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })
+            addView(text(summary, Type.CAPTION, Ui.soft).apply { setPadding(0, dp(Ui.S1) / 4, 0, 0) })
+        }), text("\u203A", Type.BODY, Ui.edge).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })
         r.contentDescription = "$title. $summary"
-        r.minimumHeight = dp(64); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
+        r.minimumHeight = dp(Ui.S4 * 2); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
         r.isClickable = true; r.setOnClickListener { onClick() }
         parent.addView(r, lp())
     }
@@ -247,22 +251,22 @@ class Kit(private val c: Context) {
     /** A navRow that starts with a coloured dot (green = reachable, grey = not, or not known yet). */
     fun dotRow(parent: LinearLayout, dot: Int, title: String, summary: String, onClick: () -> Unit) {
         val d = View(c).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(dot) } }
-        val r = row(d.apply { layoutParams = LinearLayout.LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(12) } }, grow(LinearLayout(c).apply {
+        val r = row(d.apply { layoutParams = LinearLayout.LayoutParams(dp(Ui.S1), dp(Ui.S1)).apply { marginEnd = dp(Ui.S2) } }, grow(LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL
             addView(text(title))
-            addView(text(summary, Type.CAPTION, Ui.soft).apply { setPadding(0, dp(2), 0, 0) })
-        }), text("\u203A", Type.TITLE, Ui.edge).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })
+            addView(text(summary, Type.CAPTION, Ui.soft).apply { setPadding(0, dp(Ui.S1) / 4, 0, 0) })
+        }), text("\u203A", Type.BODY, Ui.edge).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })
         r.contentDescription = "$title. $summary"
-        r.minimumHeight = dp(64); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
+        r.minimumHeight = dp(Ui.S4 * 2); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
         r.isClickable = true; r.setOnClickListener { onClick() }
         parent.addView(r, lp())
     }
 
     /** A row of a group where exactly one choice is on: the title and a check mark. TalkBack hears "selected". */
     fun choiceRow(parent: LinearLayout, title: String, selected: Boolean, onClick: () -> Unit) {
-        val r = row(grow(text(title)), text(if (selected) "\u2713" else "", Type.TITLE, Ui.accent).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })
+        val r = row(grow(text(title)), text(if (selected) "\u2713" else "", Type.BODY, Ui.accent).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })
         r.contentDescription = if (selected) title + ", " + Translations.label("selected") else title
-        r.minimumHeight = dp(52); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
+        r.minimumHeight = dp(Space.TOUCH + 4); r.setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), dp(Ui.S1))
         r.isClickable = true; r.setOnClickListener { onClick() }
         parent.addView(r, lp())
     }
@@ -272,9 +276,9 @@ class Kit(private val c: Context) {
         orientation = LinearLayout.HORIZONTAL
         labels.forEachIndexed { i, l ->
             val b = Button(c).apply {
-                text = l; isAllCaps = false; textSize = Type.SMALL.size; minHeight = dp(44); minimumHeight = dp(44)
-                stateListAnimator = null; elevation = 0f; isSelected = i == selected
-                setTextColor(if (i == selected) Ui.onAccent else Ui.accent); background = fill(if (i == selected) Ui.accentFill else Ui.tint, Ui.RADIUS_BUTTON)
+                styled(l, Type.BODY, if (i == selected) Ui.onAccent else Ui.accent)
+                isSelected = i == selected
+                background = fill(if (i == selected) Ui.accentFill else Ui.tint, Ui.RADIUS_BUTTON)
                 contentDescription = if (i == selected) l + ", " + Translations.label("selected") else l
                 setOnClickListener { onSelect(i) }
             }
@@ -283,8 +287,8 @@ class Kit(private val c: Context) {
     }
 
     /** One line of fixed-width text in [color] (a line of a patch); long lines scroll sideways with the others. */
-    fun monoLine(t: String, color: Int = Ui.ink) = TextView(c).apply {
-        text = t; textSize = 13f; setTextColor(color); typeface = Typeface.MONOSPACE; setHorizontallyScrolling(true); setPadding(dp(Ui.S1), 0, dp(Ui.S1), 0)
+    fun monoLine(t: String, color: Int = Ui.ink) = text(t, Type.MONO, color).apply {
+        setHorizontallyScrolling(true); setPadding(dp(Ui.S1), 0, dp(Ui.S1), 0)
     }
 
     /** A picture from its bytes (png, jpeg, webp, gif); fits the width. Null when the bytes are not an image. */
@@ -383,7 +387,7 @@ class Kit(private val c: Context) {
             }
             for ((off, v) in slots) bind(v, current + off)
             bind(now, current)
-            if (items.isEmpty()) { now.text = empty; now.visibility = View.VISIBLE; now.setTextColor(Ui.soft) } else now.setTextColor(Ui.now)
+            if (items.isEmpty()) { nowLine(now, empty, Ui.soft, glow = false); now.visibility = View.VISIBLE } else nowLine(now, items.getOrNull(current) ?: "", Ui.now, glow = true)
             now.contentDescription = if (items.isEmpty()) null else now.text.toString() + ", " + Translations.label("selected")
             glyph.hint = asks
             val lp = PressHint.fromGestureText(lastPress)
@@ -392,16 +396,53 @@ class Kit(private val c: Context) {
         }
     }
 
-    /** The quiet title at the top of the stage and the loop screen: a small soft word and a faint cyan hairline. No dot, no second line. */
+    /**
+     * The NOW line (cyan, the only glowing text): the text in one of three discrete steps, never in between ([Type.nowStep]):
+     * DISPLAY if it fits in 4 lines, else TITLE if it fits in 6, else BODY.
+     */
+    fun nowLine(v: TextView, t: String, color: Int, glow: Boolean = true) {
+        val m = c.resources.displayMetrics
+        val widthPx = (m.widthPixels - dp(Ui.S2 * 4)).coerceAtLeast(dp(Ui.S6))
+        val step = Type.nowStep { ty -> linesOf(t, ty, widthPx) }
+        v.text = t; v.textSize = step.size; v.typeface = Typeface.create(step.face, Typeface.NORMAL)
+        v.maxLines = when (step) { Type.DISPLAY -> Type.DISPLAY_LINES; Type.TITLE -> Type.TITLE_LINES; else -> 8 }
+        v.setTextColor(color)
+        if (glow) v.setShadowLayer(dp(Space.GLOW).toFloat(), 0f, 0f, (color and 0x00FFFFFF) or 0x66000000) else v.setShadowLayer(0f, 0f, 0f, Ui.clear)
+    }
+
+    private fun linesOf(t: String, type: Type, widthPx: Int): Int {
+        if (t.isEmpty()) return 0
+        val p = android.text.TextPaint().apply {
+            textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, type.size, c.resources.displayMetrics)
+            typeface = Typeface.create(type.face, Typeface.NORMAL)
+        }
+        return android.text.StaticLayout.Builder.obtain(t, 0, t.length, p, widthPx).build().lineCount
+    }
+
+    /** The quiet title at the top of the stage and the loop screen: a caption-size soft word and a faint cyan hairline. No dot, no second line. */
     private fun stageHeader(parent: LinearLayout, title: String) {
-        parent.addView(text(title, Type.SECTION, Ui.soft).apply { isAccessibilityHeading = true; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; gravity = Gravity.CENTER }, lp(top = Ui.S1))
-        parent.addView(View(c).apply { setBackgroundColor(Ui.line); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, lp(h = maxOf(1, dp(1)), top = Ui.S1))
+        parent.addView(text(title, Type.CAPTION, Ui.soft).apply { isAccessibilityHeading = true; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; gravity = Gravity.CENTER }, lp(top = Ui.S1))
+        parent.addView(hairline(), lp(h = maxOf(1, dp(Space.STROKE)), top = Ui.S1))
+    }
+
+    /** The one hairline (a divider), in the line colour. */
+    fun hairline() = View(c).apply { setBackgroundColor(Ui.line); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+
+    /** The quiet text under a page or a group: a caption in soft colour. */
+    fun footer(parent: LinearLayout, t: String) {
+        parent.addView(text(t, Type.CAPTION, Ui.soft).apply { setPadding(dp(Ui.S2), dp(Ui.S1), dp(Ui.S2), 0) }, lp())
+    }
+
+    /** A small status label on a tint: the word in the colour of its role (done, press, bad, soft). It is text, never the only sign. */
+    fun statusChip(label: String, color: Int = Ui.done) = text(label, Type.CAPTION, color).apply {
+        setPadding(dp(Ui.S1), dp(Ui.S1) / 2, dp(Ui.S1), dp(Ui.S1) / 2); background = fill(Ui.tint, Ui.RADIUS_CHIP)
     }
 
     /**
-     * The stage: what you hear is what you see, as one thing at a glance. The line (or item) being spoken NOW sits in the middle of the free space in very
-     * large cyan type (it shrinks to fit); the two before it above, faded; the next ones below, small and soft. Under the NOW line the press it asks for is
-     * drawn in orange. The foot is one quiet row: Back, Close, Settings as text links, and the last press as the same glyph. A tap on a line picks it, as a click would.
+     * The stage: what you hear is what you see, as one thing at a glance. The line (or item) being spoken NOW sits in the middle of the free space in
+     * cyan DISPLAY type (a smaller discrete step only when it is long, see [nowLine]); the two before it above, faded; the next ones below, soft. Lines
+     * before and after use only BODY and CAPTION, the same on every screen. Under the NOW line the press it asks for is drawn in orange. The foot is one
+     * quiet row: Back, Close, Settings as text links, and the last press as the same glyph. A tap on a line picks it, as a click would.
      * Fits the window; nothing scrolls, so moving the mark never moves the layout.
      */
     fun mirrorScreen(parent: LinearLayout, title: String, items: List<String>, current: Int, lastPress: String?, asks: PressHint?,
@@ -409,29 +450,25 @@ class Kit(private val c: Context) {
         stageHeader(parent, title)
         fun line(type: Type, alpha: Float) = text("", type, Ui.soft).apply {
             gravity = Gravity.CENTER; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; this.alpha = alpha
-            setPadding(dp(Ui.S2), dp(4), dp(Ui.S2), dp(4)); minHeight = dp(40)
+            setPadding(dp(Ui.S2), dp(Ui.S1) / 2, dp(Ui.S2), dp(Ui.S1) / 2); minHeight = dp(Ui.S4 + Ui.S1)
         }
-        val before = listOf(-2 to line(Type.SMALL, 0.45f), -1 to line(Type.BODY, 0.75f))
-        val after = listOf(1 to line(Type.BODY, 0.8f), 2 to line(Type.SMALL, 0.55f), 3 to line(Type.SMALL, 0.3f))
+        val before = listOf(-2 to line(Type.CAPTION, 0.45f), -1 to line(Type.BODY, 0.75f))
+        val after = listOf(1 to line(Type.BODY, 0.8f), 2 to line(Type.CAPTION, 0.55f), 3 to line(Type.CAPTION, 0.3f))
         val up = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; before.forEach { addView(it.second, lp()) } }
         val down = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL; after.forEach { addView(it.second, lp()) } }
-        val big = text("", Type.LARGE, Ui.now).apply {
-            textSize = 52f; gravity = Gravity.CENTER; setPadding(dp(Ui.S2), 0, dp(Ui.S2), 0); maxLines = 6
-            setShadowLayer(dp(10).toFloat(), 0f, 0f, (Ui.now and 0x00FFFFFF) or 0x66000000)   // a soft glow
-            if (android.os.Build.VERSION.SDK_INT >= 26) setAutoSizeTextTypeUniformWithConfiguration(22, 56, 2, android.util.TypedValue.COMPLEX_UNIT_SP)
-        }
+        val big = text("", Type.DISPLAY, Ui.now).apply { gravity = Gravity.CENTER; setPadding(dp(Ui.S2), 0, dp(Ui.S2), 0) }
         val glyph = pressGlyph(false)
         parent.addView(up, LinearLayout.LayoutParams(-1, 0, 1f))
-        parent.addView(big, LinearLayout.LayoutParams(-1, dp(240)))
-        parent.addView(glyph, LinearLayout.LayoutParams(-1, dp(64)))
+        parent.addView(big, LinearLayout.LayoutParams(-1, dp(Ui.S6 * 5)))
+        parent.addView(glyph, LinearLayout.LayoutParams(-1, dp(Ui.S6 + Ui.S2)))
         parent.addView(down, LinearLayout.LayoutParams(-1, 0, 1f))
         val strip = soundStrip()
         val last = pressGlyph(true)
-        parent.addView(View(c).apply { setBackgroundColor(Ui.line); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, lp(h = maxOf(1, dp(1))))
-        parent.addView(LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; addView(strip.view, LinearLayout.LayoutParams(-2, dp(22))); addView(View(c), LinearLayout.LayoutParams(0, 1, 1f)); addView(last, LinearLayout.LayoutParams(dp(120), dp(32))) }, lp(top = Ui.S1))
+        parent.addView(hairline(), lp(h = maxOf(1, dp(Space.STROKE))))
+        parent.addView(LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; addView(strip.view, LinearLayout.LayoutParams(-2, dp(Ui.S3))); addView(View(c), LinearLayout.LayoutParams(0, 1, 1f)); addView(last, LinearLayout.LayoutParams(dp(Ui.S6 * 2 + Ui.S4), dp(Ui.S4))) }, lp(top = Ui.S1))
         val bar = LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL }
         for ((label, act) in listOf(backLabel to onBack, closeLabel to onClose, moreLabel to onMore))
-            bar.addView(quiet(label, Ui.soft) { act() }.apply { textSize = Type.BODY.size }, LinearLayout.LayoutParams(0, dp(52), 1f))
+            bar.addView(quiet(label, Ui.soft) { act() }, LinearLayout.LayoutParams(0, dp(Space.TOUCH + 4), 1f))
         parent.addView(bar, lp(top = 0))
         val empty = Translations.label("Playing. Use your earbud button.")
         return MirrorView(items, before + after, big, glyph, last, strip, empty, onPick).also { it.update(current, lastPress, asks, sounds) }
@@ -447,39 +484,35 @@ class Kit(private val c: Context) {
             val ch = s.chosen
             if (n == 0 || (s.at < 0 && ch == null)) {
                 before.text = ""; after.text = if (n == 0) "" else ring.take(3).joinToString("   ") { it.text }
-                big.text = ""; note.text = ""; return
+                nowLine(big, "", Ui.now); note.text = ""; return
             }
             val at = s.at.coerceIn(0, n - 1)
             before.text = near(at, -1).reversed().joinToString("   ")
             after.text = near(at, 1).joinToString("   ")
             val now = ch ?: ring[at]
-            big.text = now.text
-            big.setTextColor(if (ch != null) Ui.good else Ui.accent)
+            nowLine(big, now.text, if (ch != null) Ui.good else Ui.now)
             note.text = if (ch != null) Translations.label("Picked") else if (now.isGuess) Translations.label("A whole guess") else ""
         }
     }
 
     /**
-     * What you hear is what you see: the item sounding now BIG in the middle (letter or whole word), the two or three before and after it small
-     * above and below, [header] rows on top (what was typed), the item just taken in green. Centered, fixed sizes: only the texts change ([LoopSceneView.update]).
+     * What you hear is what you see: the item sounding now big in the middle (letter or whole word, [nowLine]), the two or three before and after it
+     * above and below, [header] rows on top (what was typed), the item just taken in green. Centered, discrete sizes: only the texts change ([LoopSceneView.update]).
      */
     fun loopScreen(parent: LinearLayout, title: String, snap: com.faka.invisible.voicekit.ScreenMirror.LoopSnap, sounds: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark> = emptyList()): LoopSceneView {
         stageHeader(parent, title)
-        fun centred(t: TextView, type: Type, color: Int) = t.apply { gravity = Gravity.CENTER; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; textSize = type.size; setTextColor(color) }
-        val head = List(3) { i -> centred(text("", if (i == 0) Type.TITLE else Type.SMALL, if (i == 0) Ui.ink else Ui.soft), if (i == 0) Type.TITLE else Type.SMALL, if (i == 0) Ui.ink else Ui.soft).apply { minHeight = dp(if (i == 0) 32 else 22) } }
+        fun centred(t: TextView) = t.apply { gravity = Gravity.CENTER; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        val head = List(3) { i -> centred(text("", if (i == 0) Type.TITLE else Type.CAPTION, if (i == 0) Ui.ink else Ui.soft)).apply { minHeight = dp(if (i == 0) Ui.S4 + Ui.S1 else Ui.S3) } }
         head.forEach { parent.addView(it, lp(top = Ui.S1)) }
         val mid = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
-        val before = centred(text("", Type.BODY, Ui.soft), Type.BODY, Ui.soft).apply { minHeight = dp(28); maxLines = 1 }
-        val big = centred(text("", Type.LARGE, Ui.accent), Type.LARGE, Ui.accent).apply {
-            textSize = 72f; minHeight = dp(120); setPadding(0, dp(Ui.S1), 0, dp(Ui.S1))
-            if (android.os.Build.VERSION.SDK_INT >= 26) setAutoSizeTextTypeUniformWithConfiguration(24, 72, 2, android.util.TypedValue.COMPLEX_UNIT_SP)
-        }
-        val after = centred(text("", Type.BODY, Ui.soft), Type.BODY, Ui.soft).apply { minHeight = dp(28); maxLines = 1 }
-        val note = centred(text("", Type.SMALL, Ui.soft), Type.SMALL, Ui.soft).apply { minHeight = dp(22) }
-        mid.addView(before, lp()); mid.addView(big, LinearLayout.LayoutParams(-1, dp(140))); mid.addView(after, lp()); mid.addView(note, lp(top = Ui.S1))
+        val before = centred(text("", Type.BODY, Ui.soft)).apply { minHeight = dp(Ui.S4); maxLines = 1 }
+        val big = centred(text("", Type.DISPLAY, Ui.now)).apply { setPadding(0, dp(Ui.S1), 0, dp(Ui.S1)) }
+        val after = centred(text("", Type.BODY, Ui.soft)).apply { minHeight = dp(Ui.S4); maxLines = 1 }
+        val note = centred(text("", Type.CAPTION, Ui.soft)).apply { minHeight = dp(Ui.S3) }
+        mid.addView(before, lp()); mid.addView(big, LinearLayout.LayoutParams(-1, dp(Ui.S6 * 3))); mid.addView(after, lp()); mid.addView(note, lp(top = Ui.S1))
         parent.addView(mid, LinearLayout.LayoutParams(-1, 0, 1f))
         val strip = soundStrip()
-        parent.addView(strip.view, LinearLayout.LayoutParams(-1, dp(22)).apply { topMargin = dp(Ui.S1); gravity = Gravity.CENTER })
+        parent.addView(strip.view, LinearLayout.LayoutParams(-1, dp(Ui.S3)).apply { topMargin = dp(Ui.S1); gravity = Gravity.CENTER })
         return LoopSceneView(head, before, big, after, note, strip).also { it.update(snap, sounds) }
     }
 
@@ -523,9 +556,9 @@ class Kit(private val c: Context) {
 
     /** Home status: a large word (red only for a problem), one quiet line. */
     fun status(parent: LinearLayout, headline: String, line: String, color: Int, top: Int = Ui.S3, align: Boolean = false, fill: LinearLayout.() -> Unit = {}) {
-        if (align) parent.addView(View(c), LinearLayout.LayoutParams(1, dp(48)))   // the room of a page's "‹ Home" line: the title then sits at the same height as on every page
-        parent.addView(text(headline, Type.LARGE, if (color == Ui.bad) Ui.bad else Ui.ink), lp(top = top))   // no dot: only a problem has a colour
-        parent.addView(text(line, Type.SMALL, Ui.soft), lp(top = Ui.S1))
+        if (align) parent.addView(View(c), LinearLayout.LayoutParams(1, dp(Space.TOUCH)))   // the room of a page's "‹ Home" line: the title then sits at the same height as on every page
+        parent.addView(text(headline, Type.TITLE, if (color == Ui.bad) Ui.bad else Ui.ink), lp(top = top))   // no dot: only a problem has a colour
+        parent.addView(text(line, Type.BODY, Ui.soft), lp(top = Ui.S1))
         val extra = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
         extra.fill()
         if (extra.childCount > 0) parent.addView(extra, lp(top = Ui.S2))
@@ -535,21 +568,21 @@ class Kit(private val c: Context) {
     fun onboarding(parent: LinearLayout, progress: Float, stepLabel: String, title: String, line: String,
                    primaryLabel: String?, onPrimary: () -> Unit, secondaryLabel: String? = null, onSecondary: () -> Unit = {}, focusFirst: Boolean = false, bigLine: Boolean = false) {
         val track = FrameBar(progress).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
-        parent.addView(track, lp(h = dp(4), top = Ui.S3))
-        val label = text(stepLabel, Type.SECTION, Ui.accent).apply { contentDescription = "$stepLabel. $title" }   // first thing TalkBack reads: where you are and what it is
+        parent.addView(track, lp(h = dp(Ui.S1 / 2), top = Ui.S3))
+        val label = text(stepLabel, Type.CAPTION, Ui.accent).apply { contentDescription = "$stepLabel. $title" }   // first thing TalkBack reads: where you are and what it is
         parent.addView(label, lp(top = Ui.S6))
         if (focusFirst) label.post {   // the step appears: TalkBack moves to it and reads it
             val am = c.getSystemService(android.view.accessibility.AccessibilityManager::class.java)
             if (am.isTouchExplorationEnabled) label.performAccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
         }
-        parent.addView(text(title, Type.LARGE), lp(top = Ui.S1))
+        parent.addView(text(title, Type.TITLE), lp(top = Ui.S1))
         parent.addView(if (bigLine) text(line, Type.TITLE) else text(line, Type.BODY, Ui.soft), lp(top = Ui.S2))
         if (primaryLabel != null) parent.addView(primary(primaryLabel, onPrimary), lp(top = Ui.S6))
         if (secondaryLabel != null) parent.addView(quiet(secondaryLabel, Ui.soft, onSecondary), lp(top = Ui.S1))
     }
 
     private inner class FrameBar(private val frac: Float) : View(c) {
-        private val track = fill(Ui.line, 2); private val bar = fill(Ui.accent, 2)
+        private val track = fill(Ui.line, Space.STROKE * 2); private val bar = fill(Ui.accent, Space.STROKE * 2)
         override fun onDraw(canvas: android.graphics.Canvas) {
             track.setBounds(0, 0, width, height); track.draw(canvas)
             bar.setBounds(0, 0, (width * frac.coerceIn(0.04f, 1f)).toInt(), height); bar.draw(canvas)
@@ -566,16 +599,16 @@ class Kit(private val c: Context) {
 
     /** A tinted button for one value (a timer length). */
     fun chip(label: String, selected: Boolean = false, onClick: () -> Unit) = Button(c).apply {
-        text = label; isAllCaps = false; textSize = Type.TITLE.size; setTextColor(if (selected) Ui.onAccent else Ui.accent); stateListAnimator = null; elevation = 0f
+        styled(label, Type.BODY, if (selected) Ui.onAccent else Ui.accent)
         background = fill(if (selected) Ui.accentFill else Ui.tint, Ui.RADIUS_CHIP)
         setOnClickListener { onClick() }
     }
 
     fun slider(label: String, valueText: String, max: Int, now: Int, onCommit: (Int) -> Unit): View = LinearLayout(c).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(0, dp(6), 0, 0)
+        orientation = LinearLayout.VERTICAL; setPadding(0, dp(Ui.S1), 0, 0)
         addView(row(grow(text(label)), text(valueText, Type.BODY, Ui.accent)))
         addView(SeekBar(c).apply {
-            this.max = max; progress = now; minimumHeight = dp(48); contentDescription = "$label, $valueText"
+            this.max = max; progress = now; minimumHeight = dp(Space.TOUCH); contentDescription = "$label, $valueText"
             progressTintList = ColorStateList.valueOf(Ui.accent); thumbTintList = ColorStateList.valueOf(Ui.accent)
             progressBackgroundTintList = ColorStateList.valueOf(Ui.edge)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -591,9 +624,9 @@ class Kit(private val c: Context) {
         fun wheel(max: Int, v: Int) = NumberPicker(c).apply { minValue = 0; maxValue = max; value = v; wrapSelectorWheel = true; setFormatter { "%02d".format(it) } }
         val h = wheel(3, now / 60); val m = wheel(59, now % 60)
         val box = LinearLayout(c).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(16), dp(16), dp(16), dp(8))
-            addView(h); addView(text("h", Type.BODY, Ui.soft).apply { setPadding(dp(8), 0, dp(24), 0) })
-            addView(m); addView(text("min", Type.BODY, Ui.soft).apply { setPadding(dp(8), 0, 0, 0) })
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(dp(Ui.S2), dp(Ui.S2), dp(Ui.S2), dp(Ui.S1))
+            addView(h); addView(text("h", Type.BODY, Ui.soft).apply { setPadding(dp(Ui.S1), 0, dp(Ui.S3), 0) })
+            addView(m); addView(text("min", Type.BODY, Ui.soft).apply { setPadding(dp(Ui.S1), 0, 0, 0) })
         }
         AlertDialog.Builder(c).setTitle("Timer length").setView(box)
             .setPositiveButton("Set") { _, _ -> set((h.value * 60 + m.value).coerceIn(1, 180)) }
@@ -607,7 +640,7 @@ class Kit(private val c: Context) {
         handle.setOnTouchListener { v, e ->
             val orig = rows.indexOf(r)
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { startY = e.rawY; v.parent.requestDisallowInterceptTouchEvent(true); r.elevation = dp(8).toFloat() }
+                MotionEvent.ACTION_DOWN -> { startY = e.rawY; v.parent.requestDisallowInterceptTouchEvent(true); r.elevation = dp(Ui.S1).toFloat() }
                 MotionEvent.ACTION_MOVE -> {
                     val dy = (e.rawY - startY).coerceIn(-orig * rowH.toFloat(), (last - orig) * rowH.toFloat())
                     r.translationY = dy
@@ -633,12 +666,12 @@ class Kit(private val c: Context) {
      */
     fun dragList(on: List<String>, names: Map<String, String>, locked: Set<String>, onOrder: (List<String>) -> Unit): View {
         val box = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
-        val rowH = dp(52)
+        val rowH = dp(Space.TOUCH + 4)
         val rows = ArrayList<View>()
         val all = on + names.keys.filter { it !in on }
         all.forEach { k ->
             val isOn = k in on
-            val handle = handle(48, isOn).apply { layoutParams = LinearLayout.LayoutParams(dp(48), rowH) }
+            val handle = handle(Space.TOUCH, isOn).apply { layoutParams = LinearLayout.LayoutParams(dp(Space.TOUCH), rowH) }
             val r = row(handle, grow(text(names[k]!!, Type.BODY, if (isOn) Ui.ink else Ui.soft)),
                 toggle(names[k]!!, isOn, k !in locked) { v -> onOrder(if (v) on + k else on - k) })
             r.tag = k; r.minimumHeight = rowH

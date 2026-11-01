@@ -109,7 +109,7 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
             list.filter { status[it.name]?.ok == false }.forEach { c -> body.addView(k.text(tr(status[c.name]?.why.orEmpty()), Type.CAPTION, Ui.bad), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) }) }
             list.forEach { c -> body.addView(k.quiet(tr("Rename or remove {0}").replace("{0}", c.name)) { selected = c.name; mode = Mode.ONE; error = ""; redraw() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) }) }
         }
-        body.addView(k.btn(tr("Add a laptop"), list.isEmpty()) { mode = Mode.ADD; error = ""; notice = ""; paired = null; skipClip = false; draftFor = ""; redraw() }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(Ui.S2) })
+        body.addView(k.btn(tr("Add a laptop"), list.isEmpty()) { mode = Mode.ADD; error = ""; notice = ""; paired = null; skipClip = false; draftFor = ""; redraw() }, LinearLayout.LayoutParams(-1, k.dp(Space.BUTTON)).apply { topMargin = k.dp(Ui.S2) })
     }
 
     private fun clip(): String {
@@ -138,8 +138,8 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
             paired = c; error = ""; redraw()
         }
         k.card(body, tr("Add a laptop"), tr("On the laptop run: sh bridge/setup.sh. Scan the QR code it shows with this phone's camera app (it opens Invisible OS). Or copy the pair code line and paste it. Already set up? Run: python3 bridge/server.py --pair")) {
-            addView(k.btn(tr("Paste from clipboard"), true) { take(clip()) }, LinearLayout.LayoutParams(-1, k.dp(52)))
-            addView(code, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
+            addView(k.btn(tr("Paste from clipboard"), true) { take(clip()) }, LinearLayout.LayoutParams(-1, k.dp(Space.BUTTON)))
+            addView(code, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
             addView(k.btn(tr("Add this code")) { take(code.text.toString()) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
             addView(k.quiet(tr("Enter by hand")) { mode = Mode.HAND; error = ""; redraw() })
             addView(note)
@@ -151,7 +151,7 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
         val note = k.text(error, Type.CAPTION, Ui.bad)
         k.card(body, tr("Found {0}. Add?").replace("{0}", c.name.ifEmpty { tr("a laptop") }), c.url) {
             nameAndChips(this, tr("Name"))
-            addView(k.btn(tr("Add"), true) { addNow(c, draft.name) }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+            addView(k.btn(tr("Add"), true) { addNow(c, draft.name) }, LinearLayout.LayoutParams(-1, k.dp(Space.BUTTON)).apply { topMargin = k.dp(Ui.S1) })
             addView(k.quiet(tr("Use another code")) { paired = null; skipClip = true; error = ""; redraw() })
             addView(note)
         }
@@ -164,23 +164,23 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
         val note = k.text(error, Type.CAPTION, Ui.bad)
         k.card(body, tr("Enter by hand"), tr("Run bridge/server.py on the laptop, then type the address it prints and the token.")) {
             nameAndChips(this, tr("Name, e.g. Home"))
-            addView(url, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
-            addView(tok, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
+            addView(url, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
+            addView(tok, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
             addView(k.btn(tr("Save"), true) {
                 val list = Actions.computers()
                 val p = Computers.problem(list, draft.name, url.text.toString(), tok.text.toString())
                 if (p != null) note.text = tr(p)
                 else { Actions.setComputers(Computers.add(list, Computer(draft.name, url.text.toString(), tok.text.toString(), draft.profile))); error = ""; mode = Mode.LIST; check() }
-            }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+            }, LinearLayout.LayoutParams(-1, k.dp(Space.BUTTON)).apply { topMargin = k.dp(Ui.S1) })
             addView(note)
         }
     }
 
     private fun drawOne(c: Computer) {
         body.addView(k.text(c.name, Type.TITLE))
-        body.addView(k.text(summary(c), Type.SMALL, Ui.soft), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
-        body.addView(k.btn(tr(if (isActive(c)) "Show rooms" else "Listen and show rooms"), true) { openRooms(c.name) }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(Ui.S2) })
-        body.addView(k.btn(tr("Rename")) { mode = Mode.RENAME; error = ""; redraw() }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(Ui.S1) })
+        body.addView(k.text(summary(c), Type.CAPTION, Ui.soft), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
+        body.addView(k.btn(tr(if (isActive(c)) "Show rooms" else "Listen and show rooms"), true) { openRooms(c.name) }, LinearLayout.LayoutParams(-1, k.dp(Space.BUTTON)).apply { topMargin = k.dp(Ui.S2) })
+        body.addView(k.btn(tr("Rename")) { mode = Mode.RENAME; error = ""; redraw() }, LinearLayout.LayoutParams(-1, k.dp(Space.BUTTON)).apply { topMargin = k.dp(Ui.S1) })
         body.addView(k.quiet(tr("Remove"), Ui.bad) {
             k.confirm(tr("Remove {0}?").replace("{0}", c.name), tr("Remove")) { Actions.setComputers(Computers.remove(Actions.computers(), c.name)); mode = Mode.LIST; check() }
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
@@ -197,7 +197,7 @@ class ComputersPage(private val a: Activity, private val k: Kit, private val bod
                 val p = if (c == null) "Write a name." else Computers.problem(list, draft.name, c.url, c.token, renaming = old)
                 if (p != null) note.text = tr(p)
                 else { val wasActive = c != null && isActive(c); Actions.setComputers(Computers.withProfile(Computers.rename(list, old, draft.name), draft.name, draft.profile)); if (wasActive) Actions.setActive(draft.name); selected = Computers.clean(draft.name); draftFor = ""; mode = Mode.LIST; check() }
-            }, LinearLayout.LayoutParams(-1, k.dp(52)).apply { topMargin = k.dp(10) })
+            }, LinearLayout.LayoutParams(-1, k.dp(Space.BUTTON)).apply { topMargin = k.dp(Ui.S1) })
             addView(note)
         }
     }

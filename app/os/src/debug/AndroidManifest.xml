@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <!-- Dev tool, debug builds only: adb shell am broadcast -n com.faka.invisible/.AiTestReceiver ... -->
+        <activity android:name=".GalleryActivity" android:exported="false" />
         <receiver android:name=".AiTestReceiver" android:exported="true" />
     </application>
 </manifest>

@@ -5,7 +5,6 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
@@ -458,17 +457,17 @@ class MainActivity : Activity() {
         }
         Habits.names(saved).forEachIndexed { i, name ->
             val item = k.row(k.grow(k.text(name).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }),
-                k.btn(tr("Remove")) { save(Habits.removed(saved, name)) }.apply { minWidth = k.dp(96) })
-            item.setPadding(k.dp(12), 0, k.dp(8), 0)
+                k.btn(tr("Remove")) { save(Habits.removed(saved, name)) }.apply { minWidth = k.dp(Ui.S6 * 2) })
+            item.setPadding(k.dp(Ui.S2), 0, k.dp(Ui.S1), 0)
             k.surface(item)
-            body.addView(item, LinearLayout.LayoutParams(-1, k.dp(60)).apply { topMargin = k.dp(if (i == 0) 14 else 8) })
+            body.addView(item, LinearLayout.LayoutParams(-1, k.dp(Ui.S6 + Ui.S2)).apply { topMargin = k.dp(if (i == 0) Ui.S2 else Ui.S1) })
         }
     }
 
     private fun tasksPage() {
         k.card(pageTop!!, "Tasks" + Actions.tasks().size.let { if (it > 0) " ($it)" else "" }, "Add one here, or share from Google Keep. Hold the button and pick \"Tasks\" to hear them.", true) {
             val input = k.input("Write a task, or paste a checklist")
-            val note = k.text(taskNote, Type.CAPTION, if (taskNoteBad) Ui.bad else Ui.good).apply { setPadding(0, k.dp(6), 0, 0) }
+            val note = k.text(taskNote, Type.CAPTION, if (taskNoteBad) Ui.bad else Ui.good).apply { setPadding(0, k.dp(Ui.S1), 0, 0) }
             fun add() {
                 val t = input.text.toString()
                 if (t.isBlank()) { taskNote = "Write a task in the box first."; taskNoteBad = true; render(); return }
@@ -484,18 +483,18 @@ class MainActivity : Activity() {
         }
         run {
             val ts = Actions.tasks()
-            if (ts.isEmpty()) body.addView(k.text("No tasks yet.\nIn Google Keep: open a note, tap Share, choose \"Invisible task\". Only unchecked items are added.", Type.CAPTION, Ui.soft).apply { setPadding(0, k.dp(12), 0, 0) })
+            if (ts.isEmpty()) body.addView(k.text("No tasks yet.\nIn Google Keep: open a note, tap Share, choose \"Invisible task\". Only unchecked items are added.", Type.CAPTION, Ui.soft).apply { setPadding(0, k.dp(Ui.S2), 0, 0) })
             val taskRows = ArrayList<View>()
-            val th = k.dp(68)
+            val th = k.dp(Ui.S6 + Ui.S2)
             ts.forEachIndexed { i, t ->
                 val handle = k.handle(40, visible = ts.size > 1)
                 val item = k.row(handle, k.grow(k.text(t.text).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }),
-                    k.btn("Done") { Actions.completeTask(t.id); taskNote = ""; render() }.apply { minWidth = k.dp(84) })
-                item.setPadding(k.dp(4), 0, k.dp(8), 0)
+                    k.btn("Done") { Actions.completeTask(t.id); taskNote = ""; render() }.apply { minWidth = k.dp(Ui.S6 * 2) })
+                item.setPadding(k.dp(Ui.S1 / 2), 0, k.dp(Ui.S1), 0)
                 k.surface(item)
                 taskRows.add(item)
-                if (ts.size > 1) k.makeDraggable(handle, taskRows, ts.size - 1, th + k.dp(8)) { from, to -> Actions.moveTask(from, to); render() }
-                body.addView(item, LinearLayout.LayoutParams(-1, th).apply { topMargin = k.dp(if (i == 0) 14 else 8) })
+                if (ts.size > 1) k.makeDraggable(handle, taskRows, ts.size - 1, th + k.dp(Ui.S1)) { from, to -> Actions.moveTask(from, to); render() }
+                body.addView(item, LinearLayout.LayoutParams(-1, th).apply { topMargin = k.dp(if (i == 0) Ui.S2 else Ui.S1) })
             }
         }
 
@@ -509,7 +508,7 @@ class MainActivity : Activity() {
         if (built.first != treeKey()) warmTree()   // an edit was made: the old tree stays on screen until the new one is ready
         val root = built.second
         card("What you hear", "The tree the voice walks, in its order. Tap a group to open it. Tap an app to pin, move or hide it.") {
-            addView(treeSearchBox(root), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = k.dp(8) })
+            addView(treeSearchBox(root), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = k.dp(Ui.S1) })
             fun toggle(set: Set<String>, k: String) = if (k in set) set - k else set + k
             fun actions(a: AppLeaf) {
                 val pinned = a.pkg in s.pinned
@@ -528,13 +527,13 @@ class MainActivity : Activity() {
             fun leafCount(n: TreeNode): Int = if (n.app != null) 1 else n.children.sumOf { leafCount(it) }
             fun node(n: TreeNode, depth: Int, path: String) {
                 val a = n.app
-                val pad = k.dp(12 * depth)
+                val pad = k.dp(Ui.S2 * depth)
                 if (a == null) {
                     if (n.label.isEmpty()) return
                     val key = "$path/${n.label}"
                     val open = key in openGroups
-                    val head = k.row(k.grow(k.text(n.label, Type.HEAD)), k.text("${leafCount(n)}  " + if (open) "\u25B4" else "\u25BE", Type.SMALL, Ui.soft))
-                    head.minimumHeight = k.dp(48); head.setPadding(pad, 0, k.dp(4), 0)
+                    val head = k.row(k.grow(k.text(n.label, Type.BODY)), k.text("${leafCount(n)}  " + if (open) "\u25B4" else "\u25BE", Type.CAPTION, Ui.soft))
+                    head.minimumHeight = k.dp(Space.TOUCH); head.setPadding(pad, 0, k.dp(Ui.S1 / 2), 0)
                     head.setOnClickListener { openGroups = if (open) openGroups - key else if (depth == 0) setOf(key) else openGroups + key; render() }
                     addView(head)
                     if (open) n.children.forEach { node(it, depth + 1, key) }
@@ -542,7 +541,7 @@ class MainActivity : Activity() {
                 }
                 val tag = listOfNotNull(if (a.pkg in s.pinned) "pinned" else null, if (a.pkg in s.moved) "moved" else null).joinToString(", ")
                 val row = k.row(k.grow(k.text(a.label).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }), k.text(tag, Type.CAPTION, Ui.soft))
-                row.minimumHeight = k.dp(48); row.setPadding(pad, 0, k.dp(4), 0)
+                row.minimumHeight = k.dp(Space.TOUCH); row.setPadding(pad, 0, k.dp(Ui.S1 / 2), 0)
                 row.setOnClickListener { actions(a) }
                 addView(row)
             }
@@ -550,8 +549,8 @@ class MainActivity : Activity() {
             val stored = TreeLeaves.edit(all, s).filter { it.stored }
             if (stored.isNotEmpty()) {
                 val key = "/stored"; val open = key in openGroups
-                val head = k.row(k.grow(k.text("Not used (Find only)", Type.HEAD)), k.text("${stored.size}  " + if (open) "\u25B4" else "\u25BE", Type.SMALL, Ui.soft))
-                head.minimumHeight = k.dp(52)
+                val head = k.row(k.grow(k.text("Not used (Find only)", Type.BODY)), k.text("${stored.size}  " + if (open) "\u25B4" else "\u25BE", Type.CAPTION, Ui.soft))
+                head.minimumHeight = k.dp(Space.BUTTON)
                 head.setOnClickListener { openGroups = if (open) openGroups - key else openGroups + key; render() }
                 addView(head)
                 if (open) stored.forEach { a -> addView(k.row(k.grow(k.text(a.label)))) }
@@ -559,8 +558,8 @@ class MainActivity : Activity() {
             val gone = all.filter { it.pkg in s.hidden }
             if (gone.isNotEmpty()) {
                 val key = "/hidden"; val open = key in openGroups
-                val head = k.row(k.grow(k.text("Hidden", Type.HEAD)), k.text("${gone.size}  " + if (open) "\u25B4" else "\u25BE", Type.SMALL, Ui.soft))
-                head.minimumHeight = k.dp(52)
+                val head = k.row(k.grow(k.text("Hidden", Type.BODY)), k.text("${gone.size}  " + if (open) "\u25B4" else "\u25BE", Type.CAPTION, Ui.soft))
+                head.minimumHeight = k.dp(Space.BUTTON)
                 head.setOnClickListener { openGroups = if (open) openGroups - key else openGroups + key; render() }
                 addView(head)
                 if (open) gone.forEach { a -> addView(k.row(k.grow(k.text(a.label)), k.chip("Show") { change(s.copy(hidden = s.hidden - a.pkg)) })) }
@@ -588,7 +587,7 @@ class MainActivity : Activity() {
             val hits = TreeSearch.search(root, treeFind, treeQuery)
             if (hits.isEmpty()) { out.addView(k.text("Nothing found", Type.CAPTION, Ui.soft)); return }
             hits.forEach { h ->
-                out.addView(k.text(h.app.label, Type.HEAD), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(10) })
+                out.addView(k.text(h.app.label, Type.BODY), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
                 out.addView(k.text("Click: " + h.tree, Type.CAPTION, Ui.soft))
                 out.addView(k.text("Hold on home: " + (h.find ?: "working it out\u2026"), Type.CAPTION, Ui.soft))
             }
@@ -674,7 +673,7 @@ class MainActivity : Activity() {
         card("Timer", "Tap a time to change it, like the clock app. These are the choices you hear. \"Last used\" is always added.") {
             val chips = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL }
             s.timers.forEachIndexed { i, m ->
-                chips.addView(k.chip(clockText(m)) { k.pickTime(m) { v -> change(s.copy(timers = LauncherSettings.cleanTimers(s.timers.toMutableList().also { it[i] = v }))) } }, LinearLayout.LayoutParams(0, k.dp(64), 1f).apply { if (i > 0) marginStart = k.dp(8) })
+                chips.addView(k.chip(clockText(m)) { k.pickTime(m) { v -> change(s.copy(timers = LauncherSettings.cleanTimers(s.timers.toMutableList().also { it[i] = v }))) } }, LinearLayout.LayoutParams(0, k.dp(Ui.S6 + Ui.S2), 1f).apply { if (i > 0) marginStart = k.dp(Ui.S1) })
             }
             addView(chips, LinearLayout.LayoutParams(-1, -2))
         }
@@ -687,7 +686,7 @@ class MainActivity : Activity() {
             if (s.ai) {
                 val ready = ModelDownload.ready(this@MainActivity)
                 addView(k.text(if (ready) "Ready. The model is on this phone." else ModelDownload.status.ifEmpty { "The model (2.6 GB) is not on this phone yet." }, Type.CAPTION, Ui.soft),
-                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(8) })
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
                 if (!ready) addView(k.btn("Download model (Wi-Fi only)", true) { ModelDownload.start(applicationContext) { EventLog.refresh() }; render() },
                     LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
             }
@@ -707,7 +706,7 @@ class MainActivity : Activity() {
         }
 
         card("Recent button presses") {
-            addView(k.text(EventLog.items.joinToString("\n").ifEmpty { "None yet. Press your button." }, Type.SMALL, Ui.soft).apply { setLineSpacing(0f, 1.2f) })
+            addView(k.text(EventLog.items.joinToString("\n").ifEmpty { "None yet. Press your button." }, Type.CAPTION, Ui.soft).apply { setLineSpacing(0f, 1.2f) })
         }
 
         body.addView(k.quiet("Reset settings", Ui.bad) { k.confirm("Reset all settings?", "Reset") { change(LauncherSettings()) } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })

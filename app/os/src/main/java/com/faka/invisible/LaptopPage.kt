@@ -87,7 +87,7 @@ class LaptopPage(private val a: Activity, private val k: com.faka.invisible.Kit,
 
     private fun drawRoom(r: Room) {
         body.addView(k.text(RoomState.word(r.state) + if (r.need.isNotBlank()) ". " + r.need else "", Type.BODY, Ui.soft))
-        if (note.isNotEmpty()) body.addView(k.text(note, Type.SMALL, if (note.startsWith("Sent")) Ui.good else Ui.bad), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
+        if (note.isNotEmpty()) body.addView(k.text(note, Type.CAPTION, if (note.startsWith("Sent")) Ui.good else Ui.bad), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
         body.addView(k.mono(screen.ifBlank { "..." }), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
         body.addView(k.btn("Refresh") { loadScreen(r) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
         k.group(body, "Actions") {
