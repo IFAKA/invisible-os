@@ -7,8 +7,8 @@ package com.faka.invisible.voicekit
 /** Fixed spoken sentences, and the tree names the menu says. */
 private val SPOKEN_ES = mapOf(
     // ---- Voice ----
-    "Click when you hear it. Two clicks: back one. Three clicks: go up." to "Haz clic cuando lo oigas. Dos clics: uno atrás. Tres clics: sube.",
-    "Hold: quieter, any press stops. Click: louder." to "Mantén: más bajo. Cualquier toque lo detiene. Clic: más alto.",
+    "Click when you hear it. Two clicks: back one. Three clicks: go up. To close: click, then hold." to "Haz clic cuando lo oigas. Dos clics: uno atrás. Tres clics: sube. Para cerrar: clic, luego mantén.",
+    "Click: louder. Two clicks: quieter. Hold: keep lowering." to "Clic: más alto. Dos clics: más bajo. Mantén: sigue bajando.",
     "Find. Pick the first letter." to "Buscar. Elige la primera letra.",
     "Type it with letters. They go A to Z. Click on yours." to "Escríbelo con letras. Van de la A a la Z. Haz clic en la tuya.",
     "Hold to find by name." to "Mantén pulsado para buscar por nombre.",

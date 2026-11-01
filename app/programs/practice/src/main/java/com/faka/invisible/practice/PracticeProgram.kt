@@ -80,7 +80,7 @@ class PracticeProgram : Program {
     companion object {
         const val DONE_KEY = "practice_done"
         private const val LEAVE_MS = 3000L
-        private const val IDLE_MS = 10000L   // quiet after a prompt before it is repeated: time to find the button and press
+        private const val IDLE_MS = 5000L   // quiet after a prompt before it is repeated: time to find the button and press
     }
 }
 

@@ -22,6 +22,7 @@ class FlowButtonTest {
         rig.press("120");                 rig.need("click twice")
         rig.press("120,150,120");         rig.need("click three times")
         rig.press("100,150,100,150,100"); rig.need("click, then hold")
+        rig.need("wake me")               // the last line names the next step
         assertEquals(0, host.ended)
         rig.press("120,150,900")          // click, then hold: the OS (ButtonInput) catches it and closes the practice
         rig.advance(Pacing.GAP_MS)
@@ -147,6 +148,20 @@ class FlowButtonTest {
         val r = p.result as HomeResult.Act
         assertEquals("com.whatsapp", r.action.target)
         assertEquals(1, host.ended)
+    }
+
+    // ---- the first time, the home letters say how to leave ----
+    @Test fun home_letters_first_time_says_how_to_leave() {
+        val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)
+        val apps = object : ActionSource {
+            override val id = "apps"
+            override fun actions() = listOf(HomeAction(ActionKind.OPEN, "WhatsApp", "com.whatsapp", 30.0))
+        }
+        val store = object : com.faka.invisible.write.LoopStore { override fun load() = emptyList<Double>(); override fun level() = com.faka.invisible.logickit.LoopLevel.TOP; override fun save(offsets: List<Double>) {} }
+        val p = HomeLetters(listOf(apps), ActionRanker(), audio, audio, store, { false }, {})
+        rig.running = p; p.start(host)
+        rig.advance(6000)
+        rig.need("hold three seconds to leave")
     }
 
     // ---- what you hear is what you see: the screen's item is the item whose sound starts now ----

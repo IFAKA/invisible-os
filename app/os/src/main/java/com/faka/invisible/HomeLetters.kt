@@ -70,7 +70,7 @@ class HomeLetters(
         Trace.ev("home", "request start seed=${seeded.first}")
         Trace.ev("loop", level.describe())
         if (hintSeen()) { Trace.ev("home", "hint skipped (heard before)"); round() }
-        else { setHintSeen(); Trace.ev("home", "hint spoken"); speakThen(Voice.HOME_LETTERS_HINT) { round() } }
+        else { setHintSeen(); Trace.ev("home", "hint spoken"); speakThen(Voice.HOME_LETTERS_HINT) { speakThen(Voice.HOME_LETTERS_LEAVE) { round() } } }
     }
 
     override fun stop() { finish(HomeResult.Exit) }

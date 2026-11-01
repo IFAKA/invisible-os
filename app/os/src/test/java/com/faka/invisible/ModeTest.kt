@@ -1022,7 +1022,7 @@ class ModeTest {
     @Test fun learningModeSpeaksOneHintAtWakeThenOptions() {
         val r = Rig(); r.codes = 0; r.wake()
         r.advance(400)
-        assertEquals(listOf("say Click when you hear it. Two clicks: back one. Three clicks: go up."), r.spoken())
+        assertEquals(listOf("say Click when you hear it. Two clicks: back one. Three clicks: go up. To close: click, then hold."), r.spoken())
         r.advance(500); assertEquals("say Timer", r.spoken().last())
         r.advance(60_000); assertEquals(1, r.spoken().count { it.contains("Click when you") })
     }
