@@ -12,12 +12,39 @@ class SetupTest {
     @Test fun firstStepIsButtonAccess() {
         val st = Setup.steps(none)
         assertEquals("button", st[Setup.current(st)].id)
-        assertEquals("Step 1 of 2", Setup.label(0, Setup.firstRun(st).size))
+        assertEquals("Step 1 of 3", Setup.label(0, Setup.firstRun(st).size))
     }
-    @Test fun newUserIsAskedOnlyForButtonAccessAndTheHold() {
-        assertEquals(listOf("button", "test"), Setup.firstRun(Setup.steps(none)).map { it.id })
-        val ready = Setup.firstRun(Setup.steps(none.copy(button = true, buttonTested = true)))
-        assertEquals(-1, Setup.current(ready)); assertTrue(Setup.ready(Setup.steps(none.copy(button = true, buttonTested = true))))
+    @Test fun newUserIsAskedForButtonThenTestThenNotificationsAndNothingElse() {
+        assertEquals(listOf("button", "test", "notif"), Setup.firstRun(Setup.steps(none)).map { it.id })
+        val st = Setup.firstRun(Setup.steps(none.copy(button = true, buttonTested = true)))
+        assertEquals("notif", st[Setup.current(st)].id)
+        assertTrue(st.last().optional)   // skippable, never a wall
+        val skipped = Setup.firstRun(Setup.steps(none.copy(button = true, buttonTested = true, skipped = setOf("notif"))))
+        assertEquals(-1, Setup.current(skipped))
+        assertTrue(Setup.ready(Setup.steps(none.copy(button = true, buttonTested = true))))
+    }
+    @Test fun optionalStepsComeAfterOneAtATimeInOrder() {
+        val st = Setup.steps(all.copy(assistant = false, postNotifications = false, calendar = false, location = false, usage = false))
+        val seen = ArrayList<String>()
+        var skipped = emptySet<String>()
+        while (true) {
+            val n = Setup.later(Setup.steps(all.copy(assistant = false, postNotifications = false, calendar = false, location = false, usage = false, skipped = skipped)), true) ?: break
+            seen += n.id; skipped = skipped + n.id
+        }
+        assertEquals(listOf("assist", "post", "calendar", "location", "usage"), seen)
+        assertEquals(null, Setup.later(st, practiceDone = false))
+    }
+    @Test fun comingBackRepeatsTapsOnceThenOnlyHints() {
+        assertEquals(Setup.Back.DONE, Setup.afterReturn(true, 0))
+        assertEquals(Setup.Back.REPEAT_TAPS, Setup.afterReturn(false, 0))
+        assertEquals(Setup.Back.HINT_ONLY, Setup.afterReturn(false, 1))
+    }
+    @Test fun everyTapSentenceIsShortAndEveryStepHasTaps() {
+        for (id in Setup.steps(all).map { it.id } + "test") {
+            val taps = com.faka.invisible.voicekit.Voice.setupTaps(id)
+            assertTrue(id, taps.isNotEmpty())
+            taps.forEach { assertTrue(it.text, it.text.split(" ").size <= 7) }
+        }
     }
     @Test fun assistantIsOfferedOnlyAfterPracticeThenUsageAndSkipIsFinal() {
         val st = Setup.steps(all.copy(assistant = false, usage = false))

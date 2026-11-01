@@ -140,6 +140,26 @@ object Voice {
     fun setupStep(n: Int, total: Int, title: String, action: String?) =
         f("Step $n of $total. $title. " + if (action != null) "Tap $action." else "Hold it for one second.")
     val BUTTON_ACCESS_OFF get() = f("Button access is off.")
+    /** "Step 1 of 3. Button access." The page opens by itself; the taps follow in [setupTaps]. */
+    fun setupIntro(n: Int, total: Int, title: String) = f("Step $n of $total. $title.")
+    /** The exact taps of one setup step, one short sentence each (spoken in order; the screen shows the one now heard). */
+    fun setupTaps(id: String): List<Phrase> = when (id) {
+        "button", "notif" -> listOf(f("Find Invisible OS."), f("Tap it."), f("Turn it on."), f("Tap Allow."))
+        "usage" -> listOf(f("Find Invisible OS."), f("Tap it."), f("Turn it on."))
+        "assist" -> listOf(f("Tap Digital assistant app."), f("Tap Invisible OS."), f("Tap OK."))
+        "location" -> listOf(f("Tap While using the app."))
+        "test" -> listOf(f("Hold your earbud button."), f("Hold it for one second."))
+        else -> listOf(f("Tap Allow."))
+    }
+    /** An optional step offered after the main setup: "Calendar. Optional." */
+    fun setupOffer(title: String) = f("$title. Optional.")
+    /** The Button access promise, in short (the screen card has the full text); then the person taps Agree. */
+    val DISCLOSE get() = listOf(f("It reads only your earbud button."), f("It never reads your screen."), f("Nothing leaves the phone."), f("Tap Agree on the screen."))
+    val SETUP_DONE get() = f("Done.")
+    val HEARD_BUTTON get() = f("I heard your button.")
+    val SETUP_SKIP_HINT get() = f("Skip for now: click once.")
+    /** Said after 5 s of quiet on a setup step. */
+    fun setupNudge(id: String) = if (id == "test") f("Hold your earbud button for one second.") else f("Tap the big button on the screen.")
     val NOTIF_ACCESS_OFF get() = f("Notification access is off. Music and messages will not work. Open the app to turn it on.")
 
     // ---- weather, calendar, find my phone ----

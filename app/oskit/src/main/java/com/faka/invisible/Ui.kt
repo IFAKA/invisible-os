@@ -485,7 +485,7 @@ class Kit(private val c: Context) {
 
     /** One onboarding step: a thin progress bar, a quiet step label, a large title, a plain line, one main button, one quiet one. */
     fun onboarding(parent: LinearLayout, progress: Float, stepLabel: String, title: String, line: String,
-                   primaryLabel: String?, onPrimary: () -> Unit, secondaryLabel: String? = null, onSecondary: () -> Unit = {}, focusFirst: Boolean = false) {
+                   primaryLabel: String?, onPrimary: () -> Unit, secondaryLabel: String? = null, onSecondary: () -> Unit = {}, focusFirst: Boolean = false, bigLine: Boolean = false) {
         val track = FrameBar(progress).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
         parent.addView(track, lp(h = dp(4), top = Ui.S3))
         val label = text(stepLabel, Type.SECTION, Ui.accent).apply { contentDescription = "$stepLabel. $title" }   // first thing TalkBack reads: where you are and what it is
@@ -495,7 +495,7 @@ class Kit(private val c: Context) {
             if (am.isTouchExplorationEnabled) label.performAccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
         }
         parent.addView(text(title, Type.LARGE), lp(top = Ui.S1))
-        parent.addView(text(line, Type.BODY, Ui.soft), lp(top = Ui.S2))
+        parent.addView(if (bigLine) text(line, Type.TITLE) else text(line, Type.BODY, Ui.soft), lp(top = Ui.S2))
         if (primaryLabel != null) parent.addView(primary(primaryLabel, onPrimary), lp(top = Ui.S6))
         if (secondaryLabel != null) parent.addView(quiet(secondaryLabel, Ui.soft, onSecondary), lp(top = Ui.S1))
     }

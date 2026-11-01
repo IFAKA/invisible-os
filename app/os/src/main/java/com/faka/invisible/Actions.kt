@@ -300,7 +300,7 @@ object Actions {
         taskStore = TaskStore(if (tf.exists()) tf.readLines() else emptyList(), onAdd = { taskMemory.record(it.text, it.lang) }) { lines -> try { tf.writeText(lines.joinToString("\n")) } catch (e: Exception) { Log.e(TAG, "tasks.txt write failed", e) } }
         VoiceKit.init(app, handler, { speechRate() }, object : SpeechListener {
             override fun started() { mode.onSpeechStarted(); Log.d("E2E", "speech started"); pressOnStarted() }
-            override fun ended() { mode.onSpeechDone(); running?.takeIf { it.active }?.speechDone(); Log.d("E2E", "speech ended") }
+            override fun ended() { onSpeechIdle?.invoke(); mode.onSpeechDone(); running?.takeIf { it.active }?.speechDone(); Log.d("E2E", "speech ended") }
         }, buttonTarget, ComponentName(app, ControllerNotificationListener::class.java))
         VoiceKit.narrator.swapEars = { prefs().getBoolean("swap_ears", true) }
         rooms.restart()
@@ -471,6 +471,33 @@ object Actions {
         com.faka.invisible.voicekit.Cues.stageLine(t)
     }
 
+    fun tonePick() { handler.post { narrator.beep(Tone.PICK) } }
+
+    /** Called when the phone finishes a spoken line (the setup uses it to time its 5 s nudge). Main thread. */
+    @Volatile var onSpeechIdle: (() -> Unit)? = null
+
+    /** The app screen leaves the setup: forget the setup lines so the plain home shows (not while the menu or a program is on). */
+    fun clearSetupMirror() { handler.post { if (!mode.active && running == null) com.faka.invisible.voicekit.ScreenMirror.clear() } }
+
+    /** A button gesture while the setup screen shows. A first hold: confirm sound and "I heard your button." One click: skip the step if the screen said it may be skipped. */
+    private fun setupGesture(g: Gesture) {
+        val p = prefs()
+        if (g == Gesture.HOLD || g == Gesture.CLICK_HOLD) {
+            if (p.getBoolean("button_tested", false)) return
+            p.edit().putBoolean("button_tested", true).apply()
+            Trace.ev("setup", "button heard")
+            handler.post { narrator.beep(Tone.PICK); com.faka.invisible.voicekit.Cues.stageLine(Voice.HEARD_BUTTON.text); say(Voice.HEARD_BUTTON, false) }
+            EventLog.refresh()
+        } else if (g == Gesture.SINGLE) {
+            val id = p.getString("setup_skippable", "").orEmpty()
+            if (id.isEmpty()) return
+            p.edit().putStringSet("setup_skipped", (p.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + id).remove("setup_skippable").apply()
+            Trace.ev("setup", "skipped $id by click")
+            handler.post { narrator.beep(Tone.BACK) }
+            EventLog.refresh()
+        }
+    }
+
     private fun startProgram(p: Program) {
         running?.stop()
         running = p
@@ -511,7 +538,7 @@ object Actions {
         override fun gesture(g: Gesture, durationMs: Long) {
             EventLog.add("${g.name.lowercase()}  ${durationMs}ms")
             EventLog.pressed(g)
-            if (prefs().getBoolean("setup_open", false)) { prefs().edit().putBoolean("button_tested", true).apply(); return }   // the setup screen is showing: a hold only proves the button works, it opens nothing
+            if (prefs().getBoolean("setup_open", false)) { setupGesture(g); return }   // the setup screen is showing: nothing opens; a hold proves the button, one click skips when allowed
             if ((g == Gesture.HOLD || g == Gesture.CLICK_HOLD) && !mode.active && running == null && !prefs().getBoolean(PracticeProgram.DONE_KEY, false)) { startPractice(); return }   // the first wake: the practice comes first, once
             val inMode = mode.active && mode.screen != ControllerMode.Screen.SENT   // a click that cancels a send has its own tone
             val before = mode.tonesPlayed
@@ -646,6 +673,9 @@ object Actions {
 
     /** A screen of the app speaks with the app's own voice (the setup steps, the lost-access warning). */
     fun announce(p: Phrase, queue: Boolean) { handler.post { say(p, queue) } }
+
+    /** A setup line: spoken, and published as the line now heard, so the big setup text is the same words at the same moment. */
+    fun announceSetup(p: Phrase, queue: Boolean) { handler.post { com.faka.invisible.voicekit.Cues.stageLine(p.text); say(p, queue) } }
 
     private fun say(p: Phrase, queue: Boolean, fast: Boolean = false, slow: Boolean = false) { Log.d("SAY", p.text); pressOnSaid(p.text); narrator.say(p, queue, fast, slow) }   // SAY log: lets a dev check what the menu speaks
 

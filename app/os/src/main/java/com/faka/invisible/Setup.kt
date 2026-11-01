@@ -30,18 +30,25 @@ object Setup {
         add(SetupStep("usage", "Usage access", "Better order of apps: the ones you use most come first.", s.usage, true))
     }.map { it.copy(skipped = !it.done && it.optional && it.id in s.skipped) }
 
-    /** First run: ONLY the required steps (Button access, then holding the button). Every other permission is asked when a feature first needs it. */
-    fun firstRun(steps: List<SetupStep>) = steps.filter { !it.optional }
+    /** First run: the main feature only, in this order: Button access, the button test, Notification access (skippable). Every other permission comes later, one at a time ([later]). */
+    val FIRST_RUN = listOf("button", "test", "notif")
+    fun firstRun(steps: List<SetupStep>) = FIRST_RUN.mapNotNull { id -> steps.firstOrNull { it.id == id } }
+
+    /** What to say when the person comes back from a Settings page. */
+    enum class Back { DONE, REPEAT_TAPS, HINT_ONLY }
+    /** [passed] = the permission is on now; [failures] = how many times they already came back without it. Taps are repeated once, then only the skip hint. */
+    fun afterReturn(passed: Boolean, failures: Int) = if (passed) Back.DONE else if (failures == 0) Back.REPEAT_TAPS else Back.HINT_ONLY
 
     /** Index of the step to do now, or -1 when all are passed. */
     fun current(steps: List<SetupStep>) = steps.indexOfFirst { !it.passed }
 
     /**
      * The one optional step offered on the app screen once the user is ready (never blocks): the Assistant after the practice
-     * was heard, then Usage access. A skipped or done step is not offered again. Null = nothing to offer.
+     * was heard, then [LATER] in order. A skipped or done step is not offered again. Null = nothing to offer.
      */
+    val LATER = listOf("assist", "post", "calendar", "location", "usage")
     fun later(steps: List<SetupStep>, practiceDone: Boolean): SetupStep? {
-        val order = if (practiceDone) listOf("assist", "usage") else emptyList()
+        val order = if (practiceDone) LATER else emptyList()
         return order.mapNotNull { id -> steps.firstOrNull { it.id == id } }.firstOrNull { !it.passed }
     }
 

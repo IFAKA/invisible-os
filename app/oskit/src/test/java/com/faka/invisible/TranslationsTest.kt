@@ -79,6 +79,8 @@ class TranslationsTest {
         assertEquals("5 03 de la tarde, batería 80 por ciento, sin mensajes sin leer, próxima alarma 7 00 de la mañana",
             Voice.status(com.faka.invisible.voicekit.Status(17, 3, 80, 7, 0), 0).text)
         assertEquals("Paso 2 de 12. Acceso a notificaciones. Toca Activar.", Voice.setupStep(2, 12, "Notification access", "Turn on").text)
+        assertEquals("Paso 1 de 3. Acceso al botón.", Voice.setupIntro(1, 3, "Button access").text)
+        assertEquals("Toca Permitir.", Voice.setupTaps("button").last().text)
     }
 
     @Test fun unknownTextStaysEnglishWithTheEnglishVoice() {
