@@ -1,7 +1,7 @@
 const QA = [
   ["Does it listen to me?", "No. There is no microphone permission and no voice recognition. It speaks, and waits for your finger."],
   ["What earbuds work?", "Any wired or Bluetooth earbud or headset that has one button."],
-  ["Does it need internet?", "No. Only the optional on-phone AI model is downloaded, and only if you ask."],
+  ["Does it need internet?", "Not for the button and the menu. The internet is used only to download the AI model and voice when you ask, for the weather (your rounded coordinates go to open-meteo.com), to search music on YouTube Music, and for your own laptop if you pair one. See the privacy page."],
   ["Is it for blind people only?", "No. It is for anyone who cannot or does not want to look: cooks, runners, riders, people with motor limits."],
 ] as const;
 

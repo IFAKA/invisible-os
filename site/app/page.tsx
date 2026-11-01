@@ -83,6 +83,7 @@ export default function Home() {
                 <p className="text-sm text-mute">Then scan the QR code it shows. Remove it all with <code>invisible uninstall</code>.</p>
               </div>
               <a href="https://github.com/IFAKA/invisible-os" className="text-sm text-mute underline">Source on GitHub</a>
+              <a href="/privacy" className="text-sm text-mute underline">Privacy policy</a>
             </div>
           </Reveal>
           <Reveal delay={0.2} className="mt-[4svh] w-full max-w-[680px] text-left"><Faq /></Reveal>
