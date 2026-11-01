@@ -219,6 +219,21 @@ class FlowButtonTest {
         assertEquals(0, rig2.exits); assertEquals(0, host2.ended); assertTrue(p2.active)
     }
 
+    /** The phone (trace 2026-11-01 21:48): a home hold started the letters while the button was still down; the release went to the
+     *  program, so the menu kept a press open for 30 s and the next click then hold read as a plain hold (letters again, not close). */
+    @Test fun a_hold_that_starts_a_program_does_not_leave_a_press_open_in_the_menu() {
+        val rig = RoboRig()
+        val owner = object : RawButton { var on = false; override val active get() = on; override fun down(time: Long) {}; override fun up(time: Long) {} }
+        rig.rawOwner = owner
+        rig.gestureHook = { g -> if (g == Gesture.CLICK_HOLD) owner.on = true; true }   // the hold opens the program mid-press
+        rig.press("900"); rig.advance(Pacing.GAP_MS)
+        assertTrue(owner.on)
+        owner.on = false; rig.unhandled.clear()               // the program ended; the menu has the button again
+        rig.gestureHook = null
+        rig.press("120,200,800"); rig.advance(Pacing.GAP_MS)
+        assertEquals("click then hold is the close", listOf(Gesture.HOLD), rig.unhandled.filter { it != Gesture.CLICK_HOLD_END })
+    }
+
     /** The real phone (trace 2026-10-28 21:47): one click reached the loop, then ~600 ms later the system's assistant signal arrived and was read as click-then-hold = exit. */
     @Test fun home_letters_one_click_then_the_assistant_signal_does_not_end_it() {
         val rig = RoboRig(); val host = rig.Host(); val audio = RigLoopAudio(rig)

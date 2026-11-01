@@ -55,7 +55,7 @@ class ButtonInput(private val handler: Handler, private val narrator: Narrator, 
         lastKeyAt = SystemClock.uptimeMillis()
         if (!deduper.accept(source, isDown, downTime)) { Log.d(TAG, "DEDUPE dropped $source down=$downTime"); Trace.ev("key", "$source ${if (isDown) "down" else "up"} dropped (duplicate)"); return }
         Trace.ev("key", "$source ${if (isDown) "down" else "up"} menu=${target.menuActive} prog=${target.raw()?.javaClass?.simpleName ?: "-"}")
-        target.raw()?.let { r -> if (isDown) rawDown(r, time) else rawUp(r, time); return }   // a program owns the raw button
+        target.raw()?.let { r -> detector.abandon(); if (isDown) rawDown(r, time) else rawUp(r, time); return }   // a program owns the raw button; a menu press it cut is forgotten (else the next press reads as the end of a 30 s hold)
         if (isDown && target.menuActive) narrator.beep(Tone.TAP)   // blind: every press is answered at once
         if (isDown) detector.down(time) else detector.up(time)
     }

@@ -40,6 +40,12 @@ class GestureDetector(
         onGesture(g, dur)
     }
 
+    /** A program took the button mid-press (a hold that started it): its release goes to the program, so forget this press. */
+    fun abandon() {
+        if (downAt < 0 && presses.isEmpty()) return
+        cancel(); downAt = -1; holdFired = false; clickHold = false; presses.clear()
+    }
+
     fun up(time: Long) {
         if (downAt < 0) return
         cancel()
