@@ -103,7 +103,7 @@ say "Bridge \"$NAME\" is $LOADED at $URL (starts at every login)."
 case "$HOOKS" in added*) say "Claude Code hooks added to ~/.claude/settings.json (backup: settings.json.bak)." ;; *) say "Claude Code hooks were already in ~/.claude/settings.json." ;; esac
 [ -n "$LINK" ] && say "Command \`invisible\` ready: invisible status, invisible uninstall."
 for CLIP in pbcopy wl-copy "xclip -selection clipboard"; do
-  if command -v "${CLIP%% *}" >/dev/null 2>&1 && printf '%s' "$CODE" | $CLIP 2>/dev/null; then say "No camera? The code is copied: paste it in the app, Computers, Add."; break; fi
+  if command -v "${CLIP%% *}" >/dev/null 2>&1 && printf '%s' "$CODE" | $CLIP 2>/dev/null; then say "No camera? The code is copied: paste it in the app: Laptop, Add a laptop."; break; fi
 done
 say ""
 # the QR is last, so the one thing to do is what the eye lands on. A web link: a phone without the app gets "install, then connect"

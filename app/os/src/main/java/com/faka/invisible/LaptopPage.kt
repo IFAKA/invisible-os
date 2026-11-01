@@ -29,7 +29,7 @@ class LaptopPage(private val a: Activity, private val k: com.faka.invisible.Kit,
 
     /** True when the back link goes out of a room. */
     val inRoom get() = room != null
-    fun title() = room?.let { RoomState.nameOf(it) } ?: Actions.activeComputer()?.name ?: "Computer"
+    fun title() = room?.let { RoomState.nameOf(it) } ?: Actions.activeComputer()?.name ?: "Laptop"
     fun backLabel() = "Rooms"
     fun leaveRoom() { room = null; note = ""; redraw(); load() }
 
@@ -52,13 +52,13 @@ class LaptopPage(private val a: Activity, private val k: com.faka.invisible.Kit,
     }
 
     private fun loadScreen(r: Room) {
-        bg({ it.screen(r.id) }) { t -> if (room?.id == r.id) { if (t == null) note = (Actions.activeComputer()?.name ?: "The computer") + " not reachable" else { screen = t; note = "" }; redraw() } }
+        bg({ it.screen(r.id) }) { t -> if (room?.id == r.id) { if (t == null) note = (Actions.activeComputer()?.name ?: "The laptop") + " not reachable" else { screen = t; note = "" }; redraw() } }
     }
 
     private fun runAction(r: Room, act: RoomAction) {
         note = "Sending..."; redraw()
         bg({ it.act(r.id, act.id) }) { ok ->
-            note = when (ok) { true -> "Sent: " + RoomText.label(act); false -> "The computer did not take it"; null -> (Actions.activeComputer()?.name ?: "The computer") + " not reachable" }
+            note = when (ok) { true -> "Sent: " + RoomText.label(act); false -> "The laptop did not take it"; null -> (Actions.activeComputer()?.name ?: "The laptop") + " not reachable" }
             redraw()
         }
     }
@@ -75,10 +75,7 @@ class LaptopPage(private val a: Activity, private val k: com.faka.invisible.Kit,
 
     private fun drawRooms() {
         val list = rooms
-        when {
-            loading && list == null -> body.addView(k.text("Loading...", Type.BODY, Ui.soft))
-            down -> body.addView(k.text((Actions.activeComputer()?.name ?: "The computer") + " not reachable", Type.HEAD, Ui.bad))
-        }
+        if (loading && list == null) body.addView(k.text("Loading...", Type.BODY, Ui.soft))   // "not reachable" and why: the connection part above (ComputersPage)
         if (list != null) {
             if (list.isEmpty()) body.addView(k.text("No rooms open.", Type.BODY, Ui.soft))
             else k.group(body) { list.forEach { r -> k.navRow(this, RoomState.nameOf(r) + ", " + RoomState.word(r.state), r.need.ifBlank { r.project }) { openRoom(r) } } }

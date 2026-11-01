@@ -150,7 +150,7 @@ object Computers {
         val n = clean(name)
         return when {
             n.isEmpty() -> "Write a name."
-            list.any { it.name.equals(n, true) && !it.name.equals(renaming, true) } -> "Another computer has this name."
+            list.any { it.name.equals(n, true) && !it.name.equals(renaming, true) } -> "Another laptop has this name."
             url.isBlank() -> "Write the address."
             token.isBlank() -> "Write the token."
             else -> null

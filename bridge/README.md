@@ -20,15 +20,15 @@ The laptop is a shop. Claude Code is a worker who sometimes needs a yes or no. `
 
 ## Set up (the whole story in 3 lines)
 1. On the computer, as the Mac user to add, run the one line above (or `invisible pair`, or `sh bridge/setup.sh`; optional `--name Work`, `--port 8766`). It gets a copy into `~/invisible-os`, adds the Claude Code hooks to that user's `~/.claude/settings.json` (backup kept), starts the bridge at login (launchd, no terminal left open), puts the `invisible` command on PATH, and shows a QR code. Run it again any time: it changes nothing that is already right.
-2. On the phone: scan the QR with the camera. It is a web link (`invisible-os.vercel.app/pair#CODE`, the code stays after `#`, so the site never sees it): with the app installed it opens the app and adds the computer; without it the page says "1. Download the app, 2. Connect". No camera? The code is in the Mac's clipboard: Computers, Add a computer, Paste.
-3. The phone listens to the computer you scanned last. Switch with "Switch to Work" in the Laptop tool, or tap the computer under Computers.
+2. On the phone: scan the QR with the camera. It is a web link (`invisible-os.vercel.app/pair#CODE`, the code stays after `#`, so the site never sees it): with the app installed it opens the app and adds the computer; without it the page says "1. Download the app, 2. Connect". No camera? The code is in the Mac's clipboard: Laptop, Add a laptop, Paste.
+3. The phone listens to the computer you scanned last. Switch with "Switch to Work" in the Laptop tool, or tap the laptop on the Laptop page.
 
 Each Mac user gets their own copy, bridge and port (the next free one from 8765), named by the person's first name ("Ana"), short to hear. The `invisible` command in `/opt/homebrew/bin` is shared by all users of the Mac and runs each user's own copy. The pair code carries the name, address and token, so there is nothing to type. Not built yet: scanning inside the app; the camera app does the scan.
 
 ## By hand (what setup.sh does for you)
 - `./install.sh` prints the hooks text and a launchd file; it changes nothing itself.
-- `python3 server.py` prints the address, the token and the pair code line (token in `~/.config/invisible-bridge/token`, mode 600; `--show-token` prints them again; `--name Work`, `--port 8766` or `INVISIBLE_BRIDGE_PORT`).
-- Phone: Computers, Add a computer, paste the pair code ("Enter by hand" still takes the address and token).
+- `python3 server.py` prints the address, the token and the pair code line (token in `~/.config/invisible-bridge/token`, mode 600; `--show-token` prints them again; `--pair` prints just the pair code and QR; `--name Work`, `--port 8766` or `INVISIBLE_BRIDGE_PORT`).
+- Phone: Laptop, Add a laptop, paste the pair code ("Enter by hand" still takes the address and token).
 - `hook.py` finds its bridge in `~/.config/invisible-bridge/url`, which `server.py` writes in that user's home, so each Mac user's hooks call their own port.
 
 ## More than one computer

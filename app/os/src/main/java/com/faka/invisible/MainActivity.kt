@@ -27,6 +27,7 @@ import com.faka.invisible.logickit.AiChoice
 import com.faka.invisible.logickit.Habits
 import com.faka.invisible.habits.HabitsProgram
 import com.faka.invisible.oskit.Trace
+import com.faka.invisible.claude.LaptopLink
 import com.faka.invisible.voicekit.MenuLanguage
 import com.faka.invisible.voicekit.ScreenMirror
 import com.faka.invisible.voicekit.Translations
@@ -68,7 +69,6 @@ class MainActivity : Activity() {
         ScreenMirror.onChange = { if (page == Page.HOME) EventLog.refresh() }
         intent.getStringExtra("page")?.let { n -> Page.values().firstOrNull { it.name.equals(n, true) }?.let { page = it } }   // for screenshots: adb ... --es page menu --es open /Tools
         if (page == Page.LAPTOP) laptop.start()
-        if (page == Page.COMPUTERS) computersPage.start()
         previewReady = intent.getBooleanExtra("ready", false)
         if (intent.getBooleanExtra("disclosure", false)) disclosure = true   // for screenshots
         intent.getStringExtra("open")?.let { openGroups = it.split(',').toSet() }
@@ -84,8 +84,42 @@ class MainActivity : Activity() {
         if (i.hasExtra("need")) { previewNeed = i.getStringExtra("need")?.takeIf { it.isNotEmpty() }; render() }   // screenshots: show the card of a missing permission
     }
 
+    // ---- the laptop line under the status card: a quick check on a background thread, on resume and every 30 s while the screen is visible ----
+    private var laptopOk: Boolean? = null
+    private var laptopWhy = ""
+    private var laptopFor = ""
+    private var laptopBusy = false
+    private val laptopTimer = object : Runnable { override fun run() { checkLaptop(); Handler(Looper.getMainLooper()).postDelayed(this, 30_000) } }
+
+    private fun checkLaptop() {
+        val c = Actions.activeComputer() ?: return
+        if (laptopBusy) return
+        laptopBusy = true
+        Thread({
+            val p = com.faka.invisible.claude.LaptopLink.probe(c)
+            runOnUiThread {
+                laptopBusy = false
+                if (isDestroyed) return@runOnUiThread
+                val same = laptopFor == c.name && laptopOk == p.ok && laptopWhy == p.why
+                laptopOk = p.ok; laptopWhy = p.why; laptopFor = c.name
+                if (!same && page == Page.HOME) render()
+            }
+        }, "laptop-status").apply { isDaemon = true; start() }
+    }
+
+    private fun laptopLine(parent: LinearLayout) {
+        val list = Actions.computers(); val c = Actions.activeComputer()
+        val tone = LaptopLink.tone(list.size, if (c != null && laptopFor == c.name) laptopOk else null)
+        val color = when (tone) { LaptopLink.Tone.OK -> Ui.good; LaptopLink.Tone.DOWN -> Ui.bad; else -> Ui.edge }
+        val sub = when (tone) { LaptopLink.Tone.NONE -> tr("Tap to add one"); LaptopLink.Tone.DOWN -> tr(laptopWhy); else -> c?.name.orEmpty() }
+        k.dotRow(parent, color, tr(LaptopLink.headline(tone)), sub) { open(Page.LAPTOP) }
+    }
+
+    override fun onPause() { Handler(Looper.getMainLooper()).removeCallbacks(laptopTimer); super.onPause() }
+
     override fun onResume() {
         super.onResume()
+        Handler(Looper.getMainLooper()).removeCallbacks(laptopTimer); Handler(Looper.getMainLooper()).post(laptopTimer)
         if (!EventLog.running && !Actions.paused) startForegroundService(Intent(this, ButtonService::class.java))
         announceStep = true
         Handler(Looper.getMainLooper()).postDelayed({ render() }, 2600)   // if the service did not start, say so then
@@ -103,17 +137,18 @@ class MainActivity : Activity() {
     private fun slider(label: String, valueText: String, max: Int, now: Int, apply: (Int) -> LauncherSettings) = k.slider(label, valueText, max, now) { change(apply(it)) }
 
     // ---- screens: Home shows one thing to do and a few doors; each door opens one small page ----
-    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), MENUMORE("Order, Today and Phone"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), HABITS("Habits"), COMPUTERS("Computers"), LAPTOP("Laptop"), AI("AI"), HELP("Help") }
+    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), MENUMORE("Order, Today and Phone"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), HABITS("Habits"), LAPTOP("Laptop"), AI("AI"), HELP("Help") }
     private var page = Page.HOME
 
     private val laptop by lazy { LaptopPage(this, k, body) { render() } }
-    private val computersPage by lazy { ComputersPage(this, k, body, { render() }) { name -> Actions.setActive(name); page = Page.LAPTOP; laptop.start(); render() } }
+    private val computersPage: ComputersPage by lazy { ComputersPage(this, k, body, { render() }) { name -> Actions.setActive(name); computersPage.back(); laptop.start() } }
 
-    private fun open(p: Page) { page = p; if (p == Page.LAPTOP) laptop.start(); if (p == Page.COMPUTERS) computersPage.start(); render(); (body.parent as? ScrollView)?.scrollTo(0, 0); k.enter(body) }
+    private fun open(p: Page) { page = p; if (p == Page.LAPTOP) { laptop.start(); computersPage.start() }; render(); (body.parent as? ScrollView)?.scrollTo(0, 0); k.enter(body) }
 
-    /** Back goes up one step: inside the Computers page, a sub-page to its page, a page to Home, the settings to the mirror; from Home it leaves. */
+    /** Back goes up one step: inside the Laptop page, a room or a sub-page to its page, a page to Home, the settings to the mirror; from Home it leaves. */
     private fun goBack(): Boolean = when {
-        page == Page.COMPUTERS && computersPage.inside -> { computersPage.back(); true }
+        page == Page.LAPTOP && laptop.inRoom -> { laptop.leaveRoom(); true }
+        page == Page.LAPTOP && computersPage.inside -> { computersPage.back(); true }
         page == Page.MENUMORE -> { open(Page.MENU); true }
         page != Page.HOME -> { open(Page.HOME); true }
         settingsOpen -> { settingsOpen = false; render(); true }
@@ -171,7 +206,7 @@ class MainActivity : Activity() {
         body.removeAllViews(); cardParent = null
         if (page in fixedPages) { /* header is already in place */ }
         else if (page == Page.LAPTOP && laptop.inRoom) body.addView(k.header(laptop.title(), { laptop.leaveRoom() }, "Rooms"))
-        else if (page != Page.HOME) body.addView(k.header(tr(page.title), { open(Page.HOME) }))
+        else if (page != Page.HOME) body.addView(k.header(tr(if (page == Page.LAPTOP) LaptopLink.title(Actions.computers().size) else page.title), { open(Page.HOME) }))
         when (page) {
             Page.HOME -> home()
             Page.TASKS -> tasksPage()
@@ -180,8 +215,10 @@ class MainActivity : Activity() {
             Page.VOICE -> voicePage()
             Page.EMERGENCY -> emergencyPage()
             Page.HABITS -> habitsPage()
-            Page.COMPUTERS -> computersPage.draw()
-            Page.LAPTOP -> laptop.draw()
+            Page.LAPTOP -> {   // one page: the connection (name, reachable or not, add, rename, remove) on top, its rooms under it
+                if (!laptop.inRoom) computersPage.draw()
+                if (laptop.inRoom || (!computersPage.inside && Actions.computers().isNotEmpty())) laptop.draw()
+            }
             Page.AI -> aiPage()
             Page.HELP -> helpPage()
         }
@@ -304,6 +341,7 @@ class MainActivity : Activity() {
                 addView(k.primary(tr("Open Invisible OS")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) })
             }
         }
+        laptopLine(fixed)
         if (mir.active && settingsOpen) fixed.addView(k.quiet("\u2039 " + tr("Back to the menu")) { settingsOpen = false; render() })
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         fixed.addView(ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(list) }, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = k.dp(Ui.S2) })
@@ -326,11 +364,7 @@ class MainActivity : Activity() {
             k.navRow(this, tr("Habits"), Habits.names(sp.getString(HabitsProgram.LIST_KEY, null)).joinToString(", ")) { open(Page.HABITS) }
             k.navRow(this, tr("Emergency contact"), Actions.emergencyContact().ifEmpty { tr("Not set") }) { open(Page.EMERGENCY) }
             val pcs = Actions.computers()
-            if (pcs.isEmpty()) k.navRow(this, tr("Connect your laptop"), tr("Not connected yet")) { open(Page.COMPUTERS) }
-            else {
-                k.navRow(this, tr("Your laptop: agents and terminals"), tr("Read what needs you, answer by button")) { open(Page.LAPTOP) }
-                k.navRow(this, tr("Laptop connection"), pcs.joinToString(", ") { it.name }) { open(Page.COMPUTERS) }
-            }
+            k.navRow(this, tr(LaptopLink.title(pcs.size)), if (pcs.isEmpty()) tr("Not connected yet") else pcs.joinToString(", ") { it.name }) { open(Page.LAPTOP) }
             k.navRow(this, tr("Short summaries (AI)"), tr(when (AiChoice.label(s.ai, pcs.isNotEmpty(), ModelDownload.ready(this@MainActivity))) { "Off" -> "Off"; "Computer" -> "On, done by your laptop"; "Phone" -> "On, done on this phone"; else -> "On, but the phone model is not downloaded" })) { open(Page.AI) }
             k.navRow(this, tr("Help"), tr("Button gestures and practice")) { open(Page.HELP) }
         }

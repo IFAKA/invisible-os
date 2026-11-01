@@ -298,30 +298,43 @@ def make_server(host, port, store, token, rooms=None, idle=None):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--host", default=None, help="address to listen on (default: Tailscale or LAN address)")
+    ap.add_argument("--host", default=None, help="address to listen on (default: all addresses, so the Wi-Fi and Tailscale both work; the token is still needed)")
     ap.add_argument("--port", type=int, default=int(os.environ.get("INVISIBLE_BRIDGE_PORT", "8765")))
     ap.add_argument("--name", default=None, help="the name shown on the phone (default: this computer's short name)")
+    ap.add_argument("--pair", action="store_true", help="print the pair code and its QR code for the phone, then exit (fresh address, works while the bridge runs)")
     ap.add_argument("--show-token", action="store_true", help="print the token and the pair code, then exit")
     a = ap.parse_args()
     token = load_token()
-    host = a.host or default_host()
+    host = a.host or "0.0.0.0"   # listen on every address: a bridge started before Tailscale was up used to listen on the wrong one and the phone got no answer
+    shown = a.host if a.host and a.host != "0.0.0.0" else default_host()   # the address the phone is told
     name = a.name or default_name()
+    if a.pair:
+        code = pair_code(name, "http://%s:%d" % (shown, a.port), load_token())
+        if shown.startswith("127."):
+            print("Warning: this laptop has no network address, so the phone cannot reach it. Join the Wi-Fi (or start Tailscale) and run this again.", file=sys.stderr)
+        print(code)
+        try:
+            subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "qr.py"), "https://invisible-os.vercel.app/pair#" + code[len("invisible-pair:"):]], timeout=10)
+            print("Scan this with the phone camera, or paste the line above in the app (Laptop, Add a laptop).")
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return
     if a.show_token:
         print(token)
-        print(pair_code(name, "http://%s:%d" % (host, a.port), token))
+        print(pair_code(name, "http://%s:%d" % (shown, a.port), token))
         return
     idle = Idle()
     store = Store(active=idle.active)
     rooms = Rooms.from_env(pending=store.pending_panes, asks=store.pending_asks)
     srv = make_server(host, a.port, store, token, rooms, idle)
     threading.Thread(target=watch_rooms, args=(rooms, store, threading.Event()), daemon=True).start()
-    print("Bridge listening on http://%s:%d" % (host, a.port))
+    print("Bridge listening on port %d; the phone is told http://%s:%d" % (a.port, shown, a.port))
     os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(URL_FILE, "w") as f:
-        f.write("http://%s:%d\n" % (host, a.port))
+        f.write("http://%s:%d\n" % (shown, a.port))
     print("Token (also in %s):\n  %s" % (TOKEN_FILE, token))
-    print("Copy this line and paste it in the phone app (home screen, Computers, Add a computer):")
-    print(pair_code(name, "http://%s:%d" % (host, a.port), token))
+    print("Copy this line and paste it in the phone app (home screen, Laptop, Add a laptop):")
+    print(pair_code(name, "http://%s:%d" % (shown, a.port), token))
     sys.stdout.flush()
     try:
         srv.serve_forever()
