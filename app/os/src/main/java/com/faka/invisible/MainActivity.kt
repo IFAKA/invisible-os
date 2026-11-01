@@ -50,6 +50,21 @@ class MainActivity : Activity() {
     private val k by lazy { Kit(this) }
     /** A screen label in the menu language. */
     private fun tr(text: String) = Translations.label(text)
+
+    /** Only on a press: puts the last 2 days of the trace into a text file and opens the Android share sheet. The app sends nothing itself. */
+    private fun sendProblemReport() {
+        try {
+            val dir = java.io.File(filesDir, "trace")
+            val files = (dir.listFiles() ?: emptyArray()).filter { it.isFile }.associate { it.name to it.readText() }
+            val text = ProblemReport.build("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}, ${BuildConfig.BUILD_STAMP})", "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
+                "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}", files, System.currentTimeMillis())
+            val out = java.io.File(cacheDir, "reports").apply { mkdirs() }.let { java.io.File(it, "invisible-problem-report.txt") }
+            out.writeText(text)
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, "com.faka.invisible.reports", out)
+            startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_STREAM, uri).putExtra(Intent.EXTRA_SUBJECT, "Invisible OS problem report")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), tr("Send a problem report")))
+        } catch (e: Exception) { android.widget.Toast.makeText(this, tr("Could not make the report"), android.widget.Toast.LENGTH_LONG).show() }
+    }
     private var announceStep = true      // say the setup step when the screen opens and when we come back from Settings
     private var lostNote = false         // Button access was turned off since last time: say it once
 
@@ -428,9 +443,10 @@ class MainActivity : Activity() {
             k.navRow(this, tr("Habits"), Habits.names(sp.getString(HabitsProgram.LIST_KEY, null)).joinToString(", ")) { open(Page.HABITS) }
             k.navRow(this, tr("Emergency contact"), Actions.emergencyContact().ifEmpty { tr("Not set") }) { open(Page.EMERGENCY) }
             val pcs = Actions.computers()
-            k.navRow(this, tr(LaptopLink.title(pcs.size)), if (pcs.isEmpty()) tr("No laptop yet. Tap to add one.") else pcs.map { it.name }.filter { it != "Laptop" }.joinToString(", ").ifEmpty { tr("Tap to open") }) { open(Page.LAPTOP) }
+            k.navRow(this, tr(LaptopLink.title(pcs.size)), if (pcs.isEmpty()) tr("Optional: use with your computer") else pcs.map { it.name }.filter { it != "Laptop" }.joinToString(", ").ifEmpty { tr("Tap to open") }) { open(Page.LAPTOP) }
             k.navRow(this, tr("Short summaries (AI)"), tr(when (AiChoice.label(s.ai, pcs.isNotEmpty(), ModelDownload.ready(this@MainActivity))) { "Off" -> "Off"; "Computer" -> "On, done by your laptop"; "Phone" -> "On, done on this phone"; else -> "On, but the phone model is not downloaded" })) { open(Page.AI) }
             k.navRow(this, tr("Help"), tr("Button gestures and practice")) { open(Page.HELP) }
+            k.navRow(this, tr("Send a problem report"), tr("Share the last 2 days of the log. You choose where it goes.")) { sendProblemReport() }
         }
         if (EventLog.running) list.addView(k.quiet(tr("Turn off Invisible OS"), Ui.bad) { Actions.paused = true; stopService(Intent(this, ButtonService::class.java)); render() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
     }

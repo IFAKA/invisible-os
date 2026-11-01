@@ -98,5 +98,8 @@
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
         <service android:name=".InvisibleRecognitionService" android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="com.faka.invisible.reports" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

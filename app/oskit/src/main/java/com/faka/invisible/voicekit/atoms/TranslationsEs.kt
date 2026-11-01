@@ -472,6 +472,10 @@ private val SPOKEN_ES = mapOf(
 /** Screen labels (not spoken as a menu, so the 7 word rule does not apply). */
 private val SCREEN_ES = mapOf(
     "Laptops" to "Portátiles",
+    "Optional: use with your computer" to "Opcional: úsalo con tu ordenador",
+    "Send a problem report" to "Enviar un informe de problemas",
+    "Share the last 2 days of the log. You choose where it goes." to "Comparte el registro de los últimos 2 días. Tú eliges adónde va.",
+    "Could not make the report" to "No se pudo crear el informe",
     "Add a laptop" to "Añadir un portátil",
     "No laptop yet" to "Aún no hay portátil",
     "Laptop: checking..." to "Portátil: comprobando...",
