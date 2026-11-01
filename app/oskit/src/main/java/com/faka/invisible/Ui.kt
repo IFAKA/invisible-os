@@ -441,12 +441,12 @@ class Kit(private val c: Context) {
     /**
      * The stage: what you hear is what you see, as one thing at a glance. The line (or item) being spoken NOW sits in the middle of the free space in
      * cyan DISPLAY type (a smaller discrete step only when it is long, see [nowLine]); the two before it above, faded; the next ones below, soft. Lines
-     * before and after use only BODY and CAPTION, the same on every screen. Under the NOW line the press it asks for is drawn in orange. The foot is one
-     * quiet row: Back, Close, Settings as text links, and the last press as the same glyph. A tap on a line picks it, as a click would.
+     * before and after use only BODY and CAPTION, the same on every screen. Under the NOW line the press it asks for is drawn in orange. The foot is the last
+     * press as a glyph and ONE small quiet "Leave" button (no Back, Close or Settings links while a list is read or a program runs). A tap on a line picks it, as a click would.
      * Fits the window; nothing scrolls, so moving the mark never moves the layout.
      */
     fun mirrorScreen(parent: LinearLayout, title: String, items: List<String>, current: Int, lastPress: String?, asks: PressHint?,
-                     sounds: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark>, onPick: (Int, String) -> Unit, backLabel: String, onBack: () -> Unit, closeLabel: String, onClose: () -> Unit, moreLabel: String, onMore: () -> Unit): MirrorView {
+                     sounds: List<com.faka.invisible.voicekit.ScreenMirror.SoundMark>, onPick: (Int, String) -> Unit, leaveLabel: String, onLeave: () -> Unit): MirrorView {
         stageHeader(parent, title)
         fun line(type: Type, alpha: Float) = text("", type, Ui.soft).apply {
             gravity = Gravity.CENTER; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; this.alpha = alpha
@@ -466,10 +466,7 @@ class Kit(private val c: Context) {
         val last = pressGlyph(true)
         parent.addView(hairline(), lp(h = maxOf(1, dp(Space.STROKE))))
         parent.addView(LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; addView(strip.view, LinearLayout.LayoutParams(-2, dp(Ui.S3))); addView(View(c), LinearLayout.LayoutParams(0, 1, 1f)); addView(last, LinearLayout.LayoutParams(dp(Ui.S6 * 2 + Ui.S4), dp(Ui.S4))) }, lp(top = Ui.S1))
-        val bar = LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL }
-        for ((label, act) in listOf(backLabel to onBack, closeLabel to onClose, moreLabel to onMore))
-            bar.addView(quiet(label, Ui.soft) { act() }, LinearLayout.LayoutParams(0, dp(Space.TOUCH + 4), 1f))
-        parent.addView(bar, lp(top = 0))
+        parent.addView(quiet(leaveLabel, Ui.soft) { onLeave() }, LinearLayout.LayoutParams(-2, dp(Space.TOUCH + 4)).apply { gravity = Gravity.END })   // the one control: for a sighted person, the same as the close gesture
         val empty = Translations.label("Playing. Use your earbud button.")
         return MirrorView(items, before + after, big, glyph, last, strip, empty, onPick).also { it.update(current, lastPress, asks, sounds) }
     }

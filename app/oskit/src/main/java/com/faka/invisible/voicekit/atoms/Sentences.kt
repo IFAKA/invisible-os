@@ -156,6 +156,10 @@ object Voice {
     /** The Button access promise, in short (the screen card has the full text); then the person taps Agree. */
     val DISCLOSE get() = listOf(f("It reads only your earbud button."), f("It never reads your screen."), f("Nothing leaves the phone."), f("Tap Agree on the screen."))
     val SETUP_DONE get() = f("Done.")
+    /** After the close sound, the first 3 times the menu closes after a pick: what happened, and the way back in. */
+    val SESSION_DONE get() = f("Done. Hold again any time.")
+    /** Asked once, at the end of the first session. A click is yes; silence or three clicks is no. */
+    val PRACTICE_OFFER get() = f("Want to practice? Click for yes.").asks(PressHint.click(1))
     val HEARD_BUTTON get() = f("I heard your button.")
     val SETUP_SKIP_HINT get() = f("Skip for now: click once.")
     /** Said after 5 s of quiet on a setup step. */

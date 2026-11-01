@@ -55,6 +55,11 @@ Lines before and after the NOW line use only BODY and CAPTION, the same on every
 | Home status, first-run step | `status`, `onboarding` |
 | Terminal text | `mono`, `monoLine` |
 
+## One main thing per screen
+- Every screen has ONE main thing and at most 3 controls. The app home has three zones: the state in one huge sentence (with its one fix button if something is missing), one big button ("Open the menu"), and one quiet row "Settings and more" that opens the second screen with every setting and its value.
+- The Stage (the spoken screen) has no Back, Close or Settings links while a list is read or a program runs. It shows only the NOW line, the press glyph and the sound strip, plus one small quiet "Leave" button for sighted people (`Kit.mirrorScreen` foot).
+- The first minute is the same story in voice and picture: setup, then the menu with its short hint, then after a pick "Done. Hold again any time." (first 3 sessions, also drawn on the Stage), then once "Want to practice? Click for yes."
+
 ## How to add a screen
 1. Build it only from `Kit` parts and tokens (`Ui.S1..S6`, `Space.*`, `Ui.<role>`). A missing part is added to `Ui.kt` first, then shown in `Gallery.kt`.
 2. If it speaks, the voice kit shows it (the stage); do not write the spoken text by hand. If it has a control you can touch, the same choice must be reachable by the button and have its voice.

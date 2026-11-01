@@ -92,6 +92,11 @@ interface ModeOutput {
     fun background(work: () -> Unit, done: () -> Unit) { work(); done() }   // heavy work off the main thread; [done] runs on the main thread
     fun groupPicks(group: String): Int = 99   // apps picked inside this home group so far (persisted); under [GROUP_NAMES_UNTIL] the group speaks the names inside it
     fun addGroupPick(group: String) {}
+    fun doneLines(): Int = 3          // how many times "Done. Hold again any time." was said (persisted); it is said for the first 3 sessions with a pick
+    fun setDoneLines(n: Int) {}
+    fun practiceOffered(): Boolean = true   // "Want to practice?" was asked once (persisted); never again
+    fun setPracticeOffered() {}
+    fun closing(p: Phrase, queue: Boolean, offer: Boolean = false) { speak(p, queue, false) }   // a line after the close sound; [offer] = a click within the next seconds says yes (the OS starts the practice)
     fun findHintSeen(): Boolean = true   // "Find. Pick the first letter." is said only once
     fun setFindHintSeen() {}
     fun loadReactions(): String = ""   // saved reaction samples (see ReactionGap.encode)
@@ -347,7 +352,7 @@ class ControllerMode(
         pausedByUs = out.pauseMusic(); wmark("pauseMusic")
         queue = buildQueue(); qi = 0; wmark("buildQueue")
         fromHub = false; speechOpen = false
-        hintPending = learning(); lostStreak = 0; lostHintSaid = false; lostHintPending = false; wmark("learning")
+        sessionPicks = 0; hintPending = learning(); lostStreak = 0; lostHintSaid = false; lostHintPending = false; wmark("learning")
         accessWarn = out.notifAccessOff(); wmark("notifAccessOff")
         out.log("MODE enter")
         com.faka.invisible.oskit.Trace.ev("wake", "menu on pausedMusic=$pausedByUs queue=${queue.size}")
@@ -1260,7 +1265,9 @@ class ControllerMode(
 
     private var pickedInGroup = false; private var lostStreak = 0; private var lostHintSaid = false; private var lostHintPending = false
 
+    private var sessionPicks = 0   // real picks (not group walks, not Back) since the menu woke
     private fun pick(intent: String, sender: String = "") {
+        if (!intent.startsWith("group:") && !intent.endsWith(":back") && intent != "volume:done" && intent != "none" && intent != "nothing") sessionPicks++
         if (suggestedKeys.isNotEmpty() && screen == Screen.HUB) out.choice(screen.name, -1, if (intent in suggestedKeys) "suggest:hit" else "suggest:miss", intent)   // into the choice log, for tools/menu_report.py
         backPicked = intent.endsWith(":back") || intent == "volume:done"
         if (backPicked) backNav = true
@@ -1310,11 +1317,23 @@ class ControllerMode(
         if (pausedByUs) { pausedByUs = false; out.resumeMusic() }
         out.log("MODE exit")
         com.faka.invisible.oskit.Trace.ev("exit", "menu off from ${screen.name} tone=$withTone")
-        if (withTone) tn(Tone.EXIT)
+        if (withTone) { tn(Tone.EXIT); closingLines() }
+    }
+
+    /** After the close sound: what happened ("Done. Hold again any time." after a pick, the first 3 times), then once the practice offer. Never over a program or a new wake. */
+    private fun closingLines() {
+        val summary = sessionPicks > 0 && out.doneLines() < DONE_LINES
+        val offer = !out.practiceOffered()
+        if (!summary && !offer) return
+        timers.set("closing", 700) {
+            if (active) return@set
+            if (summary) { out.setDoneLines(out.doneLines() + 1); out.closing(Voice.SESSION_DONE, false) }
+            if (offer) { out.setPracticeOffered(); out.closing(Voice.PRACTICE_OFFER, summary, offer = true) }
+        }
     }
 
     /** Two silent loops or 4 clicks: leave, and say so with the leaving tone (silence is never ambiguous). */
-    private fun leaveSilent() { if (!active) return; exit(false); tn(Tone.LEAVE) }
+    private fun leaveSilent() { if (!active) return; exit(false); tn(Tone.LEAVE); closingLines() }
 
     /** The platform started speaking the newest utterance. */
     fun onSpeechStarted() {
@@ -1350,7 +1369,8 @@ class ControllerMode(
         const val DIAL_STEP_MS = 450L   // volume dial: one step quieter every this long after a hold, until a press
         const val ITEM_GAP_MS = Pacing.ITEM_GAP_MS
         const val FIND_MS = 20_000L   // "Find my phone" rings this long
-        const val GROUP_NAMES_UNTIL = 3   // picks inside a home group, then it speaks its short name
+        const val DONE_LINES = 3   // sessions that end with "Done. Hold again any time."
+    const val GROUP_NAMES_UNTIL = 3   // picks inside a home group, then it speaks its short name
         const val SPEARCON_AFTER = 30   // picks of one option, then it is scanned as a sped-up spearcon
         private const val MAX_SPOKEN = 160
         private const val TASK_FULL_CHARS = 600   // a task read in full after a hold

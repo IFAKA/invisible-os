@@ -12,11 +12,6 @@ import com.faka.invisible.voicekit.ScreenMirror
  */
 internal class Flow(val r: ModeTest.Rig = ModeTest.Rig(gap = null)) {
     val m get() = r.m
-    /** The practice has run (the first wake runs it once; the phone script's `reset` marks it done). */
-    var practiceDone = true
-    /** Called instead of the menu when a hold comes before the practice ran (the OS starts the practice then). */
-    var onPractice: () -> Unit = {}
-
     private var task: (() -> Unit)? = null
     private var taskAt = 0L
     private val detector = GestureDetector(
@@ -30,7 +25,6 @@ internal class Flow(val r: ModeTest.Rig = ModeTest.Rig(gap = null)) {
     /** What `Actions.buttonTarget.gesture` does with a finished gesture (its tones are not modelled). */
     private fun gesture(g: Gesture, dur: Long) {
         EventLog.pressed(g)
-        if ((g == Gesture.HOLD || g == Gesture.CLICK_HOLD) && !m.active && !practiceDone) { onPractice(); return }
         m.onGesture(g, dur)
     }
 

@@ -144,7 +144,7 @@ class MainActivity : Activity() {
     private fun slider(label: String, valueText: String, max: Int, now: Int, apply: (Int) -> LauncherSettings) = k.slider(label, valueText, max, now) { change(apply(it)) }
 
     // ---- screens: Home shows one thing to do and a few doors; each door opens one small page ----
-    private enum class Page(val title: String) { HOME("Invisible OS"), TASKS("Tasks"), MENU("Your menu"), MENUMORE("Order, Today and Phone"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), HABITS("Habits"), LAPTOP("Laptop"), AI("AI"), HELP("Help") }
+    private enum class Page(val title: String) { HOME("Invisible OS"), MORE("Settings and more"), TASKS("Tasks"), MENU("Your menu"), MENUMORE("Order, Today and Phone"), VOICE("Voice and speed"), EMERGENCY("Emergency contact"), HABITS("Habits"), LAPTOP("Laptop"), AI("AI"), HELP("Help") }
     private var page = Page.HOME
 
     private val laptop by lazy { LaptopPage(this, k, body) { render() } }
@@ -157,7 +157,8 @@ class MainActivity : Activity() {
         page == Page.LAPTOP && laptop.inRoom -> { laptop.leaveRoom(); true }
         page == Page.LAPTOP && computersPage.inside -> { computersPage.back(); true }
         page == Page.MENUMORE -> { open(Page.MENU); true }
-        page != Page.HOME -> { open(Page.HOME); true }
+        page == Page.MORE -> { open(Page.HOME); true }
+        page != Page.HOME -> { open(Page.MORE); true }
         settingsOpen -> { settingsOpen = false; render(); true }
         ScreenMirror.state.let { it.active && it.title.isNotEmpty() } && EventLog.running -> { Actions.screenPress(com.faka.invisible.voicekit.Gesture.TRIPLE); true }   // the OS is deep in a list: Back is the OS's Back, like the Back button on the picture
         else -> false
@@ -175,7 +176,7 @@ class MainActivity : Activity() {
     }
 
     /** Pages whose top (back, title) stays; only the list under it scrolls. The others scroll as one (long text, the laptop rooms). */
-    private val fixedPages = setOf(Page.TASKS, Page.HABITS, Page.MENU, Page.MENUMORE, Page.VOICE, Page.EMERGENCY, Page.AI)
+    private val fixedPages = setOf(Page.MORE, Page.TASKS, Page.HABITS, Page.MENU, Page.MENUMORE, Page.VOICE, Page.EMERGENCY, Page.AI)
 
     private val bornAt = android.os.SystemClock.uptimeMillis()
     /** The button service takes a moment to start: for the first 2.5 s the app is "listening", so "Stopped" never flashes at launch. */
@@ -202,7 +203,7 @@ class MainActivity : Activity() {
         body = scrollBody; pageTop = null
         if (page in fixedPages) {
             val f = k.fixedScreen(this)
-            f.addView(k.header(tr(page.title), { open(if (page == Page.MENUMORE) Page.MENU else Page.HOME) }, if (page == Page.MENUMORE) "Your menu" else "Home"))
+            f.addView(k.header(tr(page.title), { open(if (page == Page.MENUMORE) Page.MENU else if (page == Page.MORE) Page.HOME else Page.MORE) }, if (page == Page.MENUMORE) "Your menu" else if (page == Page.MORE) "Home" else "Settings and more"))
             val top = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             f.addView(top)
@@ -213,9 +214,10 @@ class MainActivity : Activity() {
         body.removeAllViews(); cardParent = null
         if (page in fixedPages) { /* header is already in place */ }
         else if (page == Page.LAPTOP && laptop.inRoom) body.addView(k.header(laptop.title(), { laptop.leaveRoom() }, "Rooms"))
-        else if (page != Page.HOME) body.addView(k.header(tr(if (page == Page.LAPTOP) LaptopLink.title(Actions.computers().size) else page.title), { open(Page.HOME) }))
+        else if (page != Page.HOME) body.addView(k.header(tr(if (page == Page.LAPTOP) LaptopLink.title(Actions.computers().size) else page.title), { open(Page.MORE) }))
         when (page) {
             Page.HOME -> home()
+            Page.MORE -> { cardParent = body; morePage() }
             Page.TASKS -> tasksPage()
             Page.MENU -> menuPage()
             Page.MENUMORE -> menuMorePage()
@@ -384,37 +386,40 @@ class MainActivity : Activity() {
             if (mirrorKey == key && root.getChildAt(0) === mirrorHost) { mirror?.update(mir.index, mir.lastPress, mir.asks, mir.sounds); return }   // same list: only the mark moves
             k.mirrorScreen(fixed, mir.title.ifEmpty { tr("Home") }, mir.items, mir.index, mir.lastPress, mir.asks, mir.sounds,
                 { i, t -> Actions.tapItem(i, t) },
-                tr("Back"), { Actions.screenPress(com.faka.invisible.voicekit.Gesture.TRIPLE) },
-                tr("Close"), { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) },
-                tr("Settings"), { settingsOpen = true; render() }).also { mirror = it; mirrorKey = key; mirrorHost = fixed }
+                tr("Leave"), { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) }).also { mirror = it; mirrorKey = key; mirrorHost = fixed }
             root.removeAllViews(); root.addView(fixed)
             return
-        } else if (!listening()) {
-            k.status(fixed, tr("Invisible OS is off"), tr("Your earbud button works like normal."), Ui.bad, Ui.S1) {
-                addView(k.primary(tr("Turn on")) { Actions.paused = false; startForegroundService(Intent(this@MainActivity, ButtonService::class.java)); render() })
-            }
-        } else {
-            val learned = sp.getBoolean(com.faka.invisible.practice.PracticeProgram.DONE_KEY, false)
-            k.status(fixed, tr("Invisible OS is on"), tr(if (learned) "Hold your earbud button to open the menu." else "Hold your earbud button once to learn the button (1 minute)."), Ui.good, Ui.S1) {
-                addView(k.primary(tr("Open Invisible OS")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) })
-            }
         }
-        laptopLine(fixed)
-        if (mir.active && settingsOpen) fixed.addView(k.quiet("\u2039 " + tr("Back to the menu")) { settingsOpen = false; render() })
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        fixed.addView(ScrollView(this).apply { isVerticalScrollBarEnabled = false; addView(list) }, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = k.dp(Ui.S2) })
-        root.removeAllViews(); root.addView(fixed); cardParent = list
+        // ---- three zones, three controls at most: the state (and its one fix), the one big step, one quiet door to everything else ----
         val need = Needs.pending(previewNeed ?: sp.getString(Needs.PREF, null)) { previewNeed != null || Needs.missing(this, it) }
         if (need == null && previewNeed == null && sp.contains(Needs.PREF)) sp.edit().remove(Needs.PREF).apply()   // it was met: forget it
-        val offer = if (need == null) Setup.later(allSteps, sp.getBoolean(com.faka.invisible.practice.PracticeProgram.DONE_KEY, false)) else null   // skipped steps are already "passed"
+        val st = HomeStatus.line(listening(), a11y, notif, need?.let { Triple(it.title, it.action, it.id) })
+        fixed.addView(k.text(tr(st.text), Type.DISPLAY, if (st.problem) Ui.bad else Ui.ink), LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S4) })
+        if (st.fixId != null) fixed.addView(k.btn(tr(st.fixLabel ?: "Turn on")) {
+            if (st.fixId == "on") { Actions.paused = false; startForegroundService(Intent(this@MainActivity, ButtonService::class.java)); render() } else startStep(st.fixId)
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
+        fixed.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
+        fixed.addView(k.primary(tr("Open the menu")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) }, LinearLayout.LayoutParams(-1, -2))
+        fixed.addView(k.quiet(tr("Settings and more"), Ui.soft) { open(Page.MORE) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
+        root.removeAllViews(); root.addView(fixed)
+        val offer = if (need == null) Setup.later(allSteps, sp.getBoolean(com.faka.invisible.practice.PracticeProgram.DONE_KEY, false) || sp.getBoolean("practice_offered", false)) else null   // skipped steps are already "passed"
+        if (offer != null && need == null && offerSpoken != offer.id && !clearMirrorWhenQuiet) { offerSpoken = offer.id; say(Voice.setupOffer(offer.title), true) }
+    }
+
+    /** The second screen: everything that is not the one next step. Each row shows its value; the optional offers and the off switch live here. */
+    private fun morePage() {
+        val sp0 = sp
+        val allOffers = Setup.later(Setup.steps(SetupState(true, true, Setup.listed(Settings.Secure.getString(contentResolver, "enabled_notification_listeners"), packageName), (Settings.Secure.getString(contentResolver, "assistant") ?: "").contains(packageName) || handsFreeIsOurs(),
+            granted(Manifest.permission.POST_NOTIFICATIONS), granted(Manifest.permission.READ_CALENDAR), granted(Manifest.permission.ACCESS_COARSE_LOCATION), usageOn(), android.os.Build.VERSION.SDK_INT, sp0.getStringSet("setup_skipped", emptySet()) ?: emptySet())), true)
+        val need = Needs.pending(previewNeed ?: sp.getString(Needs.PREF, null)) { previewNeed != null || Needs.missing(this, it) }
+        val list = cardParent ?: body
         if (need != null) k.status(list, tr(need.title), tr(need.reason), Ui.bad, Ui.S1) {
             addView(k.primary(tr(need.action)) { startStep(need.id) })
             if (previewNeed == null) addView(k.quiet(tr("Not now"), Ui.soft) { sp.edit().remove(Needs.PREF).apply(); render() })
-        } else if (offer != null) k.status(list, tr(offer.title) + " \u00B7 " + tr("Optional"), tr(offer.reason) + if (offer.id == "assist") " " + tr("Pick Invisible OS as the digital assistant app.") else "", Ui.accent, Ui.S1) {
-            addView(k.primary(tr(if (offer.id == "assist") "Choose Invisible" else "Turn on")) { startStep(offer.id) })
-            addView(k.quiet(tr("Not now"), Ui.soft) { sp.edit().putStringSet("setup_skipped", (sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + offer.id).apply(); render() })
+        } else if (allOffers != null) k.status(list, tr(allOffers.title) + " \u00B7 " + tr("Optional"), tr(allOffers.reason) + if (allOffers.id == "assist") " " + tr("Pick Invisible OS as the digital assistant app.") else "", Ui.accent, Ui.S1) {
+            addView(k.primary(tr(if (allOffers.id == "assist") "Choose Invisible" else "Turn on")) { startStep(allOffers.id) })
+            addView(k.quiet(tr("Not now"), Ui.soft) { sp.edit().putStringSet("setup_skipped", (sp.getStringSet("setup_skipped", emptySet()) ?: emptySet()) + allOffers.id).apply(); render() })
         }
-        if (offer != null && need == null && offerSpoken != offer.id && !clearMirrorWhenQuiet) { offerSpoken = offer.id; say(Voice.setupOffer(offer.title), true) }
         val n = Actions.tasks().size
         k.group(list) {
             k.navRow(this, tr("Tasks"), if (n == 0) tr("None yet") else tr("{0} to do").replace("{0}", "$n")) { open(Page.TASKS) }
@@ -423,7 +428,7 @@ class MainActivity : Activity() {
             k.navRow(this, tr("Habits"), Habits.names(sp.getString(HabitsProgram.LIST_KEY, null)).joinToString(", ")) { open(Page.HABITS) }
             k.navRow(this, tr("Emergency contact"), Actions.emergencyContact().ifEmpty { tr("Not set") }) { open(Page.EMERGENCY) }
             val pcs = Actions.computers()
-            k.navRow(this, tr(LaptopLink.title(pcs.size)), if (pcs.isEmpty()) tr("Not connected yet") else pcs.map { it.name }.filter { it != "Laptop" }.joinToString(", ").ifEmpty { tr("Tap to open") }) { open(Page.LAPTOP) }
+            k.navRow(this, tr(LaptopLink.title(pcs.size)), if (pcs.isEmpty()) tr("No laptop yet. Tap to add one.") else pcs.map { it.name }.filter { it != "Laptop" }.joinToString(", ").ifEmpty { tr("Tap to open") }) { open(Page.LAPTOP) }
             k.navRow(this, tr("Short summaries (AI)"), tr(when (AiChoice.label(s.ai, pcs.isNotEmpty(), ModelDownload.ready(this@MainActivity))) { "Off" -> "Off"; "Computer" -> "On, done by your laptop"; "Phone" -> "On, done on this phone"; else -> "On, but the phone model is not downloaded" })) { open(Page.AI) }
             k.navRow(this, tr("Help"), tr("Button gestures and practice")) { open(Page.HELP) }
         }
