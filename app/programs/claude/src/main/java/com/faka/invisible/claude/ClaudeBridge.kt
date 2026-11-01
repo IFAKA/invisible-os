@@ -28,9 +28,10 @@ class BridgeClient(base: String, internal val token: String) {
             val rooms = ArrayList<RoomEvent>()
             val events = (0 until arr.length()).mapNotNull { i ->
                 val it = arr.getJSONObject(i)
-                if (it.optString("type") == "room") { rooms.add(RoomEvent(it.optString("id"), it.optString("name"), it.optString("state"))); return@mapNotNull null }
+                if (it.optString("type") == "room") { rooms.add(RoomEvent(it.optString("id"), it.optString("name"), it.optString("state"), PushItem.parse(it, PushItem.ROOM), it.takeIf { o -> o.has("worked_s") && !o.isNull("worked_s") }?.optDouble("worked_s"))); return@mapNotNull null }
                 val opts = it.optJSONArray("options")?.let { a -> (0 until a.length()).map { j -> a.optString(j) } } ?: emptyList()
-                ClaudeEvent.of(it.optString("id"), it.optString("kind"), it.optString("project"), it.optString("summary"), opts)
+                val kind = it.optString("kind")
+                ClaudeEvent.of(it.optString("id"), kind, it.optString("project"), it.optString("summary"), opts, PushItem.parse(it, if (kind == ClaudeEvent.KIND_PERMISSION) PushItem.ASK else PushItem.LINE))
             }
             Reply(o.optInt("seq", since), events, rooms)
         } catch (e: org.json.JSONException) { throw IOException("bad reply") }

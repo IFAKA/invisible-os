@@ -86,6 +86,8 @@ object Actions {
             override fun tone(kind: Tone) = narrator.beep(kind)
             override fun runAction(name: String) = menuAction(name)
             override fun forward(what: Forward) = forwardToMusic(what)
+            override fun lineGesture(g: Gesture) = push.onGesture(g)
+            override fun lineWake(home: () -> Unit) = push.wake(home)
             override fun log(line: String) { Log.d(TAG, line); if (line.startsWith("MODE")) EventLog.add(line) }
             override fun tasks() = taskStore.all()
             override fun prepareAiReplies(m: Msg) {
@@ -556,7 +558,22 @@ object Actions {
     fun setClaudeBridge(url: String, token: String) = setComputers(Computers.single(url, token))
     private val rooms by lazy {
         RoomEvents(handler, { activeComputer() }, { running != null }, { RoomMute.muted(prefs().getLong(RoomMute.KEY, 0L), System.currentTimeMillis()) },
-            { narrator.beep(Tone.CLAUDE) }, { say(it, true) }, { e -> handler.post { claudeAsked(e) } })
+            { narrator.beep(Tone.CLAUDE) }, { say(it, true) }, { e -> handler.post { claudeAsked(e) } }, push)
+    }
+    /** The push line: a laptop item with a spoken line and the likely answers (DESIGN-LAYER.md); it owns the button for 8 s after the line. */
+    private val push: PushLine by lazy {
+        PushLine(handler, object : LinePorts {
+            override fun now() = android.os.SystemClock.uptimeMillis()
+            override fun ctx() = LineRules.Ctx(mode.active, running != null, ControllerNotificationListener.inCall, RoomMute.muted(prefs().getLong(RoomMute.KEY, 0L), System.currentTimeMillis()))
+            override fun computer() = activeComputer()
+            override fun beep() { narrator.beep(Tone.CLAUDE) }
+            override fun speak(p: Phrase) { if (!com.faka.invisible.voicekit.Cues.hasStagedFor(p.text)) com.faka.invisible.voicekit.Cues.stageLine(p.text); say(p, true) }
+            override fun speaking() = narrator.speaking
+            override fun stopSpeech() = narrator.stopSpeech()
+            override fun duck() = pauseMusicNow()
+            override fun resume() = resumeMusicNow()
+            override fun openWalk(target: String) { com.faka.invisible.claude.ClaudeAndroid.enterKey = target; Programs.byId("hub:claude")?.let { startProgramEntry(it) } }
+        })
     }
     private fun roomsWaitingNow(): Int = rooms.waitingNow()
     /** The laptop's model for notifications: the digest on home and the short version of long messages (never blocks; nothing without a computer). */

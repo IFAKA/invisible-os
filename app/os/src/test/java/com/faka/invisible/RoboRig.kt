@@ -31,6 +31,9 @@ internal class RoboRig {
     var exits = 0
     /** A raw-button owner that is not a [Program] (Write's typer). */
     var rawOwner: RawButton? = null
+    /** The OS's closed-menu button path (ControllerMode.onGesture -> the push line): true = taken; else the gesture is the media meaning and lands in [unhandled]. */
+    var gestureHook: ((Gesture) -> Boolean)? = null
+    val unhandled = ArrayList<Gesture>()
 
     /** The shared parity helper (oskit testing): start it in a test with `rig.parity.start()`, end with `rig.parity.assertParity(); rig.parity.stop()`. */
     val parity = ParityRecorder(clock = { now() })
@@ -41,7 +44,7 @@ internal class RoboRig {
     val target = object : ButtonTarget {
         override fun raw(): RawButton? = ((running as? RawButton) ?: rawOwner)?.takeIf { it.active }
         override val menuActive get() = false
-        override fun gesture(g: Gesture, durationMs: Long) {}
+        override fun gesture(g: Gesture, durationMs: Long) { if (gestureHook?.invoke(g) != true) unhandled.add(g) }
         override fun exitProgram() { exits++; (running as? Program)?.takeIf { it.active }?.let { if (it.exitOnClickHold) it.stop() } }
     }
     val narrator: Narrator = Narrator(speech, tones, handler)

@@ -54,7 +54,7 @@ data class Project(val name: String, val path: String, val uses: Int)
 data class Area(val name: String, val path: String, val uses: Int)
 
 /** The server says a room turned to "needs" (an /events item of type room). */
-data class RoomEvent(val id: String, val name: String, val state: String)
+data class RoomEvent(val id: String, val name: String, val state: String, val push: PushItem? = null, val workedS: Double? = null)
 
 object RoomState {
     const val NEEDS = "needs"

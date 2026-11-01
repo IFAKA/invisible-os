@@ -196,7 +196,15 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
     private fun loadRooms() {
         scanner.stop(); awaitItem = false; room = null
         phase = Phase.LOADING
-        bg({ client.rooms() }) { list -> if (list == null) unreachable { loadRooms() } else showRooms(list) }
+        bg({ client.rooms() }) { list ->
+            if (list == null) { enterKey = null; unreachable { loadRooms() } }
+            else {
+                // a pushed line the owner held: open that window (or its ask) straight away, the same walk as from the list
+                val key = enterKey; enterKey = null
+                val hit = key?.let { k -> list.firstOrNull { it.id == k || it.ask?.id == k } }
+                if (hit != null) { onBack = { loadRooms() }; openRoom(hit) } else showRooms(list)
+            }
+        }
     }
 
     /** The windows list: the windows (urgent first, at most [MAX_ROOMS]), then "New window" and "Laptop settings". */
@@ -652,7 +660,10 @@ class ClaudeAndroid(private val port: RoomsPort) : Program {
         host.resumeMusic()
     }
 
-    private companion object { const val RETRY_MS = 700L; const val PAUSE_MS = 1200L; const val PARTS_PAUSE_MS = 90_000L; const val LOOPS = 2; const val NEXT_MS = 700L; const val OPEN_POLL_MS = 1500L; const val OPEN_TRIES = 8; const val MAX_ROOMS = 8 }
+    companion object {
+        /** Set by the OS before it starts this tool: the room id or ask id of a pushed line; the first window list then opens that window. Taken once. */
+        @Volatile var enterKey: String? = null
+        private const val RETRY_MS = 700L; private const val PAUSE_MS = 1200L; private const val PARTS_PAUSE_MS = 90_000L; private const val LOOPS = 2; private const val NEXT_MS = 700L; private const val OPEN_POLL_MS = 1500L; private const val OPEN_TRIES = 8; private const val MAX_ROOMS = 8 }
 }
 
 /** What the OS registry lists for the Claude bridge (a tool of the home hub). */

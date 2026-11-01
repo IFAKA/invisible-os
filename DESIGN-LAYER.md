@@ -102,8 +102,8 @@ Safety rules (enforced by a unit test):
 1. Done 2026-11-01 (`cd bridge && python3 -m unittest test_layer`). Bridge: the `/line` queue and item format, fed from rooms, hook asks and `POST /line`. A and B come from the quoted options and the learned order. Check: `bridge/test_*.py` with fake rooms.
 2. Done 2026-11-01: replay top-2 share is 66.5% (C2). Rerun: `mkdir -p /tmp/wf && python3 bridge/research/extract.py`, then `replay(rows, ..., top=2)`.
 3. Done 2026-11-01 (same command, `IdleTest`). Bridge: laptop idle in `/info` and in each event. Check: unit test with a fake `ioreg`.
-4. Phone: the push line and the answer window (`RoomEvents` grows from a tone into a line; this also covers chats). Check: Flow tests for C1, C4 and C5.
-5. Phone: wake reads the queue first; 4 clicks replays. Check: Flow test; the e2e scenario `line_push_answer` on the phone (the real button over Bluetooth).
+4. Done 2026-11-01: phone push line and answer window (`PushLine`, `LineRules`, `LineQueue`; `RoomEvents` hands events with a line to it). Flow tests in `FlowLineTest`: `line_one_click_sends_the_action_within_six_seconds` (C1), `two_clicks_send_answer_b`, `risky_single_click_sends_nothing_and_hold_sends_it` (C4), `ask_click_allows_and_two_clicks_deny`, `a_second_line_within_20_seconds_is_queued`, `hold_opens_the_full_walk_at_that_room`, `parity_push_line_and_hint` (C5). Rules in `LineRulesTest` (C3, C4).
+5. Done 2026-11-01 (phone run not yet made): wake reads the queue first (asks, rooms, lines, then All clear.), 4 clicks replays. Flow tests `laptop_active_is_queued_silently_and_wake_reads_it`, `wake_with_an_empty_queue_is_the_normal_wake`, `wake_reads_asks_first_and_triple_click_goes_home`, `no_press_keeps_the_item_and_walks_on`, `four_clicks_replay_the_last_line_while_it_is_unanswered`. The e2e scenario `line_push_answer` (real button over Bluetooth) is written; run it with the phone lease.
 6. Two weeks of real use, then C7 from the logs. Change A/B, the levels and the rules from that data, not from guesses.
 
 ## Not decided by me (yours)

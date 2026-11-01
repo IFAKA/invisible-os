@@ -97,6 +97,12 @@ object Voice {
     fun arrivalFrom(app: String, sender: String) = Phrase.mixed("$app, $sender")
     /** A laptop window finished while the phone was idle: its name only; the full message is read when the room is opened. */
     fun roomDone(name: String) = f("$name, done")
+    /** The queue of pushed lines is empty (end of the wake walk). */
+    val ALL_CLEAR get() = f("All clear.")
+    /** After a pushed line: what a click does. Normal: "Click: Go. Two: Push." (no second answer: "Click: Go."). A risky first answer needs a hold: "Click: no. Hold: Push." The labels are the laptop's words. */
+    fun lineHint(a: String, b: String?, risky: Boolean): Phrase =
+        if (risky) Phrase.join(listOf(f("Click: no. Hold:"), Phrase.content("$a.", "en")))
+        else Phrase.join(listOf(f("Click:"), Phrase.content("$a.", "en")) + if (b == null) emptyList() else listOf(f("Two:"), Phrase.content("$b.", "en")))
     fun roomsDone(name: String, more: Int) = f("$name, done. $more more windows done")
     /** The phone now listens to this computer (after a switch). */
     fun listening(computer: String) = f("$computer, listening")

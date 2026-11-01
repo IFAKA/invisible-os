@@ -19,8 +19,10 @@ class RoomEvents(
     private val beepNeeds: () -> Unit,
     private val say: (Phrase) -> Unit,
     onAsk: (com.faka.invisible.claude.ClaudeEvent) -> Unit = {},
+    private val push: PushLine? = null,
 ) {
-    private val watch = ClaudeWatch(active, onAsk, { waitingNow(); handler.post { needs() } }, { e -> waitingNow(); handler.post { done(e.name) } })
+    private val watch = ClaudeWatch(active, onAsk, { waitingNow(); handler.post { needs() } }, { e -> waitingNow(); handler.post { done(e) } },
+        { p, replay -> waitingNow(); handler.post { push?.offer(p, replay) } })
     @Volatile private var waitingRooms = 0
     private val waitingBusy = java.util.concurrent.atomic.AtomicBoolean(false)
     private val batch = DoneBatch()
@@ -41,7 +43,9 @@ class RoomEvents(
     }
 
     private fun needs() { if (programRuns() || muted()) return; beepNeeds() }
-    private fun done(name: String) {
+    private fun done(e: com.faka.invisible.claude.RoomEvent) {
+        val name = e.name
+        if (!LineRules.doneSpoken(e.workedS)) { com.faka.invisible.oskit.Trace.ev("room", "done $name not said: worked ${e.workedS}s"); return }
         if (programRuns() || muted()) { com.faka.invisible.oskit.Trace.ev("room", "done $name not said: ${if (programRuns()) "a program runs" else "muted"}"); return }
         if (batch.add(name)) handler.postDelayed({ batch.take()?.let { say(it) } }, (3000 * devBatchScale).toLong())
         else com.faka.invisible.oskit.Trace.ev("room", "done $name joins a waiting line")

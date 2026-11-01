@@ -22,6 +22,8 @@ interface ModeOutput {
     fun tone(kind: Tone)
     fun runAction(name: String)      // "Flashlight", "Do not disturb"
     fun forward(what: Forward)       // to the real music app
+    fun lineGesture(g: Gesture): Boolean = false   // the push line owns the button now (its answer window, the wake walk): true = taken, not play/pause
+    fun lineWake(home: () -> Unit): Boolean = false   // a wake with pushed lines waiting: true = they are read first, [home] runs when the walk ends
     fun log(line: String)
     fun pauseMusic(): Boolean        // true if music was playing and we paused it
     fun resumeMusic()                // resume what pauseMusic paused (skips if user started something else)
@@ -251,11 +253,12 @@ class ControllerMode(
         if (active && finding) { endFind(); if (g != Gesture.HOLD) return }   // ANY click or hold stops the ringing; click then hold also closes
         if (pending != null && g != Gesture.HOLD) { cancelPending(); return }   // ANY click cancels
         if (!active) {
+            if (out.lineGesture(g)) return   // the push line's answer window comes before the media meaning
             when (g) {
                 Gesture.SINGLE -> out.forward(Forward.PLAY_PAUSE)
                 Gesture.DOUBLE -> out.forward(Forward.NEXT)
                 Gesture.TRIPLE -> out.forward(Forward.PREVIOUS)
-                Gesture.HOLD -> wake()
+                Gesture.HOLD -> if (!out.lineWake { wake() }) wake()   // pushed lines waiting are read first (PushLine)
                 Gesture.CLICK_HOLD, Gesture.CLICK_HOLD_END -> {}   // mapped to HOLD above
                 Gesture.QUAD -> {}   // no meaning when idle; hold wakes (the system sends it, also on the lock screen)
             }

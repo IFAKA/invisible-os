@@ -14,6 +14,10 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
     val gets = CopyOnWriteArrayList<String>()
     /** Names of windows that finished: the next /events says so, one name per call. */
     val fire = CopyOnWriteArrayList<String>()
+    /** Raw /events items (a room event with a line, an ask, a line item): the next /events delivers them all. */
+    val fireJson = CopyOnWriteArrayList<JSONObject>()
+    /** The HTTP code of POST /answer (409 = too late). */
+    @Volatile var answerCode = 200
     /** -1 until POST /project/open; then the number of GET /rooms since. The opened window %9 is listed from the second one on (it takes a moment to appear). */
     @Volatile private var polls = -1
     private val server = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
@@ -47,6 +51,7 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
                 "/room/act" -> reply(c, JSONObject().put("ok", true).put("said", j.optString("action")))
                 "/project/open" -> { polls = 0; reply(c, JSONObject().put("ok", true).put("id", "%9")) }
                 "/room/tool" -> reply(c, tool(j))
+                "/answer" -> reply(c, JSONObject().put("ok", answerCode == 200), answerCode)
                 else -> reply(c, JSONObject().put("ok", true))
             }
             return
@@ -73,6 +78,8 @@ internal class FakeRooms(val token: String = "e2e-token", val rooms: List<JSONOb
             "/projects" -> reply(c, JSONObject().put("projects", JSONArray().put(proj("alpha-proj", "/tmp/alpha", 10)).put(proj("beta-proj", "/tmp/beta", 5))))
             "/areas" -> reply(c, JSONObject().put("areas", JSONArray().put(proj("hardware", "/tmp/fake/hardware", 9))))
             "/events" -> {
+                val raw = fireJson.toList().also { fireJson.removeAll(it.toSet()) }
+                if (raw.isNotEmpty()) { reply(c, JSONObject().put("seq", 3).put("items", JSONArray(raw))); return }
                 val name = try { fire.removeAt(0) } catch (_: IndexOutOfBoundsException) { null }
                 if (name != null) reply(c, JSONObject().put("seq", 2).put("items", JSONArray().put(JSONObject()
                     .put("type", "room").put("kind", "room").put("id", "%7").put("name", name).put("state", "done").put("project", "p").put("summary", "").put("options", JSONArray()).put("seq", 2))))

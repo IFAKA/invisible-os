@@ -403,6 +403,45 @@ def rooms_done_spoken():
         try: reset()
         except Fail: pass
 
+def line_push_answer():
+    """The push line (DESIGN-LAYER.md steps 4, 5): a needs event with a line arrives while the phone is idle; the earbud says the line and the hint, one real click sends answer A. Own small server (the shared fake sends names only)."""
+    import json, threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    home = os.path.expanduser("~/.config/invisible-bridge/")
+    real_url = open(home + "url").read().strip() if os.path.exists(home + "url") else ""
+    real_tok = open(home + "token").read().strip() if os.path.exists(home + "token") else ""
+    host = test_host(real_url)
+    posts, pending = [], []
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def _json(self, o, code=200):
+            b = json.dumps(o).encode(); self.send_response(code); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+        def do_GET(self):
+            if self.path.startswith("/events"):
+                t_end = time.time() + 2
+                while not pending and time.time() < t_end: time.sleep(0.03)
+                items = [pending.pop(0)] if pending else []
+                self._json({"seq": 5 if items else 1, "items": items})
+            elif self.path.startswith("/rooms"): self._json({"seq": 1, "rooms": []})
+            else: self._json({"error": "not found"}, 404)
+        def do_POST(self):
+            n = int(self.headers.get("Content-Length", "0") or 0); posts.append((self.path, json.loads(self.rfile.read(n) or b"{}"))); self._json({"ok": True})
+    srv = ThreadingHTTPServer((host, 8796), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        reset(); bcast("--es", "bridge", f"http://{host}:8796", "--es", "token", "e2e-token"); time.sleep(3); i = mark()
+        pending.append({"type": "room", "kind": "room", "id": "%3", "name": "os", "state": "needs", "project": "p", "summary": "", "options": [], "seq": 5, "line": "os: tests pass, commit?", "laptop_active": False,
+                        "a": {"label": "Go", "risky": False, "act": {"id": "%3", "action": "go"}}, "b": {"label": "Push", "risky": False, "act": {"id": "%3", "action": "push"}}})
+        need("os: tests pass, commit?", i, 20); need("Click: Go. Two: Push.", i, 10)
+        press("120")
+        need("Sent to os", i, 10)
+        if not any(p == "/room/act" and b.get("action") == "go" for p, b in posts): raise Fail(f"the server got {posts}")
+        return "the line and the hint were heard, one click sent Go"
+    finally:
+        srv.shutdown()
+        bcast("--es", "bridge", real_url, "--es", "token", real_tok)
+        try: reset()
+        except Fail: pass
+
 def rooms_new_project():
     """Laptop tool against the fake server: New window, New project, an area, then the cue for the name (Write starts)."""
     sys.path.insert(0, os.path.join(HERE, "..", "bridge")); import fake_rooms
@@ -475,7 +514,7 @@ def idle_clicks_go_to_the_player():
         bcast("--ez", "replaydry", "false")
 
 SCENARIOS = [wake_reads_home_menu, click_picks, triple_click_goes_back, click_hold_closes, screen_mirrors_menu, screen_tap_picks, practice_end_to_end,
-             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, chat_arrival_spoken, live_app_first_on_home, voice_speed_applied, rooms_go, rooms_waiting_on_home, rooms_done_spoken, computers_two, idle_clicks_go_to_the_player, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
+             phone_list, emergency_confirm_goes_back, fake_incoming_call, fake_chat_message, chat_arrival_spoken, live_app_first_on_home, voice_speed_applied, rooms_go, rooms_waiting_on_home, rooms_done_spoken, computers_two, idle_clicks_go_to_the_player, line_push_answer, rooms_new_project]   # rooms_new_project leaves the Write cue running; keep it last
 
 # ---- voice and pace per scenario ----
 # Default: the instant voice (debug stand-in for the TTS engine: same SAY/SPEAK/"speech started"/ended events, no audio) and quicker menu silences.
@@ -485,7 +524,7 @@ REAL_VOICE = {"wake_reads_home_menu", "click_picks", "voice_speed_applied", "cha
 PACE = 1.0          # scenarios that click an item: window = item gap 1500 ms; the click lands about 1060 ms after the item starts (500 ms grace + 120 press + 350 gap + sends), so 1.0 leaves ~440 ms of margin; 0.8 left ~140 ms, less than a late log line costs
 PACE_LISTEN = 0.0   # scenarios that only listen and never click an item in a list
 PACE_OF = {"fake_incoming_call": 0.3}   # the call menu has 2 items and leaves after its silent loops: at 0 it would be gone before the state is read
-LISTEN_ONLY = {"phone_list", "fake_incoming_call", "fake_chat_message", "rooms_done_spoken", "practice_end_to_end", "idle_clicks_go_to_the_player", "computers_two"}
+LISTEN_ONLY = {"phone_list", "fake_incoming_call", "fake_chat_message", "rooms_done_spoken", "practice_end_to_end", "idle_clicks_go_to_the_player", "computers_two", "line_push_answer"}
 
 def set_mode(f):
     real = f.__name__ in REAL_VOICE

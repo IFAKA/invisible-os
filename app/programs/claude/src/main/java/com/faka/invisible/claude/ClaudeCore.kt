@@ -4,7 +4,7 @@ import com.faka.invisible.logickit.firstWords
 import com.faka.invisible.logickit.squash
 
 /** One thing the laptop sent: a question that needs an answer (permission, question) or a short note (done, needs). */
-data class ClaudeEvent(val id: String, val kind: String, val project: String, val summary: String, val options: List<String>) {
+data class ClaudeEvent(val id: String, val kind: String, val project: String, val summary: String, val options: List<String>, val push: PushItem? = null) {
     val needsAnswer get() = options.isNotEmpty() && (kind == KIND_PERMISSION || kind == KIND_QUESTION)
 
     companion object {
@@ -12,16 +12,17 @@ data class ClaudeEvent(val id: String, val kind: String, val project: String, va
         const val KIND_QUESTION = "question"
         const val KIND_DONE = "done"
         const val KIND_NEEDS = "needs"
+        const val KIND_LINE = "line"
         const val MAX_WORDS = 12
         const val MAX_OPTIONS = 6
 
         /** A clean event from raw fields: summary at most [MAX_WORDS] words (a note: 25), options without blanks or repeats. Null if it has no id. */
-        fun of(id: String?, kind: String?, project: String?, summary: String?, options: List<String>): ClaudeEvent? {
+        fun of(id: String?, kind: String?, project: String?, summary: String?, options: List<String>, push: PushItem? = null): ClaudeEvent? {
             if (id.isNullOrBlank()) return null
-            val k = when (kind) { KIND_PERMISSION, KIND_QUESTION, KIND_DONE, KIND_NEEDS -> kind; else -> KIND_NEEDS }
+            val k = when (kind) { KIND_PERMISSION, KIND_QUESTION, KIND_DONE, KIND_NEEDS, KIND_LINE -> kind; else -> KIND_NEEDS }
             val opts = options.map { it.squash() }.filter { it.isNotEmpty() }.distinct().take(MAX_OPTIONS)
             val words = if (opts.isEmpty()) 25 else MAX_WORDS
-            return ClaudeEvent(id, k, project.orEmpty().squash().ifEmpty { "Claude" }, summary.orEmpty().firstWords(words), opts)
+            return ClaudeEvent(id, k, project.orEmpty().squash().ifEmpty { "Claude" }, summary.orEmpty().firstWords(words), opts, push)
         }
     }
 }

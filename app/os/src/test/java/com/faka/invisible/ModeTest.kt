@@ -23,6 +23,8 @@ class ModeTest {
         var playing = false
         var msgs = listOf<Msg>()
         var replyOk = true
+        /** The push line (hooks for the ControllerMode border): which gestures it was offered, whether it takes them, whether lines wait at wake. */
+        val lineSeen = ArrayList<com.faka.invisible.voicekit.Gesture>(); var lineTakes = false; var lineWaiting = false; var lineHome: () -> Unit = {}
         var ringing = false
         var dnd = true
         var last = 0
@@ -71,6 +73,8 @@ class ModeTest {
             override fun startProgram(id: String) { log.add(when (id) { "games:duel" -> "startGame false"; "games:howto" -> "startGame true"; else -> "start" + id.substringAfter(':').replaceFirstChar { it.uppercase() } }) }
             override fun runAction(name: String) { log.add("run $name"); speech() }
             override fun forward(what: Forward) { log.add("fwd $what") }
+            override fun lineGesture(g: com.faka.invisible.voicekit.Gesture): Boolean { lineSeen.add(g); return lineTakes }
+            override fun lineWake(home: () -> Unit): Boolean { lineHome = home; return lineWaiting }
             override fun log(line: String) {}
             override fun pauseMusic(): Boolean { if (playing) log.add("pause"); return playing }
             override fun resumeMusic() { log.add("resume") }
