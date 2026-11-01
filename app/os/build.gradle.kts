@@ -17,7 +17,7 @@ android {
         applicationId = "com.faka.invisible"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
+        versionCode = git("rev-list", "--count", "HEAD").toIntOrNull() ?: 1   // rises with every commit; 1 when git is missing
         versionName = (findProperty("appVersion") as String?) ?: "0.1.0"
         buildConfigField("String", "BUILD_STAMP", "\"$stamp\"")
         ndk { abiFilters += "arm64-v8a" }   // the phone is arm64; keeps sherpa-onnx + onnxruntime to one ABI
