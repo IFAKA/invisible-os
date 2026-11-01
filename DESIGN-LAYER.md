@@ -97,6 +97,7 @@ Safety rules (enforced by a unit test):
 | C5 | Hear equals see: the shown item equals the spoken line | `ParityRecorder` Flow test (KIT.md Cue step 5) |
 | C6 | No microphone | Existing rules (`checkVoiceKit`) |
 | C7 | You actually keep using it | Only real use can tell: days a week with an answered push, and whether the 92 s wait before a reply drops. Read from `sends.log` and the trace after 2 weeks |
+| C8 | The spoken line keeps what is wanted (the question is never cut) | `python3 bridge/research/line_replay.py` over 1753 real answered messages (code fallback only): the line keeps the ask in 83.0% (old `shorten(12)` cut: 50.3%), 100% of lines <= 16 words, "..." in 0.1% (old 58.4%), mean 10.3 words (old 9.8). Unit tests `FitLineTest`. The model question test (gemma3:4b, 40 messages) runs at the end of the same command; skipped when Ollama is down (2026-11-01: skipped) |
 
 ## Build order (each step has its check)
 1. Done 2026-11-01 (`cd bridge && python3 -m unittest test_layer`). Bridge: the `/line` queue and item format, fed from rooms, hook asks and `POST /line`. A and B come from the quoted options and the learned order. Check: `bridge/test_*.py` with fake rooms.

@@ -482,7 +482,7 @@ class RoomsTmuxTest(unittest.TestCase):
         first = self.by_id(r.rooms(), c2)
         self.assertEqual((first["story"], first["go"]), ("", ""))   # /rooms never waits for the model
         got = r.story_for(c2, wait=3)
-        self.assertEqual(got, {"story": "Fixed 3 bugs. Commit the fix?", "go": "commit the fix"})
+        self.assertEqual(got, {"story": "Fixed 3 bugs. Commit the fix?", "go": "commit the fix", "line": ""})
         again = self.by_id(r.rooms(), c2)
         self.assertEqual((again["story"], again["go"]), ("Fixed 3 bugs. Commit the fix?", "commit the fix"))
         self.assertIsNone(r.story_for("%999999"))

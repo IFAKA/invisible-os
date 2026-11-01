@@ -18,6 +18,7 @@ import urllib.request
 
 from aitext import AiText
 import choice as choicelib
+import layer
 from core import shorten
 from story import StoryCache, first_sentence, ollama_model, squash
 from preview import Preview
@@ -539,7 +540,10 @@ class Rooms:
 
     @staticmethod
     def _story_fallback(room, source):
-        return room["need"] or first_sentence(source)
+        need = room["need"]
+        if room["kind"] == "claude" and squash(source) and (not need or need.endswith("...") or len(need.split()) > layer.NEED_WORDS):
+            return layer.fit_text(source)   # the need was cut or is long: a cut story may lose the question
+        return need or first_sentence(source)
 
     def _claude_state(self, room, row, asks):
         st = self.agent_status(row["window"])

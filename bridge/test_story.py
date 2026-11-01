@@ -82,8 +82,8 @@ class CacheTest(unittest.TestCase):
             calls.append(p); gate.wait(2)
             return reply("Tests failed, 3 of 12.", "commit the fix")
         c = story.StoryCache(model)
-        self.assertEqual(c.peek("%1", "claude", SRC, "", "fb"), {"story": "", "go": ""})   # does not wait
-        self.assertEqual(c.peek("%1", "claude", SRC, "", "fb"), {"story": "", "go": ""})   # no second run
+        self.assertEqual(c.peek("%1", "claude", SRC, "", "fb"), {"story": "", "go": "", "line": ""})   # does not wait
+        self.assertEqual(c.peek("%1", "claude", SRC, "", "fb"), {"story": "", "go": "", "line": ""})   # no second run
         gate.set()
         self.assertEqual(c.ask("%1", "claude", SRC, "", "fb")["story"], "Tests failed, 3 of 12.")
         self.assertEqual(c.peek("%1", "claude", SRC)["go"], "commit the fix")
@@ -126,11 +126,11 @@ class CacheTest(unittest.TestCase):
 
     def test_no_model_answers_at_once_with_fallback(self):
         c = story.StoryCache(None)
-        self.assertEqual(c.peek("%1", "claude", SRC, "", "need line"), {"story": "need line", "go": ""})
+        self.assertEqual(c.peek("%1", "claude", SRC, "", "need line"), {"story": "need line", "go": "", "line": ""})
 
     def test_empty_source_uses_fallback_without_model(self):
         c = story.StoryCache(lambda p: 1 / 0)
-        self.assertEqual(c.peek("%1", "claude", "", "", "waiting"), {"story": "waiting", "go": ""})
+        self.assertEqual(c.peek("%1", "claude", "", "", "waiting"), {"story": "waiting", "go": "", "line": ""})
 
 
 class PlainTest(unittest.TestCase):
@@ -191,8 +191,8 @@ class ContextPromptTest(unittest.TestCase):
         self.assertNotEqual(story.StoryCache.key("%1", SRC, "a"), story.StoryCache.key("%1", SRC, "b"))
         calls = []
         c = story.StoryCache(lambda p: calls.append(p) or reply("x"))
-        self.assertEqual(c.peek("%1", "claude", SRC, "", "fb", "", False), {"story": "fb", "go": ""})
-        self.assertEqual(c.ask("%1", "claude", SRC, "", "fb", 0.1, "", False), {"story": "fb", "go": ""})
+        self.assertEqual(c.peek("%1", "claude", SRC, "", "fb", "", False), {"story": "fb", "go": "", "line": ""})
+        self.assertEqual(c.ask("%1", "claude", SRC, "", "fb", 0.1, "", False), {"story": "fb", "go": "", "line": ""})
         self.assertEqual(c.plain("rm -rf x", "", False), "")
         self.assertEqual(calls, [])
 
@@ -203,3 +203,22 @@ class ContextPromptTest(unittest.TestCase):
         self.assertEqual(story.check_plain("Deletes the Build folder", "rm -rf build", "I will clear the Build folder"), "Deletes the Build folder")
         self.assertEqual(story.check_plain("Deletes the safe folder", "rm -rf build", "why"), "")
         self.assertEqual(story.check_plain("Deletes it, it is safe", "rm -rf build", "It is safe"), "")
+
+
+class LineTest(unittest.TestCase):
+    def test_check_line(self):
+        self.assertEqual(story.check_line("Tests failed, 3 of 12. Commit?", SRC), "Tests failed, 3 of 12. Commit?")
+        self.assertEqual(story.check_line("one two three four five six seven eight nine ten eleven twelve thirteen", SRC), "")
+        self.assertEqual(story.check_line("Tests failed, 99 of 12. Commit?", SRC), "")   # invented number
+        self.assertEqual(story.check_line("Tests failed...", SRC), "")
+
+    def test_make_all_gives_line_and_cache_keeps_it(self):
+        raw = json.dumps({"story": "Tests failed, 3 of 12. Commit the fix?", "go": "commit the fix", "line": "3 of 12 tests failed, commit the fix?"})
+        s, g, line, ok = story.make_all("claude", SRC, "", "fb", lambda p: raw)
+        self.assertEqual((ok, line), (True, "3 of 12 tests failed, commit the fix?"))
+        self.assertIn('"line"', story.build_prompt("claude", SRC))
+        c = story.StoryCache(lambda p: raw)
+        c.ask("%1", "claude", SRC, "", "fb")
+        self.assertEqual(c.peek("%1", "claude", SRC, "", "fb")["line"], "3 of 12 tests failed, commit the fix?")
+        self.assertEqual(c.peek("%1", "claude", SRC, "", "fb", "", False)["line"], "")   # ai=0: no model line
+

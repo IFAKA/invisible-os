@@ -78,8 +78,10 @@ class AnswersTest(unittest.TestCase):
         self.assertEqual(layer.room_line(room(need="say go")), "invisible-os: say go")
         self.assertEqual(layer.room_line(room()), "invisible-os: Polish")
         long = layer.room_line(room(story=" ".join(["w"] * 30)))
-        self.assertTrue(long.endswith("...") and len(long.split()) == 12)
+        self.assertTrue("..." not in long and len(long.split()) == 1 + layer.FIT_WORDS)
         self.assertEqual(layer.ask_line("app", "rm -rf build"), "app wants to run rm -rf build")
+        self.assertEqual(layer.ask_line("app", "npm run build --prefix web --silent --if-present all"), "app wants to run npm run and 6 more words")
+        self.assertTrue(layer.is_risky("rm -rf build/ node_modules dist out tmp cache logs"))   # risk is judged on the full command
         self.assertEqual(layer.ask_line("app", "edit Main.kt"), "app wants to edit Main.kt")
 
 
@@ -250,3 +252,47 @@ class FakeRoomsFull:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FitLineTest(unittest.TestCase):
+    def fit(self, text, **kw):
+        return layer.fit_line("p", text=text, **kw)
+
+    def test_sources_in_order(self):
+        self.assertEqual(layer.fit_line("p", need="say go", model_line="M", story="S"), "p: say go")
+        self.assertEqual(layer.fit_line("p", need=" ".join(["w"] * 15), model_line="Tests failed. Commit?", story="S"), "p: Tests failed. Commit?")
+        self.assertEqual(layer.fit_line("p", need="x...", model_line="a " * 15, story="Short story."), "p: Short story.")
+
+    def test_question_at_the_end_is_kept(self):
+        t = ("I ran the whole suite twice and looked at every failing case in the output. Tests ran, 3 of 12 failed. "
+             "I fixed one of them in parser.py and left the rest for later. Do you want me to commit?")
+        out = self.fit(t)
+        self.assertTrue(out.endswith("Do you want me to commit?"), out)
+        self.assertNotIn("...", out)
+        self.assertLessEqual(len(out.split()) - 1, layer.FIT_WORDS)
+
+    def test_long_asking_sentence_keeps_its_last_clause(self):
+        t = "After reading all of the files in the source tree and comparing them with the notes from last week, should I commit the fix?"
+        self.assertEqual(self.fit(t), "p: should I commit the fix?")
+
+    def test_quoted_option_sentence_is_kept(self):
+        out = self.fit("Build passed. Nothing else changed. Reply \"push\" when ready. Thanks.")
+        self.assertIn('Reply "push" when ready.', out)
+        self.assertNotIn("Thanks", out)
+
+    def test_no_question_starts_from_the_beginning(self):
+        out = self.fit("Wrote the design doc. It has 4 sections and 120 lines. " + "More text here. " * 10)
+        self.assertTrue(out.startswith("p: Wrote the design doc. It has 4 sections and 120 lines."), out)
+        self.assertLessEqual(len(out.split()) - 1, layer.FIT_WORDS)
+
+    def test_markdown_removed_numbers_kept(self):
+        out = self.fit("**Done.** Fixed `parser.py`, 3 of 12 tests still fail. Run `make test`?")
+        self.assertNotIn("`", out)
+        self.assertNotIn("*", out)
+        self.assertIn("3 of 12", out)
+        self.assertTrue(out.endswith("Run make test?"), out)
+
+    def test_never_cuts_with_dots(self):
+        for n in (5, 20, 40, 100):
+            self.assertNotIn("...", self.fit(("word " * n).strip() + "."))
+        self.assertEqual(layer.fit_line("p"), "p")

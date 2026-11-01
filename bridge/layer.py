@@ -87,15 +87,101 @@ def option_answers(item_id, options):
     return out[0], out[1]
 
 
+NEED_WORDS = 14      # the agent's own need line, a model line or a story up to this long is spoken as it is
+FIT_WORDS = 16       # the code fallback keeps the line within this (the project name is not counted)
+CMD_WORDS = 6        # an ask command longer than this is spoken as program, first argument, "and N more words"
+_MD_RE = re.compile(r"```[^\n]*\n?|[`*]+|^\s*[#>]+\s*|^\s*[-+]\s+|^\s*\d+[.)]\s+", re.M)
+_SENT_RE = re.compile(r"(?<=[.!?])\s+|\n+")
+_CLAUSE_RE = re.compile(r"(?<=[,;:])\s+|\s+[-\u2013\u2014]\s+")
+_QUOTED_RE = re.compile(r"\"[^\"\n]+\"|\u201c[^\u201d\n]+\u201d")
+_ASK_VERB_RE = re.compile(r"^(say|run|commit|approve|reply|tell|confirm|push|merge|want me|should i|shall i|do you|can i|let me know|choose|pick|click|answer)\b", re.I)
+
+
+def _clean(text):
+    return " ".join(_MD_RE.sub("", str(text or "")).split())
+
+
+def _n(text):
+    return len(text.split())
+
+
+def _asks(sentence):
+    s = sentence.strip()
+    return s.endswith("?") or bool(_QUOTED_RE.search(s)) or bool(_ASK_VERB_RE.match(s))
+
+
+def _units(sentence, limit):
+    """The sentence whole if it fits `limit` words, else its clauses cut at commas, colons, semicolons or dashes."""
+    return [sentence] if _n(sentence) <= limit else [c for c in _CLAUSE_RE.split(sentence) if c.strip()]
+
+
+def fit_line(project, need="", model_line="", story="", text=""):
+    """The spoken push line (heard once, no screen): what happened and what is wanted. Source order: (a) the agent's own need line
+    (<= NEED_WORDS), (b) the model line, (c) the story (<= NEED_WORDS), (d) code: split into sentences, always keep the one that
+    asks, add earlier sentences from the start while <= FIT_WORDS; a long asking sentence keeps its last clause. Never "...".
+    The project name is a prefix outside the word budget."""
+    def pick(t):
+        t = _clean(t)
+        return t if t and _n(t) <= NEED_WORDS and not t.endswith("...") else ""
+    body = pick(need) or pick(model_line) or pick(story)
+    if not body:
+        body = _fit_text(_clean(story) or _clean(need) or _clean(text))
+    return "%s: %s" % (project, body) if body else str(project)
+
+
+def fit_text(text):
+    """Pure. The code fallback body (see fit_line, step d) of a message: the asking sentence kept, earlier sentences added from the start."""
+    return _fit_text(_clean(text))
+
+
+def _fit_text(t):
+    sents = [x.strip() for x in _SENT_RE.split(t) if x.strip()]
+    if not sents:
+        return ""
+    ask_i = next((i for i in range(len(sents) - 1, -1, -1) if _asks(sents[i])), None)
+    if ask_i is None:
+        head, budget = [], FIT_WORDS
+        for sent in sents:
+            for u in _units(sent, FIT_WORDS):
+                if head and _n(u) > budget:
+                    return " ".join(head)
+                if not head and _n(u) > FIT_WORDS:   # one long clause with no break: the start, nothing to mark a cut
+                    u = " ".join(u.split()[:FIT_WORDS])
+                head.append(u)
+                budget -= _n(u)
+        return " ".join(head)
+    ask = sents[ask_i]
+    if _n(ask) > FIT_WORDS:
+        parts = [c for c in _CLAUSE_RE.split(ask) if c.strip()]
+        ask = parts[-1] if parts else ask
+        if _n(ask) > FIT_WORDS:
+            ask = " ".join(ask.split()[-FIT_WORDS:])
+    out, budget = [], FIT_WORDS - _n(ask)
+    for sent in sents[:ask_i]:
+        if _n(sent) > budget:
+            break
+        out.append(sent)
+        budget -= _n(sent)
+    return " ".join(out + [ask])
+
+
 def room_line(room):
     ask = room.get("ask")
     if ask:
         return ask_line(room["project"], ask.get("what", ""))
-    text = room.get("story") or room.get("need") or room.get("name") or ""
-    return shorten("%s: %s" % (room["project"], text), 12)
+    return fit_line(room["project"], room.get("need", ""), room.get("line", ""), room.get("story", ""),
+                    room.get("_src") or room.get("name") or "")
+
+
+def short_command(what):
+    """The exact command if short; else the program, its first argument and 'and N more words' (the phone can show the full one)."""
+    w = str(what or "").split()
+    if len(w) <= CMD_WORDS:
+        return " ".join(w)
+    return "%s and %d more words" % (" ".join(w[:2]), len(w) - 2)
 
 
 def ask_line(project, what):
     what = " ".join(str(what or "").split())
     verb = "wants to " + ("" if re.match(r"^(edit|write|read|fetch|search)\b", what) else "run ")
-    return shorten("%s %s%s" % (project, verb, what), 12)
+    return "%s %s%s" % (project, verb, short_command(what))
