@@ -271,6 +271,11 @@ object Actions {
 
     private fun prefs() = app.getSharedPreferences("invisible", Context.MODE_PRIVATE)
 
+    /** Owner turned the whole OS off: the button works like normal and nothing starts it again until "Turn on". */
+    var paused: Boolean
+        get() = ::app.isInitialized && prefs().getBoolean("os_paused", false)
+        set(v) { prefs().edit().putBoolean("os_paused", v).apply() }
+
     fun init(ctx: Context) {
         if (::app.isInitialized) return
         app = ctx.applicationContext
@@ -506,6 +511,7 @@ object Actions {
         override fun gesture(g: Gesture, durationMs: Long) {
             EventLog.add("${g.name.lowercase()}  ${durationMs}ms")
             EventLog.pressed(g)
+            if (prefs().getBoolean("setup_open", false)) { prefs().edit().putBoolean("button_tested", true).apply(); return }   // the setup screen is showing: a hold only proves the button works, it opens nothing
             if ((g == Gesture.HOLD || g == Gesture.CLICK_HOLD) && !mode.active && running == null && !prefs().getBoolean(PracticeProgram.DONE_KEY, false)) { startPractice(); return }   // the first wake: the practice comes first, once
             val inMode = mode.active && mode.screen != ControllerMode.Screen.SENT   // a click that cancels a send has its own tone
             val before = mode.tonesPlayed

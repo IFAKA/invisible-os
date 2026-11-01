@@ -63,7 +63,7 @@ class MainActivity : Activity() {
         scroll = k.screen(this, body)
         root = android.widget.FrameLayout(this).apply { addView(scroll) }
         setContentView(root)
-        if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java))
+        if (!EventLog.running && !Actions.paused) startForegroundService(Intent(this, ButtonService::class.java))
         EventLog.onChange = { renderSoon() }
         ScreenMirror.onChange = { if (page == Page.HOME) EventLog.refresh() }
         intent.getStringExtra("page")?.let { n -> Page.values().firstOrNull { it.name.equals(n, true) }?.let { page = it } }   // for screenshots: adb ... --es page menu --es open /Tools
@@ -86,7 +86,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java))
+        if (!EventLog.running && !Actions.paused) startForegroundService(Intent(this, ButtonService::class.java))
         announceStep = true
         Handler(Looper.getMainLooper()).postDelayed({ render() }, 2600)   // if the service did not start, say so then
         if (!lostNote) lostNote = ButtonAccess.check(this)
@@ -250,6 +250,7 @@ class MainActivity : Activity() {
             contacts = granted(Manifest.permission.READ_CONTACTS), calls = granted(Manifest.permission.CALL_PHONE) && granted(Manifest.permission.ANSWER_PHONE_CALLS), sms = granted(Manifest.permission.SEND_SMS), callLog = granted(Manifest.permission.READ_CALL_LOG)))
         val steps = Setup.firstRun(allSteps)   // a new user is asked ONLY for these; every other permission is asked when a feature first needs it
         val next = if (previewReady) -1 else Setup.current(steps)
+        sp.edit().putBoolean("setup_open", next >= 0).apply()   // while the setup shows, the button opens no menu and no practice (the voices would overlap)
         val stepKey = if (next >= 0) steps[next].id else if (!listening()) "stopped" else "ready"
         val changed = stepKey != lastStep
         if (changed) { lastStep = stepKey; if (next >= 0) body.post { k.enter(body) } }
@@ -257,7 +258,7 @@ class MainActivity : Activity() {
             val t = steps[next]
             val perm = t.id in Setup.PERMISSION_STEPS
             val action = if (t.id == "test") null else if (perm) "Allow" else "Turn on"
-            val line = if (t.id == "test") tr(if (a11y) "Press your earbud button once. This screen will say when it hears you." else t.reason) else tr(t.reason) + tr(" You turn it on once.")
+            val line = if (t.id == "test") tr(if (a11y) "Hold your earbud button for one second. Nothing else opens yet. This screen will say when it hears you." else t.reason) else tr(t.reason) + tr(" You turn it on once.")
             if ((changed || announceStep) && !previewReady) {   // the app's own voice, for a person who cannot see the screen
                 if (lostNote) { Actions.announce(Voice.BUTTON_ACCESS_OFF, false); ButtonAccess.told(this); lostNote = false }
                 Actions.announce(Voice.setupStep(next + 1, steps.size, t.title, action), true)
@@ -294,11 +295,12 @@ class MainActivity : Activity() {
             root.removeAllViews(); root.addView(fixed)
             return
         } else if (!listening()) {
-            k.status(fixed, tr("Stopped"), tr("The app is not listening to the button."), Ui.bad, Ui.S1) {
-                addView(k.primary(tr("Start")) { startForegroundService(Intent(this@MainActivity, ButtonService::class.java)) })
+            k.status(fixed, tr("Invisible OS is off"), tr("Your earbud button works like normal."), Ui.bad, Ui.S1) {
+                addView(k.primary(tr("Turn on")) { Actions.paused = false; startForegroundService(Intent(this@MainActivity, ButtonService::class.java)); render() })
             }
         } else {
-            k.status(fixed, tr("Ready"), tr("Hold your earbud button to open Invisible OS."), Ui.good, Ui.S1) {
+            val learned = sp.getBoolean(com.faka.invisible.practice.PracticeProgram.DONE_KEY, false)
+            k.status(fixed, tr("Invisible OS is on"), tr(if (learned) "Hold your earbud button to open the menu." else "Hold your earbud button once to learn the button (1 minute)."), Ui.good, Ui.S1) {
                 addView(k.primary(tr("Open Invisible OS")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) })
             }
         }
@@ -324,12 +326,15 @@ class MainActivity : Activity() {
             k.navRow(this, tr("Habits"), Habits.names(sp.getString(HabitsProgram.LIST_KEY, null)).joinToString(", ")) { open(Page.HABITS) }
             k.navRow(this, tr("Emergency contact"), Actions.emergencyContact().ifEmpty { tr("Not set") }) { open(Page.EMERGENCY) }
             val pcs = Actions.computers()
-            k.navRow(this, tr("Computers"), if (pcs.isEmpty()) tr("Add a computer") else pcs.joinToString(", ") { it.name }) { open(Page.COMPUTERS) }
-            if (pcs.isNotEmpty()) k.navRow(this, if (pcs.size == 1) pcs[0].name else tr("Rooms"), tr("Rooms of your computer: read, answer")) { open(Page.LAPTOP) }
-            k.navRow(this, tr("AI"), tr(AiChoice.label(s.ai, pcs.isNotEmpty(), ModelDownload.ready(this@MainActivity)))) { open(Page.AI) }
+            if (pcs.isEmpty()) k.navRow(this, tr("Connect your laptop"), tr("Not connected yet")) { open(Page.COMPUTERS) }
+            else {
+                k.navRow(this, tr("Your laptop: agents and terminals"), tr("Read what needs you, answer by button")) { open(Page.LAPTOP) }
+                k.navRow(this, tr("Laptop connection"), pcs.joinToString(", ") { it.name }) { open(Page.COMPUTERS) }
+            }
+            k.navRow(this, tr("Short summaries (AI)"), tr(when (AiChoice.label(s.ai, pcs.isNotEmpty(), ModelDownload.ready(this@MainActivity))) { "Off" -> "Off"; "Computer" -> "On, done by your laptop"; "Phone" -> "On, done on this phone"; else -> "On, but the phone model is not downloaded" })) { open(Page.AI) }
             k.navRow(this, tr("Help"), tr("Button gestures and practice")) { open(Page.HELP) }
         }
-        if (EventLog.running) list.addView(k.quiet(tr("Stop listening"), Ui.bad) { stopService(Intent(this, ButtonService::class.java)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
+        if (EventLog.running) list.addView(k.quiet(tr("Turn off Invisible OS"), Ui.bad) { Actions.paused = true; stopService(Intent(this, ButtonService::class.java)); render() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S2) })
     }
 
     /** The emergency contact: its own small page. */

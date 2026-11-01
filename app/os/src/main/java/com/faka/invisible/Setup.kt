@@ -16,8 +16,8 @@ data class SetupStep(val id: String, val title: String, val reason: String, val 
 /** The first-run checklist: pure, in the order a new user should do it. */
 object Setup {
     fun steps(s: SetupState): List<SetupStep> = buildList {
-        add(SetupStep("button", "Button access", "So the app can hear your earbud button.", s.button, false))
-        add(SetupStep("test", "Hold your earbud button", "Hold your earbud button. This screen will say when it hears you.", s.buttonTested, false))
+        add(SetupStep("button", "Button access", "Tap Turn on. In the list tap Invisible OS, switch it on, tap Allow. Then come back here.", s.button, false))
+        add(SetupStep("test", "Hold your earbud button", "Hold your earbud button for one second. Nothing else opens yet.", s.buttonTested, false))
         add(SetupStep("notif", "Notification access", "So it can read your new messages to you.", s.notifications, true))
         add(SetupStep("assist", "Assistant", "So your earbud hold opens it. In the earbud app set the right earbud: one tap Play/Pause, two taps Next song, three taps Previous song, hold Voice assistant.", s.assistant, true))
         if (s.sdk >= 33) add(SetupStep("post", "Show notifications", "So the app can show that it is listening.", s.postNotifications, true))

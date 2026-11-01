@@ -135,9 +135,9 @@ object Voice {
     fun status(s: Status, unread: Int) = f(Spoken.status(s, unread))
 
     // ---- setup (said when a step appears; the screen shows the same words) ----
-    /** "Step 2 of 12. Notification access. Double tap Turn on." [action] = the button of the step, or null when the step only waits for the button. */
+    /** "Step 2 of 12. Notification access. Tap Turn on." [action] = the button of the step, or null when the step only waits for the button. */
     fun setupStep(n: Int, total: Int, title: String, action: String?) =
-        f("Step $n of $total. $title. " + if (action != null) "Double tap $action." else "Hold it for one second.")
+        f("Step $n of $total. $title. " + if (action != null) "Tap $action." else "Hold it for one second.")
     val BUTTON_ACCESS_OFF get() = f("Button access is off.")
     val NOTIF_ACCESS_OFF get() = f("Notification access is off. Music and messages will not work. Open the app to turn it on.")
 

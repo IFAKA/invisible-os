@@ -78,7 +78,7 @@ class TranslationsTest {
         assertEquals("Ahora menos 3 grados, lluvia en 2 horas.", Voice.weather(-3, 2).text)
         assertEquals("5 03 de la tarde, batería 80 por ciento, sin mensajes sin leer, próxima alarma 7 00 de la mañana",
             Voice.status(com.faka.invisible.voicekit.Status(17, 3, 80, 7, 0), 0).text)
-        assertEquals("Paso 2 de 12. Acceso a notificaciones. Toca dos veces Activar.", Voice.setupStep(2, 12, "Notification access", "Turn on").text)
+        assertEquals("Paso 2 de 12. Acceso a notificaciones. Toca Activar.", Voice.setupStep(2, 12, "Notification access", "Turn on").text)
     }
 
     @Test fun unknownTextStaysEnglishWithTheEnglishVoice() {

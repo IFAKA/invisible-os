@@ -21,13 +21,13 @@ class ButtonAccessibilityService : AccessibilityService() {
         inst = this
         Actions.init(this)
         Actions.accessibilityConnected = true
-        if (!EventLog.running) startForegroundService(Intent(this, ButtonService::class.java)) // self-start, no screen needed
+        if (!EventLog.running && !Actions.paused) startForegroundService(Intent(this, ButtonService::class.java)) // self-start, no screen needed
         Log.d("Invisible", "A11Y connected")
         EventLog.add("accessibility connected")
         ButtonAccess.check(this)   // remembers that it is on
     }
 
-    override fun onKeyEvent(e: KeyEvent): Boolean = VoiceKit.buttons.keyEvent("a11y", e)
+    override fun onKeyEvent(e: KeyEvent): Boolean = !Actions.paused && VoiceKit.buttons.keyEvent("a11y", e)
 
     private val nameLike = Regex("title|name|contact|conversation|toolbar", RegexOption.IGNORE_CASE)
 
