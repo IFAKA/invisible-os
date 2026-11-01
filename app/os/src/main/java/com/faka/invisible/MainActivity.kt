@@ -402,7 +402,7 @@ class MainActivity : Activity() {
         fixed.addView(k.primary(tr("Open the menu")) { Actions.screenPress(com.faka.invisible.voicekit.Gesture.HOLD) }, LinearLayout.LayoutParams(-1, -2))
         fixed.addView(k.quiet(tr("Settings and more"), Ui.soft) { open(Page.MORE) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = k.dp(Ui.S1) })
         root.removeAllViews(); root.addView(fixed)
-        val offer = if (need == null) Setup.later(allSteps, sp.getBoolean(com.faka.invisible.practice.PracticeProgram.DONE_KEY, false) || sp.getBoolean("practice_offered", false)) else null   // skipped steps are already "passed"
+        val offer = if (need == null) Setup.later(allSteps, sp.getBoolean(com.faka.invisible.practice.PracticeProgram.DONE_KEY, false) || sp.getInt("done_lines", 0) > 0) else null   // skipped steps are already "passed"
         if (offer != null && need == null && offerSpoken != offer.id && !clearMirrorWhenQuiet) { offerSpoken = offer.id; say(Voice.setupOffer(offer.title), true) }
     }
 

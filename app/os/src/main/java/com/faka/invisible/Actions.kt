@@ -202,9 +202,7 @@ object Actions {
             override fun addGroupPick(group: String) { prefs().edit().putInt("group_picks_$group", groupPicks(group) + 1).apply() }
             override fun doneLines() = prefs().getInt("done_lines", 0)
             override fun setDoneLines(n: Int) { prefs().edit().putInt("done_lines", n).apply() }
-            override fun practiceOffered() = prefs().getBoolean("practice_offered", false)
-            override fun setPracticeOffered() { prefs().edit().putBoolean("practice_offered", true).apply() }
-            override fun closing(p: Phrase, queue: Boolean, offer: Boolean) = closingLine(p, queue, offer)
+            override fun closing(p: Phrase, queue: Boolean) = closingLine(p, queue)
             override fun findHintSeen() = prefs().getBoolean("find_hint_seen", false)
             override fun setFindHintSeen() { prefs().edit().putBoolean("find_hint_seen", true).apply() }
             override fun loadReactions() = prefs().getString("reactions", "") ?: ""
@@ -418,29 +416,25 @@ object Actions {
             if (i % 2 == 0) handler.postAtTime({ VoiceKit.buttons.key("dev", false, 0, down, end) }, end)
         }
     }
-    // ---- the line after the close sound ("Done. Hold again any time.", then once "Want to practice?"): spoken and shown on the Stage, then the Stage is cleared ----
-    @Volatile private var offerOpen = false
+    // ---- the line after the close sound ("Done. Hold again any time.", ): spoken and shown on the Stage, then the Stage is cleared ----
     private var closingLeft = 0
-    private val offerEnd = Runnable { endOffer() }
-    private val closingClear = Runnable { closingLeft = 0; if (!offerOpen && !mode.active && running == null) com.faka.invisible.voicekit.ScreenMirror.clear() }
-    private fun closingLine(p: Phrase, queue: Boolean, offer: Boolean) {
+    private val closingClear = Runnable { closingLeft = 0; if (!mode.active && running == null) com.faka.invisible.voicekit.ScreenMirror.clear() }
+    private fun closingLine(p: Phrase, queue: Boolean) {
         handler.post {
             com.faka.invisible.voicekit.Cues.stageLine(p.text, p.press)
             closingLeft++
-            if (offer) { offerOpen = true; handler.removeCallbacks(offerEnd); handler.postDelayed(offerEnd, 25_000) }
             say(p, queue)
             handler.removeCallbacks(closingClear); handler.postDelayed(closingClear, 30_000)
         }
     }
-    private fun endOffer() { offerOpen = false; handler.removeCallbacks(offerEnd); if (closingLeft == 0 && !mode.active && running == null) com.faka.invisible.voicekit.ScreenMirror.clear() }
-    private fun closingSpoken() { if (closingLeft > 0 && --closingLeft == 0 && !offerOpen && !mode.active && running == null) com.faka.invisible.voicekit.ScreenMirror.clear() }
+    private fun closingSpoken() { if (closingLeft > 0 && --closingLeft == 0 && !mode.active && running == null) com.faka.invisible.voicekit.ScreenMirror.clear() }
 
-    /** The practice: offered once at the end of the first session, and replayed from the Help page. It never runs by itself. */
+    /** The practice: started only from the Help page. It never runs by itself. */
     fun startPractice() {
         handler.post {
             startProgramEntry(PracticeEntry.entry)
-            // When the practice ends, go straight to the home menu (no second hold needed).
-            backAfterEnd = { gameEnded(); handler.postDelayed({ if (running == null && !mode.active) mode.onGesture(Gesture.HOLD, 0) }, 1500); true }
+            // When the practice ends the menu stays closed: only a person's hold wakes it.
+            backAfterEnd = { gameEnded(); true }
         }
     }
     /** Dev (e2e): back to a known state: no program, menu closed, nothing spoken, practice marked done (or not), fake notifications gone. */
@@ -448,7 +442,7 @@ object Actions {
         backAfterEnd = null
         running?.stop(); running = null
         mode.exit(false); com.faka.invisible.voicekit.ScreenMirror.clear(); narrator.stopSpeech()
-        prefs().edit().putBoolean(PracticeProgram.DONE_KEY, practiceDone).putBoolean("practice_offered", true).putInt("done_lines", 3).remove(RoomMute.KEY).apply()   // known state: the rooms are not muted
+        prefs().edit().putBoolean(PracticeProgram.DONE_KEY, practiceDone).putInt("done_lines", 3).remove(RoomMute.KEY).apply()   // known state: the rooms are not muted
         Log.d("E2E", "reset done")
     }
     /** Dev (e2e): swap the speech engine for the instant stand-in (debug builds only; the class exists only there). */
@@ -573,7 +567,6 @@ object Actions {
             EventLog.pressed(g)
             if (prefs().getBoolean("setup_open", false)) { setupGesture(g); return }
             if (setupLive) { setupLive = false; com.faka.invisible.voicekit.Cues.clearStaged(); narrator.stopSpeech(); if (!mode.active && running == null) com.faka.invisible.voicekit.ScreenMirror.clear() }   // the setup is over: its queued lines are never spoken over the menu   // the setup screen is showing: nothing opens; a hold proves the button, one click skips when allowed
-            if (offerOpen && !mode.active && running == null) { val yes = g == Gesture.SINGLE; endOffer(); if (yes) { Trace.ev("practice", "offer accepted"); narrator.beep(Tone.PICK); startPractice(); return } else if (g == Gesture.TRIPLE || g == Gesture.DOUBLE) { narrator.beep(Tone.BACK); return } }   // the end-of-first-session offer: one click = yes, three clicks or silence = no (a hold wakes the menu as always)
             val inMode = mode.active && mode.screen != ControllerMode.Screen.SENT   // a click that cancels a send has its own tone
             val before = mode.tonesPlayed
             val scan = inMode && mode.scanning()   // while options are read: 1 click = choose (pick tone), 2 clicks = previous item (step-down tone)

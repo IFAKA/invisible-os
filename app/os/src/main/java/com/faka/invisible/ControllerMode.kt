@@ -94,9 +94,7 @@ interface ModeOutput {
     fun addGroupPick(group: String) {}
     fun doneLines(): Int = 3          // how many times "Done. Hold again any time." was said (persisted); it is said for the first 3 sessions with a pick
     fun setDoneLines(n: Int) {}
-    fun practiceOffered(): Boolean = true   // "Want to practice?" was asked once (persisted); never again
-    fun setPracticeOffered() {}
-    fun closing(p: Phrase, queue: Boolean, offer: Boolean = false) { speak(p, queue, false) }   // a line after the close sound; [offer] = a click within the next seconds says yes (the OS starts the practice)
+    fun closing(p: Phrase, queue: Boolean) { speak(p, queue, false) }   // a line after the close sound; nothing starts from it
     fun findHintSeen(): Boolean = true   // "Find. Pick the first letter." is said only once
     fun setFindHintSeen() {}
     fun loadReactions(): String = ""   // saved reaction samples (see ReactionGap.encode)
@@ -1320,15 +1318,13 @@ class ControllerMode(
         if (withTone) { tn(Tone.EXIT); closingLines() }
     }
 
-    /** After the close sound: what happened ("Done. Hold again any time." after a pick, the first 3 times), then once the practice offer. Never over a program or a new wake. */
+    /** After the close sound: what happened ("Done. Hold again any time." after a pick, the first 3 times), . Never over a program or a new wake. */
     private fun closingLines() {
         val summary = sessionPicks > 0 && out.doneLines() < DONE_LINES
-        val offer = !out.practiceOffered()
-        if (!summary && !offer) return
+        if (!summary) return
         timers.set("closing", 700) {
             if (active) return@set
-            if (summary) { out.setDoneLines(out.doneLines() + 1); out.closing(Voice.SESSION_DONE, false) }
-            if (offer) { out.setPracticeOffered(); out.closing(Voice.PRACTICE_OFFER, summary, offer = true) }
+            out.setDoneLines(out.doneLines() + 1); out.closing(Voice.SESSION_DONE, false)
         }
     }
 

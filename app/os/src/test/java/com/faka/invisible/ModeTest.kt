@@ -51,7 +51,7 @@ class ModeTest {
         var pendingWeather: ((Phrase) -> Unit)? = null
         var accessOff = false
         var live = listOf<LiveApp>(); val liveNotifs = HashMap<String, Notif>(); var rooms = 0; var caller: String? = "Mama"; var extraPrograms = listOf<Pair<String, String>>()   // for the flow tests
-        var doneCount = 3; var offered = true; val offersMade = ArrayList<String>()   // the lines after the close sound: defaults say "already told", so other tests hear nothing extra
+        var doneCount = 3;    // the lines after the close sound: defaults say "already told", so other tests hear nothing extra
         var codes = 100          // experienced by default; learning tests set 0
         private val timers = HashMap<String, Pair<Long, () -> Unit>>()
         /** The shared parity helper (oskit testing): `r.parity.start()` ... `r.parity.assertParity()`. */
@@ -140,9 +140,7 @@ class ModeTest {
             override fun playSong(search: String) { songsPlayed.add(search) }
             override fun doneLines() = doneCount
             override fun setDoneLines(n: Int) { doneCount = n }
-            override fun practiceOffered() = offered
-            override fun setPracticeOffered() { offered = true }
-            override fun closing(p: Phrase, queue: Boolean, offer: Boolean) { if (offer) offersMade.add(p.text); log.add("say " + p.text); speech(p, queue) }
+            override fun closing(p: Phrase, queue: Boolean) { log.add("say " + p.text); speech(p, queue) }
             override fun findHintSeen() = findSeen
             override fun setFindHintSeen() { findSeen = true }
             override fun loadReactions() = savedReactions

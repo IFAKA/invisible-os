@@ -622,7 +622,6 @@ private val SCREEN_ES = mapOf(
     "Hold it for one second." to "Mantenlo un segundo.",
     "Done." to "Listo.",
     "Done. Hold again any time." to "Listo. Mantén pulsado cuando quieras.",
-    "Want to practice? Click for yes." to "¿Quieres practicar? Un clic para sí.",
     "I heard your button." to "Oí tu botón.",
     "Skip for now: click once." to "Omitir por ahora: un clic.",
     "Hold your earbud button for one second." to "Mantén pulsado el botón del auricular un segundo.",

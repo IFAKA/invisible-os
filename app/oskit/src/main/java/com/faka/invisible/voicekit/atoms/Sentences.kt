@@ -159,7 +159,6 @@ object Voice {
     /** After the close sound, the first 3 times the menu closes after a pick: what happened, and the way back in. */
     val SESSION_DONE get() = f("Done. Hold again any time.")
     /** Asked once, at the end of the first session. A click is yes; silence or three clicks is no. */
-    val PRACTICE_OFFER get() = f("Want to practice? Click for yes.").asks(PressHint.click(1))
     val HEARD_BUTTON get() = f("I heard your button.")
     val SETUP_SKIP_HINT get() = f("Skip for now: click once.")
     /** Said after 5 s of quiet on a setup step. */

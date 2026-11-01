@@ -31,6 +31,19 @@ class FlowButtonTest {
         assertTrue(host.prefs.getBoolean(PracticeProgram.DONE_KEY, false))   // it ran once: never again by itself
     }
 
+    // ---- the menu never opens by itself after the practice ends ----
+    @Test fun practice_exit_does_not_wake_the_menu() {
+        val rig = RoboRig(); val host = rig.Host(); val p = PracticeProgram()
+        rig.running = p; p.start(host)
+        rig.press("120,150,900")
+        rig.advance(Pacing.GAP_MS)
+        assertEquals(1, host.ended)
+        rig.unhandled.clear()
+        rig.advance(5_000)
+        assertTrue("a gesture reached the OS with no press: ${rig.unhandled}", rig.unhandled.isEmpty())
+        assertNull(rig.running)
+    }
+
     // ---- click then hold leaves any program (also the tail of screen_tap_picks) ----
     @Test fun click_then_hold_leaves_a_program_but_a_plain_hold_does_not() {
         val rig = RoboRig(); val host = rig.Host(); val p = PracticeProgram()
