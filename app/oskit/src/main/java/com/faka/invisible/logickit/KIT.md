@@ -37,6 +37,7 @@ Rules are checked by `KitRulesTest` and `checkVoiceKit` (file `app/voicekit-rule
 | Detect a text's language | `MlKitLangDetector` (`LangDetector`), falls back to `MessageLogic.guessLang` | MlKitLangDetector.kt, MessageLogic.kt |
 | Translate English to the chat language | `MlKitTranslator` (a missing model is an answer, not a silent skip) | MlKitTranslator.kt |
 | Strip links, spot "Photo" placeholders, make a link speakable, a person's stable name | `MessageLogic.stripLinks / isPlaceholder / spoken / stableName / wordingLang / voiceLang` | MessageLogic.kt |
+| The one spoken+shown line of a notification (a reaction becomes "Lisandro reacted with a heart.", links named, emoji dropped, sender once, calm punctuation); when the AI short version is worth asking (> 25 clean words) | `NotifSpeech.read / cleanText / reaction / isLong`, `AiAssist.isLongClean` | NotifSpeech.kt |
 | Classify a message and word the answers | `MessageLogic` (MsgType, Answer, When, Extra) | MessageLogic.kt |
 | Latest unread message per conversation | `MessageStore` | MessageStore.kt |
 | All notifications, groups, one by key (`notifs.get(key)`) | `NotificationStore` (`Notif`, `NotifAction`); chat messages are a different store (`ControllerNotificationListener.store`) | `Notif` in `oskit/Notifications.kt`, the store in `os/.../NotificationStore.kt` |

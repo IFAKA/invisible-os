@@ -14,6 +14,9 @@ object AiAssist {
 
     fun isLong(text: String): Boolean = text.words().size > LONG_WORDS
 
+    /** For a notification: the cleaned text (NotifSpeech) is long enough for a short version (> 25 words). */
+    fun isLongClean(cleaned: String): Boolean = NotifSpeech.isLong(cleaned)
+
     /** The cache key of a set of notifications: the same set (apps, titles, texts, and how many are private) gives the same key. */
     fun digestKey(items: List<Triple<String, String, String>>, hidden: Int): String =
         (items.map { "${it.first}\u0001${it.second}\u0001${it.third}" }.sorted() + "hidden=$hidden").joinToString("\u0002").hashCode().toString() + ":" + items.size + ":" + hidden

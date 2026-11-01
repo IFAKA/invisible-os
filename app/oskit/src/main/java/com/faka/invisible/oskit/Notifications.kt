@@ -47,7 +47,7 @@ interface NotificationModule {
     /** Notifications with the same key are listed together. Default: one group per app. */
     fun groupKey(n: Notif): String = n.pkg
     /** What is read in full. Never called for a private notification. */
-    fun read(n: Notif): String = listOf(n.title, n.text).filter { it.isNotBlank() }.joinToString(". ")
+    fun read(n: Notif): String = com.faka.invisible.logickit.NotifSpeech.read(n.title, n.text, sep = ". ")
     /** The one line in the list (the caller cuts it). */
     fun summary(n: Notif): String = read(n)
 

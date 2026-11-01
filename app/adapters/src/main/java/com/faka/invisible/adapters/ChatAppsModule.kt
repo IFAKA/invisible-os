@@ -40,7 +40,7 @@ class ChatAppsModule : NotificationModule {
     private val replies = HashMap<String, Notification.Action>()
 
     override fun matches(pkg: String) = pkg in APPS
-    override fun read(n: Notif) = listOf(n.title, n.text).filter { it.isNotBlank() }.joinToString(": ")
+    override fun read(n: Notif) = NotifSpeech.read(n.title, n.text, chat = true)
 
     override fun onConnected(ctx: android.content.Context, host: NotificationHost) {
         this.host = host

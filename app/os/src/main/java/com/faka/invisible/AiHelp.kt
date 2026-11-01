@@ -6,6 +6,7 @@ import com.faka.invisible.logickit.AiAssist
 import com.faka.invisible.logickit.AiChoice
 import com.faka.invisible.logickit.AiGuard
 import com.faka.invisible.logickit.AiSource
+import com.faka.invisible.logickit.NotifSpeech
 import com.faka.invisible.logickit.squash
 import com.faka.invisible.logickit.words
 import com.faka.invisible.oskit.Notif
@@ -122,8 +123,8 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
     private fun shortKey(text: String, context: String) = text + "\u0001" + context + "\u0001" + source()
 
     private fun prefetchShort(n: Notif, all: List<Notif>) {
-        val t = n.text.squash()
-        if (n.hidden || !AiAssist.isLong(t) || source() == AiSource.NONE) return
+        val t = NotifSpeech.cleanText(n.text)
+        if (n.hidden || !AiAssist.isLongClean(t) || source() == AiSource.NONE) return
         val ctx = AiAssist.earlier(n, all)
         val k = shortKey(t, ctx)
         synchronized(lock) { if (k in shorts || !shortBusy.add(k)) return }
@@ -135,8 +136,8 @@ class AiHelp(private val active: () -> Computer?, private val enabled: () -> Boo
 
     /** The short version of a long message [n] when the AI made one, else "" (private, short, no AI, or no answer yet: asks now if it has not yet). */
     fun short(n: Notif, all: List<Notif>): String {
-        val t = n.text.squash()
-        if (n.hidden || !AiAssist.isLong(t) || source() == AiSource.NONE) return ""
+        val t = NotifSpeech.cleanText(n.text)
+        if (n.hidden || !AiAssist.isLongClean(t) || source() == AiSource.NONE) return ""
         val k = shortKey(t, AiAssist.earlier(n, all))
         val s = synchronized(lock) { shorts[k] }
         if (s == null) prefetchShort(n, all)

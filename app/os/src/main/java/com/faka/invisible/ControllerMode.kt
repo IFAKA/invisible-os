@@ -886,7 +886,7 @@ class ControllerMode(
     }
     private fun notifRead(n: Notif) = notifLine(n, 500, true)
     /** The short version of a long message (> 40 words) from the laptop's model, or "" (short message, private, no laptop, no answer yet). */
-    private fun longShort(n: Notif): String = if (n.hidden || !AiAssist.isLong(n.text.squash())) "" else out.notifShort(n)
+    private fun longShort(n: Notif): String = if (n.hidden || !AiAssist.isLongClean(NotifSpeech.cleanText(n.text))) "" else out.notifShort(n)
     /** What is said on opening a notification: the short version of a long message, else the message. */
     private fun notifIntro(n: Notif): Phrase {
         val s = longShort(n)

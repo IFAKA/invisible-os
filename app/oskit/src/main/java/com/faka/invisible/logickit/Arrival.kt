@@ -14,7 +14,7 @@ object ArrivalPlan {
      */
     fun lines(app: String, sender: String, text: String, lang: String, hidden: Boolean, max: Int = MAX_CHARS): List<Phrase> {
         if (hidden) return listOf(Voice.newMessage(app))
-        val body = MessageLogic.stripLinks(text).ifBlank { return listOf(Voice.arrivalFrom(app, sender)) }
+        val body = (NotifSpeech.reaction("", text) ?: if (MessageLogic.stripLinks(text).isBlank()) "" else NotifSpeech.cleanText(text, lang)).ifBlank { return listOf(Voice.arrivalFrom(app, sender)) }
         return listOf(Voice.arrivalFrom(app, sender), Voice.cut(body, max, lang == "es", lang))
     }
 
